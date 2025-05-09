@@ -17,41 +17,87 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 
-// ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
-type ZeroTrustWorkloadIdentityManagerSpec struct {
+// ZeroTrustWorkloadIdentityManager defines the configuration for the
+// operator that manages the lifecycle of SPIRE components in OpenShift
+// clusters.
+//
+// Note: This resource is **operator-facing only**. It should not contain
+// low-level configuration for SPIRE components, which is managed separately
+// in the SpireConfig CRD.
+type ZeroTrustWorkloadIdentityManager struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              ZeroTrustWorkloadIdentityManagerSpec   `json:"spec,omitempty"`
+	Status            ZeroTrustWorkloadIdentityManagerStatus `json:"status,omitempty"`
 }
 
 // ZeroTrustWorkloadIdentityManagerStatus defines the observed state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// conditions holds information of the current state of the zero-trust-workload-identity-manager deployment.
+	ConditionalStatus `json:",inline,omitempty"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-
-// ZeroTrustWorkloadIdentityManager is the Schema for the zerotrustworkloadidentitymanagers API
-type ZeroTrustWorkloadIdentityManager struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   ZeroTrustWorkloadIdentityManagerSpec   `json:"spec,omitempty"`
-	Status ZeroTrustWorkloadIdentityManagerStatus `json:"status,omitempty"`
-}
-
-// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ZeroTrustWorkloadIdentityManagerList contains a list of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ZeroTrustWorkloadIdentityManager `json:"items"`
+}
+
+// ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
+type ZeroTrustWorkloadIdentityManagerSpec struct {
+	// logLevel supports value range as per [kubernetes logging guidelines](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md#what-method-to-use).
+	// +kubebuilder:default:=1
+	// +kubebuilder:validation:Minimum:=1
+	// +kubebuilder:validation:Maximum:=5
+	// +kubebuilder:validation:Optional
+	LogLevel int32 `json:"logLevel,omitempty"`
+
+	// namespace is for configuring the namespace to install the operator deployments.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:="zero-trust-workload-identity-manager"
+	Namespace string `json:"namespace,omitempty"`
+
+	// labels to apply to all resources created for operator deployment.
+	// +mapType=granular
+	// +kubebuilder:validation:Optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// resources are for defining the resource requirements.
+	// Cannot be updated.
+	// ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+	// +kubebuilder:validation:Optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// affinity is for setting scheduling affinity rules.
+	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+	// +kubebuilder:validation:Optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// tolerations are for setting the pod tolerations.
+	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+	// +kubebuilder:validation:Optional
+	// +listType=atomic
+	Tolerations []*corev1.Toleration `json:"tolerations,omitempty"`
+
+	// nodeSelector is for defining the scheduling criteria using node labels.
+	// ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+	// +kubebuilder:validation:Optional
+	// +mapType=atomic
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
 func init() {

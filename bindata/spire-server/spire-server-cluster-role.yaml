@@ -1,0 +1,23 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-server
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/version: "1.12.0"
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+rules:
+  - apiGroups: [authentication.k8s.io]
+    resources: [tokenreviews]
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs:
+      - get
+      - list

@@ -16,7 +16,7 @@ metadata:
     features.operators.openshift.io/token-auth-azure: "true"
     features.operators.openshift.io/token-auth-gcp: "true"
     operatorframework.io/suggested-namespace: zero-trust-workload-identity-manager
-    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
     operators.operatorframework.io/project_layout: unknown
     repository: https://github.com/openshift/zero-trust-workload-identity-manager

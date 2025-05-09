@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: ""
-    createdAt: "2025-05-08T15:46:38Z"
+    createdAt: "2025-05-15T09:01:34Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -33,7 +33,7 @@ metadata:
     features.operators.openshift.io/token-auth-azure: "true"
     features.operators.openshift.io/token-auth-gcp: "true"
     operatorframework.io/suggested-namespace: zero-trust-workload-identity-manager
-    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.39.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -51,6 +51,27 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: ClusterFederatedTrustDomain
+      name: clusterfederatedtrustdomains.spire.spiffe.io
+      version: v1alpha1
+    - kind: ClusterSPIFFEID
+      name: clusterspiffeids.spire.spiffe.io
+      version: v1alpha1
+    - kind: ClusterStaticEntry
+      name: clusterstaticentries.spire.spiffe.io
+      version: v1alpha1
+    - kind: SpiffeCSIDriverConfig
+      name: spiffecsidriverconfigs.operator.openshift.io
+      version: v1alpha1
+    - kind: SpireAgentConfig
+      name: spireagentconfigs.operator.openshift.io
+      version: v1alpha1
+    - kind: SpireOIDCDiscoveryProviderConfig
+      name: spireoidcdiscoveryproviderconfigs.operator.openshift.io
+      version: v1alpha1
+    - kind: SpireServerConfig
+      name: spireserverconfigs.operator.openshift.io
+      version: v1alpha1
     - kind: ZeroTrustWorkloadIdentityManager
       name: zerotrustworkloadidentitymanagers.operator.openshift.io
       version: v1alpha1
@@ -73,6 +94,10 @@ spec:
         - apiGroups:
           - operator.openshift.io
           resources:
+          - spiffecsidriverconfigs
+          - spireagentconfigs
+          - spireoidcdiscoveryproviderconfigs
+          - spireserverconfigs
           - zerotrustworkloadidentitymanagers
           verbs:
           - create
@@ -85,12 +110,20 @@ spec:
         - apiGroups:
           - operator.openshift.io
           resources:
+          - spiffecsidriverconfigs/finalizers
+          - spireagentconfigs/finalizers
+          - spireoidcdiscoveryproviderconfigs/finalizers
+          - spireserverconfigs/finalizers
           - zerotrustworkloadidentitymanagers/finalizers
           verbs:
           - update
         - apiGroups:
           - operator.openshift.io
           resources:
+          - spiffecsidriverconfigs/status
+          - spireagentconfigs/status
+          - spireoidcdiscoveryproviderconfigs/status
+          - spireserverconfigs/status
           - zerotrustworkloadidentitymanagers/status
           verbs:
           - get

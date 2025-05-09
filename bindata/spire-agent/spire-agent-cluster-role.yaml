@@ -1,0 +1,17 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "spire-agent"
+  labels:
+    app.kubernetes.io/name: "agent"
+    app.kubernetes.io/instance: "spire"
+    app.kubernetes.io/version: "1.12.0"
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - nodes/proxy
+    verbs: ["get"]

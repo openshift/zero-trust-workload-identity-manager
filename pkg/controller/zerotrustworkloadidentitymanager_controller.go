@@ -36,6 +36,18 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spiffecsidriverconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spiffecsidriverconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spiffecsidriverconfigs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireagentconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireagentconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireagentconfigs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireoidcdiscoveryproviderconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireoidcdiscoveryproviderconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireoidcdiscoveryproviderconfigs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireserverconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireserverconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireserverconfigs/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
