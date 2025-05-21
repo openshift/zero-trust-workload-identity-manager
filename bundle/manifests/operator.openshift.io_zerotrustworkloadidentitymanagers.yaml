@@ -972,8 +972,7 @@ spec:
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources created for operator
-                  deployment.
+                description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
               logLevel:
@@ -1169,6 +1168,10 @@ spec:
                 x-kubernetes-list-type: map
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: ZeroTrustWorkloadIdentityManager is a singleton, .metadata.name
+            must be 'cluster'
+          rule: self.metadata.name == 'cluster'
     served: true
     storage: true
     subresources:

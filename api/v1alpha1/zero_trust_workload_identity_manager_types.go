@@ -26,6 +26,8 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="ZeroTrustWorkloadIdentityManager is a singleton, .metadata.name must be 'cluster'"
+// +operator-sdk:csv:customresourcedefinitions:displayName="ZeroTrustWorkloadIdentityManager"
 
 // ZeroTrustWorkloadIdentityManager defines the configuration for the
 // operator that manages the lifecycle of SPIRE components in OpenShift
@@ -71,7 +73,12 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	// +kubebuilder:default:="zero-trust-workload-identity-manager"
 	Namespace string `json:"namespace,omitempty"`
 
-	// labels to apply to all resources created for operator deployment.
+	CommonConfig `json:",inline"`
+}
+
+// CommonConfig will have similar config required for all other APIs
+type CommonConfig struct {
+	// labels to apply to all resources managed by the API.
 	// +mapType=granular
 	// +kubebuilder:validation:Optional
 	Labels map[string]string `json:"labels,omitempty"`

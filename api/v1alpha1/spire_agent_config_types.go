@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -36,52 +35,27 @@ type SpireAgentConfigSpec struct {
 
 	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=spire-bundle
+	// +kubebuilder:default:=spire-bundle
 	BundleConfigMap string `json:"bundleConfigMap"`
 
-	// NodeAttestor specifies the configuration for the Node Attestor.
+	// nodeAttestor specifies the configuration for the Node Attestor.
 	// +kubebuilder:validation:Optional
 	NodeAttestor *NodeAttestor `json:"nodeAttestor,omitempty"`
 
-	// WorkloadAttestors specifies the configuration for the Workload Attestors.
+	// workloadAttestors specifies the configuration for the Workload Attestors.
 	// +kubebuilder:validation:Optional
 	WorkloadAttestors *WorkloadAttestors `json:"workloadAttestors,omitempty"`
 
-	// labels to apply to all resources created for operator deployment.
-	// +mapType=granular
-	// +kubebuilder:validation:Optional
-	Labels map[string]string `json:"labels,omitempty"`
-
-	// resources are for defining the resource requirements.
-	// Cannot be updated.
-	// ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-	// +kubebuilder:validation:Optional
-	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-
-	// affinity is for setting scheduling affinity rules.
-	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-	// +kubebuilder:validation:Optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
-
-	// tolerations are for setting the pod tolerations.
-	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-	// +kubebuilder:validation:Optional
-	// +listType=atomic
-	Tolerations []*corev1.Toleration `json:"tolerations,omitempty"`
-
-	// nodeSelector is for defining the scheduling criteria using node labels.
-	// ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
-	// +kubebuilder:validation:Optional
-	// +mapType=atomic
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	CommonConfig `json:",inline"`
 }
 
 // NodeAttestor defines the configuration for the Node Attestor.
-// +kubebuilder:validation:Optional
 type NodeAttestor struct {
 	// k8sPSATEnabled tells if k8sPSAT configuration is enabled
-	// +kubebuilder:default:=true
-	K8sPSATEnabled bool `json:"k8sPSATEnabled,omitempty"`
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	K8sPSATEnabled string `json:"k8sPSATEnabled,omitempty"`
 }
 
 // WorkloadAttestors defines the configuration for the Workload Attestors.
@@ -89,8 +63,10 @@ type NodeAttestor struct {
 type WorkloadAttestors struct {
 
 	// k8sEnabled explains if the configuration is enabled for k8s.
-	// +kubebuilder:default=true
-	K8sEnabled bool `json:"k8sEnabled,omitempty"`
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	K8sEnabled string `json:"k8sEnabled,omitempty"`
 
 	// workloadAttestorsVerification tells what kind of verification to do against kubelet.
 	// auto will first attempt to use hostCert, and then fall back to apiServerCA.
@@ -98,27 +74,29 @@ type WorkloadAttestors struct {
 	// +kubebuilder:validation:Optional
 	WorkloadAttestorsVerification *WorkloadAttestorsVerification `json:"workloadAttestorsVerification,omitempty"`
 
-	// DisableContainerSelectors specifies whether to disable container selectors in the Kubernetes workload attestor.
+	// disableContainerSelectors specifies whether to disable container selectors in the Kubernetes workload attestor.
 	// Set to true if using holdApplicationUntilProxyStarts in Istio
+	// +kubebuilder:default:="false"
+	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=false
-	DisableContainerSelectors bool `json:"disableContainerSelectors,omitempty"`
+	DisableContainerSelectors string `json:"disableContainerSelectors,omitempty"`
 
-	// UseNewContainerLocator enables the new container locator algorithm that has support for cgroups v2.
+	// useNewContainerLocator enables the new container locator algorithm that has support for cgroups v2.
 	// Defaults to true
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=true
-	UseNewContainerLocator bool `json:"useNewContainerLocator,omitempty"`
+	UseNewContainerLocator string `json:"useNewContainerLocator,omitempty"`
 }
 
 type WorkloadAttestorsVerification struct {
-	// Type specifies the type of verification to be used.
-	// +kubebuilder: default="skip"
+	// type specifies the type of verification to be used.
+	// +kubebuilder: default:="skip"
 	Type string `json:"type,omitempty"`
 
 	// hostCertBasePath specifies the base Path where kubelet places its certificates.
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default="/var/lib/kubelet/pki"
+	// +kubebuilder:default:="/var/lib/kubelet/pki"
 	HostCertBasePath string `json:"hostCertBasePath,omitempty"`
 
 	// hostCertFileName specifies the file name for the host certificate.
@@ -128,7 +106,7 @@ type WorkloadAttestorsVerification struct {
 
 // SpireAgentConfigStatus defines the observed state of spire agents related reconciliation made by operator
 type SpireAgentConfigStatus struct {
-	// conditions holds information of the current state of the Spire agents deployment.
+	// conditions holds information of the current state of the spire agents deployment.
 	ConditionalStatus `json:",inline,omitempty"`
 }
 

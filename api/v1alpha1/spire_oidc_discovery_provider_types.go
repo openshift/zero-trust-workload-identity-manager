@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,51 +29,26 @@ type SpireOIDCDiscoveryProviderConfigSpec struct {
 	// +kubebuilder:validation:Required
 	TrustDomain string `json:"trustDomain,omitempty"`
 
-	// AgentSocket is the name of the agent socket.
-	// +kubebuilder:default="spire-agent.sock"
+	// agentSocketName is the name of the agent socket.
+	// +kubebuilder:default:="spire-agent.sock"
 	AgentSocketName string `json:"agentSocketName,omitempty"`
 
-	// jwtIssuerPath to JWT issuer. Defaults to oidc-discovery.$trustDomain if unset
+	// jwtIssuer is jwtIssuerPath to JWT issuer. Defaults to oidc-discovery.$trustDomain if unset
 	// +kubebuilder:validation:Optional
 	JwtIssuer string `json:"jwtIssuer,omitempty"`
 
-	// ReplicaCount is the number of replicas for the OIDC provider.
+	// replicaCount is the number of replicas for the OIDC provider.
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=1
+	// +kubebuilder:default:=1
 	ReplicaCount int `json:"replicaCount,omitempty"`
 
-	// labels to apply to all resources created for operator deployment.
-	// +mapType=granular
-	// +kubebuilder:validation:Optional
-	Labels map[string]string `json:"labels,omitempty"`
-
-	// resources are for defining the resource requirements.
-	// Cannot be updated.
-	// ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-	// +kubebuilder:validation:Optional
-	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-
-	// affinity is for setting scheduling affinity rules.
-	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-	// +kubebuilder:validation:Optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
-
-	// tolerations are for setting the pod tolerations.
-	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-	// +kubebuilder:validation:Optional
-	// +listType=atomic
-	Tolerations []*corev1.Toleration `json:"tolerations,omitempty"`
-
-	// nodeSelector is for defining the scheduling criteria using node labels.
-	// ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
-	// +kubebuilder:validation:Optional
-	// +mapType=atomic
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	CommonConfig `json:",inline"`
 }
 
 // SpireOIDCDiscoveryProviderConfigStatus defines the observed state of spire-oidc discovery provider
 // related reconciliation made by operator
 type SpireOIDCDiscoveryProviderConfigStatus struct {
+	// conditions holds information of the current state of the spire-oidc resources.
 	ConditionalStatus `json:",inline,omitempty"`
 }
 

@@ -971,17 +971,17 @@ spec:
                   sets the trust domain to be used for the SPIFFE identifiers
                 type: string
               caSubject:
-                description: CASubject contains subject information for the Spire
+                description: caSubject contains subject information for the Spire
                   CA.
                 properties:
                   commonName:
-                    description: CommonName specifies the common name for the CA.
+                    description: commonName specifies the common name for the CA.
                     type: string
                   country:
-                    description: Country specifies the country for the CA.
+                    description: country specifies the country for the CA.
                     type: string
                   organization:
-                    description: Organization specifies the organization for the CA.
+                    description: organization specifies the organization for the CA.
                     type: string
                 type: object
               clusterName:
@@ -989,14 +989,13 @@ spec:
                   spire server.
                 type: string
               jwtIssuer:
-                description: JwtIssuer is the JWT issuer domain. Defaults to oidc-discovery.$trustDomain
+                description: jwtIssuer is the JWT issuer domain. Defaults to oidc-discovery.$trustDomain
                   if unset
                 type: string
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources created for operator
-                  deployment.
+                description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
               nodeSelector:
@@ -1013,7 +1012,7 @@ spec:
                 properties:
                   accessMode:
                     default: ReadWriteOnce
-                    description: Access mode for the volume.
+                    description: accessMode for the volume.
                     enum:
                     - ReadWriteOnce
                     - ReadWriteOncePod
@@ -1021,20 +1020,20 @@ spec:
                     type: string
                   hostPath:
                     default: ""
-                    description: Host path to be used when type is hostPath.
+                    description: hostPath to be used when type is hostPath.
                     type: string
                   size:
                     default: 1Gi
-                    description: Size of the persistent volume (e.g., 1Gi).
+                    description: size of the persistent volume (e.g., 1Gi).
                     pattern: ^[1-9][0-9]*Gi$
                     type: string
                   storageClass:
-                    default: "null"
-                    description: StorageClass to be used for the PVC.
+                    default: ""
+                    description: storageClass to be used for the PVC.
                     type: string
                   type:
                     default: pvc
-                    description: Type of volume to use for persistence.
+                    description: type of volume to use for persistence.
                     enum:
                     - pvc
                     - hostPath
@@ -1116,17 +1115,19 @@ spec:
                   clientKeyPath:
                     type: string
                   connMaxLifetime:
-                    description: Max time (in seconds) a connection may live.
+                    description: |-
+                      connMaxLifetime will specify maximum lifetime connections.
+                      Max time (in seconds) a connection may live.
                     minimum: 0
                     type: integer
                   connectionString:
                     default: /run/spire/data/datastore.sqlite3
-                    description: ConnectionString contain connection credentials required
+                    description: connectionString contain connection credentials required
                       for spire server Datastore.
                     type: string
                   databaseType:
                     default: sqlite3
-                    description: Type of database to use.
+                    description: databaseType specifies type of database to use.
                     enum:
                     - sql
                     - sqlite3
@@ -1136,21 +1137,30 @@ spec:
                     - aws_mysql
                     type: string
                   disableMigration:
-                    default: false
-                    description: If true, disables DB auto-migration.
-                    type: boolean
+                    default: "false"
+                    description: |-
+                      disableMigration specifies the migration state
+                      If true, disables DB auto-migration.
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                   maxIdleConns:
                     default: 2
+                    description: maxIdleConns specifies the maximum idle connection
+                      to be configured.
                     minimum: 0
                     type: integer
                   maxOpenConns:
                     default: 100
-                    description: DB pool config
+                    description: |-
+                      DB pool config
+                      maxOpenConns will specify the maximum connections for the DB pool.
                     minimum: 0
                     type: integer
                   options:
                     default: []
-                    description: Extra DB options.
+                    description: options specifies extra DB options.
                     items:
                       type: string
                     type: array
@@ -1162,7 +1172,6 @@ spec:
                 - connMaxLifetime
                 - connectionString
                 - databaseType
-                - disableMigration
                 - maxIdleConns
                 - maxOpenConns
                 type: object
@@ -1171,13 +1180,19 @@ spec:
                   key manager.
                 properties:
                   diskEnabled:
-                    default: true
+                    default: "true"
                     description: diskEnabled is a flag to enable keyManager on disk.
-                    type: boolean
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                   memoryEnabled:
-                    default: false
+                    default: "false"
                     description: memoryEnabled is a flag to enable keyManager on memory
-                    type: boolean
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                 type: object
               tolerations:
                 description: |-

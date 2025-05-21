@@ -966,14 +966,13 @@ spec:
                 type: object
               agentSocketPath:
                 default: /run/spire/agent-sockets/spire-agent.sock
-                description: AgentSocket is the path to spiffe csi driver the agent
-                  socket.
+                description: agentSocketPath is the path to spiffe csi driver the
+                  agent socket.
                 type: string
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to the daemon set deployed using csi
-                  driver.
+                description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
               nodeSelector:
@@ -986,7 +985,7 @@ spec:
                 x-kubernetes-map-type: atomic
               pluginName:
                 default: csi.spiffe.io
-                description: PluginName defines the name of the CSI plugin, Sets the
+                description: pluginName defines the name of the CSI plugin, Sets the
                   csi driver name deployed to the cluster.
                 type: string
               resources:

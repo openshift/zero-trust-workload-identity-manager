@@ -967,17 +967,16 @@ spec:
                 type: object
               agentSocketName:
                 default: spire-agent.sock
-                description: AgentSocket is the name of the agent socket.
+                description: agentSocketName is the name of the agent socket.
                 type: string
               jwtIssuer:
-                description: jwtIssuerPath to JWT issuer. Defaults to oidc-discovery.$trustDomain
-                  if unset
+                description: jwtIssuer is jwtIssuerPath to JWT issuer. Defaults to
+                  oidc-discovery.$trustDomain if unset
                 type: string
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources created for operator
-                  deployment.
+                description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
               nodeSelector:
@@ -990,7 +989,7 @@ spec:
                 x-kubernetes-map-type: atomic
               replicaCount:
                 default: 1
-                description: ReplicaCount is the number of replicas for the OIDC provider.
+                description: replicaCount is the number of replicas for the OIDC provider.
                 type: integer
               resources:
                 description: |-

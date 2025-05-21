@@ -977,19 +977,21 @@ spec:
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources created for operator
-                  deployment.
+                description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
               nodeAttestor:
-                description: NodeAttestor specifies the configuration for the Node
+                description: nodeAttestor specifies the configuration for the Node
                   Attestor.
                 properties:
                   k8sPSATEnabled:
-                    default: true
+                    default: "true"
                     description: k8sPSATEnabled tells if k8sPSAT configuration is
                       enabled
-                    type: boolean
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                 type: object
               nodeSelector:
                 additionalProperties:
@@ -1107,26 +1109,35 @@ spec:
                 description: trustDomain to be used for the SPIFFE identifiers
                 type: string
               workloadAttestors:
-                description: WorkloadAttestors specifies the configuration for the
+                description: workloadAttestors specifies the configuration for the
                   Workload Attestors.
                 properties:
                   disableContainerSelectors:
-                    default: false
+                    default: "false"
                     description: |-
-                      DisableContainerSelectors specifies whether to disable container selectors in the Kubernetes workload attestor.
+                      disableContainerSelectors specifies whether to disable container selectors in the Kubernetes workload attestor.
                       Set to true if using holdApplicationUntilProxyStarts in Istio
-                    type: boolean
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                   k8sEnabled:
-                    default: true
+                    default: "true"
                     description: k8sEnabled explains if the configuration is enabled
                       for k8s.
-                    type: boolean
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                   useNewContainerLocator:
-                    default: true
+                    default: "true"
                     description: |-
-                      UseNewContainerLocator enables the new container locator algorithm that has support for cgroups v2.
+                      useNewContainerLocator enables the new container locator algorithm that has support for cgroups v2.
                       Defaults to true
-                    type: boolean
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
                   workloadAttestorsVerification:
                     description: |-
                       workloadAttestorsVerification tells what kind of verification to do against kubelet.
@@ -1143,7 +1154,7 @@ spec:
                           the host certificate.
                         type: string
                       type:
-                        description: Type specifies the type of verification to be
+                        description: type specifies the type of verification to be
                           used.
                         type: string
                     type: object
