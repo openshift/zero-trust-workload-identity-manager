@@ -84,7 +84,6 @@ type CommonConfig struct {
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// resources are for defining the resource requirements.
-	// Cannot be updated.
 	// ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 	// +kubebuilder:validation:Optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`

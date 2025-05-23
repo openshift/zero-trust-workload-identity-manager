@@ -994,7 +994,6 @@ spec:
               resources:
                 description: |-
                   resources are for defining the resource requirements.
-                  Cannot be updated.
                   ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                 properties:
                   claims:
