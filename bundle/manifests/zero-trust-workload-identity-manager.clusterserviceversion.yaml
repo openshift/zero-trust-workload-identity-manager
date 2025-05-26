@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: ""
-    createdAt: "2025-05-23T16:30:23Z"
+    createdAt: "2025-05-26T10:46:31Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"

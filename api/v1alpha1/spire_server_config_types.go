@@ -42,9 +42,9 @@ type SpireServerConfigSpec struct {
 	// +kubebuilder:validation:Optional
 	JwtIssuer string `json:"jwtIssuer,omitempty"`
 
-	// spireServerKeyManager has configs for the spire server key manager.
+	// keyManager has configs for the spire server key manager.
 	// +kubebuilder:validation:Optional
-	SpireServerKeyManager *SpireServerKeyManager `json:"spireServerKeyManager,omitempty"`
+	KeyManager *KeyManager `json:"keyManager,omitempty"`
 
 	// caSubject contains subject information for the Spire CA.
 	// +kubebuilder:validation:Optional
@@ -56,7 +56,7 @@ type SpireServerConfigSpec struct {
 
 	// spireSQLConfig has the config required for the spire server SQL DataStore.
 	// +kubebuilder:validation:Optional
-	Datastore *DataStore `json:"spireSQLConfig,omitempty"`
+	Datastore *DataStore `json:"datastore,omitempty"`
 
 	CommonConfig `json:",inline"`
 }
@@ -135,8 +135,8 @@ type DataStore struct {
 	DisableMigration string `json:"disableMigration"`
 }
 
-// SpireServerKeyManager will contain configs for the spire server key manager
-type SpireServerKeyManager struct {
+// KeyManager will contain configs for the spire server key manager
+type KeyManager struct {
 	// diskEnabled is a flag to enable keyManager on disk.
 	// +kubebuilder:default:="true"
 	// +kubebuilder:validation:Enum:="true";"false"
@@ -151,7 +151,6 @@ type SpireServerKeyManager struct {
 }
 
 // CASubject defines the subject information for the Spire CA.
-// +kubebuilder:validation:Optional
 type CASubject struct {
 	// country specifies the country for the CA.
 	// +kubebuilder:validation:Optional

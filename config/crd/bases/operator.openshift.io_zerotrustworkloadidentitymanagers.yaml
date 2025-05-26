@@ -22,7 +22,8 @@ spec:
           operator that manages the lifecycle of SPIRE components in OpenShift
           clusters.
 
-          Note: This resource is **operator-facing only**. It should not contain
+          Note: This resource is *intended as a global config for operands managed
+          by zero-trust-workload-identity-manager. It does not contain
           low-level configuration for SPIRE components, which is managed separately
           in the SpireConfig CRD.
         properties:
@@ -985,8 +986,9 @@ spec:
                 type: integer
               namespace:
                 default: zero-trust-workload-identity-manager
-                description: namespace is for configuring the namespace to install
-                  the operator deployments.
+                description: |-
+                  namespace to install the deployments and other resources managed by
+                  zero-trust-workload-identity-manager.
                 type: string
               nodeSelector:
                 additionalProperties:

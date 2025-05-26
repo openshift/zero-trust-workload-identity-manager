@@ -33,7 +33,8 @@ import (
 // operator that manages the lifecycle of SPIRE components in OpenShift
 // clusters.
 //
-// Note: This resource is **operator-facing only**. It should not contain
+// Note: This resource is *intended as a global config for operands managed
+// by zero-trust-workload-identity-manager. It does not contain
 // low-level configuration for SPIRE components, which is managed separately
 // in the SpireConfig CRD.
 type ZeroTrustWorkloadIdentityManager struct {
@@ -68,7 +69,8 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	// +kubebuilder:validation:Optional
 	LogLevel int32 `json:"logLevel,omitempty"`
 
-	// namespace is for configuring the namespace to install the operator deployments.
+	// namespace to install the deployments and other resources managed by
+	// zero-trust-workload-identity-manager.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:="zero-trust-workload-identity-manager"
 	Namespace string `json:"namespace,omitempty"`
