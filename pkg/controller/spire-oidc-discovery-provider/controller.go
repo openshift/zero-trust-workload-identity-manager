@@ -1,0 +1,1 @@
+package spire_oidc_discovery_provider

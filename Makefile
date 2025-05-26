@@ -80,6 +80,9 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
     targets/openshift/bindata.mk \
 )
 
+# generate bindata targets
+$(call add-bindata,assets,./bindata/...,bindata,assets,pkg/operator/assets/bindata.go)
+
 .PHONY: all
 all: build verify
 
@@ -337,3 +340,9 @@ catalog-push: ## Push a catalog image.
 ## verify the changes are working as expected.
 .PHONY: verify
 verify: vet fmt golangci-lint
+
+## generate the vendor code
+.PHONY: vendor
+vendor:
+	go mod tidy
+	go mod vendor
