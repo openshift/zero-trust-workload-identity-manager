@@ -17,10 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -37,6 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	operatoropenshiftiov1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -119,8 +123,13 @@ func main() {
 		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/metrics/filters#WithAuthenticationAndAuthorization
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
+	config := ctrl.GetConfigOrDie()
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	// Increase QPS and Burst to allow more concurrent API calls
+	config.QPS = 50    // Default is usually 5, increase as needed
+	config.Burst = 100 // Default is usually 10, increase as needed
+
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
@@ -144,14 +153,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.ZeroTrustWorkloadIdentityManagerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "failed to set up ZeroTrustWorkloadIdentityManager controller with manager",
-			"controller", "ZeroTrustWorkloadIdentityManager", "manager")
+	uncachedClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create uncached client")
 		os.Exit(1)
 	}
+	if err = bootstrap.BootstrapCR(context.Background(), uncachedClient, setupLog); err != nil {
+		setupLog.Error(err, "Failed to bootstrap ZeroTrustWorkloadIdentityManager CR")
+		os.Exit(1)
+	}
+
+	staticResourceControllerManager, err := staticResourceController.New(mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to set up static resource controller manager")
+		os.Exit(1)
+	}
+	if err = staticResourceControllerManager.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "failed to set up StaticResourceReconciler controller with manager",
+			"controller", utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName, "manager")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
