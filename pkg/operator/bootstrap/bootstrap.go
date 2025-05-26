@@ -2,24 +2,23 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/go-logr/logr"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-// BootstrapCR ensures the ZeroTrustWorkloadIdentityManager CR is created if it doesn't exist
 func BootstrapCR(ctx context.Context, c client.Client, log logr.Logger) error {
 	const (
 		retryInterval = 2 * time.Second
-		maxRetries    = 3
+		maxRetries    = 5
 	)
 
 	log.Info("Bootstrapping ZeroTrustWorkloadIdentityManager CR")
@@ -32,12 +31,17 @@ func BootstrapCR(ctx context.Context, c client.Client, log logr.Logger) error {
 			return nil
 		}
 
-		if client.IgnoreNotFound(err) != nil {
+		if !apierrors.IsNotFound(err) {
 			log.Error(err, "Failed to get ZeroTrustWorkloadIdentityManager")
-			return err
+			if isRetriable(err) {
+				log.Info("Retrying due to retriable error")
+				time.Sleep(retryInterval)
+				continue
+			}
+			return err // non-retriable error
 		}
 
-		// Not found, create it
+		// Not found: create it
 		instance = &v1alpha1.ZeroTrustWorkloadIdentityManager{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cluster",
@@ -46,17 +50,31 @@ func BootstrapCR(ctx context.Context, c client.Client, log logr.Logger) error {
 					utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
 				},
 			},
-			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{}, // Empty spec
+			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{},
 		}
 
-		if err := c.Create(ctx, instance); err != nil {
-			log.Error(err, "Failed to create ZeroTrustWorkloadIdentityManager CR")
-		} else {
+		err = c.Create(ctx, instance)
+		if err == nil {
 			log.Info("Successfully created ZeroTrustWorkloadIdentityManager CR")
 			return nil
 		}
 
-		time.Sleep(retryInterval)
+		log.Error(err, "Failed to create ZeroTrustWorkloadIdentityManager CR")
+		if isRetriable(err) {
+			log.Info("Retrying due to retriable create error")
+			time.Sleep(retryInterval)
+			continue
+		}
+		return err
 	}
-	return nil
+
+	return errors.New("max retries exceeded")
+}
+
+func isRetriable(err error) bool {
+	return apierrors.IsServerTimeout(err) ||
+		apierrors.IsTimeout(err) ||
+		apierrors.IsTooManyRequests(err) ||
+		apierrors.IsInternalError(err) ||
+		apierrors.IsConflict(err)
 }

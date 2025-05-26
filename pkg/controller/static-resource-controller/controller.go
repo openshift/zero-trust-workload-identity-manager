@@ -133,6 +133,8 @@ func hasControllerManagedLabel(obj client.Object) bool {
 	return ok && val == utils.AppManagedByLabelValue
 }
 
+// Reconcile function to checks for the ZeroTrustWorkloadIdentityManager and creates the static resources required for
+// the operands to be used, and reflect the reconciliation status on the ZeroTrustWorkloadIdentityManager CR.
 func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var config v1alpha1.ZeroTrustWorkloadIdentityManager
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)

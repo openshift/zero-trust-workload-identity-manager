@@ -1,5 +1,5 @@
 # Build the Zero Trust Workload Identity Manager binary
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.23-openshift-4.19 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.23-openshift-4.18 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 

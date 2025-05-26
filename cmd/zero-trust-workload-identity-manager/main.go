@@ -39,7 +39,6 @@ import (
 
 	operatoropenshiftiov1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 	// +kubebuilder:scaffold:imports
 )
@@ -148,46 +147,37 @@ func main() {
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
 	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
+	exitOnError(err, "unable to start manager")
 
 	uncachedClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: scheme})
-	if err != nil {
-		setupLog.Error(err, "unable to create uncached client")
-		os.Exit(1)
-	}
+	exitOnError(err, "unable to create uncached client")
 	if err = bootstrap.BootstrapCR(context.Background(), uncachedClient, setupLog); err != nil {
-		setupLog.Error(err, "Failed to bootstrap ZeroTrustWorkloadIdentityManager CR")
-		os.Exit(1)
+		exitOnError(err, "Failed to bootstrap ZeroTrustWorkloadIdentityManager CR")
 	}
 
 	staticResourceControllerManager, err := staticResourceController.New(mgr)
-	if err != nil {
-		setupLog.Error(err, "unable to set up static resource controller manager")
-		os.Exit(1)
-	}
+	exitOnError(err, "unable to set up static resource controller manager")
 	if err = staticResourceControllerManager.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "failed to set up StaticResourceReconciler controller with manager",
-			"controller", utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName, "manager")
-		os.Exit(1)
+		exitOnError(err, "unable to setup static resource controller manager")
 	}
 
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+		exitOnError(err, "unable to set up health check")
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		exitOnError(err, "unable to set up ready check")
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+	err = mgr.Start(ctrl.SetupSignalHandler())
+	exitOnError(err, "problem running manager")
+}
+
+func exitOnError(err error, logMessage string) {
+	if err != nil {
+		setupLog.Error(err, logMessage)
 		os.Exit(1)
 	}
 }
