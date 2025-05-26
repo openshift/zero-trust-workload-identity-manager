@@ -10,4 +10,5 @@ import (
 	// Makefile
 	_ "github.com/go-bindata/go-bindata/go-bindata"
 	_ "github.com/openshift/build-machinery-go"
+	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
 )
