@@ -9,6 +9,7 @@ require (
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.11.2
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
+	github.com/openshift/api v0.0.0-20250527072845-f5e205b58365
 	github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda
 	github.com/spiffe/spire-controller-manager v0.6.2
 	github.com/stretchr/testify v1.10.0

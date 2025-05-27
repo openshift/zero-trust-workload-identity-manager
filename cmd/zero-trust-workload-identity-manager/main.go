@@ -39,9 +39,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	operatoropenshiftiov1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	spiffeCsiDriverController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spiffe-csi-driver"
+	spireAgentController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-agent"
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
 	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
+
+	securityv1 "github.com/openshift/api/security/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -130,6 +134,11 @@ func main() {
 	config.QPS = 50    // Default is usually 5, increase as needed
 	config.Burst = 100 // Default is usually 10, increase as needed
 
+	// Add OpenShift SCC scheme
+	if err := securityv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add securityv1 scheme")
+	}
+
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -167,6 +176,22 @@ func main() {
 	exitOnError(err, "unable to set up spire server controller manager")
 	if err = spireServerControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup spire server controller manager")
+	}
+
+	spireAgentControllerManager, err := spireAgentController.New(mgr)
+	if err != nil {
+		exitOnError(err, "unable to set up spire agent controller manager")
+	}
+	if err = spireAgentControllerManager.SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to setup spire agent controller manager")
+	}
+
+	spiffeCsiDriverControllerManager, err := spiffeCsiDriverController.New(mgr)
+	if err != nil {
+		exitOnError(err, "unable to set up spiffe csi driver controller manager")
+	}
+	if err = spiffeCsiDriverControllerManager.SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to setup spiffe csi driver controller manager")
 	}
 
 	// +kubebuilder:scaffold:builder
