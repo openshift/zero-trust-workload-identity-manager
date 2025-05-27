@@ -45,6 +45,14 @@ var (
 		&admissionregistrationv1.ValidatingWebhookConfiguration{},
 	}
 
+	cacheResourceWithoutReqSelectors = []client.Object{
+		&v1alpha1.ZeroTrustWorkloadIdentityManager{},
+		&v1alpha1.SpireAgentConfig{},
+		&v1alpha1.SpiffeCSIDriverConfig{},
+		&v1alpha1.SpireServerConfig{},
+		&v1alpha1.SpireOIDCDiscoveryProviderConfig{},
+	}
+
 	informerResources = []client.Object{
 		&corev1.ServiceAccount{},
 		&corev1.Service{},
@@ -188,6 +196,9 @@ func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
 		customCacheObjects[resource] = cache.ByObject{
 			Label: managedResourceLabelReqSelector,
 		}
+	}
+	for _, resource := range cacheResourceWithoutReqSelectors {
+		customCacheObjects[resource] = cache.ByObject{}
 	}
 	customCacheOpts := cache.Options{
 		HTTPClient:                  mgr.GetHTTPClient(),
