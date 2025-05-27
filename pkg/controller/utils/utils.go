@@ -88,3 +88,10 @@ func DecodeValidatingWebhookConfigurationByBytes(objBytes []byte) *admissionregi
 	}
 	return obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
 }
+
+func StringToBool(s string) bool {
+	if s == "true" {
+		return true
+	}
+	return false
+}

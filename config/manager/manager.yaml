@@ -64,6 +64,23 @@ spec:
         - /zero-trust-workload-identity-manager
         args:
           - --health-probe-bind-address=:8081
+        env:
+        - name: OPERATOR_NAME
+          value: zero-trust-workload-identity-manager
+        - name: SPIRE_SERVER_IMAGE
+          value: ghcr.io/spiffe/spire-server:1.12.0
+        - name: SPIRE_AGENT_IMAGE
+          value: ghcr.io/spiffe/spire-agent:1.12.0
+        - name: SPIFFE_CSI_DRIVER_IMAGE
+          value: ghcr.io/spiffe/spiffe-csi-driver:0.2.3
+        - name: SPIRE_OIDC_DISCOVERY_PROVIDER_IMAGE
+          value: ghcr.io/spiffe/oidc-discovery-provider:1.12.0
+        - name: SPIRE_CONTROLLER_MANAGER_IMAGE
+          value: ghcr.io/spiffe/spire-controller-manager:0.6.0
+        - name: SPIFFE_HELPER_IMAGE
+          value: ghcr.io/spiffe/spiffe-helper:0.9.1
+        - name: NODE_DRIVER_REGISTRAR_IMAGE
+          value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
         image: controller:latest
         name: manager
         securityContext:
