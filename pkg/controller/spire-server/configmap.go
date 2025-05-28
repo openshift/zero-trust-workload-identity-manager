@@ -249,7 +249,6 @@ func generateSpireControllerManagerConfigYaml(config *v1alpha1.SpireServerConfig
 	if err != nil {
 		return "", err
 	}
-	fmt.Println(controllerManagerConfig.WatchClassless)
 	configData, err := yaml.Marshal(controllerManagerConfig)
 	if err != nil {
 		return "", err

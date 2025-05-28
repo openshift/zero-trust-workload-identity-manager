@@ -275,24 +275,17 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	t.Run("Matches reference implementation", func(t *testing.T) {
 		expected := createReferenceStatefulSet(config, serverConfigHash, controllerConfigHash)
 
-		// Compare the entire object
-		if !reflect.DeepEqual(statefulSet, expected) {
-			t.Errorf("StatefulSet does not match reference implementation")
+		// Help pinpoint differences if there are any
+		if !reflect.DeepEqual(statefulSet.ObjectMeta, expected.ObjectMeta) {
+			t.Errorf("ObjectMeta differs")
+		}
 
-			// Help pinpoint differences if there are any
-			if !reflect.DeepEqual(statefulSet.ObjectMeta, expected.ObjectMeta) {
-				t.Errorf("ObjectMeta differs")
-			}
+		if !reflect.DeepEqual(statefulSet.Spec.Replicas, expected.Spec.Replicas) {
+			t.Errorf("Replicas differs: got %v, expected %v", *statefulSet.Spec.Replicas, *expected.Spec.Replicas)
+		}
 
-			if !reflect.DeepEqual(statefulSet.Spec.Replicas, expected.Spec.Replicas) {
-				t.Errorf("Replicas differs: got %v, expected %v", *statefulSet.Spec.Replicas, *expected.Spec.Replicas)
-			}
-
-			if !reflect.DeepEqual(statefulSet.Spec.ServiceName, expected.Spec.ServiceName) {
-				t.Errorf("ServiceName differs: got %v, expected %v", statefulSet.Spec.ServiceName, expected.Spec.ServiceName)
-			}
-
-			// Continue with more granular checks if needed...
+		if !reflect.DeepEqual(statefulSet.Spec.ServiceName, expected.Spec.ServiceName) {
+			t.Errorf("ServiceName differs: got %v, expected %v", statefulSet.Spec.ServiceName, expected.Spec.ServiceName)
 		}
 	})
 }

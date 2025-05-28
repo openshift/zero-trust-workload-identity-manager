@@ -117,6 +117,10 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 						{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 						{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
 					},
+					Affinity:     config.Affinity,
+					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
+					Resources:    config.Resources,
+					Tolerations:  utils.DerefTolerations(config.Tolerations),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
