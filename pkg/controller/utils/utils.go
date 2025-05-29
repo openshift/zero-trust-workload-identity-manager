@@ -1,12 +1,16 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	securityv1 "github.com/openshift/api/security/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"strings"
 )
 
 var (
@@ -20,6 +24,7 @@ func init() {
 	_ = rbacv1.AddToScheme(scheme)
 	_ = storagev1.AddToScheme(scheme)
 	_ = admissionregistrationv1.AddToScheme(scheme)
+	_ = securityv1.AddToScheme(scheme)
 
 	// Create a codec factory for this scheme
 	codecs = serializer.NewCodecFactory(scheme)
@@ -87,6 +92,19 @@ func DecodeValidatingWebhookConfigurationByBytes(objBytes []byte) *admissionregi
 		panic(err)
 	}
 	return obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
+}
+
+// GenerateConfigHashFromString returns a SHA256 hex string of the trimmed input string
+func GenerateConfigHashFromString(data string) string {
+	normalized := strings.TrimSpace(data) // Removes leading/trailing whitespace and newlines
+	return GenerateConfigHash([]byte(normalized))
+}
+
+// GenerateConfigHash returns a SHA256 hex string of the trimmed input bytes
+func GenerateConfigHash(data []byte) string {
+	normalized := strings.TrimSpace(string(data)) // Convert to string, trim, convert back to bytes
+	hash := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(hash[:])
 }
 
 func StringToBool(s string) bool {
