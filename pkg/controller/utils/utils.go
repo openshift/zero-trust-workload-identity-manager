@@ -88,3 +88,45 @@ func DecodeValidatingWebhookConfigurationByBytes(objBytes []byte) *admissionregi
 	}
 	return obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
 }
+
+func StringToBool(s string) bool {
+	if s == "true" {
+		return true
+	}
+	return false
+}
+
+func DerefResourceRequirements(r *corev1.ResourceRequirements) corev1.ResourceRequirements {
+	if r != nil {
+		return *r
+	}
+	return corev1.ResourceRequirements{}
+}
+
+func DerefAffinity(a *corev1.Affinity) corev1.Affinity {
+	if a != nil {
+		return *a
+	}
+	return corev1.Affinity{}
+}
+
+func DerefTolerations(tolerations []*corev1.Toleration) []corev1.Toleration {
+	result := []corev1.Toleration{}
+	for _, t := range tolerations {
+		if t != nil {
+			result = append(result, *t)
+		}
+	}
+	return result
+}
+
+func DerefNodeSelector(selector map[string]string) map[string]string {
+	if selector == nil {
+		return map[string]string{}
+	}
+	result := make(map[string]string, len(selector))
+	for k, v := range selector {
+		result[k] = v
+	}
+	return result
+}

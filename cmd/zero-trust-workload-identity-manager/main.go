@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -38,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	operatoropenshiftiov1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
 	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 	// +kubebuilder:scaffold:imports
@@ -159,6 +161,12 @@ func main() {
 	exitOnError(err, "unable to set up static resource controller manager")
 	if err = staticResourceControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup static resource controller manager")
+	}
+
+	spireServerControllerManager, err := spireServerController.New(mgr)
+	exitOnError(err, "unable to set up spire server controller manager")
+	if err = spireServerControllerManager.SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to setup spire server controller manager")
 	}
 
 	// +kubebuilder:scaffold:builder
