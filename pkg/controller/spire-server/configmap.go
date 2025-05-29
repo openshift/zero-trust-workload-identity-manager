@@ -38,6 +38,9 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerConfigSpec) (*core
 	if config.Datastore == nil {
 		return nil, fmt.Errorf("datastore configuration is required")
 	}
+	if config.CASubject == nil {
+		return nil, fmt.Errorf("CASubject is empty")
+	}
 	confMap := generateServerConfMap(config)
 	confJSON, err := marshalToJSON(confMap)
 	if err != nil {
@@ -218,27 +221,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerConfigSpec) (*C
 				"kube-system",
 				"kube-public",
 				"local-path-storage",
-				"openshift-cluster-node-tuning-operator",
-				"openshift-cluster-samples-operator",
-				"openshift-cluster-storage-operator",
-				"openshift-console-operator",
-				"openshift-console",
-				"openshift-dns",
-				"openshift-dns-operator",
-				"openshift-image-registry",
-				"openshift-ingress",
-				"openshift-kube-storage-version-migrator",
-				"openshift-kube-storage-version-migrator-operator",
-				"openshift-kube-proxy",
-				"openshift-marketplace",
-				"openshift-monitoring",
-				"openshift-multus",
-				"openshift-network-diagnostics",
-				"openshift-network-operator",
-				"openshift-operator-lifecycle-manager",
-				"openshift-roks-metrics",
-				"openshift-service-ca-operator",
-				"openshift-service-ca",
+				"openshift-*",
 			},
 		},
 	}, nil
