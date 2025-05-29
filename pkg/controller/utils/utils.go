@@ -10,6 +10,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"sort"
 	"strings"
 )
 
@@ -104,6 +105,30 @@ func GenerateConfigHashFromString(data string) string {
 func GenerateConfigHash(data []byte) string {
 	normalized := strings.TrimSpace(string(data)) // Convert to string, trim, convert back to bytes
 	hash := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(hash[:])
+}
+
+// GenerateMapHash takes a map[string]string, sorts it by key, and returns a SHA256 hash.
+func GenerateMapHash(m map[string]string) string {
+	var builder strings.Builder
+
+	// Extract and sort the keys
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Concatenate keys and values in sorted order
+	for _, k := range keys {
+		builder.WriteString(strings.TrimSpace(k))
+		builder.WriteString("=")
+		builder.WriteString(strings.TrimSpace(m[k]))
+		builder.WriteString(";") // Separator (optional but recommended for clarity)
+	}
+
+	// Compute the hash
+	hash := sha256.Sum256([]byte(builder.String()))
 	return hex.EncodeToString(hash[:])
 }
 

@@ -3,10 +3,11 @@ package utils
 const (
 
 	// Controller Names
-	ZeroTrustWorkloadIdentityManagerStaticResourceControllerName  = "zero-trust-workload-identity-manager-static-resource-controller"
-	ZeroTrustWorkloadIdentityManagerSpireServerControllerName     = "zero-trust-workload-identity-manager-spire-server-controller"
-	ZeroTrustWorkloadIdentityManagerSpireAgentControllerName      = "zero-trust-workload-identity-manager-spire-agent-controller"
-	ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName = "zero-trust-workload-identity-manager-spiffe-csi-driver-controller"
+	ZeroTrustWorkloadIdentityManagerStaticResourceControllerName             = "zero-trust-workload-identity-manager-static-resource-controller"
+	ZeroTrustWorkloadIdentityManagerSpireServerControllerName                = "zero-trust-workload-identity-manager-spire-server-controller"
+	ZeroTrustWorkloadIdentityManagerSpireAgentControllerName                 = "zero-trust-workload-identity-manager-spire-agent-controller"
+	ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName            = "zero-trust-workload-identity-manager-spiffe-csi-driver-controller"
+	ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName = "zero-trust-workload-identity-manager-spire-oidc-discovery-provider-controller"
 
 	OperatorNamespace = "zero-trust-workload-identity-manager"
 
