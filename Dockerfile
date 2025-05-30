@@ -15,7 +15,7 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
 
 FROM registry.access.redhat.com/ubi9-minimal:9.4
 WORKDIR /
-COPY --from=builder /workspace/zero-trust-workload-identity-manager .
+COPY --from=builder /workspace/zero-trust-workload-identity-manager /usr/bin
 USER 65532:65532
 
-ENTRYPOINT ["/zero-trust-workload-identity-manager"]
+ENTRYPOINT ["/usr/bin/zero-trust-workload-identity-manager"]
