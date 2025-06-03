@@ -102,7 +102,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		newConfig := server.DeepCopy()
 		if !equality.Semantic.DeepEqual(originalStatus, &server.Status) {
-			if err := r.ctrlClient.StatusUpdate(ctx, newConfig); err != nil {
+			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
 				r.log.Error(err, "failed to update status")
 			}
 		}
@@ -144,7 +144,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
-		r.log.Info("Created spire sever ConfigMap")
+		r.log.Info("Created spire server ConfigMap")
 	} else if err == nil && existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] {
 		existingSpireServerCM.Data = spireServerConfigMap.Data
 		if err = r.ctrlClient.Update(ctx, &existingSpireServerCM); err != nil {
@@ -296,10 +296,9 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to create StatefulSet: %w", err)
 		}
-		r.log.Info("Created spire sever StatefulSet")
+		r.log.Info("Created spire server StatefulSet")
 	} else if err == nil && needsUpdate(existingSTS, *sts) {
-		existingSTS.Spec = sts.Spec
-		if err = r.ctrlClient.Update(ctx, &existingSTS); err != nil {
+		if err = r.ctrlClient.Update(ctx, sts); err != nil {
 			reconcileStatus[SpireServerStatefulSetGeneration] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  "SpireServerStatefulSetGenerationFailed",
@@ -307,7 +306,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to update StatefulSet: %w", err)
 		}
-		r.log.Info("Updated spire sever StatefulSet")
+		r.log.Info("Updated spire server StatefulSet")
 	} else if err != nil {
 		r.log.Error(err, "failed to update spire server stateful set resource")
 		return ctrl.Result{}, err
@@ -369,6 +368,8 @@ func needsUpdate(current, desired appsv1.StatefulSet) bool {
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
+		return true
+	} else if utils.StatefulSetSpecModified(&desired, &current) {
 		return true
 	}
 	return false

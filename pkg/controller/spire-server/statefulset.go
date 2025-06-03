@@ -3,7 +3,6 @@ package spire_server
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -28,7 +27,10 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 	for k, v := range config.Labels {
 		labels[k] = v
 	}
-
+	volumeResourceRequest := "1Gi"
+	if config.Persistence != nil && config.Persistence.Size != "" {
+		volumeResourceRequest = config.Persistence.Size
+	}
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -78,6 +80,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
 							},
+							Resources: utils.DerefResourceRequirements(config.Resources),
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private"},
 								{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
@@ -108,6 +111,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 								{Name: "controller-manager-config", MountPath: "/controller-manager-config.yaml", SubPath: "controller-manager-config.yaml", ReadOnly: true},
 								{Name: "spire-controller-manager-tmp", MountPath: "/tmp", SubPath: "spire-controller-manager"},
 							},
+							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
 					},
 					Volumes: []corev1.Volume{
@@ -119,7 +123,6 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
-					Resources:    config.Resources,
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
 				},
 			},
@@ -130,7 +133,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceStorage: resource.MustParse("1Gi"),
+								corev1.ResourceStorage: resource.MustParse(volumeResourceRequest),
 							},
 						},
 					},

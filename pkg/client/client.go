@@ -23,6 +23,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
@@ -76,6 +78,7 @@ var (
 
 type customCtrlClientImpl struct {
 	client.Client
+	apiReader client.Reader
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
@@ -91,6 +94,7 @@ type CustomCtrlClient interface {
 	Patch(context.Context, client.Object, client.Patch, ...client.PatchOption) error
 	Exists(context.Context, client.ObjectKey, client.Object) (bool, error)
 	CreateOrUpdateObject(ctx context.Context, obj client.Object) error
+	StatusUpdateWithRetry(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error
 }
 
 func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
@@ -99,14 +103,19 @@ func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
 		return nil, fmt.Errorf("failed to build custom client: %w", err)
 	}
 	return &customCtrlClientImpl{
-		Client: c,
+		Client:    c,
+		apiReader: m.GetAPIReader(),
 	}, nil
 }
 
 func (c *customCtrlClientImpl) Get(
 	ctx context.Context, key client.ObjectKey, obj client.Object,
 ) error {
-	return c.Client.Get(ctx, key, obj)
+	err := c.Client.Get(ctx, key, obj)
+	if err != nil && kerrors.IsNotFound(err) {
+		return c.apiReader.Get(ctx, key, obj)
+	}
+	return err
 }
 
 func (c *customCtrlClientImpl) List(
@@ -151,6 +160,26 @@ func (c *customCtrlClientImpl) UpdateWithRetry(
 		return err
 	}
 
+	return nil
+}
+
+func (c *customCtrlClientImpl) StatusUpdateWithRetry(
+	ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption,
+) error {
+	key := types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(client.Object)
+		if err := c.Client.Get(ctx, key, current); err != nil {
+			return fmt.Errorf("failed to fetch latest %q for update: %w", key, err)
+		}
+		obj.SetResourceVersion(current.GetResourceVersion())
+		if err := c.Client.Status().Update(ctx, obj, opts...); err != nil {
+			return fmt.Errorf("failed to update %q resource: %w", key, err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
