@@ -1,6 +1,7 @@
 package spiffe_csi_driver
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -8,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func generateSpiffeCsiDriverDaemonSet() *appsv1.DaemonSet {
+func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverConfigSpec) *appsv1.DaemonSet {
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-csi-driver",
@@ -44,6 +45,9 @@ func generateSpiffeCsiDriverDaemonSet() *appsv1.DaemonSet {
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "spire-spiffe-csi-driver",
+					Affinity:           config.Affinity,
+					Tolerations:        utils.DerefTolerations(config.Tolerations),
+					NodeSelector:       utils.DerefNodeSelector(config.NodeSelector),
 					InitContainers: []corev1.Container{
 						{
 							Name:  "set-context",
@@ -95,6 +99,7 @@ func generateSpiffeCsiDriverDaemonSet() *appsv1.DaemonSet {
 									Drop: []corev1.Capability{"all"},
 								},
 							},
+							Resources: utils.DerefResourceRequirements(config.Resources),
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "spire-agent-socket-dir",
@@ -137,6 +142,7 @@ func generateSpiffeCsiDriverDaemonSet() *appsv1.DaemonSet {
 									Name:          "healthz",
 								},
 							},
+							Resources: utils.DerefResourceRequirements(config.Resources),
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 5,
 								TimeoutSeconds:      5,

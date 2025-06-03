@@ -100,11 +100,11 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentConfigSpec, spireAgen
 								{Name: "spire-agent-socket-dir", MountPath: "/tmp/spire-agent/public"},
 								{Name: "spire-token", MountPath: "/var/run/secrets/tokens"},
 							},
+							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
-					Resources:    config.Resources,
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
 					Volumes: []corev1.Volume{
 						{

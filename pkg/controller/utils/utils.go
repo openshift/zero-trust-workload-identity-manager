@@ -3,15 +3,21 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"reflect"
+	"sort"
+	"strings"
+
 	securityv1 "github.com/openshift/api/security/v1"
+
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"sort"
-	"strings"
+	"k8s.io/utils/pointer"
 )
 
 var (
@@ -172,4 +178,240 @@ func DerefNodeSelector(selector map[string]string) map[string]string {
 		result[k] = v
 	}
 	return result
+}
+
+func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
+	if desired == nil || fetched == nil {
+		return true
+	}
+	ds := desired.Spec
+	fs := fetched.Spec
+	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
+		return true
+	}
+	if ds.ServiceName != fs.ServiceName {
+		return true
+	}
+
+	if !reflect.DeepEqual(ds.Selector, fs.Selector) {
+		return true
+	}
+
+	if !reflect.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+
+	for _, key := range []string{
+		"kubectl.kubernetes.io/default-container",
+		"ztwim.openshift.io/spire-server-config-hash",
+		"ztwim.openshift.io/spire-controller-manager-config-hash",
+	} {
+		if ds.Template.Annotations[key] != fs.Template.Annotations[key] {
+			return true
+		}
+	}
+	dPod := ds.Template.Spec
+	fPod := fs.Template.Spec
+	if dPod.ServiceAccountName != fPod.ServiceAccountName {
+		return true
+	}
+	if !pointer.BoolEqual(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+		return true
+	}
+	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+		return true
+	}
+	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+		return true
+	}
+	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+		return true
+	}
+	if len(dPod.Containers) != len(fPod.Containers) {
+		return true
+	}
+	dMap := map[string]corev1.Container{}
+	fMap := map[string]corev1.Container{}
+	for _, c := range dPod.Containers {
+		dMap[c.Name] = c
+	}
+	for _, c := range fPod.Containers {
+		fMap[c.Name] = c
+	}
+
+	for name, dCont := range dMap {
+		fCont, ok := fMap[name]
+		if !ok {
+			return true
+		}
+		if dCont.Image != fCont.Image {
+			return true
+		}
+		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+			return true
+		}
+	}
+	if len(ds.VolumeClaimTemplates) != len(fs.VolumeClaimTemplates) {
+		return true
+	}
+	for i := range ds.VolumeClaimTemplates {
+		dvc := ds.VolumeClaimTemplates[i]
+		fvc := fs.VolumeClaimTemplates[i]
+		if dvc.Name != fvc.Name {
+			return true
+		}
+		if !reflect.DeepEqual(dvc.Spec.AccessModes, fvc.Spec.AccessModes) {
+			return true
+		}
+		if !reflect.DeepEqual(dvc.Spec.Resources.Requests, fvc.Spec.Resources.Requests) {
+			return true
+		}
+	}
+	return false
+}
+
+func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
+	if desired == nil || fetched == nil {
+		return true
+	}
+	ds := desired.Spec
+	fs := fetched.Spec
+	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
+		return true
+	}
+	if !reflect.DeepEqual(ds.Selector, fs.Selector) {
+		return true
+	}
+	if !reflect.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+	dPod := ds.Template.Spec
+	fPod := fs.Template.Spec
+	if dPod.ServiceAccountName != fPod.ServiceAccountName {
+		return true
+	}
+	if !pointer.BoolEqual(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+		return true
+	}
+	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+		return true
+	}
+	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+		return true
+	}
+	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+		return true
+	}
+	if len(dPod.Containers) != len(fPod.Containers) {
+		return true
+	}
+	dMap := map[string]corev1.Container{}
+	fMap := map[string]corev1.Container{}
+	for _, c := range dPod.Containers {
+		dMap[c.Name] = c
+	}
+	for _, c := range fPod.Containers {
+		fMap[c.Name] = c
+	}
+	for name, dCont := range dMap {
+		fCont, ok := fMap[name]
+		if !ok {
+			return true
+		}
+		if dCont.Image != fCont.Image {
+			return true
+		}
+		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+			return true
+		}
+	}
+	return false
+}
+
+func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
+	if desired == nil || fetched == nil {
+		return true
+	}
+	ds := desired.Spec
+	fs := fetched.Spec
+	if !reflect.DeepEqual(ds.Selector, fs.Selector) {
+		return true
+	}
+	if !reflect.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+	dPod := ds.Template.Spec
+	fPod := fs.Template.Spec
+	if dPod.ServiceAccountName != fPod.ServiceAccountName {
+		return true
+	}
+	if !pointer.BoolEqual(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+		return true
+	}
+	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+		return true
+	}
+	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+		return true
+	}
+	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+		return true
+	}
+	if len(dPod.Containers) != len(fPod.Containers) {
+		return true
+	}
+	dMap := map[string]corev1.Container{}
+	fMap := map[string]corev1.Container{}
+	for _, c := range dPod.Containers {
+		dMap[c.Name] = c
+	}
+	for _, c := range fPod.Containers {
+		fMap[c.Name] = c
+	}
+	for name, dCont := range dMap {
+		fCont, ok := fMap[name]
+		if !ok {
+			return true
+		}
+		if dCont.Image != fCont.Image {
+			return true
+		}
+		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+			return true
+		}
+	}
+	return false
 }

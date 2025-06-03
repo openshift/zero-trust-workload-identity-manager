@@ -178,7 +178,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		newConfig := config.DeepCopy()
 		if !equality.Semantic.DeepEqual(originalStatus, &config.Status) {
-			if err = r.ctrlClient.StatusUpdate(ctx, newConfig); err != nil {
+			if err = r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
 				r.log.Error(err, "failed to update status")
 			}
 		}

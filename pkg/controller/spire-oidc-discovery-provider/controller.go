@@ -97,7 +97,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 		newConfig := oidcDiscoveryProviderConfig.DeepCopy()
 		if !equality.Semantic.DeepEqual(originalStatus, &oidcDiscoveryProviderConfig.Status) {
-			if err := r.ctrlClient.StatusUpdate(ctx, newConfig); err != nil {
+			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
 				r.log.Error(err, "failed to update status")
 			}
 		}
@@ -341,6 +341,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 // needsUpdate returns true if Deployment needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.Deployment) bool {
 	if current.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] {
+		return true
+	} else if utils.DeploymentSpecModified(&desired, &current) {
 		return true
 	}
 	return false
