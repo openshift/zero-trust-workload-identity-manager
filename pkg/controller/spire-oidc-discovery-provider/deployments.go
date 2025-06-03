@@ -30,6 +30,14 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProviderConfig, spireOid
 		replicas = int32(config.Spec.ReplicaCount)
 	}
 
+	resourceRequirements := utils.DefaultResourceRequirements()
+	if config.Spec.Resources != nil && config.Spec.Resources.Limits != nil {
+		resourceRequirements.Limits = config.Spec.Resources.Limits
+	}
+	if config.Spec.Resources != nil && config.Spec.Resources.Requests != nil {
+		resourceRequirements.Requests = config.Spec.Resources.Requests
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
@@ -152,7 +160,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProviderConfig, spireOid
 					},
 					Affinity:     config.Spec.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.Spec.NodeSelector),
-					Resources:    config.Spec.Resources,
+					Resources:    resourceRequirements,
 					Tolerations:  utils.DerefTolerations(config.Spec.Tolerations),
 				},
 			},

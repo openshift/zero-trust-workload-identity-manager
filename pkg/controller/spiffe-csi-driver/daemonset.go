@@ -1,6 +1,7 @@
 package spiffe_csi_driver
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -8,7 +9,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func generateSpiffeCsiDriverDaemonSet() *appsv1.DaemonSet {
+func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverConfigSpec) *appsv1.DaemonSet {
+	resourceRequirements := utils.DefaultResourceRequirements()
+	if config.Resources != nil && config.Resources.Limits != nil {
+		resourceRequirements.Limits = config.Resources.Limits
+	}
+	if config.Resources != nil && config.Resources.Requests != nil {
+		resourceRequirements.Requests = config.Resources.Requests
+	}
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-csi-driver",
@@ -44,6 +52,10 @@ func generateSpiffeCsiDriverDaemonSet() *appsv1.DaemonSet {
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "spire-spiffe-csi-driver",
+					Resources:          resourceRequirements,
+					Affinity:           config.Affinity,
+					Tolerations:        utils.DerefTolerations(config.Tolerations),
+					NodeSelector:       utils.DerefNodeSelector(config.NodeSelector),
 					InitContainers: []corev1.Container{
 						{
 							Name:  "set-context",

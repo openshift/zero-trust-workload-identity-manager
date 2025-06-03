@@ -12,6 +12,13 @@ import (
 )
 
 func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentConfigSpec, spireAgentConfigHash string) *appsv1.DaemonSet {
+	resourceRequirements := utils.DefaultResourceRequirements()
+	if config.Resources != nil && config.Resources.Limits != nil {
+		resourceRequirements.Limits = config.Resources.Limits
+	}
+	if config.Resources != nil && config.Resources.Requests != nil {
+		resourceRequirements.Requests = config.Resources.Requests
+	}
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
@@ -104,7 +111,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentConfigSpec, spireAgen
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
-					Resources:    config.Resources,
+					Resources:    resourceRequirements,
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
 					Volumes: []corev1.Volume{
 						{

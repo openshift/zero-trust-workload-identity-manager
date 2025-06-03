@@ -29,6 +29,14 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 		labels[k] = v
 	}
 
+	resourceRequirements := utils.DefaultResourceRequirements()
+	if config.Resources != nil && config.Resources.Limits != nil {
+		resourceRequirements.Limits = config.Resources.Limits
+	}
+	if config.Resources != nil && config.Resources.Requests != nil {
+		resourceRequirements.Requests = config.Resources.Requests
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -119,7 +127,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
-					Resources:    config.Resources,
+					Resources:    resourceRequirements,
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
 				},
 			},

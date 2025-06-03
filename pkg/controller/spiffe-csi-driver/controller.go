@@ -129,7 +129,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		Message: "SpiffeCSISCC resource created",
 	}
 
-	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet()
+	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet(spiffeCSIDriver.Spec)
 	if err = controllerutil.SetControllerReference(&spiffeCSIDriver, spiffeCsiDaemonset, r.scheme); err != nil {
 		r.log.Error(err, "failed to set owner reference for the SCC resource")
 		reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
