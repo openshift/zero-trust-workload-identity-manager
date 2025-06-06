@@ -1,6 +1,7 @@
 package spiffe_csi_driver
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"reflect"
 	"testing"
 
@@ -14,7 +15,9 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 	// Mock the utility functions that are called in the main function
 	// These would need to be properly mocked in a real test environment
 
-	daemonSet := generateSpiffeCsiDriverDaemonSet()
+	config := v1alpha1.SpiffeCSIDriverConfigSpec{}
+
+	daemonSet := generateSpiffeCsiDriverDaemonSet(config)
 
 	// Test ObjectMeta
 	if daemonSet.Name != "spire-spiffe-csi-driver" {
@@ -476,31 +479,5 @@ func TestMountPropagationPtr(t *testing.T) {
 				t.Errorf("Expected %v, got %v", tt.expected, *result)
 			}
 		})
-	}
-}
-
-// Benchmark tests for performance validation
-func BenchmarkGenerateSpiffeCsiDriverDaemonSet(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		generateSpiffeCsiDriverDaemonSet()
-	}
-}
-
-func BenchmarkBoolPtr(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		boolPtr(true)
-		boolPtr(false)
-	}
-}
-
-func BenchmarkHostPathTypePtr(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		hostPathTypePtr(corev1.HostPathDirectoryOrCreate)
-	}
-}
-
-func BenchmarkMountPropagationPtr(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		mountPropagationPtr(corev1.MountPropagationBidirectional)
 	}
 }
