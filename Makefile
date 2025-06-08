@@ -142,14 +142,14 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: build-operator
 build-operator: ## Build operator binary, no additional checks or code generation
 	@GOFLAGS="-mod=vendor" source hack/go-fips.sh && \
-	go build $(GOBUILD_VERSION_ARGS) -o $(LOCALBIN)/zero-trust-workload-identity-manager cmd/zero-trust-workload-identity-manager/main.go
+	go build $(GOBUILD_VERSION_ARGS) -o $(LOCALBIN)/zero-trust-workload-identity-manager cmd/ztwim/main.go
 
 .PHONY: build
 build: manifests generate fmt vet build-operator
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/zero-trust-workload-identity-manager/main.go
+	go run ./cmd/ztwim/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
