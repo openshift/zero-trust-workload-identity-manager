@@ -39,3 +39,8 @@ func (r *StaticResourceReconciler) getSpireControllerMangerWebhookService() *cor
 	spireControllerMangerWebhookService := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireControllerMangerWebhookServiceAssetName))
 	return spireControllerMangerWebhookService
 }
+
+func (r *StaticResourceReconciler) getSpireAgentService() *corev1.Service {
+	spireAgentService := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireAgentServiceAssetName))
+	return spireAgentService
+}
