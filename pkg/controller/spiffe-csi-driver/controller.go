@@ -97,7 +97,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		newConfig := spiffeCSIDriver.DeepCopy()
 		if !equality.Semantic.DeepEqual(originalStatus, &spiffeCSIDriver.Status) {
-			if err := r.ctrlClient.StatusUpdate(ctx, newConfig); err != nil {
+			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
 				r.log.Error(err, "failed to update status")
 			}
 		}
@@ -129,7 +129,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		Message: "SpiffeCSISCC resource created",
 	}
 
-	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet()
+	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet(spiffeCSIDriver.Spec)
 	if err = controllerutil.SetControllerReference(&spiffeCSIDriver, spiffeCsiDaemonset, r.scheme); err != nil {
 		r.log.Error(err, "failed to set owner reference for the SCC resource")
 		reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
@@ -153,7 +153,14 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to create DaemonSet: %w", err)
 		}
-		r.log.Info("Created spire sever DaemonSet")
+		r.log.Info("Created spiffe csi DaemonSet")
+	} else if err == nil && needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
+		existingSpiffeCsiDaemonSet.Spec = spiffeCsiDaemonset.Spec
+		if err = r.ctrlClient.Update(ctx, &existingSpiffeCsiDaemonSet); err != nil {
+			r.log.Error(err, "failed to update spiffe csi daemon set")
+			return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
+		}
+		r.log.Info("Updated spiffe csi DaemonSet")
 	} else if err != nil {
 		r.log.Error(err, "Failed to get SpiffeCsiDaemon set")
 		reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
@@ -213,4 +220,9 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return nil
+}
+
+// needsUpdate returns true if DaemonSet needs to be updated.
+func needsUpdate(current, desired appsv1.DaemonSet) bool {
+	return utils.DaemonSetSpecModified(&desired, &current)
 }

@@ -101,7 +101,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		newConfig := agent.DeepCopy()
 		if !equality.Semantic.DeepEqual(originalStatus, &agent.Status) {
-			if err := r.ctrlClient.StatusUpdate(ctx, newConfig); err != nil {
+			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
 				r.log.Error(err, "failed to update status")
 			}
 		}
@@ -165,7 +165,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
-		r.log.Info("Created spire sever ConfigMap")
+		r.log.Info("Created spire agent ConfigMap")
 	} else if err == nil && existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] {
 		existingSpireAgentCM.Data = spireAgentConfigMap.Data
 		if err = r.ctrlClient.Update(ctx, &existingSpireAgentCM); err != nil {
@@ -216,14 +216,14 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to create DaemonSet: %w", err)
 		}
-		r.log.Info("Created spire sever DaemonSet")
+		r.log.Info("Created spire agent DaemonSet")
 	} else if err == nil && needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
 		existingSpireAgentDaemonSet.Spec = spireAgentDaemonset.Spec
 		if err = r.ctrlClient.Update(ctx, &existingSpireAgentDaemonSet); err != nil {
 			r.log.Error(err, "failed to update spire agent config map")
 			return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
 		}
-		r.log.Info("Updated spire sever DaemonSet")
+		r.log.Info("Updated spire agent DaemonSet")
 	} else if err != nil {
 		r.log.Error(err, "failed to update spire-agent daemonset")
 		reconcileStatus[SpireAgentDaemonSetGeneration] = reconcilerStatus{
@@ -290,6 +290,8 @@ func (r *SpireAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // needsUpdate returns true if DaemonSet needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
 	if current.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] {
+		return true
+	} else if utils.DaemonSetSpecModified(&desired, &current) {
 		return true
 	}
 	return false

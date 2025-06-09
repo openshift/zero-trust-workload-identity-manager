@@ -116,6 +116,19 @@ type FakeCustomCtrlClient struct {
 	statusUpdateReturnsOnCall map[int]struct {
 		result1 error
 	}
+	StatusUpdateWithRetryStub        func(context.Context, clienta.Object, ...clienta.SubResourceUpdateOption) error
+	statusUpdateWithRetryMutex       sync.RWMutex
+	statusUpdateWithRetryArgsForCall []struct {
+		arg1 context.Context
+		arg2 clienta.Object
+		arg3 []clienta.SubResourceUpdateOption
+	}
+	statusUpdateWithRetryReturns struct {
+		result1 error
+	}
+	statusUpdateWithRetryReturnsOnCall map[int]struct {
+		result1 error
+	}
 	UpdateStub        func(context.Context, clienta.Object, ...clienta.UpdateOption) error
 	updateMutex       sync.RWMutex
 	updateArgsForCall []struct {
@@ -653,6 +666,69 @@ func (fake *FakeCustomCtrlClient) StatusUpdateReturnsOnCall(i int, result1 error
 	}{result1}
 }
 
+func (fake *FakeCustomCtrlClient) StatusUpdateWithRetry(arg1 context.Context, arg2 clienta.Object, arg3 ...clienta.SubResourceUpdateOption) error {
+	fake.statusUpdateWithRetryMutex.Lock()
+	ret, specificReturn := fake.statusUpdateWithRetryReturnsOnCall[len(fake.statusUpdateWithRetryArgsForCall)]
+	fake.statusUpdateWithRetryArgsForCall = append(fake.statusUpdateWithRetryArgsForCall, struct {
+		arg1 context.Context
+		arg2 clienta.Object
+		arg3 []clienta.SubResourceUpdateOption
+	}{arg1, arg2, arg3})
+	stub := fake.StatusUpdateWithRetryStub
+	fakeReturns := fake.statusUpdateWithRetryReturns
+	fake.recordInvocation("StatusUpdateWithRetry", []interface{}{arg1, arg2, arg3})
+	fake.statusUpdateWithRetryMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3...)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeCustomCtrlClient) StatusUpdateWithRetryCallCount() int {
+	fake.statusUpdateWithRetryMutex.RLock()
+	defer fake.statusUpdateWithRetryMutex.RUnlock()
+	return len(fake.statusUpdateWithRetryArgsForCall)
+}
+
+func (fake *FakeCustomCtrlClient) StatusUpdateWithRetryCalls(stub func(context.Context, clienta.Object, ...clienta.SubResourceUpdateOption) error) {
+	fake.statusUpdateWithRetryMutex.Lock()
+	defer fake.statusUpdateWithRetryMutex.Unlock()
+	fake.StatusUpdateWithRetryStub = stub
+}
+
+func (fake *FakeCustomCtrlClient) StatusUpdateWithRetryArgsForCall(i int) (context.Context, clienta.Object, []clienta.SubResourceUpdateOption) {
+	fake.statusUpdateWithRetryMutex.RLock()
+	defer fake.statusUpdateWithRetryMutex.RUnlock()
+	argsForCall := fake.statusUpdateWithRetryArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeCustomCtrlClient) StatusUpdateWithRetryReturns(result1 error) {
+	fake.statusUpdateWithRetryMutex.Lock()
+	defer fake.statusUpdateWithRetryMutex.Unlock()
+	fake.StatusUpdateWithRetryStub = nil
+	fake.statusUpdateWithRetryReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeCustomCtrlClient) StatusUpdateWithRetryReturnsOnCall(i int, result1 error) {
+	fake.statusUpdateWithRetryMutex.Lock()
+	defer fake.statusUpdateWithRetryMutex.Unlock()
+	fake.StatusUpdateWithRetryStub = nil
+	if fake.statusUpdateWithRetryReturnsOnCall == nil {
+		fake.statusUpdateWithRetryReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.statusUpdateWithRetryReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeCustomCtrlClient) Update(arg1 context.Context, arg2 clienta.Object, arg3 ...clienta.UpdateOption) error {
 	fake.updateMutex.Lock()
 	ret, specificReturn := fake.updateReturnsOnCall[len(fake.updateArgsForCall)]
@@ -798,6 +874,8 @@ func (fake *FakeCustomCtrlClient) Invocations() map[string][][]interface{} {
 	defer fake.patchMutex.RUnlock()
 	fake.statusUpdateMutex.RLock()
 	defer fake.statusUpdateMutex.RUnlock()
+	fake.statusUpdateWithRetryMutex.RLock()
+	defer fake.statusUpdateWithRetryMutex.RUnlock()
 	fake.updateMutex.RLock()
 	defer fake.updateMutex.RUnlock()
 	fake.updateWithRetryMutex.RLock()

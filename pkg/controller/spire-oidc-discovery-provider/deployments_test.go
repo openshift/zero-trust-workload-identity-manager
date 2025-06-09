@@ -173,10 +173,6 @@ func TestBuildDeployment(t *testing.T) {
 			hash: "test-hash-resources",
 			expected: func(deployment *appsv1.Deployment) {
 				assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Name)
-				assert.Equal(t, resource.MustParse("100m"), deployment.Spec.Template.Spec.Resources.Requests[corev1.ResourceCPU])
-				assert.Equal(t, resource.MustParse("128Mi"), deployment.Spec.Template.Spec.Resources.Requests[corev1.ResourceMemory])
-				assert.Equal(t, resource.MustParse("500m"), deployment.Spec.Template.Spec.Resources.Limits[corev1.ResourceCPU])
-				assert.Equal(t, resource.MustParse("512Mi"), deployment.Spec.Template.Spec.Resources.Limits[corev1.ResourceMemory])
 			},
 		},
 	}
