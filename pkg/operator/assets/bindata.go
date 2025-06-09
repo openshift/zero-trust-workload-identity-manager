@@ -258,7 +258,6 @@ spec:
     - name: metrics
       port: 9402
       targetPort: 9402
-      protocol: http
   selector:
     app.kubernetes.io/name: agent
     app.kubernetes.io/instance: spire
@@ -817,7 +816,6 @@ spec:
     - name: metrics
       port: 9402
       targetPort: 9402
-      protocol: http
   selector:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire

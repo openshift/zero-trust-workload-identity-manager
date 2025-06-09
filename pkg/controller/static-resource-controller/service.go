@@ -21,7 +21,7 @@ func (r *StaticResourceReconciler) CreateOrApplyServiceResources(ctx context.Con
 
 func (r *StaticResourceReconciler) listStaticServiceResource() []*corev1.Service {
 	staticServices := []*corev1.Service{}
-	staticServices = append(staticServices, r.getSpireServerService(), r.getSpireOIDCDiscoveryProviderService(), r.getSpireControllerMangerWebhookService())
+	staticServices = append(staticServices, r.getSpireServerService(), r.getSpireAgentService(), r.getSpireOIDCDiscoveryProviderService(), r.getSpireControllerMangerWebhookService())
 	return staticServices
 }
 
