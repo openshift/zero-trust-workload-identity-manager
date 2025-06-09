@@ -150,6 +150,12 @@ func generateServerConfMap(config *v1alpha1.SpireServerConfigSpec) map[string]in
 			"log_level":             "debug",
 			"trust_domain":          config.TrustDomain,
 		},
+		"telemetry": map[string]interface{}{
+			"Prometheus": map[string]interface{}{
+				"host": "0.0.0.0",
+				"port": "9402",
+			},
+		},
 	}
 }
 

@@ -47,6 +47,12 @@ func TestGenerateAgentConfig(t *testing.T) {
 						{"memory": map[string]interface{}{"plugin_data": nil}},
 					},
 				},
+				"telemetry": map[string]interface{}{
+					"Prometheus": map[string]interface{}{
+						"host": "0.0.0.0",
+						"port": "9402",
+					},
+				},
 			},
 		},
 		{
@@ -90,6 +96,12 @@ func TestGenerateAgentConfig(t *testing.T) {
 								},
 							},
 						},
+					},
+				},
+				"telemetry": map[string]interface{}{
+					"Prometheus": map[string]interface{}{
+						"host": "0.0.0.0",
+						"port": "9402",
 					},
 				},
 			},
@@ -140,6 +152,12 @@ func TestGenerateAgentConfig(t *testing.T) {
 								},
 							},
 						},
+					},
+				},
+				"telemetry": map[string]interface{}{
+					"Prometheus": map[string]interface{}{
+						"host": "0.0.0.0",
+						"port": "9402",
 					},
 				},
 			},
@@ -205,6 +223,12 @@ func TestGenerateAgentConfig(t *testing.T) {
 						},
 					},
 				},
+				"telemetry": map[string]interface{}{
+					"Prometheus": map[string]interface{}{
+						"host": "0.0.0.0",
+						"port": "9402",
+					},
+				},
 			},
 		},
 		{
@@ -241,6 +265,12 @@ func TestGenerateAgentConfig(t *testing.T) {
 						{"memory": map[string]interface{}{"plugin_data": nil}},
 					},
 				},
+				"telemetry": map[string]interface{}{
+					"Prometheus": map[string]interface{}{
+						"host": "0.0.0.0",
+						"port": "9402",
+					},
+				},
 			},
 		},
 		{
@@ -274,6 +304,12 @@ func TestGenerateAgentConfig(t *testing.T) {
 				"plugins": map[string]interface{}{
 					"KeyManager": []map[string]interface{}{
 						{"memory": map[string]interface{}{"plugin_data": nil}},
+					},
+				},
+				"telemetry": map[string]interface{}{
+					"Prometheus": map[string]interface{}{
+						"host": "0.0.0.0",
+						"port": "9402",
 					},
 				},
 			},
