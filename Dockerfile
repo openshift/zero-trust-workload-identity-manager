@@ -11,7 +11,7 @@ RUN go mod download
 
 # Build
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
-    go build -mod=mod -a -o zero-trust-workload-identity-manager ./cmd/zero-trust-workload-identity-manager/main.go
+    go build -mod=mod -a -o zero-trust-workload-identity-manager ./cmd/ztwim/main.go
 
 FROM registry.access.redhat.com/ubi9-minimal:9.4
 WORKDIR /
