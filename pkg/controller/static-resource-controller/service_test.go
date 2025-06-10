@@ -11,7 +11,7 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 	r := &StaticResourceReconciler{}
 
 	services := r.listStaticServiceResource()
-	assert.Len(t, services, 3)
+	assert.Len(t, services, 4)
 
 	// Define expected info for each service in order
 	expectedServices := []struct {
@@ -34,9 +34,32 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 					TargetPort: intstrFromString("grpc"),
 					Protocol:   corev1.ProtocolTCP,
 				},
+				{
+					Name:       "metrics",
+					Port:       9402,
+					TargetPort: intstrFromInt(9402),
+				},
 			},
+
 			selector: map[string]string{
 				"app.kubernetes.io/name":     "server",
+				"app.kubernetes.io/instance": "spire",
+			},
+		},
+		{
+			name:      "spire-agent",
+			kind:      "Service",
+			namespace: "zero-trust-workload-identity-manager",
+			labels:    requiredAgentResourceLabels,
+			ports: []corev1.ServicePort{
+				{
+					Name:       "metrics",
+					Port:       9402,
+					TargetPort: intstrFromInt(9402),
+				},
+			},
+			selector: map[string]string{
+				"app.kubernetes.io/name":     "agent",
 				"app.kubernetes.io/instance": "spire",
 			},
 		},
@@ -97,12 +120,20 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 		assert.Equal(t, expectedServices[0].labels, svc.Labels)
 	})
 
+	t.Run("getSpireAgentService", func(t *testing.T) {
+		svc := r.getSpireAgentService()
+		assert.Equal(t, "spire-agent", svc.Name)
+		assert.Equal(t, "Service", svc.Kind)
+		assert.Equal(t, "zero-trust-workload-identity-manager", svc.Namespace)
+		assert.Equal(t, expectedServices[1].labels, svc.Labels)
+	})
+
 	t.Run("getSpireOIDCDiscoveryProviderService", func(t *testing.T) {
 		svc := r.getSpireOIDCDiscoveryProviderService()
 		assert.Equal(t, "spire-spiffe-oidc-discovery-provider", svc.Name)
 		assert.Equal(t, "Service", svc.Kind)
 		assert.Equal(t, "zero-trust-workload-identity-manager", svc.Namespace)
-		assert.Equal(t, expectedServices[1].labels, svc.Labels)
+		assert.Equal(t, expectedServices[2].labels, svc.Labels)
 	})
 
 	t.Run("getSpireControllerMangerWebhookService", func(t *testing.T) {
@@ -110,7 +141,7 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 		assert.Equal(t, "spire-controller-manager-webhook", svc.Name)
 		assert.Equal(t, "Service", svc.Kind)
 		assert.Equal(t, "zero-trust-workload-identity-manager", svc.Namespace)
-		assert.Equal(t, expectedServices[2].labels, svc.Labels)
+		assert.Equal(t, expectedServices[3].labels, svc.Labels)
 	})
 }
 
@@ -125,7 +156,7 @@ func TestGetSpireServerService(t *testing.T) {
 	expectedLabels := requiredServerResourceLabels
 	assert.Equal(t, expectedLabels, svc.Labels)
 
-	assert.Len(t, svc.Spec.Ports, 1)
+	assert.Len(t, svc.Spec.Ports, 2)
 	assert.Equal(t, "grpc", svc.Spec.Ports[0].Name)
 	assert.Equal(t, int32(443), svc.Spec.Ports[0].Port)
 	assert.Equal(t, "grpc", svc.Spec.Ports[0].TargetPort.String())
@@ -189,4 +220,8 @@ func TestGetSpireControllerMangerWebhookService(t *testing.T) {
 // helper to get intstr.IntOrString from string
 func intstrFromString(s string) intstr.IntOrString {
 	return intstr.IntOrString{Type: intstr.String, StrVal: s}
+}
+
+func intstrFromInt(i int32) intstr.IntOrString {
+	return intstr.IntOrString{Type: intstr.Int, IntVal: i}
 }

@@ -21,7 +21,7 @@ func (r *StaticResourceReconciler) CreateOrApplyServiceResources(ctx context.Con
 
 func (r *StaticResourceReconciler) listStaticServiceResource() []*corev1.Service {
 	staticServices := []*corev1.Service{}
-	staticServices = append(staticServices, r.getSpireServerService(), r.getSpireOIDCDiscoveryProviderService(), r.getSpireControllerMangerWebhookService())
+	staticServices = append(staticServices, r.getSpireServerService(), r.getSpireAgentService(), r.getSpireOIDCDiscoveryProviderService(), r.getSpireControllerMangerWebhookService())
 	return staticServices
 }
 
@@ -38,4 +38,9 @@ func (r *StaticResourceReconciler) getSpireServerService() *corev1.Service {
 func (r *StaticResourceReconciler) getSpireControllerMangerWebhookService() *corev1.Service {
 	spireControllerMangerWebhookService := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireControllerMangerWebhookServiceAssetName))
 	return spireControllerMangerWebhookService
+}
+
+func (r *StaticResourceReconciler) getSpireAgentService() *corev1.Service {
+	spireAgentService := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireAgentServiceAssetName))
+	return spireAgentService
 }

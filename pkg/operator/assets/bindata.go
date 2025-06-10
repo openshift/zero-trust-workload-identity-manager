@@ -5,6 +5,7 @@
 // bindata/spire-agent/spire-agent-cluster-role-binding.yaml
 // bindata/spire-agent/spire-agent-cluster-role.yaml
 // bindata/spire-agent/spire-agent-service-account.yaml
+// bindata/spire-agent/spire-agent-service.yaml
 // bindata/spire-bundle/spire-bundle-role-binding.yaml
 // bindata/spire-bundle/spire-bundle-role.yaml
 // bindata/spire-controller-manager/spire-controller-manager-cluster-role-binding.yaml
@@ -236,6 +237,43 @@ func spireAgentSpireAgentServiceAccountYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "spire-agent/spire-agent-service-account.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireAgentSpireAgentServiceYaml = []byte(`apiVersion: v1
+kind: Service
+metadata:
+  name: spire-agent
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: agent
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/version: "1.12.0"
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: 9402
+      targetPort: 9402
+  selector:
+    app.kubernetes.io/name: agent
+    app.kubernetes.io/instance: spire
+`)
+
+func spireAgentSpireAgentServiceYamlBytes() ([]byte, error) {
+	return _spireAgentSpireAgentServiceYaml, nil
+}
+
+func spireAgentSpireAgentServiceYaml() (*asset, error) {
+	bytes, err := spireAgentSpireAgentServiceYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-agent/spire-agent-service.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -775,6 +813,9 @@ spec:
       port: 443
       targetPort: grpc
       protocol: TCP
+    - name: metrics
+      port: 9402
+      targetPort: 9402
   selector:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
@@ -852,6 +893,7 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-agent/spire-agent-cluster-role-binding.yaml":                                   spireAgentSpireAgentClusterRoleBindingYaml,
 	"spire-agent/spire-agent-cluster-role.yaml":                                           spireAgentSpireAgentClusterRoleYaml,
 	"spire-agent/spire-agent-service-account.yaml":                                        spireAgentSpireAgentServiceAccountYaml,
+	"spire-agent/spire-agent-service.yaml":                                                spireAgentSpireAgentServiceYaml,
 	"spire-bundle/spire-bundle-role-binding.yaml":                                         spireBundleSpireBundleRoleBindingYaml,
 	"spire-bundle/spire-bundle-role.yaml":                                                 spireBundleSpireBundleRoleYaml,
 	"spire-controller-manager/spire-controller-manager-cluster-role-binding.yaml":         spireControllerManagerSpireControllerManagerClusterRoleBindingYaml,
@@ -919,6 +961,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"spire-agent-cluster-role-binding.yaml": {spireAgentSpireAgentClusterRoleBindingYaml, map[string]*bintree{}},
 		"spire-agent-cluster-role.yaml":         {spireAgentSpireAgentClusterRoleYaml, map[string]*bintree{}},
 		"spire-agent-service-account.yaml":      {spireAgentSpireAgentServiceAccountYaml, map[string]*bintree{}},
+		"spire-agent-service.yaml":              {spireAgentSpireAgentServiceYaml, map[string]*bintree{}},
 	}},
 	"spire-bundle": {nil, map[string]*bintree{
 		"spire-bundle-role-binding.yaml": {spireBundleSpireBundleRoleBindingYaml, map[string]*bintree{}},

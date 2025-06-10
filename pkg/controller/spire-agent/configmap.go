@@ -33,6 +33,12 @@ func GenerateAgentConfig(cfg *v1alpha1.SpireAgentConfig) map[string]interface{} 
 				{"memory": map[string]interface{}{"plugin_data": nil}},
 			},
 		},
+		"telemetry": map[string]interface{}{
+			"Prometheus": map[string]interface{}{
+				"host": "0.0.0.0",
+				"port": "9402",
+			},
+		},
 	}
 
 	if cfg.Spec.NodeAttestor != nil && cfg.Spec.NodeAttestor.K8sPSATEnabled == "true" {
