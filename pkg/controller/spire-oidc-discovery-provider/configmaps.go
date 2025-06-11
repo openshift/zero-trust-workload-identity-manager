@@ -11,7 +11,7 @@ import (
 )
 
 // GenerateOIDCConfigMapFromCR creates a ConfigMap for the spire oidc discovery provider from the CR spec
-func GenerateOIDCConfigMapFromCR(cr *v1alpha1.SpireOIDCDiscoveryProviderConfig) (*corev1.ConfigMap, error) {
+func GenerateOIDCConfigMapFromCR(cr *v1alpha1.SpireOIDCDiscoveryProvider) (*corev1.ConfigMap, error) {
 	if cr == nil {
 		return nil, errors.New("spire OIDC Discovery Provider Config is nil")
 	}

@@ -6,10 +6,10 @@ resources:
 - bases/clusterfederatedtrustdomains-spiffe-crd.yaml
 - bases/clusterspiffeids-spiffe-crd.yaml
 - bases/clusterstaticentries-spiffe-crd.yaml
-- bases/operator.openshift.io_spiffecsidriverconfigs.yaml
-- bases/operator.openshift.io_spireagentconfigs.yaml
-- bases/operator.openshift.io_spireoidcdiscoveryproviderconfigs.yaml
-- bases/operator.openshift.io_spireserverconfigs.yaml
+- bases/operator.openshift.io_spiffecsidrivers.yaml
+- bases/operator.openshift.io_spireagents.yaml
+- bases/operator.openshift.io_spireoidcdiscoveryproviders.yaml
+- bases/operator.openshift.io_spireservers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

@@ -4,22 +4,23 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
   creationTimestamp: null
-  name: spireoidcdiscoveryproviderconfigs.operator.openshift.io
+  name: spireagents.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
-    kind: SpireOIDCDiscoveryProviderConfig
-    listKind: SpireOIDCDiscoveryProviderConfigList
-    plural: spireoidcdiscoveryproviderconfigs
-    singular: spireoidcdiscoveryproviderconfig
+    kind: SpireAgent
+    listKind: SpireAgentList
+    plural: spireagents
+    singular: spireagent
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          SpireOIDCDiscoveryProviderConfig defines the configuration for the SPIRE OIDC Discovery Provider managed by zero trust workload identity manager.
-          This component allows workloads to authenticate using SPIFFE SVIDs via standard OIDC protocols.
+          SpireAgent defines the configuration for the SPIRE Agent managed by zero trust workload identity manager.
+          The agent runs on each node and is responsible for node attestation,
+          SVID rotation, and exposing the Workload API to local workloads.
         properties:
           apiVersion:
             description: |-
@@ -39,9 +40,8 @@ spec:
           metadata:
             type: object
           spec:
-            description: |-
-              SpireOIDCDiscoveryProviderConfigSpec will have specifications for configuration related to the spire oidc
-              discovery provider
+            description: SpireAgentSpec will have specifications for configuration
+              related to the spire agents.
             properties:
               affinity:
                 description: |-
@@ -965,13 +965,14 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
-              agentSocketName:
-                default: spire-agent.sock
-                description: agentSocketName is the name of the agent socket.
+              bundleConfigMap:
+                default: spire-bundle
+                description: bundleConfigMap is Configmap name for Spire bundle, it
+                  sets the trust domain to be used for the SPIFFE identifiers
                 type: string
-              jwtIssuer:
-                description: jwtIssuer is the path to JWT issuer. Defaults to "oidc-discovery.<trustDomain>"
-                  if unset
+              clusterName:
+                description: clusterName will have the cluster name required to configure
+                  spire agent.
                 type: string
               labels:
                 additionalProperties:
@@ -979,6 +980,19 @@ spec:
                 description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
+              nodeAttestor:
+                description: nodeAttestor specifies the configuration for the Node
+                  Attestor.
+                properties:
+                  k8sPSATEnabled:
+                    default: "true"
+                    description: k8sPSATEnabled tells if k8sPSAT configuration is
+                      enabled
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                type: object
               nodeSelector:
                 additionalProperties:
                   type: string
@@ -987,10 +1001,6 @@ spec:
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 type: object
                 x-kubernetes-map-type: atomic
-              replicaCount:
-                default: 1
-                description: replicaCount is the number of replicas for the OIDC provider.
-                type: integer
               resources:
                 description: |-
                   resources are for defining the resource requirements.
@@ -1097,12 +1107,63 @@ spec:
               trustDomain:
                 description: trustDomain to be used for the SPIFFE identifiers
                 type: string
+              workloadAttestors:
+                description: workloadAttestors specifies the configuration for the
+                  Workload Attestors.
+                properties:
+                  disableContainerSelectors:
+                    default: "false"
+                    description: |-
+                      disableContainerSelectors specifies whether to disable container selectors in the Kubernetes workload attestor.
+                      Set to true if using holdApplicationUntilProxyStarts in Istio
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                  k8sEnabled:
+                    default: "true"
+                    description: k8sEnabled explains if the configuration is enabled
+                      for k8s.
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                  useNewContainerLocator:
+                    default: "true"
+                    description: |-
+                      useNewContainerLocator enables the new container locator algorithm that has support for cgroups v2.
+                      Defaults to true
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                  workloadAttestorsVerification:
+                    description: |-
+                      workloadAttestorsVerification tells what kind of verification to do against kubelet.
+                      auto will first attempt to use hostCert, and then fall back to apiServerCA.
+                      Valid options are [auto, hostCert, apiServerCA, skip]
+                    properties:
+                      hostCertBasePath:
+                        default: /var/lib/kubelet/pki
+                        description: hostCertBasePath specifies the base Path where
+                          kubelet places its certificates.
+                        type: string
+                      hostCertFileName:
+                        description: hostCertFileName specifies the file name for
+                          the host certificate.
+                        type: string
+                      type:
+                        description: type specifies the type of verification to be
+                          used.
+                        type: string
+                    type: object
+                type: object
             required:
+            - clusterName
             - trustDomain
             type: object
           status:
-            description: |-
-              SpireOIDCDiscoveryProviderConfigStatus defines the observed state of spire-oidc discovery provider
+            description: SpireAgentStatus defines the observed state of spire agents
               related reconciliation made by operator
             properties:
               conditions:
@@ -1169,8 +1230,7 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - message: SpireOIDCDiscoveryProviderConfig is a singleton, .metadata.name
-            must be 'cluster'
+        - message: SpireAgent is a singleton, .metadata.name must be 'cluster'
           rule: self.metadata.name == 'cluster'
     served: true
     storage: true

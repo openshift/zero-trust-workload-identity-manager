@@ -14,13 +14,13 @@ import (
 func TestGenerateAgentConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		cfg      *v1alpha1.SpireAgentConfig
+		cfg      *v1alpha1.SpireAgent
 		expected map[string]interface{}
 	}{
 		{
 			name: "minimal config",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "example.org",
 				},
 			},
@@ -57,8 +57,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 		},
 		{
 			name: "config with k8s_psat node attestor enabled",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "test.domain",
 					ClusterName: "test-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
@@ -108,8 +108,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 		},
 		{
 			name: "config with k8s workload attestor enabled",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "workload.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled:                "true",
@@ -164,8 +164,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 		},
 		{
 			name: "config with both attestors enabled",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "full.domain",
 					ClusterName: "full-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
@@ -233,8 +233,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 		},
 		{
 			name: "config with node attestor disabled",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "disabled.domain",
 					ClusterName: "disabled-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
@@ -275,8 +275,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 		},
 		{
 			name: "config with workload attestor disabled",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "workload-disabled.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "false",
@@ -330,7 +330,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 
 	tests := []struct {
 		name                       string
-		spireAgentConfig           *v1alpha1.SpireAgentConfig
+		spireAgentConfig           *v1alpha1.SpireAgent
 		expectedConfigMapName      string
 		expectedConfigMapNamespace string
 		expectError                bool
@@ -338,12 +338,12 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 	}{
 		{
 			name: "successful configmap generation",
-			spireAgentConfig: &v1alpha1.SpireAgentConfig{
+			spireAgentConfig: &v1alpha1.SpireAgent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-agent-config",
 					Namespace: originalNamespace,
 				},
-				Spec: v1alpha1.SpireAgentConfigSpec{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "example.org",
 				},
 			},
@@ -354,12 +354,12 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 		},
 		{
 			name: "configmap with custom labels",
-			spireAgentConfig: &v1alpha1.SpireAgentConfig{
+			spireAgentConfig: &v1alpha1.SpireAgent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-agent-config",
 					Namespace: originalNamespace,
 				},
-				Spec: v1alpha1.SpireAgentConfigSpec{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "example.org",
 					ClusterName: "test-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
@@ -464,12 +464,12 @@ func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
 	// Mock the utils.OperatorNamespace for testing
 	originalNamespace := utils.OperatorNamespace
 
-	spireAgentConfig := &v1alpha1.SpireAgentConfig{
+	spireAgentConfig := &v1alpha1.SpireAgent{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "consistency-test",
 			Namespace: originalNamespace,
 		},
-		Spec: v1alpha1.SpireAgentConfigSpec{
+		Spec: v1alpha1.SpireAgentSpec{
 			TrustDomain: "consistency.test",
 			ClusterName: "consistency-cluster",
 			NodeAttestor: &v1alpha1.NodeAttestor{
@@ -503,12 +503,12 @@ func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
 func TestGenerateAgentConfigNilChecks(t *testing.T) {
 	tests := []struct {
 		name string
-		cfg  *v1alpha1.SpireAgentConfig
+		cfg  *v1alpha1.SpireAgent
 	}{
 		{
 			name: "nil node attestor",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain:  "test.domain",
 					NodeAttestor: nil,
 				},
@@ -516,8 +516,8 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 		},
 		{
 			name: "nil workload attestors",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain:       "test.domain",
 					WorkloadAttestors: nil,
 				},
@@ -525,8 +525,8 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 		},
 		{
 			name: "both nil",
-			cfg: &v1alpha1.SpireAgentConfig{
-				Spec: v1alpha1.SpireAgentConfigSpec{
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain:       "test.domain",
 					NodeAttestor:      nil,
 					WorkloadAttestors: nil,
@@ -558,13 +558,13 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 	// Mock the utils.OperatorNamespace for testing
 	originalNamespace := utils.OperatorNamespace
 
-	spireAgentConfig := &v1alpha1.SpireAgentConfig{
+	spireAgentConfig := &v1alpha1.SpireAgent{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "empty-labels-test",
 			Namespace: originalNamespace,
 			Labels:    nil, // Explicitly nil labels
 		},
-		Spec: v1alpha1.SpireAgentConfigSpec{
+		Spec: v1alpha1.SpireAgentSpec{
 			TrustDomain: "empty.labels",
 		},
 	}

@@ -1,26 +1,25 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  creationTimestamp: null
-  name: spireserverconfigs.operator.openshift.io
+  name: spiffecsidrivers.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
-    kind: SpireServerConfig
-    listKind: SpireServerConfigList
-    plural: spireserverconfigs
-    singular: spireserverconfig
+    kind: SpiffeCSIDriver
+    listKind: SpiffeCSIDriverList
+    plural: spiffecsidrivers
+    singular: spiffecsidriver
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          SpireServerConfig defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
-          This includes details related to trust domain, data storage, plugins
-          and other configs required for workload authentication.
+          SpiffeCSIDriver defines the configuration for the SPIFFE CSI Driver managed by zero trust workload identity manager.
+          This includes settings related to the registration, socket paths, plugin name and optional runtime flags that influence how the driver operates.
         properties:
           apiVersion:
             description: |-
@@ -40,8 +39,8 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpireServerConfigSpec will have specifications for configuration
-              related to the spire server.
+            description: SpiffeCSIDriverSpec will have specifications for configuration
+              related to the spiffe-csi driver.
             properties:
               affinity:
                 description: |-
@@ -965,120 +964,11 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
-              bundleConfigMap:
-                default: spire-bundle
-                description: bundleConfigMap is Configmap name for Spire bundle, it
-                  sets the trust domain to be used for the SPIFFE identifiers
+              agentSocketPath:
+                default: /run/spire/agent-sockets/spire-agent.sock
+                description: agentSocketPath is the path to spiffe csi driver the
+                  agent socket.
                 type: string
-              caSubject:
-                description: caSubject contains subject information for the Spire
-                  CA.
-                properties:
-                  commonName:
-                    description: commonName specifies the common name for the CA.
-                    type: string
-                  country:
-                    description: country specifies the country for the CA.
-                    type: string
-                  organization:
-                    description: organization specifies the organization for the CA.
-                    type: string
-                type: object
-              clusterName:
-                description: clusterName will have the cluster name required to configure
-                  spire server.
-                type: string
-              datastore:
-                description: spireSQLConfig has the config required for the spire
-                  server SQL DataStore.
-                properties:
-                  clientCertPath:
-                    type: string
-                  clientKeyPath:
-                    type: string
-                  connMaxLifetime:
-                    description: |-
-                      connMaxLifetime will specify maximum lifetime connections.
-                      Max time (in seconds) a connection may live.
-                    minimum: 0
-                    type: integer
-                  connectionString:
-                    default: /run/spire/data/datastore.sqlite3
-                    description: connectionString contain connection credentials required
-                      for spire server Datastore.
-                    type: string
-                  databaseType:
-                    default: sqlite3
-                    description: databaseType specifies type of database to use.
-                    enum:
-                    - sql
-                    - sqlite3
-                    - postgres
-                    - mysql
-                    - aws_postgresql
-                    - aws_mysql
-                    type: string
-                  disableMigration:
-                    default: "false"
-                    description: |-
-                      disableMigration specifies the migration state
-                      If true, disables DB auto-migration.
-                    enum:
-                    - "true"
-                    - "false"
-                    type: string
-                  maxIdleConns:
-                    default: 2
-                    description: maxIdleConns specifies the maximum idle connection
-                      to be configured.
-                    minimum: 0
-                    type: integer
-                  maxOpenConns:
-                    default: 100
-                    description: |-
-                      DB pool config
-                      maxOpenConns will specify the maximum connections for the DB pool.
-                    minimum: 0
-                    type: integer
-                  options:
-                    default: []
-                    description: options specifies extra DB options.
-                    items:
-                      type: string
-                    type: array
-                  rootCAPath:
-                    default: ""
-                    description: MySQL TLS options.
-                    type: string
-                required:
-                - connMaxLifetime
-                - connectionString
-                - databaseType
-                - maxIdleConns
-                - maxOpenConns
-                type: object
-              jwtIssuer:
-                description: jwtIssuer is the JWT issuer domain. Defaults to oidc-discovery.$trustDomain
-                  if unset
-                type: string
-              keyManager:
-                description: keyManager has configs for the spire server key manager.
-                properties:
-                  diskEnabled:
-                    default: "true"
-                    description: diskEnabled is a flag to enable keyManager on disk.
-                    enum:
-                    - "true"
-                    - "false"
-                    type: string
-                  memoryEnabled:
-                    default: "false"
-                    description: memoryEnabled is a flag to enable keyManager on memory
-                    enum:
-                    - "true"
-                    - "false"
-                    type: string
-                type: object
               labels:
                 additionalProperties:
                   type: string
@@ -1093,44 +983,11 @@ spec:
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 type: object
                 x-kubernetes-map-type: atomic
-              persistence:
-                description: persistence has config for spire server volume related
-                  configs
-                properties:
-                  accessMode:
-                    default: ReadWriteOnce
-                    description: accessMode for the volume.
-                    enum:
-                    - ReadWriteOnce
-                    - ReadWriteOncePod
-                    - ReadWriteMany
-                    type: string
-                  hostPath:
-                    default: ""
-                    description: hostPath to be used when type is hostPath.
-                    type: string
-                  size:
-                    default: 1Gi
-                    description: size of the persistent volume (e.g., 1Gi).
-                    pattern: ^[1-9][0-9]*Gi$
-                    type: string
-                  storageClass:
-                    default: ""
-                    description: storageClass to be used for the PVC.
-                    type: string
-                  type:
-                    default: pvc
-                    description: type of volume to use for persistence.
-                    enum:
-                    - pvc
-                    - hostPath
-                    - emptyDir
-                    type: string
-                required:
-                - accessMode
-                - size
-                - type
-                type: object
+              pluginName:
+                default: csi.spiffe.io
+                description: pluginName defines the name of the CSI plugin, Sets the
+                  csi driver name deployed to the cluster.
+                type: string
               resources:
                 description: |-
                   resources are for defining the resource requirements.
@@ -1234,16 +1091,10 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
-              trustDomain:
-                description: trustDomain to be used for the SPIFFE identifiers
-                type: string
-            required:
-            - clusterName
-            - trustDomain
             type: object
           status:
-            description: SpireServerConfigStatus defines the observed state of spire-server
-              related reconciliation made by operator
+            description: SpiffeCSIDriverStatus defines the observed state of spiffe
+              csi driver related reconciliation  made by operator
             properties:
               conditions:
                 description: conditions holds information of the current state of
@@ -1309,15 +1160,9 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - message: SpireServerConfig is a singleton, .metadata.name must be 'cluster'
+        - message: SpiffeCSIDriver is a singleton, .metadata.name must be 'cluster'
           rule: self.metadata.name == 'cluster'
     served: true
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
