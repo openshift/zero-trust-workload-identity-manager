@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func GenerateAgentConfig(cfg *v1alpha1.SpireAgentConfig) map[string]interface{} {
+func GenerateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 	agentConf := map[string]interface{}{
 		"agent": map[string]interface{}{
 			"data_dir":          "/var/lib/spire",
@@ -70,7 +70,7 @@ func GenerateAgentConfig(cfg *v1alpha1.SpireAgentConfig) map[string]interface{} 
 	return agentConf
 }
 
-func GenerateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgentConfig) (*corev1.ConfigMap, string, error) {
+func GenerateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent) (*corev1.ConfigMap, string, error) {
 	agentConfig := GenerateAgentConfig(spireAgentConfig)
 	agentConfigJSON, err := json.MarshalIndent(agentConfig, "", "  ")
 	if err != nil {

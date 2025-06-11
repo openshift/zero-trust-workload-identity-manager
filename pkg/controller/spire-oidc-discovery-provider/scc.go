@@ -10,7 +10,7 @@ import (
 )
 
 // generateSpireOIDCDiscoveryProviderSCC returns a SecurityContextConstraints object for spire-oidc-discovery-provider
-func generateSpireOIDCDiscoveryProviderSCC(config *v1alpha1.SpireOIDCDiscoveryProviderConfig) *securityv1.SecurityContextConstraints {
+func generateSpireOIDCDiscoveryProviderSCC(config *v1alpha1.SpireOIDCDiscoveryProvider) *securityv1.SecurityContextConstraints {
 	labels := map[string]string{}
 	for key, value := range config.Spec.Labels {
 		labels[key] = value
@@ -36,7 +36,6 @@ func generateSpireOIDCDiscoveryProviderSCC(config *v1alpha1.SpireOIDCDiscoveryPr
 		},
 		Users: []string{
 			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-oidc-discovery-provider",
-			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-oidc-discovery-provider-pre-delete",
 		},
 		Volumes: []securityv1.FSType{
 			securityv1.FSTypeConfigMap,

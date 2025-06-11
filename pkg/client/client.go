@@ -49,10 +49,10 @@ var (
 
 	cacheResourceWithoutReqSelectors = []client.Object{
 		&v1alpha1.ZeroTrustWorkloadIdentityManager{},
-		&v1alpha1.SpireAgentConfig{},
-		&v1alpha1.SpiffeCSIDriverConfig{},
-		&v1alpha1.SpireServerConfig{},
-		&v1alpha1.SpireOIDCDiscoveryProviderConfig{},
+		&v1alpha1.SpireAgent{},
+		&v1alpha1.SpiffeCSIDriver{},
+		&v1alpha1.SpireServer{},
+		&v1alpha1.SpireOIDCDiscoveryProvider{},
 	}
 
 	informerResources = []client.Object{
@@ -69,10 +69,10 @@ var (
 		&appsv1.StatefulSet{},
 		&admissionregistrationv1.ValidatingWebhookConfiguration{},
 		&v1alpha1.ZeroTrustWorkloadIdentityManager{},
-		&v1alpha1.SpireAgentConfig{},
-		&v1alpha1.SpiffeCSIDriverConfig{},
-		&v1alpha1.SpireServerConfig{},
-		&v1alpha1.SpireOIDCDiscoveryProviderConfig{},
+		&v1alpha1.SpireAgent{},
+		&v1alpha1.SpiffeCSIDriver{},
+		&v1alpha1.SpireServer{},
+		&v1alpha1.SpireOIDCDiscoveryProvider{},
 	}
 )
 

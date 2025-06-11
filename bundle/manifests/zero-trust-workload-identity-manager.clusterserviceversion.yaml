@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: ""
-    createdAt: "2025-06-06T06:52:43Z"
+    createdAt: "2025-06-11T08:43:26Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -61,22 +61,22 @@ spec:
     - kind: ClusterStaticEntry
       name: clusterstaticentries.spire.spiffe.io
       version: v1alpha1
-    - kind: SpiffeCSIDriverConfig
-      name: spiffecsidriverconfigs.operator.openshift.io
+    - kind: SpiffeCSIDriver
+      name: spiffecsidrivers.operator.openshift.io
       version: v1alpha1
-    - kind: SpireAgentConfig
-      name: spireagentconfigs.operator.openshift.io
+    - kind: SpireAgent
+      name: spireagents.operator.openshift.io
       version: v1alpha1
-    - kind: SpireOIDCDiscoveryProviderConfig
-      name: spireoidcdiscoveryproviderconfigs.operator.openshift.io
+    - kind: SpireOIDCDiscoveryProvider
+      name: spireoidcdiscoveryproviders.operator.openshift.io
       version: v1alpha1
-    - kind: SpireServerConfig
-      name: spireserverconfigs.operator.openshift.io
+    - kind: SpireServer
+      name: spireservers.operator.openshift.io
       version: v1alpha1
     - kind: ZeroTrustWorkloadIdentityManager
       name: zerotrustworkloadidentitymanagers.operator.openshift.io
       version: v1alpha1
-  description: The Zero Trust Workload Identity Manager is a Openshift Day-2 Operator
+  description: The Zero Trust Workload Identity Manager is an Openshift Day-2 Operator
     designed to automate the setup and management of SPIFFE/SPIRE components (like
     spire-server, spire-agent, spiffe-csi-driver, and oidc-discovery-provider) within
     OpenShift clusters. It enables zero-trust security by dynamically issuing and
@@ -165,10 +165,10 @@ spec:
         - apiGroups:
           - operator.openshift.io
           resources:
-          - spiffecsidriverconfigs
-          - spireagentconfigs
-          - spireoidcdiscoveryproviderconfigs
-          - spireserverconfigs
+          - spiffecsidrivers
+          - spireagents
+          - spireoidcdiscoveryproviders
+          - spireservers
           - zerotrustworkloadidentitymanagers
           verbs:
           - create
@@ -181,20 +181,20 @@ spec:
         - apiGroups:
           - operator.openshift.io
           resources:
-          - spiffecsidriverconfigs/finalizers
-          - spireagentconfigs/finalizers
-          - spireoidcdiscoveryproviderconfigs/finalizers
-          - spireserverconfigs/finalizers
+          - spiffecsidrivers/finalizers
+          - spireagents/finalizers
+          - spireoidcdiscoveryproviders/finalizers
+          - spireservers/finalizers
           - zerotrustworkloadidentitymanagers/finalizers
           verbs:
           - update
         - apiGroups:
           - operator.openshift.io
           resources:
-          - spiffecsidriverconfigs/status
-          - spireagentconfigs/status
-          - spireoidcdiscoveryproviderconfigs/status
-          - spireserverconfigs/status
+          - spiffecsidrivers/status
+          - spireagents/status
+          - spireoidcdiscoveryproviders/status
+          - spireservers/status
           - zerotrustworkloadidentitymanagers/status
           verbs:
           - get

@@ -73,11 +73,10 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 }
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
-	var server v1alpha1.SpireServerConfig
+	var server v1alpha1.SpireServer
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &server); err != nil {
 		if kerrors.IsNotFound(err) {
-			r.log.Info("SpireServerConfig resource not found. Ignoring since object must be deleted or not been created.")
+			r.log.Info("SpireServer resource not found. Ignoring since object must be deleted or not been created.")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -352,7 +351,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(controllerManagedResources)
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireServerConfig{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).

@@ -11,7 +11,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentConfigSpec, spireAgentConfigHash string) *appsv1.DaemonSet {
+func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfigHash string) *appsv1.DaemonSet {
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
