@@ -67,12 +67,12 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 }
 
 func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("Reconciling SpireOIDCDiscoveryProviderConfig controller")
+	r.log.Info("Reconciling SpireOIDCDiscoveryProvider controller")
 
 	var oidcDiscoveryProviderConfig v1alpha1.SpireOIDCDiscoveryProvider
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &oidcDiscoveryProviderConfig); err != nil {
 		if kerrors.IsNotFound(err) {
-			r.log.Info("SpireOidcDiscoveryProviderConfig resource not found. Ignoring since object must be deleted or not been created.")
+			r.log.Info("SpireOidcDiscoveryProvider resource not found. Ignoring since object must be deleted or not been created.")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err

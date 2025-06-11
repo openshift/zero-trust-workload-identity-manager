@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: ""
-    createdAt: "2025-06-11T06:53:27Z"
+    createdAt: "2025-06-11T08:43:26Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -76,7 +76,7 @@ spec:
     - kind: ZeroTrustWorkloadIdentityManager
       name: zerotrustworkloadidentitymanagers.operator.openshift.io
       version: v1alpha1
-  description: The Zero Trust Workload Identity Manager is a Openshift Day-2 Operator
+  description: The Zero Trust Workload Identity Manager is an Openshift Day-2 Operator
     designed to automate the setup and management of SPIFFE/SPIRE components (like
     spire-server, spire-agent, spiffe-csi-driver, and oidc-discovery-provider) within
     OpenShift clusters. It enables zero-trust security by dynamically issuing and

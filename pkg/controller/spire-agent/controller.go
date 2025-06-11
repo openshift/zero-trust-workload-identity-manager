@@ -75,7 +75,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var agent v1alpha1.SpireAgent
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &agent); err != nil {
 		if kerrors.IsNotFound(err) {
-			r.log.Info("SpireAgentConfig resource not found. Ignoring since object must be deleted or not been created.")
+			r.log.Info("SpireAgent resource not found. Ignoring since object must be deleted or not been created.")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err

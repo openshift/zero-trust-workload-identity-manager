@@ -71,7 +71,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &spiffeCSIDriver); err != nil {
 		if kerrors.IsNotFound(err) {
-			r.log.Info("SpiffeCsiConfig resource not found. Ignoring since object must be deleted or not been created.")
+			r.log.Info("SpiffeCsiDriver resource not found. Ignoring since object must be deleted or not been created.")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
