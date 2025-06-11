@@ -16,7 +16,7 @@ import (
 const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
 const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
 
-func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spireServerConfigMapHash string,
+func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "server",

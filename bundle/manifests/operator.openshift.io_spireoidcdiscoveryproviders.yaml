@@ -1,24 +1,24 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  name: spireoidcdiscoveryproviderconfigs.operator.openshift.io
+  creationTimestamp: null
+  name: spireoidcdiscoveryproviders.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
-    kind: SpireOIDCDiscoveryProviderConfig
-    listKind: SpireOIDCDiscoveryProviderConfigList
-    plural: spireoidcdiscoveryproviderconfigs
-    singular: spireoidcdiscoveryproviderconfig
+    kind: SpireOIDCDiscoveryProvider
+    listKind: SpireOIDCDiscoveryProviderList
+    plural: spireoidcdiscoveryproviders
+    singular: spireoidcdiscoveryprovider
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          SpireOIDCDiscoveryProviderConfig defines the configuration for the SPIRE OIDC Discovery Provider managed by zero trust workload identity manager.
+          SpireOIDCDiscoveryProvider defines the configuration for the SPIRE OIDC Discovery Provider managed by zero trust workload identity manager.
           This component allows workloads to authenticate using SPIFFE SVIDs via standard OIDC protocols.
         properties:
           apiVersion:
@@ -40,7 +40,7 @@ spec:
             type: object
           spec:
             description: |-
-              SpireOIDCDiscoveryProviderConfigSpec will have specifications for configuration related to the spire oidc
+              SpireOIDCDiscoveryProviderSpec will have specifications for configuration related to the spire oidc
               discovery provider
             properties:
               affinity:
@@ -1102,7 +1102,7 @@ spec:
             type: object
           status:
             description: |-
-              SpireOIDCDiscoveryProviderConfigStatus defines the observed state of spire-oidc discovery provider
+              SpireOIDCDiscoveryProviderStatus defines the observed state of spire-oidc discovery provider
               related reconciliation made by operator
             properties:
               conditions:
@@ -1169,10 +1169,16 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - message: SpireOIDCDiscoveryProviderConfig is a singleton, .metadata.name
-            must be 'cluster'
+        - message: SpireOIDCDiscoveryProvider is a singleton, .metadata.name must
+            be 'cluster'
           rule: self.metadata.name == 'cluster'
     served: true
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

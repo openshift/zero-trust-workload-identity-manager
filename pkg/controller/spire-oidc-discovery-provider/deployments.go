@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProviderConfig, spireOidcConfigMapHash string) *appsv1.Deployment {
+func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfigMapHash string) *appsv1.Deployment {
 	labels := map[string]string{
 		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
 		"app.kubernetes.io/instance": "spire",

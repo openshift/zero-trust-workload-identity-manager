@@ -72,7 +72,7 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 }
 
 func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var agent v1alpha1.SpireAgentConfig
+	var agent v1alpha1.SpireAgent
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &agent); err != nil {
 		if kerrors.IsNotFound(err) {
 			r.log.Info("SpireAgentConfig resource not found. Ignoring since object must be deleted or not been created.")
@@ -275,7 +275,7 @@ func (r *SpireAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(controllerManagedResources)
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireAgentConfig{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireAgent{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName).
 		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).

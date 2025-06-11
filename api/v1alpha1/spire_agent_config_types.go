@@ -9,21 +9,21 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireAgentConfig is a singleton, .metadata.name must be 'cluster'"
-// +operator-sdk:csv:customresourcedefinitions:displayName="SpireAgentConfig"
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireAgent is a singleton, .metadata.name must be 'cluster'"
+// +operator-sdk:csv:customresourcedefinitions:displayName="SpireAgent"
 
-// SpireAgentConfig defines the configuration for the SPIRE Agent managed by zero trust workload identity manager.
+// SpireAgent defines the configuration for the SPIRE Agent managed by zero trust workload identity manager.
 // The agent runs on each node and is responsible for node attestation,
 // SVID rotation, and exposing the Workload API to local workloads.
-type SpireAgentConfig struct {
+type SpireAgent struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              SpireAgentConfigSpec   `json:"spec,omitempty"`
-	Status            SpireAgentConfigStatus `json:"status,omitempty"`
+	Spec              SpireAgentSpec   `json:"spec,omitempty"`
+	Status            SpireAgentStatus `json:"status,omitempty"`
 }
 
-// SpireAgentConfigSpec will have specifications for configuration related to the spire agents.
-type SpireAgentConfigSpec struct {
+// SpireAgentSpec will have specifications for configuration related to the spire agents.
+type SpireAgentSpec struct {
 
 	// trustDomain to be used for the SPIFFE identifiers
 	// +kubebuilder:validation:Required
@@ -104,8 +104,8 @@ type WorkloadAttestorsVerification struct {
 	HostCertFileName string `json:"hostCertFileName,omitempty"`
 }
 
-// SpireAgentConfigStatus defines the observed state of spire agents related reconciliation made by operator
-type SpireAgentConfigStatus struct {
+// SpireAgentStatus defines the observed state of spire agents related reconciliation made by operator
+type SpireAgentStatus struct {
 	// conditions holds information of the current state of the spire agents deployment.
 	ConditionalStatus `json:",inline,omitempty"`
 }
@@ -113,13 +113,13 @@ type SpireAgentConfigStatus struct {
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// SpireAgentConfigList contain the list of SpireAgentConfig
-type SpireAgentConfigList struct {
+// SpireAgentList contain the list of SpireAgent
+type SpireAgentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SpireAgentConfig `json:"items"`
+	Items           []SpireAgent `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&SpireAgentConfig{}, &SpireAgentConfigList{})
+	SchemeBuilder.Register(&SpireAgent{}, &SpireAgentList{})
 }

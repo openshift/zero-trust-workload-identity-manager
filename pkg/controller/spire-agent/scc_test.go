@@ -13,8 +13,8 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	customLabels := map[string]string{
 		"custom-label": "custom-value",
 	}
-	config := &v1alpha1.SpireAgentConfig{
-		Spec: v1alpha1.SpireAgentConfigSpec{
+	config := &v1alpha1.SpireAgent{
+		Spec: v1alpha1.SpireAgentSpec{
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: customLabels,
 			},

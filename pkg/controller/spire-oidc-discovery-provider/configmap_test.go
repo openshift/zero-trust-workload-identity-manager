@@ -14,8 +14,8 @@ import (
 func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 	t.Run("should generate ConfigMap with all default values", func(t *testing.T) {
 		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
 			},
 		}
@@ -72,8 +72,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 			"app":     "spire-oidc",
 			"version": "v1.0",
 		}
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain:     "custom.domain.com",
 				AgentSocketName: "custom-agent.sock",
 				JwtIssuer:       "custom-jwt-issuer.example.com",
@@ -127,8 +127,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 	t.Run("should handle empty AgentSocketName with default", func(t *testing.T) {
 		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain:     "test.domain",
 				AgentSocketName: "", // Empty should use default
 			},
@@ -150,8 +150,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 	t.Run("should handle empty JwtIssuer with default based on trust domain", func(t *testing.T) {
 		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "test.domain",
 				JwtIssuer:   "", // Empty should use default
 			},
@@ -175,8 +175,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 	t.Run("should generate valid OIDC config structure", func(t *testing.T) {
 		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
 			},
 		}
@@ -216,8 +216,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 	t.Run("should generate valid spiffe-helper.conf content", func(t *testing.T) {
 		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain:     "example.org",
 				AgentSocketName: "custom.sock",
 			},
@@ -247,8 +247,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 	t.Run("should generate valid default.conf nginx content", func(t *testing.T) {
 		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
 			},
 		}
@@ -274,8 +274,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 	t.Run("should return error for invalid JSON marshaling scenario", func(t *testing.T) {
 		// This test would require mocking the json.MarshalIndent function
 		// For demonstration, we'll test with a valid case and ensure no error occurs
-		cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
 			},
 		}
@@ -333,8 +333,8 @@ func TestGenerateOIDCConfigMapFromCR_TrustDomains(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					TrustDomain: tc.trustDomain,
 					JwtIssuer:   tc.jwtIssuer,
 				},
@@ -356,8 +356,8 @@ func TestGenerateOIDCConfigMapFromCR_TrustDomains(t *testing.T) {
 
 // Test to verify JSON formatting
 func TestOIDCConfigJSONFormatting(t *testing.T) {
-	cr := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-		Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+	cr := &v1alpha1.SpireOIDCDiscoveryProvider{
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 			TrustDomain: "example.org",
 		},
 	}

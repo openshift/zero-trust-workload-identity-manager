@@ -11,7 +11,7 @@ import (
 )
 
 // generateSpireAgentSCC returns a SecurityContextConstraints object for spire-agent
-func generateSpireAgentSCC(config *v1alpha1.SpireAgentConfig) *securityv1.SecurityContextConstraints {
+func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityContextConstraints {
 	labels := map[string]string{
 		"app":                      "spire-agent",
 		utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,

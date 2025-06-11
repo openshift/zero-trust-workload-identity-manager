@@ -77,10 +77,10 @@ rules:
 - apiGroups:
   - operator.openshift.io
   resources:
-  - spiffecsidriverconfigs
-  - spireagentconfigs
-  - spireoidcdiscoveryproviderconfigs
-  - spireserverconfigs
+  - spiffecsidrivers
+  - spireagents
+  - spireoidcdiscoveryproviders
+  - spireservers
   - zerotrustworkloadidentitymanagers
   verbs:
   - create
@@ -93,20 +93,20 @@ rules:
 - apiGroups:
   - operator.openshift.io
   resources:
-  - spiffecsidriverconfigs/finalizers
-  - spireagentconfigs/finalizers
-  - spireoidcdiscoveryproviderconfigs/finalizers
-  - spireserverconfigs/finalizers
+  - spiffecsidrivers/finalizers
+  - spireagents/finalizers
+  - spireoidcdiscoveryproviders/finalizers
+  - spireservers/finalizers
   - zerotrustworkloadidentitymanagers/finalizers
   verbs:
   - update
 - apiGroups:
   - operator.openshift.io
   resources:
-  - spiffecsidriverconfigs/status
-  - spireagentconfigs/status
-  - spireoidcdiscoveryproviderconfigs/status
-  - spireserverconfigs/status
+  - spiffecsidrivers/status
+  - spireagents/status
+  - spireoidcdiscoveryproviders/status
+  - spireservers/status
   - zerotrustworkloadidentitymanagers/status
   verbs:
   - get
