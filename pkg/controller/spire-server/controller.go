@@ -34,7 +34,7 @@ import (
 
 const (
 	SpireServerStatefulSetGeneration          = "SpireServerStatefulSetGeneration"
-	SpireServerConfigMapGeneration            = "SpireServerConfigMapGeneration"
+	SpireServerMapGeneration            = "SpireServerMapGeneration"
 	SpireControllerManagerConfigMapGeneration = "SpireControllerManagerConfigMapGeneration"
 	SpireBundleConfigMapGeneration            = "SpireBundleConfigMapGeneration"
 )
@@ -74,10 +74,10 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	var server v1alpha1.SpireServerConfig
+	var server v1alpha1.SpireServer
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &server); err != nil {
 		if kerrors.IsNotFound(err) {
-			r.log.Info("SpireServerConfig resource not found. Ignoring since object must be deleted or not been created.")
+			r.log.Info("SpireServer resource not found. Ignoring since object must be deleted or not been created.")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -112,12 +112,12 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		server.Spec.JwtIssuer = "oidc-discovery." + server.Spec.TrustDomain
 	}
 
-	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)
+	spireServerConfigMap, err := GenerateSpireServerMap(&server.Spec)
 	if err != nil {
 		r.log.Error(err, "failed to generate spire server config map")
-		reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+		reconcileStatus[SpireServerMapGeneration] = reconcilerStatus{
 			Status:  metav1.ConditionFalse,
-			Reason:  "SpireServerConfigMapGenerationFailed",
+			Reason:  "SpireServerMapGenerationFailed",
 			Message: err.Error(),
 		}
 		return ctrl.Result{}, err
@@ -125,9 +125,9 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Set owner reference so GC cleans up when CR is deleted
 	if err = controllerutil.SetControllerReference(&server, spireServerConfigMap, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference")
-		reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+		reconcileStatus[SpireServerMapGeneration] = reconcilerStatus{
 			Status:  metav1.ConditionFalse,
-			Reason:  "SpireServerConfigMapGenerationFailed",
+			Reason:  "SpireServerMapGenerationFailed",
 			Message: err.Error(),
 		}
 		return ctrl.Result{}, err
@@ -137,9 +137,9 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireServerConfigMap.Name, Namespace: spireServerConfigMap.Namespace}, &existingSpireServerCM)
 	if err != nil && kerrors.IsNotFound(err) {
 		if err = r.ctrlClient.Create(ctx, spireServerConfigMap); err != nil {
-			reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+			reconcileStatus[SpireServerMapGeneration] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
-				Reason:  "SpireServerConfigMapGenerationFailed",
+				Reason:  "SpireServerMapGenerationFailed",
 				Message: err.Error(),
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
@@ -148,23 +148,23 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	} else if err == nil && existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] {
 		existingSpireServerCM.Data = spireServerConfigMap.Data
 		if err = r.ctrlClient.Update(ctx, &existingSpireServerCM); err != nil {
-			reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+			reconcileStatus[SpireServerMapGeneration] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
-				Reason:  "SpireServerConfigMapGenerationFailed",
+				Reason:  "SpireServerMapGenerationFailed",
 				Message: err.Error(),
 			}
 			return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
 		}
 		r.log.Info("Updated ConfigMap with new config")
 	} else if err != nil {
-		reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+		reconcileStatus[SpireServerMapGeneration] = reconcilerStatus{
 			Status:  metav1.ConditionFalse,
-			Reason:  "SpireServerConfigMapGenerationFailed",
+			Reason:  "SpireServerMapGenerationFailed",
 			Message: err.Error(),
 		}
 		return ctrl.Result{}, err
 	}
-	reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+	reconcileStatus[SpireServerMapGeneration] = reconcilerStatus{
 		Status:  metav1.ConditionTrue,
 		Reason:  "SpireConfigMapResourceCreated",
 		Message: "SpireServer config map resources applied",
@@ -352,7 +352,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(controllerManagedResources)
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireServerConfig{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
@@ -365,7 +365,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // needsUpdate returns true if StatefulSet needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.StatefulSet) bool {
-	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
+	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerHashAnnotationKey] {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
 		return true

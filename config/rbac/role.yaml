@@ -80,7 +80,7 @@ rules:
   - spiffecsidriverconfigs
   - spireagentconfigs
   - spireoidcdiscoveryproviderconfigs
-  - spireserverconfigs
+  - spireservers
   - zerotrustworkloadidentitymanagers
   verbs:
   - create
@@ -96,7 +96,7 @@ rules:
   - spiffecsidriverconfigs/finalizers
   - spireagentconfigs/finalizers
   - spireoidcdiscoveryproviderconfigs/finalizers
-  - spireserverconfigs/finalizers
+  - spireservers/finalizers
   - zerotrustworkloadidentitymanagers/finalizers
   verbs:
   - update
@@ -106,7 +106,7 @@ rules:
   - spiffecsidriverconfigs/status
   - spireagentconfigs/status
   - spireoidcdiscoveryproviderconfigs/status
-  - spireserverconfigs/status
+  - spireservers/status
   - zerotrustworkloadidentitymanagers/status
   verbs:
   - get

@@ -9,21 +9,21 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServerConfig is a singleton, .metadata.name must be 'cluster'"
-// +operator-sdk:csv:customresourcedefinitions:displayName="SpireServerConfig"
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServer is a singleton, .metadata.name must be 'cluster'"
+// +operator-sdk:csv:customresourcedefinitions:displayName="SpireServer"
 
-// SpireServerConfig defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
+// SpireServer defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
 // This includes details related to trust domain, data storage, plugins
 // and other configs required for workload authentication.
-type SpireServerConfig struct {
+type SpireServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              SpireServerConfigSpec   `json:"spec,omitempty"`
-	Status            SpireServerConfigStatus `json:"status,omitempty"`
+	Spec              SpireServerSpec   `json:"spec,omitempty"`
+	Status            SpireServerStatus `json:"status,omitempty"`
 }
 
-// SpireServerConfigSpec will have specifications for configuration related to the spire server.
-type SpireServerConfigSpec struct {
+// SpireServerSpec will have specifications for configuration related to the spire server.
+type SpireServerSpec struct {
 
 	// trustDomain to be used for the SPIFFE identifiers
 	// +kubebuilder:validation:Required
@@ -165,8 +165,8 @@ type CASubject struct {
 	CommonName string `json:"commonName,omitempty"`
 }
 
-// SpireServerConfigStatus defines the observed state of spire-server related reconciliation made by operator
-type SpireServerConfigStatus struct {
+// SpireServerStatus defines the observed state of spire-server related reconciliation made by operator
+type SpireServerStatus struct {
 	// conditions holds information of the current state of the spire-server resources.
 	ConditionalStatus `json:",inline,omitempty"`
 }
@@ -174,13 +174,13 @@ type SpireServerConfigStatus struct {
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// SpireServerConfigList contain the list of SpireServerConfig
-type SpireServerConfigList struct {
+// SpireServerList contain the list of SpireServer
+type SpireServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SpireServerConfig `json:"items"`
+	Items           []SpireServer `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&SpireServerConfig{}, &SpireServerConfigList{})
+	SchemeBuilder.Register(&SpireServer{}, &SpireServerList{})
 }

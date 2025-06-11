@@ -9,7 +9,7 @@ resources:
 - bases/operator.openshift.io_spiffecsidriverconfigs.yaml
 - bases/operator.openshift.io_spireagentconfigs.yaml
 - bases/operator.openshift.io_spireoidcdiscoveryproviderconfigs.yaml
-- bases/operator.openshift.io_spireserverconfigs.yaml
+- bases/operator.openshift.io_spireservers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

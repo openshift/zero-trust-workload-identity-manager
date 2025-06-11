@@ -13,10 +13,10 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
+const spireServerStatefulSetSpireServerHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
 const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
 
-func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spireServerConfigMapHash string,
+func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "server",
@@ -47,7 +47,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerConfigSpec, spir
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						"kubectl.kubernetes.io/default-container":                          "spire-server",
-						spireServerStatefulSetSpireServerConfigHashAnnotationKey:           spireServerConfigMapHash,
+						spireServerStatefulSetSpireServerHashAnnotationKey:           spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: spireControllerMangerConfigMapHash,
 					},
 					Labels: labels,

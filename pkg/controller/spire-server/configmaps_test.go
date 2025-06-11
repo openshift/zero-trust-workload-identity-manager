@@ -9,12 +9,12 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-func TestGenerateSpireServerConfigMap(t *testing.T) {
+func TestGenerateSpireServerMap(t *testing.T) {
 	validConfig := createValidConfig()
 
 	tests := []struct {
 		name        string
-		config      *v1alpha1.SpireServerConfigSpec
+		config      *v1alpha1.SpireServerSpec
 		expectError bool
 		errorMsg    string
 	}{
@@ -31,7 +31,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		},
 		{
 			name: "Empty trust domain",
-			config: &v1alpha1.SpireServerConfigSpec{
+			config: &v1alpha1.SpireServerSpec{
 				TrustDomain:     "",
 				BundleConfigMap: "spire-bundle",
 				Datastore: &v1alpha1.DataStore{
@@ -44,7 +44,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		},
 		{
 			name: "Empty bundle configmap",
-			config: &v1alpha1.SpireServerConfigSpec{
+			config: &v1alpha1.SpireServerSpec{
 				TrustDomain:     "example.org",
 				BundleConfigMap: "",
 				Datastore: &v1alpha1.DataStore{
@@ -57,7 +57,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		},
 		{
 			name: "Nil datastore",
-			config: &v1alpha1.SpireServerConfigSpec{
+			config: &v1alpha1.SpireServerSpec{
 				TrustDomain:     "example.org",
 				BundleConfigMap: "spire-bundle",
 				Datastore:       nil,
@@ -69,7 +69,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, err := GenerateSpireServerConfigMap(tt.config)
+			cm, err := GenerateSpireServerMap(tt.config)
 
 			// Check error expectations
 			if tt.expectError {
@@ -335,7 +335,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		config      *v1alpha1.SpireServerConfigSpec
+		config      *v1alpha1.SpireServerSpec
 		expectError bool
 		errorMsg    string
 		checkFields map[string]string
@@ -354,7 +354,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 		},
 		{
 			name: "Empty trust domain",
-			config: &v1alpha1.SpireServerConfigSpec{
+			config: &v1alpha1.SpireServerSpec{
 				TrustDomain: "",
 				ClusterName: "test-cluster",
 			},
@@ -363,7 +363,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 		},
 		{
 			name: "Empty cluster name",
-			config: &v1alpha1.SpireServerConfigSpec{
+			config: &v1alpha1.SpireServerSpec{
 				TrustDomain: "example.org",
 				ClusterName: "",
 			},
@@ -442,7 +442,7 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		config      *v1alpha1.SpireServerConfigSpec
+		config      *v1alpha1.SpireServerSpec
 		expectError bool
 		errorMsg    string
 	}{
@@ -453,7 +453,7 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 		},
 		{
 			name: "Empty bundle configmap",
-			config: &v1alpha1.SpireServerConfigSpec{
+			config: &v1alpha1.SpireServerSpec{
 				BundleConfigMap: "",
 			},
 			expectError: true,
@@ -504,8 +504,8 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 }
 
 // Helper function to create a valid config for testing
-func createValidConfig() *v1alpha1.SpireServerConfigSpec {
-	return &v1alpha1.SpireServerConfigSpec{
+func createValidConfig() *v1alpha1.SpireServerSpec {
+	return &v1alpha1.SpireServerSpec{
 		TrustDomain:     "example.org",
 		ClusterName:     "test-cluster",
 		BundleConfigMap: "spire-bundle",

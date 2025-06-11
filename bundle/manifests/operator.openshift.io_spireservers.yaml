@@ -1,24 +1,24 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  name: spireserverconfigs.operator.openshift.io
+  creationTimestamp: null
+  name: spireservers.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
-    kind: SpireServerConfig
-    listKind: SpireServerConfigList
-    plural: spireserverconfigs
-    singular: spireserverconfig
+    kind: SpireServer
+    listKind: SpireServerList
+    plural: spireservers
+    singular: spireserver
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          SpireServerConfig defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
+          SpireServer defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
           This includes details related to trust domain, data storage, plugins
           and other configs required for workload authentication.
         properties:
@@ -40,7 +40,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpireServerConfigSpec will have specifications for configuration
+            description: SpireServerSpec will have specifications for configuration
               related to the spire server.
             properties:
               affinity:
@@ -1242,7 +1242,7 @@ spec:
             - trustDomain
             type: object
           status:
-            description: SpireServerConfigStatus defines the observed state of spire-server
+            description: SpireServerStatus defines the observed state of spire-server
               related reconciliation made by operator
             properties:
               conditions:
@@ -1309,9 +1309,15 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - message: SpireServerConfig is a singleton, .metadata.name must be 'cluster'
+        - message: SpireServer is a singleton, .metadata.name must be 'cluster'
           rule: self.metadata.name == 'cluster'
     served: true
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

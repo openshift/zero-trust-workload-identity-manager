@@ -66,9 +66,9 @@ type reconcilerStatus struct {
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=spireoidcdiscoveryproviderconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=spireoidcdiscoveryproviderconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=spireoidcdiscoveryproviderconfigs/finalizers,verbs=update
-// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireserverconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireserverconfigs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireserverconfigs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireservers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=spireservers/finalizers,verbs=update
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete

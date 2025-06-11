@@ -17,7 +17,7 @@ import (
 
 func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	// Setup test inputs
-	config := &v1alpha1.SpireServerConfigSpec{
+	config := &v1alpha1.SpireServerSpec{
 		CommonConfig: v1alpha1.CommonConfig{
 			Labels: map[string]string{
 				"custom-label": "test-value",
@@ -78,7 +78,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	t.Run("Validates Pod Template annotations", func(t *testing.T) {
 		expectedAnnotations := map[string]string{
 			"kubectl.kubernetes.io/default-container":                          "spire-server",
-			spireServerStatefulSetSpireServerConfigHashAnnotationKey:           serverConfigHash,
+			spireServerStatefulSetSpireServerHashAnnotationKey:           serverConfigHash,
 			spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: controllerConfigHash,
 		}
 
@@ -223,7 +223,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 
 	// Test with nil labels
 	t.Run("Handles nil labels gracefully", func(t *testing.T) {
-		configWithNilLabels := &v1alpha1.SpireServerConfigSpec{
+		configWithNilLabels := &v1alpha1.SpireServerSpec{
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: nil,
 			},
@@ -248,7 +248,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 
 	// Test with empty labels map
 	t.Run("Handles empty labels map gracefully", func(t *testing.T) {
-		configWithEmptyLabels := &v1alpha1.SpireServerConfigSpec{
+		configWithEmptyLabels := &v1alpha1.SpireServerSpec{
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: map[string]string{},
 			},
@@ -302,7 +302,7 @@ func findContainerByName(containers []corev1.Container, name string) *corev1.Con
 
 // Helper function creating a reference implementation of the expected StatefulSet
 // This is essentially a copy of the function being tested, used to detect regressions
-func createReferenceStatefulSet(config *v1alpha1.SpireServerConfigSpec, spireServerConfigMapHash string,
+func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "server",
@@ -330,7 +330,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerConfigSpec, spireSer
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						"kubectl.kubernetes.io/default-container":                          "spire-server",
-						spireServerStatefulSetSpireServerConfigHashAnnotationKey:           spireServerConfigMapHash,
+						spireServerStatefulSetSpireServerHashAnnotationKey:           spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: spireControllerMangerConfigMapHash,
 					},
 					Labels: labels,

@@ -51,7 +51,7 @@ var (
 		&v1alpha1.ZeroTrustWorkloadIdentityManager{},
 		&v1alpha1.SpireAgentConfig{},
 		&v1alpha1.SpiffeCSIDriverConfig{},
-		&v1alpha1.SpireServerConfig{},
+		&v1alpha1.SpireServer{},
 		&v1alpha1.SpireOIDCDiscoveryProviderConfig{},
 	}
 
@@ -71,7 +71,7 @@ var (
 		&v1alpha1.ZeroTrustWorkloadIdentityManager{},
 		&v1alpha1.SpireAgentConfig{},
 		&v1alpha1.SpiffeCSIDriverConfig{},
-		&v1alpha1.SpireServerConfig{},
+		&v1alpha1.SpireServer{},
 		&v1alpha1.SpireOIDCDiscoveryProviderConfig{},
 	}
 )

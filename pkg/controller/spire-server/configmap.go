@@ -24,8 +24,8 @@ type ControllerManagerConfigYAML struct {
 	spiffev1alpha.ControllerManagerConfig `json:",inline"`
 }
 
-// GenerateSpireServerConfigMap generates the spire-server ConfigMap
-func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerConfigSpec) (*corev1.ConfigMap, error) {
+// GenerateSpireServerMap generates the spire-server ConfigMap
+func GenerateSpireServerMap(config *v1alpha1.SpireServerSpec) (*corev1.ConfigMap, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -67,7 +67,7 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerConfigSpec) (*core
 }
 
 // generateServerConfMap builds the server.conf structure as a Go map
-func generateServerConfMap(config *v1alpha1.SpireServerConfigSpec) map[string]interface{} {
+func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interface{} {
 	return map[string]interface{}{
 		"health_checks": map[string]interface{}{
 			"bind_address":     "0.0.0.0",
@@ -181,7 +181,7 @@ func generateConfigHash(data []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func generateControllerManagerConfig(config *v1alpha1.SpireServerConfigSpec) (*ControllerManagerConfigYAML, error) {
+func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*ControllerManagerConfigYAML, error) {
 	if config.TrustDomain == "" {
 		return nil, errors.New("trust_domain is empty")
 	}
@@ -233,7 +233,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerConfigSpec) (*C
 	}, nil
 }
 
-func generateSpireControllerManagerConfigYaml(config *v1alpha1.SpireServerConfigSpec) (string, error) {
+func generateSpireControllerManagerConfigYaml(config *v1alpha1.SpireServerSpec) (string, error) {
 	controllerManagerConfig, err := generateControllerManagerConfig(config)
 	if err != nil {
 		return "", err
@@ -261,7 +261,7 @@ func generateControllerManagerConfigMap(configYAML string) *corev1.ConfigMap {
 	}
 }
 
-func generateSpireBundleConfigMap(config *v1alpha1.SpireServerConfigSpec) (*corev1.ConfigMap, error) {
+func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.ConfigMap, error) {
 	if config.BundleConfigMap == "" {
 		return nil, errors.New("bundle ConfigMap is empty")
 	}

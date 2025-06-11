@@ -70,8 +70,8 @@ spec:
     - kind: SpireOIDCDiscoveryProviderConfig
       name: spireoidcdiscoveryproviderconfigs.operator.openshift.io
       version: v1alpha1
-    - kind: SpireServerConfig
-      name: spireserverconfigs.operator.openshift.io
+    - kind: SpireServer
+      name: spireservers.operator.openshift.io
       version: v1alpha1
     - kind: ZeroTrustWorkloadIdentityManager
       name: zerotrustworkloadidentitymanagers.operator.openshift.io
@@ -168,7 +168,7 @@ spec:
           - spiffecsidriverconfigs
           - spireagentconfigs
           - spireoidcdiscoveryproviderconfigs
-          - spireserverconfigs
+          - spireservers
           - zerotrustworkloadidentitymanagers
           verbs:
           - create
@@ -184,7 +184,7 @@ spec:
           - spiffecsidriverconfigs/finalizers
           - spireagentconfigs/finalizers
           - spireoidcdiscoveryproviderconfigs/finalizers
-          - spireserverconfigs/finalizers
+          - spireservers/finalizers
           - zerotrustworkloadidentitymanagers/finalizers
           verbs:
           - update
@@ -194,7 +194,7 @@ spec:
           - spiffecsidriverconfigs/status
           - spireagentconfigs/status
           - spireoidcdiscoveryproviderconfigs/status
-          - spireserverconfigs/status
+          - spireservers/status
           - zerotrustworkloadidentitymanagers/status
           verbs:
           - get
