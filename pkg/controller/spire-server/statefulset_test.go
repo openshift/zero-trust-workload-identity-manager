@@ -78,7 +78,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	t.Run("Validates Pod Template annotations", func(t *testing.T) {
 		expectedAnnotations := map[string]string{
 			"kubectl.kubernetes.io/default-container":                          "spire-server",
-			spireServerStatefulSetSpireServerHashAnnotationKey:           serverConfigHash,
+			spireServerStatefulSetSpireServerHashAnnotationKey:                 serverConfigHash,
 			spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: controllerConfigHash,
 		}
 
@@ -330,7 +330,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						"kubectl.kubernetes.io/default-container":                          "spire-server",
-						spireServerStatefulSetSpireServerHashAnnotationKey:           spireServerConfigMapHash,
+						spireServerStatefulSetSpireServerHashAnnotationKey:                 spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: spireControllerMangerConfigMapHash,
 					},
 					Labels: labels,

@@ -34,7 +34,7 @@ import (
 
 const (
 	SpireServerStatefulSetGeneration          = "SpireServerStatefulSetGeneration"
-	SpireServerMapGeneration            = "SpireServerMapGeneration"
+	SpireServerMapGeneration                  = "SpireServerMapGeneration"
 	SpireControllerManagerConfigMapGeneration = "SpireControllerManagerConfigMapGeneration"
 	SpireBundleConfigMapGeneration            = "SpireBundleConfigMapGeneration"
 )

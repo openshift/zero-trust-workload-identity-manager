@@ -47,7 +47,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						"kubectl.kubernetes.io/default-container":                          "spire-server",
-						spireServerStatefulSetSpireServerHashAnnotationKey:           spireServerConfigMapHash,
+						spireServerStatefulSetSpireServerHashAnnotationKey:                 spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: spireControllerMangerConfigMapHash,
 					},
 					Labels: labels,
