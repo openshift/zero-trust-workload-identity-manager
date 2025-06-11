@@ -16,14 +16,14 @@ import (
 func TestBuildDeployment(t *testing.T) {
 	tests := []struct {
 		name     string
-		config   *v1alpha1.SpireOIDCDiscoveryProviderConfig
+		config   *v1alpha1.SpireOIDCDiscoveryProvider
 		hash     string
 		expected func(*appsv1.Deployment)
 	}{
 		{
 			name: "basic deployment with default settings",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{},
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{},
 			},
 			hash: "test-hash-123",
 			expected: func(deployment *appsv1.Deployment) {
@@ -35,8 +35,8 @@ func TestBuildDeployment(t *testing.T) {
 		},
 		{
 			name: "deployment with custom replica count",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					ReplicaCount: 3,
 				},
 			},
@@ -47,8 +47,8 @@ func TestBuildDeployment(t *testing.T) {
 		},
 		{
 			name: "deployment with custom labels",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					CommonConfig: v1alpha1.CommonConfig{
 						Labels: map[string]string{
 							"custom-label":           "custom-value",
@@ -70,8 +70,8 @@ func TestBuildDeployment(t *testing.T) {
 		},
 		{
 			name: "deployment with node selector",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					CommonConfig: v1alpha1.CommonConfig{
 						NodeSelector: map[string]string{
 							"node-type": "compute",
@@ -90,8 +90,8 @@ func TestBuildDeployment(t *testing.T) {
 		},
 		{
 			name: "deployment with affinity",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					CommonConfig: v1alpha1.CommonConfig{
 						Affinity: &corev1.Affinity{
 							NodeAffinity: &corev1.NodeAffinity{
@@ -121,8 +121,8 @@ func TestBuildDeployment(t *testing.T) {
 		},
 		{
 			name: "deployment with tolerations",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					CommonConfig: v1alpha1.CommonConfig{
 						Tolerations: []*corev1.Toleration{
 							{
@@ -154,8 +154,8 @@ func TestBuildDeployment(t *testing.T) {
 		},
 		{
 			name: "deployment with resource requirements",
-			config: &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					CommonConfig: v1alpha1.CommonConfig{
 						Resources: &corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{

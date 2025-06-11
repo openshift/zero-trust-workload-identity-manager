@@ -13,8 +13,8 @@ import (
 func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 	t.Run("should generate SCC with minimal config", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -46,8 +46,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 			"component":  "security",
 			"custom-key": "custom-value",
 		}
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: customLabels,
 				},
@@ -73,8 +73,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should set correct security context constraints", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -103,8 +103,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should set correct host permissions", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -124,8 +124,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should set correct privilege settings", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -143,8 +143,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should set correct users", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -157,16 +157,15 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 		// Assert
 		expectedUsers := []string{
 			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-oidc-discovery-provider",
-			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-oidc-discovery-provider-pre-delete",
 		}
 		assert.Equal(t, expectedUsers, result.Users)
-		assert.Len(t, result.Users, 2)
+		assert.Len(t, result.Users, 1)
 	})
 
 	t.Run("should set correct volume types", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -198,8 +197,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should set correct capability settings", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -220,8 +219,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should set correct groups and seccomp profiles", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{},
 				},
@@ -241,8 +240,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should handle nil config labels gracefully", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: nil,
 				},
@@ -264,8 +263,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should preserve existing managed-by label if present", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{
 						utils.AppManagedByLabelKey: "existing-value",
@@ -289,8 +288,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 
 	t.Run("should return consistent results across multiple calls", func(t *testing.T) {
 		// Arrange
-		config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+		config := &v1alpha1.SpireOIDCDiscoveryProvider{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{
 						"test": "value",
@@ -373,8 +372,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC_LabelScenarios(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+			config := &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 					CommonConfig: v1alpha1.CommonConfig{
 						Labels: tc.inputLabels,
 					},
@@ -389,8 +388,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC_LabelScenarios(t *testing.T) {
 
 // Test to verify all security settings are correctly configured
 func TestGenerateSpireOIDCDiscoveryProviderSCC_SecuritySettings(t *testing.T) {
-	config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-		Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+	config := &v1alpha1.SpireOIDCDiscoveryProvider{
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: map[string]string{},
 			},
@@ -427,8 +426,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC_NoMutation(t *testing.T) {
 	originalLabels := map[string]string{
 		"original": "value",
 	}
-	config := &v1alpha1.SpireOIDCDiscoveryProviderConfig{
-		Spec: v1alpha1.SpireOIDCDiscoveryProviderConfigSpec{
+	config := &v1alpha1.SpireOIDCDiscoveryProvider{
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: originalLabels,
 			},

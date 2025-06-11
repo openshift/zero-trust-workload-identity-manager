@@ -15,7 +15,7 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 	// Mock the utility functions that are called in the main function
 	// These would need to be properly mocked in a real test environment
 
-	config := v1alpha1.SpiffeCSIDriverConfigSpec{}
+	config := v1alpha1.SpiffeCSIDriverSpec{}
 
 	daemonSet := generateSpiffeCsiDriverDaemonSet(config)
 
