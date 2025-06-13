@@ -45,11 +45,12 @@ const (
 	SpireControllerManagerValidatingWebhookConfigurationAssetName = "spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml"
 
 	// Image Reference
-	SpireServerImageEnv                = "SPIRE_SERVER_IMAGE"
-	SpireAgentImageEnv                 = "SPIRE_AGENT_IMAGE"
-	SpiffeCSIDriverImageEnv            = "SPIFFE_CSI_DRIVER_IMAGE"
-	SpireOIDCDiscoveryProviderImageEnv = "SPIRE_OIDC_DISCOVERY_PROVIDER_IMAGE"
-	SpireControllerManagerImageEnv     = "SPIRE_CONTROLLER_MANAGER_IMAGE"
-	SpiffeHelperImageEnv               = "SPIFFE_HELPER_IMAGE"
-	NodeDriverRegistrarImageEnv        = "NODE_DRIVER_REGISTRAR_IMAGE"
+	SpireServerImageEnv                = "RELATED_IMAGE_SPIRE_SERVER"
+	SpireAgentImageEnv                 = "RELATED_IMAGE_SPIRE_AGENT"
+	SpiffeCSIDriverImageEnv            = "RELATED_IMAGE_SPIFFE_CSI_DRIVER"
+	SpireOIDCDiscoveryProviderImageEnv = "RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER"
+	SpireControllerManagerImageEnv     = "RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER"
+	SpiffeHelperImageEnv               = "RELATED_IMAGE_SPIFFE_HELPER"
+	NodeDriverRegistrarImageEnv        = "RELATED_IMAGE_NODE_DRIVER_REGISTRAR"
+	SpiffeCSIInitContainerImageEnv     = "RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER"
 )

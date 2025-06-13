@@ -51,7 +51,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 					InitContainers: []corev1.Container{
 						{
 							Name:  "set-context",
-							Image: "registry.access.redhat.com/ubi9:latest",
+							Image: utils.GetSpiffeCsiInitContainerImage(),
 							Command: []string{
 								"chcon", "-Rvt", "container_file_t", "spire-agent-socket/",
 							},
