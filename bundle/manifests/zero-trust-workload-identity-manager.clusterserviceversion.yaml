@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: ""
-    createdAt: "2025-06-11T08:43:26Z"
+    createdAt: "2025-06-13T11:06:24Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -307,20 +307,22 @@ spec:
                 env:
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
-                - name: SPIRE_SERVER_IMAGE
+                - name: RELATED_IMAGE_SPIRE_SERVER
                   value: ghcr.io/spiffe/spire-server:1.12.0
-                - name: SPIRE_AGENT_IMAGE
+                - name: RELATED_IMAGE_SPIRE_AGENT
                   value: ghcr.io/spiffe/spire-agent:1.12.0
-                - name: SPIFFE_CSI_DRIVER_IMAGE
+                - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
                   value: ghcr.io/spiffe/spiffe-csi-driver:0.2.3
-                - name: SPIRE_OIDC_DISCOVERY_PROVIDER_IMAGE
+                - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
                   value: ghcr.io/spiffe/oidc-discovery-provider:1.12.0
-                - name: SPIRE_CONTROLLER_MANAGER_IMAGE
+                - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
                   value: ghcr.io/spiffe/spire-controller-manager:0.6.0
-                - name: SPIFFE_HELPER_IMAGE
+                - name: RELATED_IMAGE_SPIFFE_HELPER
                   value: ghcr.io/spiffe/spiffe-helper:0.9.1
-                - name: NODE_DRIVER_REGISTRAR_IMAGE
+                - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
+                - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
+                  value: registry.access.redhat.com/ubi9:latest
                 image: openshift.io/zero-trust-workload-identity-manager:latest
                 livenessProbe:
                   httpGet:
@@ -379,4 +381,21 @@ spec:
   minKubeVersion: 1.25.0
   provider:
     name: Red Hat
+  relatedImages:
+  - image: ghcr.io/spiffe/spire-server:1.12.0
+    name: spire-server
+  - image: ghcr.io/spiffe/spire-agent:1.12.0
+    name: spire-agent
+  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.3
+    name: spiffe-csi-driver
+  - image: ghcr.io/spiffe/oidc-discovery-provider:1.12.0
+    name: spire-oidc-discovery-provider
+  - image: ghcr.io/spiffe/spire-controller-manager:0.6.0
+    name: spire-controller-manager
+  - image: ghcr.io/spiffe/spiffe-helper:0.9.1
+    name: spiffe-helper
+  - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
+    name: node-driver-registrar
+  - image: registry.access.redhat.com/ubi9:latest
+    name: spiffe-csi-init-container
   version: 0.1.0
