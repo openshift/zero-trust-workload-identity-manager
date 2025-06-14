@@ -5,7 +5,7 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
-    containerImage: ""
+    containerImage: openshift.io/zero-trust-workload-identity-manager
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
