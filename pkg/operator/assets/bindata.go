@@ -667,9 +667,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: https
-      port: 443
-      targetPort: https
+    - name: http
+      port: 80
+      targetPort: http
       protocol: TCP
   selector:
     app.kubernetes.io/name: spiffe-oidc-discovery-provider
