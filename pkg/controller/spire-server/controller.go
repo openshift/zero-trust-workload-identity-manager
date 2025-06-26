@@ -108,7 +108,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}(reconcileStatus)
 
 	if server.Spec.JwtIssuer == "" {
-		server.Spec.JwtIssuer = "oidc-discovery." + server.Spec.TrustDomain
+		server.Spec.JwtIssuer = "https://oidc-discovery." + server.Spec.TrustDomain
 	}
 
 	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)
