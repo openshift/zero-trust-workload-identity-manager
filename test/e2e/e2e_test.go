@@ -17,67 +17,45 @@ limitations under the License.
 package e2e
 
 import (
-	"fmt"
-	"os/exec"
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 
-	"github.com/openshift/zero-trust-workload-identity-manager/test/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const namespace = "zero-trust-workload-identity-manager"
+var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
+	var testCtx context.Context
 
-var _ = Describe("controller", Ordered, func() {
-	BeforeAll(func() {
-		// TODO: Add pre-req for tests
+	BeforeEach(func() {
+		var cancel context.CancelFunc
+		testCtx, cancel = context.WithTimeout(context.Background(), utils.DefaultTimeout)
+		DeferCleanup(cancel)
 	})
 
-	AfterAll(func() {
-		//TODO: add any clean up required after the tests.
-	})
+	Context("when installing the operator", func() {
+		It("should create a normal ZeroTrustWorkloadIdentityManager object", func() {
+			By("Waiting for all resource generation conditions to be True")
+			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, 2*time.Minute)
+		})
 
-	Context("Operator", func() {
-		It("should run successfully", func() {
-			var controllerPodName string
+		It("should create a healthy operator deployment", func() {
+			By("Waiting for operator deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, 2*time.Minute)
+		})
 
-			By("validating that the controller-manager pod is running as expected")
-			verifyControllerUp := func() error {
-				// Get pod name
+		It("should recover from the pod force deletion", func() {
+			By("Deleting operator pod manually")
+			err := clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorPodLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred(), "pod should be deleted")
 
-				cmd := exec.Command("kubectl", "get",
-					"pods", "-l", "control-plane=controller-manager",
-					"-o", "go-template={{ range .items }}"+
-						"{{ if not .metadata.deletionTimestamp }}"+
-						"{{ .metadata.name }}"+
-						"{{ \"\\n\" }}{{ end }}{{ end }}",
-					"-n", namespace,
-				)
-
-				podOutput, err := utils.Run(cmd)
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				podNames := utils.GetNonEmptyLines(string(podOutput))
-				if len(podNames) != 1 {
-					return fmt.Errorf("expect 1 controller pods running, but got %d", len(podNames))
-				}
-				controllerPodName = podNames[0]
-				ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
-
-				// Validate pod status
-				cmd = exec.Command("kubectl", "get",
-					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
-					"-n", namespace,
-				)
-				status, err := utils.Run(cmd)
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				if string(status) != "Running" {
-					return fmt.Errorf("controller pod in %s status", status)
-				}
-				return nil
-			}
-			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
-
+			By("Waiting for operator deployment to become Available again")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, 2*time.Minute)
 		})
 	})
 })
