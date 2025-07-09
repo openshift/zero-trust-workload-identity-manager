@@ -99,6 +99,8 @@ type reconcilerStatus struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=issuer,verbs=get;list;watch;create;update;patch;delete
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*StaticResourceReconciler, error) {
