@@ -17,67 +17,107 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 
-	"github.com/openshift/zero-trust-workload-identity-manager/test/utils"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const namespace = "zero-trust-workload-identity-manager"
+var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
+	var testCtx context.Context
 
-var _ = Describe("controller", Ordered, func() {
-	BeforeAll(func() {
-		// TODO: Add pre-req for tests
+	BeforeEach(func() {
+		var cancel context.CancelFunc
+		testCtx, cancel = context.WithTimeout(context.Background(), utils.DefaultTimeout)
+		DeferCleanup(cancel)
 	})
 
-	AfterAll(func() {
-		//TODO: add any clean up required after the tests.
-	})
-
-	Context("Operator", func() {
-		It("should run successfully", func() {
-			var controllerPodName string
-
-			By("validating that the controller-manager pod is running as expected")
-			verifyControllerUp := func() error {
-				// Get pod name
-
-				cmd := exec.Command("kubectl", "get",
-					"pods", "-l", "control-plane=controller-manager",
-					"-o", "go-template={{ range .items }}"+
-						"{{ if not .metadata.deletionTimestamp }}"+
-						"{{ .metadata.name }}"+
-						"{{ \"\\n\" }}{{ end }}{{ end }}",
-					"-n", namespace,
-				)
-
-				podOutput, err := utils.Run(cmd)
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				podNames := utils.GetNonEmptyLines(string(podOutput))
-				if len(podNames) != 1 {
-					return fmt.Errorf("expect 1 controller pods running, but got %d", len(podNames))
-				}
-				controllerPodName = podNames[0]
-				ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
-
-				// Validate pod status
-				cmd = exec.Command("kubectl", "get",
-					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
-					"-n", namespace,
-				)
-				status, err := utils.Run(cmd)
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				if string(status) != "Running" {
-					return fmt.Errorf("controller pod in %s status", status)
-				}
-				return nil
+	Context("when installing the operator", func() {
+		It("should create a healthy operator Deployment", func() {
+			By("Waiting for all managed CRDs to be Established")
+			managedCRDs := []string{
+				"zerotrustworkloadidentitymanagers.operator.openshift.io",
+				"spireservers.operator.openshift.io",
+				"spireagents.operator.openshift.io",
+				"spiffecsidrivers.operator.openshift.io",
+				"spireoidcdiscoveryproviders.operator.openshift.io",
+				"clusterspiffeids.spire.spiffe.io",
+				"clusterstaticentries.spire.spiffe.io",
+				"clusterfederatedtrustdomains.spire.spiffe.io",
 			}
-			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
+			for _, crd := range managedCRDs {
+				utils.WaitForCRDEstablished(testCtx, apiextClient, crd, utils.ShortTimeout)
+			}
 
+			By("Waiting for all resource generation conditions in ZeroTrustWorkloadIdentityManager object to be True")
+			conditionTypes := []string{
+				"RBACResourcesGeneration",
+				"ServiceResourcesGeneration",
+				"ServiceAccountResourcesGeneration",
+				"SpiffeCSIResourcesGeneration",
+				"ValidatingWebhookConfigurationResourcesGeneration",
+			}
+			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
+		})
+
+		It("should recover from the Pod force deletion", func() {
+			By("Getting operator Pod")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.OperatorLabelSelector})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+
+			// record pod(s) name into a map
+			oldPodNames := make(map[string]struct{})
+			for _, pod := range pods.Items {
+				oldPodNames[pod.Name] = struct{}{}
+			}
+
+			By("Deleting operator Pod manually")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for new Pod to be Running and old pod to be gone")
+			Eventually(func() bool {
+				newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.OperatorLabelSelector})
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to list pods: %v\n", err)
+					return false
+				}
+
+				if len(newPods.Items) == 0 {
+					fmt.Fprintf(GinkgoWriter, "no pod found with label '%s' in namespace '%s'\n", utils.OperatorLabelSelector, utils.OperatorNamespace)
+					return false
+				}
+
+				for _, pod := range newPods.Items {
+					if _, existed := oldPodNames[pod.Name]; existed {
+						fmt.Fprintf(GinkgoWriter, "old pod '%v' still exists\n", pod.Name)
+						return false
+					}
+					if pod.Status.Phase != corev1.PodRunning {
+						fmt.Fprintf(GinkgoWriter, "new pod '%v' is created but still in '%v' phase\n", pod.Name, pod.Status.Phase)
+						return false
+					}
+				}
+
+				return true
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"new pod should be running and old pod should be deleted successfully within %v", utils.ShortTimeout)
+
+			By("Waiting for operator Deployment to become Available again")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
 		})
 	})
 })
