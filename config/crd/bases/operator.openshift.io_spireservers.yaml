@@ -1236,6 +1236,185 @@ spec:
               trustDomain:
                 description: trustDomain to be used for the SPIFFE identifiers
                 type: string
+              upstreamAuthority:
+                description: |-
+                  UpstreamAuthority configures the upstream certificate authority plugin used by the SPIRE Server.
+                  This may be one of the supported plugins: "spire", "vault", or "cert-manager".
+                  If not specified, the SPIRE Server will not use an upstream authority.
+                properties:
+                  certManager:
+                    description: |-
+                      certManager plugin uses an instance of cert-manager running in Kubernetes to request
+                      intermediate signing certificates for SPIRE Server.
+                      This plugin will request a signing certificate from cert-manager via a CertificateRequest resource.
+                      Once the referenced issuer has signed the request, the intermediate and CA bundle is retrieved by SPIRE.
+                    properties:
+                      issuerGroup:
+                        default: cert-manager.io
+                        description: issuerGroup is the group of the issuer to reference
+                          in CertificateRequests. Defaults to "cert-manager.io" if
+                          empty.
+                        type: string
+                      issuerKind:
+                        default: Issuer
+                        description: issuerKind is the kind of the issuer to reference
+                          in CertificateRequests. Defaults to "Issuer" if empty.
+                        type: string
+                      issuerName:
+                        description: issuerName is the name of the issuer to reference
+                          in CertificateRequests.
+                        type: string
+                      kubeConfigSecretName:
+                        description: |-
+                          kubeConfigSecretName is the name of the Kubernetes Secret that stores the kubeconfig
+                          used to connect to the Kubernetes cluster where cert-manager is running.
+                          If empty, in-cluster configuration will be used.
+                        type: string
+                      namespace:
+                        description: namespace in which to create CertificateRequests
+                          for signing.
+                        type: string
+                    required:
+                    - issuerName
+                    - namespace
+                    type: object
+                  spire:
+                    description: |-
+                      spire plugin uses credentials fetched from the Workload API to call an upstream
+                      SPIRE server in the same trust domain, requesting an intermediate signing certificate to use as the server's
+                      X.509 signing authority.
+                      The SVIDs minted in a nested configuration are valid in the entire trust domain, not only in the scope of the
+                      server that originated the SVID.
+                      In the case of X509-SVID, this is easily achieved because of the chaining semantics that X.509 has.
+                      On the other hand, for JWT-SVID, this capability is accomplished by propagating every JWT-SVID public
+                      signing key to the whole topology.
+                    properties:
+                      serverAddress:
+                        description: |-
+                          serverAddress is the IP address or DNS name of the upstream SPIRE Server
+                          in the same trust domain.
+                        type: string
+                      serverPort:
+                        description: serverPort is the port number on which the upstream
+                          SPIRE Server is listening.
+                        type: string
+                      workloadSocketApi:
+                        description: |-
+                          workloadSocketApi is the path to the SPIRE Workload API socket (Unix only).
+                          This socket is used to fetch credentials from the local SPIRE Agent.
+                        type: string
+                    required:
+                    - serverAddress
+                    - serverPort
+                    - workloadSocketApi
+                    type: object
+                  type:
+                    description: |-
+                      Type specifies the type of upstream authority plugin to use.
+                      Allowed values: "spire", "vault", "cert-manager".
+                      It determines which one of the optional configurations below should be populated.
+                    type: string
+                  vault:
+                    description: |-
+                      vault plugin signs intermediate CA certificates for SPIRE using the Vault PKI Engine.
+                      The plugin does not support the PublishJWTKey RPC and is therefore not appropriate for use in nested
+                      SPIRE topologies where JWT-SVIDs are in use.
+                    properties:
+                      appRoleAuth:
+                        description: AppRoleAuth configures Vault AppRole authentication.
+                        properties:
+                          appRoleID:
+                            description: AppRoleID is the AppRole ID used for authentication.
+                            type: string
+                          appRoleMountPoint:
+                            description: AppRoleMountPoint is the mount point where
+                              the AppRole auth method is enabled (e.g., "approle").
+                            type: string
+                          appRoleSecretID:
+                            description: AppRoleSecretID is the AppRole SecretID used
+                              for authentication.
+                            type: string
+                        required:
+                        - appRoleID
+                        - appRoleMountPoint
+                        - appRoleSecretID
+                        type: object
+                      caCertSecret:
+                        description: CaCertSecret is the name of the Kubernetes secret
+                          that contains the CA certificate (PEM format).
+                        type: string
+                      certAuth:
+                        description: CertAuth configures Vault client certificate
+                          authentication.
+                        properties:
+                          certAuthMountPoint:
+                            description: CertAuthMountPoint is the mount point where
+                              the TLS certificate auth method is enabled.
+                            type: string
+                          certAuthRoleName:
+                            description: CertAuthRoleName is the name of the Vault
+                              role to authenticate against, Default to trying all
+                              roles.
+                            type: string
+                          clientCertSecret:
+                            description: ClientCertSecret is the name of the Kubernetes
+                              secret containing the client certificate (PEM).
+                            type: string
+                          clientKeySecret:
+                            description: ClientKeySecret is the name of the Kubernetes
+                              secret containing the client private key (PEM).
+                            type: string
+                        required:
+                        - certAuthMountPoint
+                        - clientCertSecret
+                        - clientKeySecret
+                        type: object
+                      k8sAuth:
+                        description: K8sAuth configures Vault Kubernetes authentication.
+                        properties:
+                          k8sAuthMountPoint:
+                            description: K8sAuthMountPoint is the mount point where
+                              the Kubernetes auth method is enabled (e.g., "kubernetes").
+                            type: string
+                          k8sAuthRoleName:
+                            description: K8sAuthRoleName is the name of the Vault
+                              role the plugin authenticates against.
+                            type: string
+                          tokenPath:
+                            description: TokenPath is the path to the Kubernetes ServiceAccount
+                              token file.
+                            type: string
+                        required:
+                        - k8sAuthMountPoint
+                        - k8sAuthRoleName
+                        - tokenPath
+                        type: object
+                      namespace:
+                        description: Namespace is the Vault Enterprise namespace (optional).
+                        type: string
+                      pkiMountPoint:
+                        description: PkiMountPoint is the mount point where the PKI
+                          secrets engine is enabled (e.g., "pki").
+                        type: string
+                      tokenAuth:
+                        description: TokenAuth configures Vault token-based authentication.
+                        properties:
+                          token:
+                            description: Token is the Vault token string.
+                            type: string
+                        required:
+                        - token
+                        type: object
+                      vaultAddress:
+                        description: VaultAddress is the URL of the Vault server (e.g.,
+                          https://vault.example.com:8443).
+                        type: string
+                    required:
+                    - caCertSecret
+                    - pkiMountPoint
+                    - vaultAddress
+                    type: object
+                type: object
             required:
             - clusterName
             - jwtIssuer

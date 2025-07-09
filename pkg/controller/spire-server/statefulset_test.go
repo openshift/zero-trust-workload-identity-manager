@@ -290,6 +290,471 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	})
 }
 
+func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
+	tests := []struct {
+		name           string
+		upstreamAuth   *v1alpha1.UpstreamAuthority
+		expectedMounts []secretMountInfo
+	}{
+		{
+			name:           "nil upstream authority",
+			upstreamAuth:   nil,
+			expectedMounts: []secretMountInfo{},
+		},
+		{
+			name: "cert-manager without kubeconfig",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "cert-manager",
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName: "spire-ca",
+				},
+			},
+			expectedMounts: []secretMountInfo{},
+		},
+		{
+			name: "cert-manager with kubeconfig",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "cert-manager",
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName:           "spire-ca",
+					KubeConfigSecretName: "kubeconfig-secret",
+				},
+			},
+			expectedMounts: []secretMountInfo{
+				{
+					secretName: "kubeconfig-secret",
+					mountPath:  "/cert-manager-kubeconfig",
+					volumeName: "cert-manager-kubeconfig",
+				},
+			},
+		},
+		{
+			name: "spire upstream authority",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "spire",
+				Spire: &v1alpha1.UpstreamAuthoritySpire{
+					ServerAddress:     "upstream-spire-server",
+					ServerPort:        "8081",
+					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
+				},
+			},
+			expectedMounts: []secretMountInfo{},
+		},
+		{
+			name: "vault with token auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "vault-ca-secret",
+					TokenAuth: &v1alpha1.TokenAuth{
+						Token: "hvs.test-token",
+					},
+				},
+			},
+			expectedMounts: []secretMountInfo{
+				{
+					secretName: "vault-ca-secret",
+					mountPath:  "/vault-ca-cert",
+					volumeName: "vault-ca-cert",
+				},
+			},
+		},
+		{
+			name: "vault with cert auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "vault-ca-secret",
+					CertAuth: &v1alpha1.CertAuth{
+						CertAuthMountPoint: "cert",
+						ClientCertSecret:   "client-cert-secret",
+						ClientKeySecret:    "client-key-secret",
+					},
+				},
+			},
+			expectedMounts: []secretMountInfo{
+				{
+					secretName: "vault-ca-secret",
+					mountPath:  "/vault-ca-cert",
+					volumeName: "vault-ca-cert",
+				},
+				{
+					secretName: "client-cert-secret",
+					mountPath:  "/vault-client-cert",
+					volumeName: "vault-client-cert",
+				},
+				{
+					secretName: "client-key-secret",
+					mountPath:  "/vault-client-key",
+					volumeName: "vault-client-key",
+				},
+			},
+		},
+		{
+			name: "vault with approle auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "vault-ca-secret",
+					AppRoleAuth: &v1alpha1.AppRoleAuth{
+						AppRoleMountPoint: "approle",
+						AppRoleID:         "role-id-123",
+						AppRoleSecretID:   "secret-id-456",
+					},
+				},
+			},
+			expectedMounts: []secretMountInfo{
+				{
+					secretName: "vault-ca-secret",
+					mountPath:  "/vault-ca-cert",
+					volumeName: "vault-ca-cert",
+				},
+			},
+		},
+		{
+			name: "vault with k8s auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "vault-ca-secret",
+					K8sAuth: &v1alpha1.K8sAuth{
+						K8sAuthMountPoint: "kubernetes",
+						K8sAuthRoleName:   "spire-role",
+					},
+				},
+			},
+			expectedMounts: []secretMountInfo{
+				{
+					secretName: "vault-ca-secret",
+					mountPath:  "/vault-ca-cert",
+					volumeName: "vault-ca-cert",
+				},
+			},
+		},
+		{
+			name: "unsupported upstream authority type",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "unsupported",
+			},
+			expectedMounts: []secretMountInfo{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mounts := getUpstreamAuthoritySecretMounts(tt.upstreamAuth)
+
+			if len(mounts) != len(tt.expectedMounts) {
+				t.Errorf("Expected %d mounts, got %d", len(tt.expectedMounts), len(mounts))
+			}
+
+			for i, expectedMount := range tt.expectedMounts {
+				if i >= len(mounts) {
+					t.Errorf("Expected mount at index %d not found", i)
+					continue
+				}
+
+				actualMount := mounts[i]
+				if actualMount.secretName != expectedMount.secretName {
+					t.Errorf("Expected secretName %q, got %q", expectedMount.secretName, actualMount.secretName)
+				}
+				if actualMount.mountPath != expectedMount.mountPath {
+					t.Errorf("Expected mountPath %q, got %q", expectedMount.mountPath, actualMount.mountPath)
+				}
+				if actualMount.volumeName != expectedMount.volumeName {
+					t.Errorf("Expected volumeName %q, got %q", expectedMount.volumeName, actualMount.volumeName)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateSpireServerStatefulSetWithSecretMounts(t *testing.T) {
+	tests := []struct {
+		name                     string
+		upstreamAuth             *v1alpha1.UpstreamAuthority
+		expectedSecretVolumes    []string
+		expectedVolumeMounts     []string
+		expectedBasicVolumeCount int
+		expectedBasicMountCount  int
+	}{
+		{
+			name:                     "no upstream authority",
+			upstreamAuth:             nil,
+			expectedSecretVolumes:    []string{},
+			expectedVolumeMounts:     []string{},
+			expectedBasicVolumeCount: 5,
+			expectedBasicMountCount:  4,
+		},
+		{
+			name: "cert-manager with kubeconfig",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "cert-manager",
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName:           "spire-ca",
+					KubeConfigSecretName: "kubeconfig-secret",
+				},
+			},
+			expectedSecretVolumes:    []string{"cert-manager-kubeconfig"},
+			expectedVolumeMounts:     []string{"cert-manager-kubeconfig"},
+			expectedBasicVolumeCount: 6,
+			expectedBasicMountCount:  5,
+		},
+		{
+			name: "vault with cert auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "vault-ca-secret",
+					CertAuth: &v1alpha1.CertAuth{
+						CertAuthMountPoint: "cert",
+						ClientCertSecret:   "client-cert-secret",
+						ClientKeySecret:    "client-key-secret",
+					},
+				},
+			},
+			expectedSecretVolumes:    []string{"vault-ca-cert", "vault-client-cert", "vault-client-key"},
+			expectedVolumeMounts:     []string{"vault-ca-cert", "vault-client-cert", "vault-client-key"},
+			expectedBasicVolumeCount: 8,
+			expectedBasicMountCount:  7,
+		},
+		{
+			name: "vault with token auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "vault-ca-secret",
+					TokenAuth: &v1alpha1.TokenAuth{
+						Token: "hvs.test-token",
+					},
+				},
+			},
+			expectedSecretVolumes:    []string{"vault-ca-cert"},
+			expectedVolumeMounts:     []string{"vault-ca-cert"},
+			expectedBasicVolumeCount: 6,
+			expectedBasicMountCount:  5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &v1alpha1.SpireServerSpec{
+				TrustDomain:     "example.org",
+				ClusterName:     "test-cluster",
+				BundleConfigMap: "spire-bundle",
+				JwtIssuer:       "example.org",
+				CASubject: &v1alpha1.CASubject{
+					CommonName:   "SPIRE Server CA",
+					Country:      "US",
+					Organization: "SPIRE",
+				},
+				Datastore: &v1alpha1.DataStore{
+					ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
+					DatabaseType:     "postgres",
+					DisableMigration: "false",
+					MaxIdleConns:     10,
+					MaxOpenConns:     20,
+				},
+				Persistence: &v1alpha1.Persistence{
+					Type:       "pvc",
+					Size:       "1Gi",
+					AccessMode: "ReadWriteOnce",
+				},
+				CommonConfig: v1alpha1.CommonConfig{
+					Labels: map[string]string{
+						"custom-label": "value",
+					},
+				},
+				UpstreamAuthority: tt.upstreamAuth,
+			}
+
+			statefulSet := GenerateSpireServerStatefulSet(config, "test-hash", "test-hash")
+
+			// Check total volume count
+			volumes := statefulSet.Spec.Template.Spec.Volumes
+			if len(volumes) != tt.expectedBasicVolumeCount {
+				t.Errorf("Expected %d total volumes, got %d", tt.expectedBasicVolumeCount, len(volumes))
+			}
+
+			// Check that the StatefulSet has the expected secret volumes
+			secretVolumeNames := []string{}
+			for _, volume := range volumes {
+				if volume.Secret != nil {
+					secretVolumeNames = append(secretVolumeNames, volume.Name)
+				}
+			}
+
+			if len(secretVolumeNames) != len(tt.expectedSecretVolumes) {
+				t.Errorf("Expected %d secret volumes, got %d", len(tt.expectedSecretVolumes), len(secretVolumeNames))
+			}
+
+			for _, expectedVolume := range tt.expectedSecretVolumes {
+				found := false
+				for _, actualVolume := range secretVolumeNames {
+					if actualVolume == expectedVolume {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected secret volume %q not found", expectedVolume)
+				}
+			}
+
+			// Check that the spire-server container has the expected volume mounts
+			spireServerContainer := findContainerByName(statefulSet.Spec.Template.Spec.Containers, "spire-server")
+			if spireServerContainer == nil {
+				t.Fatal("spire-server container not found")
+			}
+
+			// Check total mount count
+			if len(spireServerContainer.VolumeMounts) != tt.expectedBasicMountCount {
+				t.Errorf("Expected %d total volume mounts, got %d", tt.expectedBasicMountCount, len(spireServerContainer.VolumeMounts))
+			}
+
+			secretVolumeMountNames := []string{}
+			for _, volumeMount := range spireServerContainer.VolumeMounts {
+				// Check if this volume mount corresponds to a secret volume
+				for _, volumeName := range tt.expectedVolumeMounts {
+					if volumeMount.Name == volumeName {
+						secretVolumeMountNames = append(secretVolumeMountNames, volumeMount.Name)
+						break
+					}
+				}
+			}
+
+			if len(secretVolumeMountNames) != len(tt.expectedVolumeMounts) {
+				t.Errorf("Expected %d secret volume mounts, got %d", len(tt.expectedVolumeMounts), len(secretVolumeMountNames))
+			}
+
+			for _, expectedMount := range tt.expectedVolumeMounts {
+				found := false
+				for _, actualMount := range secretVolumeMountNames {
+					if actualMount == expectedMount {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected secret volume mount %q not found", expectedMount)
+				}
+			}
+
+			// Verify that secret volume mounts are read-only
+			for _, volumeMount := range spireServerContainer.VolumeMounts {
+				for _, expectedMount := range tt.expectedVolumeMounts {
+					if volumeMount.Name == expectedMount {
+						if !volumeMount.ReadOnly {
+							t.Errorf("Expected secret volume mount %q to be read-only", expectedMount)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateSpireServerStatefulSetSecretVolumeMapping(t *testing.T) {
+	tests := []struct {
+		name              string
+		upstreamAuth      *v1alpha1.UpstreamAuthority
+		expectedSecretMap map[string]string // volumeName -> secretName
+	}{
+		{
+			name: "cert-manager with kubeconfig",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "cert-manager",
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName:           "spire-ca",
+					KubeConfigSecretName: "my-kubeconfig-secret",
+				},
+			},
+			expectedSecretMap: map[string]string{
+				"cert-manager-kubeconfig": "my-kubeconfig-secret",
+			},
+		},
+		{
+			name: "vault with cert auth",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddress:  "https://vault.example.org/",
+					PkiMountPoint: "pki",
+					CaCertSecret:  "my-vault-ca-secret",
+					CertAuth: &v1alpha1.CertAuth{
+						CertAuthMountPoint: "cert",
+						ClientCertSecret:   "my-client-cert-secret",
+						ClientKeySecret:    "my-client-key-secret",
+					},
+				},
+			},
+			expectedSecretMap: map[string]string{
+				"vault-ca-cert":     "my-vault-ca-secret",
+				"vault-client-cert": "my-client-cert-secret",
+				"vault-client-key":  "my-client-key-secret",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &v1alpha1.SpireServerSpec{
+				TrustDomain:     "example.org",
+				ClusterName:     "test-cluster",
+				BundleConfigMap: "spire-bundle",
+				JwtIssuer:       "example.org",
+				CASubject: &v1alpha1.CASubject{
+					CommonName:   "SPIRE Server CA",
+					Country:      "US",
+					Organization: "SPIRE",
+				},
+				Datastore: &v1alpha1.DataStore{
+					ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
+					DatabaseType:     "postgres",
+					DisableMigration: "false",
+					MaxIdleConns:     10,
+					MaxOpenConns:     20,
+				},
+				UpstreamAuthority: tt.upstreamAuth,
+			}
+
+			statefulSet := GenerateSpireServerStatefulSet(config, "test-hash", "test-hash")
+
+			// Check that volumes are correctly mapped to secrets
+			volumes := statefulSet.Spec.Template.Spec.Volumes
+			for volumeName, expectedSecretName := range tt.expectedSecretMap {
+				found := false
+				for _, volume := range volumes {
+					if volume.Name == volumeName {
+						found = true
+						if volume.Secret == nil {
+							t.Errorf("Expected volume %q to be a secret volume", volumeName)
+						} else if volume.Secret.SecretName != expectedSecretName {
+							t.Errorf("Expected volume %q to reference secret %q, got %q", volumeName, expectedSecretName, volume.Secret.SecretName)
+						}
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected volume %q not found", volumeName)
+				}
+			}
+		})
+	}
+}
+
 // Helper function to find a container by name
 func findContainerByName(containers []corev1.Container, name string) *corev1.Container {
 	for i := range containers {

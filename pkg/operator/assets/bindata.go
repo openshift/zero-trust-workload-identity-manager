@@ -744,6 +744,14 @@ rules:
       - watch
       - list
       - create
+  - apiGroups: [ cert-manager.io ]
+    resources: [ certificaterequests ]
+    verbs:
+    - get
+    - watch
+    - list
+    - create
+    - delete
   - apiGroups: [""]
     resources: [nodes, pods]
     verbs:
