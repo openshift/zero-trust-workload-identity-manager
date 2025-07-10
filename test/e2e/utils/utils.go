@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +61,16 @@ func GetKubeConfig() (*rest.Config, error) {
 	}
 
 	return config, nil
+}
+
+// GetClusterBaseDomain gets the cluster base domain from the DNS cluster object
+func GetClusterBaseDomain(ctx context.Context, configClient configv1.ConfigV1Interface) (string, error) {
+	dns, err := configClient.DNSes().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get base domain from DNS cluster object: %w", err)
+	}
+
+	return dns.Spec.BaseDomain, nil
 }
 
 // IsCRDEstablished checks if a CRD is Established
@@ -124,6 +135,57 @@ func WaitForDeploymentAvailable(ctx context.Context, clientset kubernetes.Interf
 		return true
 	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
 		"deployment '%s/%s' should become available within %v", namespace, name, timeout)
+}
+
+// IsStatefulSetReady checks if a StatefulSet is Ready
+func IsStatefulSetReady(sts *appsv1.StatefulSet) bool {
+	return sts.Status.ReadyReplicas == *sts.Spec.Replicas && sts.Status.CurrentReplicas == *sts.Spec.Replicas
+}
+
+// WaitForStatefulSetReady waits for a StatefulSet to be Ready within timeout
+func WaitForStatefulSetReady(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
+	Eventually(func() bool {
+		sts, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get statefulset '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		if !IsStatefulSetReady(sts) {
+			fmt.Fprintf(GinkgoWriter, "statefulset '%s/%s' not ready yet (%d/%d replicas ready)\n", namespace, name, sts.Status.ReadyReplicas, *sts.Spec.Replicas)
+			return false
+		}
+
+		fmt.Fprintf(GinkgoWriter, "statefulset '%s/%s' is ready (%d/%d replicas)\n", namespace, name, sts.Status.ReadyReplicas, *sts.Spec.Replicas)
+		return true
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
+		"statefulset '%s/%s' should become ready within %v", namespace, name, timeout)
+}
+
+// IsDaemonSetAvailable checks if a DaemonSet has all desired pods Up-to-date and Available
+func IsDaemonSetAvailable(ds *appsv1.DaemonSet) bool {
+	desired := ds.Status.DesiredNumberScheduled
+	return desired > 0 && ds.Status.NumberAvailable == desired && ds.Status.UpdatedNumberScheduled == desired
+}
+
+// WaitForDaemonSetAvailable waits for a DaemonSet to have all desired pods available within timeout
+func WaitForDaemonSetAvailable(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
+	Eventually(func() bool {
+		ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get daemonset '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		if !IsDaemonSetAvailable(ds) {
+			fmt.Fprintf(GinkgoWriter, "daemonset '%s/%s' not available yet (%d/%d pods available)\n", namespace, name, ds.Status.NumberAvailable, ds.Status.DesiredNumberScheduled)
+			return false
+		}
+
+		fmt.Fprintf(GinkgoWriter, "daemonset '%s/%s' is available (%d/%d pods)\n", namespace, name, ds.Status.NumberAvailable, ds.Status.DesiredNumberScheduled)
+		return true
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
+		"daemonset '%s/%s' should become available within %v", namespace, name, timeout)
 }
 
 // WaitForCRConditionsTrue waits for all required conditions of the operator managed cluster CR object to be True within timeout
