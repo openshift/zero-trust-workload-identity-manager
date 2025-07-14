@@ -17,6 +17,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
+				JwtIssuer:   "https://oidc-discovery.example.org",
 			},
 		}
 
@@ -76,7 +77,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain:     "custom.domain.com",
 				AgentSocketName: "custom-agent.sock",
-				JwtIssuer:       "custom-jwt-issuer.example.com",
+				JwtIssuer:       "https://custom-jwt-issuer.example.com",
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: customLabels,
 				},
@@ -146,31 +147,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 		workloadAPI := oidcConfig["workload_api"].(map[string]interface{})
 		assert.Equal(t, "/spiffe-workload-api/spire-agent.sock", workloadAPI["socket_path"])
-	})
-
-	t.Run("should handle empty JwtIssuer with default based on trust domain", func(t *testing.T) {
-		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain: "test.domain",
-				JwtIssuer:   "", // Empty should use default
-			},
-		}
-
-		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
-
-		// Assert
-		require.NoError(t, err)
-
-		var oidcConfig map[string]interface{}
-		err = json.Unmarshal([]byte(result.Data["oidc-discovery-provider.conf"]), &oidcConfig)
-		require.NoError(t, err)
-
-		domains := oidcConfig["domains"].([]interface{})
-		// The last domain should be the default JWT issuer
-		lastDomain := domains[len(domains)-1].(string)
-		assert.Equal(t, "oidc-discovery.test.domain", lastDomain)
 	})
 
 	t.Run("should generate valid OIDC config structure", func(t *testing.T) {
@@ -295,63 +271,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Error(t, err)
 	})
-}
-
-// Table-driven test for different trust domain scenarios
-func TestGenerateOIDCConfigMapFromCR_TrustDomains(t *testing.T) {
-	testCases := []struct {
-		name        string
-		trustDomain string
-		jwtIssuer   string
-		expectedJWT string
-	}{
-		{
-			name:        "simple domain",
-			trustDomain: "example.com",
-			jwtIssuer:   "",
-			expectedJWT: "oidc-discovery.example.com",
-		},
-		{
-			name:        "subdomain",
-			trustDomain: "test.example.com",
-			jwtIssuer:   "",
-			expectedJWT: "oidc-discovery.test.example.com",
-		},
-		{
-			name:        "custom jwt issuer",
-			trustDomain: "example.com",
-			jwtIssuer:   "custom.issuer.com",
-			expectedJWT: "custom.issuer.com",
-		},
-		{
-			name:        "empty trust domain",
-			trustDomain: "",
-			jwtIssuer:   "",
-			expectedJWT: "oidc-discovery.",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-					TrustDomain: tc.trustDomain,
-					JwtIssuer:   tc.jwtIssuer,
-				},
-			}
-
-			result, err := GenerateOIDCConfigMapFromCR(cr)
-			require.NoError(t, err)
-
-			var oidcConfig map[string]interface{}
-			err = json.Unmarshal([]byte(result.Data["oidc-discovery-provider.conf"]), &oidcConfig)
-			require.NoError(t, err)
-
-			domains := oidcConfig["domains"].([]interface{})
-			lastDomain := domains[len(domains)-1].(string)
-			assert.Equal(t, tc.expectedJWT, lastDomain)
-		})
-	}
 }
 
 // Test to verify JSON formatting

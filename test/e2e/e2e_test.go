@@ -146,6 +146,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					TrustDomain:     appDomain,
 					ClusterName:     clusterName,
 					BundleConfigMap: bundleConfigMap,
+					JwtIssuer:       fmt.Sprintf("https://oidc-discovery.%s", appDomain),
 					CASubject: &operatorv1alpha1.CASubject{
 						CommonName:   appDomain,
 						Country:      "US",

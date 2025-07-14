@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -11,23 +12,23 @@ import (
 )
 
 // GenerateOIDCConfigMapFromCR creates a ConfigMap for the spire oidc discovery provider from the CR spec
-func GenerateOIDCConfigMapFromCR(cr *v1alpha1.SpireOIDCDiscoveryProvider) (*corev1.ConfigMap, error) {
-	if cr == nil {
+func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*corev1.ConfigMap, error) {
+	if dp == nil {
 		return nil, errors.New("spire OIDC Discovery Provider Config is nil")
 	}
 	// Default to "spire-agent.sock" if not provided
-	agentSocketName := cr.Spec.AgentSocketName
+	agentSocketName := dp.Spec.AgentSocketName
 	if agentSocketName == "" {
 		agentSocketName = "spire-agent.sock"
 	}
 
 	// Determine trust domain
-	trustDomain := cr.Spec.TrustDomain
+	trustDomain := dp.Spec.TrustDomain
 
-	// JWT Issuer fallback
-	jwtIssuer := cr.Spec.JwtIssuer
-	if jwtIssuer == "" {
-		jwtIssuer = fmt.Sprintf("oidc-discovery.%s", trustDomain)
+	// JWT Issuer validation and normalization
+	jwtIssuer, err := utils.StripProtocolFromJWTIssuer(dp.Spec.JwtIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JWT issuer URL: %w", err)
 	}
 
 	// OIDC config map data
@@ -87,8 +88,10 @@ server {
 }`
 
 	labels := map[string]string{}
-	for key, value := range cr.Spec.Labels {
-		labels[key] = value
+	if dp.Spec.Labels != nil {
+		for key, value := range dp.Spec.Labels {
+			labels[key] = value
+		}
 	}
 	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
 	configMap := &corev1.ConfigMap{

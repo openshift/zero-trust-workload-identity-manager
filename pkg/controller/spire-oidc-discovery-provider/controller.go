@@ -2,6 +2,8 @@ package spire_oidc_discovery_provider
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/go-logr/logr"
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
@@ -34,6 +36,7 @@ const (
 	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
 	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
+	ConfigurationValidation        = "ConfigurationValidation"
 )
 
 type reconcilerStatus struct {
@@ -103,8 +106,25 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 	}(reconcileStatus)
 
-	if oidcDiscoveryProviderConfig.Spec.JwtIssuer == "" {
-		oidcDiscoveryProviderConfig.Spec.JwtIssuer = "oidc-discovery." + oidcDiscoveryProviderConfig.Spec.TrustDomain
+	// Validate JWT issuer URL format to prevent unintended formats during OIDC discovery document creation
+	if err := utils.IsValidURL(oidcDiscoveryProviderConfig.Spec.JwtIssuer); err != nil {
+		r.log.Error(err, "Invalid JWT issuer URL in SpireOIDCDiscoveryProvider configuration", "jwtIssuer", oidcDiscoveryProviderConfig.Spec.JwtIssuer)
+		reconcileStatus[ConfigurationValidation] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "InvalidJWTIssuerURL",
+			Message: fmt.Sprintf("JWT issuer URL validation failed: %v", err),
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Only set to true if the condition previously existed as false
+	existingCondition := apimeta.FindStatusCondition(oidcDiscoveryProviderConfig.Status.ConditionalStatus.Conditions, ConfigurationValidation)
+	if existingCondition != nil && existingCondition.Status == metav1.ConditionFalse {
+		reconcileStatus[ConfigurationValidation] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "ValidJWTIssuerURL",
+			Message: "JWT issuer URL validation passed",
+		}
 	}
 
 	spireOIDCClusterSpiffeID := generateSpireIODCDiscoveryProviderSpiffeID()

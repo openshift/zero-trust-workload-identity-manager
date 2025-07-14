@@ -38,9 +38,9 @@ type SpireServerSpec struct {
 	// +kubebuilder:default:=spire-bundle
 	BundleConfigMap string `json:"bundleConfigMap"`
 
-	// jwtIssuer is the JWT issuer domain. Defaults to oidc-discovery.$trustDomain if unset
-	// +kubebuilder:validation:Optional
-	JwtIssuer string `json:"jwtIssuer,omitempty"`
+	// jwtIssuer is the JWT issuer url.
+	// +kubebuilder:validation:Required
+	JwtIssuer string `json:"jwtIssuer"`
 
 	// keyManager has configs for the spire server key manager.
 	// +kubebuilder:validation:Optional
