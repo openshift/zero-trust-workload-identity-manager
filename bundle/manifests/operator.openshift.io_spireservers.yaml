@@ -1058,7 +1058,7 @@ spec:
                 - maxOpenConns
                 type: object
               jwtIssuer:
-                description: jwtIssuer is the JWT issuer domain. Defaults to oidc-discovery.$trustDomain
+                description: jwtIssuer is the JWT issuer domain. Defaults to https://oidc-discovery.$trustDomain
                   if unset
                 type: string
               keyManager:

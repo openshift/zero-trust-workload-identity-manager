@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +30,8 @@ func GenerateOIDCConfigMapFromCR(cr *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	jwtIssuer := cr.Spec.JwtIssuer
 	if jwtIssuer == "" {
 		jwtIssuer = fmt.Sprintf("oidc-discovery.%s", trustDomain)
+	} else {
+		jwtIssuer = stripProtocol(jwtIssuer)
 	}
 
 	// OIDC config map data
@@ -105,4 +109,16 @@ server {
 	}
 
 	return configMap, nil
+}
+
+// stripProtocol removes "http://" or "https://"" from the beginning of a string.
+// If no protocol prefix is found, it returns the original string unmodified.
+func stripProtocol(url string) string {
+	if strings.HasPrefix(url, "https://") {
+		return strings.TrimPrefix(url, "https://")
+	}
+	if strings.HasPrefix(url, "http://") {
+		return strings.TrimPrefix(url, "http://")
+	}
+	return url
 }
