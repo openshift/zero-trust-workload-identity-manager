@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -11,24 +13,21 @@ import (
 )
 
 // GenerateOIDCConfigMapFromCR creates a ConfigMap for the spire oidc discovery provider from the CR spec
-func GenerateOIDCConfigMapFromCR(cr *v1alpha1.SpireOIDCDiscoveryProvider) (*corev1.ConfigMap, error) {
-	if cr == nil {
+func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*corev1.ConfigMap, error) {
+	if dp == nil {
 		return nil, errors.New("spire OIDC Discovery Provider Config is nil")
 	}
 	// Default to "spire-agent.sock" if not provided
-	agentSocketName := cr.Spec.AgentSocketName
+	agentSocketName := dp.Spec.AgentSocketName
 	if agentSocketName == "" {
 		agentSocketName = "spire-agent.sock"
 	}
 
 	// Determine trust domain
-	trustDomain := cr.Spec.TrustDomain
+	trustDomain := dp.Spec.TrustDomain
 
 	// JWT Issuer fallback
-	jwtIssuer := cr.Spec.JwtIssuer
-	if jwtIssuer == "" {
-		jwtIssuer = fmt.Sprintf("oidc-discovery.%s", trustDomain)
-	}
+	jwtIssuer := stripProtocol(dp.Spec.JwtIssuer)
 
 	// OIDC config map data
 	oidcConfig := map[string]interface{}{
@@ -87,7 +86,7 @@ server {
 }`
 
 	labels := map[string]string{}
-	for key, value := range cr.Spec.Labels {
+	for key, value := range dp.Spec.Labels {
 		labels[key] = value
 	}
 	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
@@ -105,4 +104,16 @@ server {
 	}
 
 	return configMap, nil
+}
+
+// stripProtocol removes "http://" or "https://"" from the beginning of a string.
+// If no protocol prefix is found, it returns the original string unmodified.
+func stripProtocol(url string) string {
+	if strings.HasPrefix(url, "https://") {
+		return strings.TrimPrefix(url, "https://")
+	}
+	if strings.HasPrefix(url, "http://") {
+		return strings.TrimPrefix(url, "http://")
+	}
+	return url
 }

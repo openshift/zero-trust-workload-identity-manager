@@ -17,6 +17,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
+				JwtIssuer:   "oidc-discovery.example.org",
 			},
 		}
 
@@ -146,31 +147,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 		workloadAPI := oidcConfig["workload_api"].(map[string]interface{})
 		assert.Equal(t, "/spiffe-workload-api/spire-agent.sock", workloadAPI["socket_path"])
-	})
-
-	t.Run("should handle empty JwtIssuer with default based on trust domain", func(t *testing.T) {
-		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain: "test.domain",
-				JwtIssuer:   "", // Empty should use default
-			},
-		}
-
-		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
-
-		// Assert
-		require.NoError(t, err)
-
-		var oidcConfig map[string]interface{}
-		err = json.Unmarshal([]byte(result.Data["oidc-discovery-provider.conf"]), &oidcConfig)
-		require.NoError(t, err)
-
-		domains := oidcConfig["domains"].([]interface{})
-		// The last domain should be the default JWT issuer
-		lastDomain := domains[len(domains)-1].(string)
-		assert.Equal(t, "oidc-discovery.test.domain", lastDomain)
 	})
 
 	t.Run("should generate valid OIDC config structure", func(t *testing.T) {
@@ -306,28 +282,10 @@ func TestGenerateOIDCConfigMapFromCR_TrustDomains(t *testing.T) {
 		expectedJWT string
 	}{
 		{
-			name:        "simple domain",
-			trustDomain: "example.com",
-			jwtIssuer:   "",
-			expectedJWT: "oidc-discovery.example.com",
-		},
-		{
-			name:        "subdomain",
-			trustDomain: "test.example.com",
-			jwtIssuer:   "",
-			expectedJWT: "oidc-discovery.test.example.com",
-		},
-		{
 			name:        "custom jwt issuer",
 			trustDomain: "example.com",
 			jwtIssuer:   "custom.issuer.com",
 			expectedJWT: "custom.issuer.com",
-		},
-		{
-			name:        "empty trust domain",
-			trustDomain: "",
-			jwtIssuer:   "",
-			expectedJWT: "oidc-discovery.",
 		},
 	}
 
@@ -375,4 +333,60 @@ func TestOIDCConfigJSONFormatting(t *testing.T) {
 	var temp interface{}
 	err = json.Unmarshal([]byte(oidcJSON), &temp)
 	assert.NoError(t, err)
+}
+
+func TestStripProtocol(t *testing.T) {
+	testCases := []struct {
+		name     string // A descriptive name for the test case
+		inputURL string // The input URL to the stripProtocol function
+		expected string // The expected output after stripping the protocol
+	}{
+		{
+			name:     "should strip https prefix",
+			inputURL: "https://example.com",
+			expected: "example.com",
+		},
+		{
+			name:     "should strip http prefix",
+			inputURL: "http://example.com",
+			expected: "example.com",
+		},
+		{
+			name:     "should return original string if no protocol prefix exists",
+			inputURL: "example.com",
+			expected: "example.com",
+		},
+		{
+			name:     "should handle an empty string gracefully",
+			inputURL: "",
+			expected: "",
+		},
+		{
+			name:     "should handle a string that is only the https prefix",
+			inputURL: "https://",
+			expected: "",
+		},
+		{
+			name:     "should handle a string that is only the http prefix",
+			inputURL: "http://",
+			expected: "",
+		},
+		{
+			name:     "should not strip protocol if it appears in the middle of the string",
+			inputURL: "my-site-[https://-is-cool.com](https://-is-cool.com)",
+			expected: "my-site-[https://-is-cool.com](https://-is-cool.com)",
+		},
+		{
+			name:     "should handle url with path and query parameters",
+			inputURL: "https://example.com/path?query=1",
+			expected: "example.com/path?query=1",
+		},
+	}
+	// Iterate over the defined test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualResult := stripProtocol(tc.inputURL)
+			assert.Equal(t, tc.expected, actualResult)
+		})
+	}
 }
