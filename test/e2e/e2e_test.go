@@ -31,6 +31,20 @@ import (
 
 var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	var testCtx context.Context
+	var appDomain string
+	var clusterName string
+	var bundleConfigMap string
+
+	BeforeAll(func() {
+		By("Getting cluster base domain")
+		baseDomain, err := utils.GetClusterBaseDomain(context.Background(), configClient)
+		Expect(err).NotTo(HaveOccurred(), "failed to get cluster base domain")
+
+		// declare shared variables for tests
+		appDomain = fmt.Sprintf("apps.%s", baseDomain)
+		clusterName = "test01"
+		bundleConfigMap = "spire-bundle"
+	})
 
 	BeforeEach(func() {
 		var cancel context.CancelFunc
@@ -118,6 +132,94 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Waiting for operator Deployment to become Available again")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
+		})
+	})
+
+	Context("when creating a SpireServer object", func() {
+		It("should create a healthy SPIRE Server StatefulSet", func() {
+			By("Creating SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: operatorv1alpha1.SpireServerSpec{
+					TrustDomain:     appDomain,
+					ClusterName:     clusterName,
+					BundleConfigMap: bundleConfigMap,
+					CASubject: &operatorv1alpha1.CASubject{
+						CommonName:   appDomain,
+						Country:      "US",
+						Organization: "RH",
+					},
+					Persistence: &operatorv1alpha1.Persistence{
+						Type:       "pvc",
+						Size:       "2Gi",
+						AccessMode: "ReadWriteOncePod",
+					},
+					Datastore: &operatorv1alpha1.DataStore{
+						DatabaseType:     "sqlite3",
+						ConnectionString: "/run/spire/data/datastore.sqlite3",
+						MaxOpenConns:     100,
+						MaxIdleConns:     2,
+						ConnMaxLifetime:  3600,
+						DisableMigration: "false",
+					},
+				},
+			}
+			err := k8sClient.Create(testCtx, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to create SpireServer object")
+
+			By("Waiting for all resource generation conditions in SpireServer object to be True")
+			conditionTypes := []string{
+				"SpireServerConfigMapGeneration",
+				"SpireControllerManagerConfigMapGeneration",
+				"SpireBundleConfigMapGeneration",
+				"SpireServerStatefulSetGeneration",
+			}
+			cr := &operatorv1alpha1.SpireServer{}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+	})
+
+	Context("when creating a SpireAgent object", func() {
+		It("should create a healthy SPIRE Agent DaemonSet", func() {
+			By("Creating SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: operatorv1alpha1.SpireAgentSpec{
+					TrustDomain:     appDomain,
+					ClusterName:     clusterName,
+					BundleConfigMap: bundleConfigMap,
+					NodeAttestor: &operatorv1alpha1.NodeAttestor{
+						K8sPSATEnabled: "true",
+					},
+					WorkloadAttestors: &operatorv1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &operatorv1alpha1.WorkloadAttestorsVerification{
+							Type: "auto",
+						},
+					},
+				},
+			}
+			err := k8sClient.Create(testCtx, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to create SpireAgent object")
+
+			By("Waiting for all resource generation conditions in SpireAgent object to be True")
+			conditionTypes := []string{
+				"SpireAgentSCCGeneration",
+				"SpireAgentConfigMapGeneration",
+				"SpireAgentDaemonSetGeneration",
+			}
+			cr := &operatorv1alpha1.SpireAgent{}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 	})
 })

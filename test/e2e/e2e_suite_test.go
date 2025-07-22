@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 
@@ -40,6 +41,7 @@ var (
 	k8sClient    client.Client
 	clientset    kubernetes.Interface
 	apiextClient apiextclient.Interface
+	configClient configv1.ConfigV1Interface
 )
 
 var _ = BeforeSuite(func() {
@@ -67,6 +69,10 @@ var _ = BeforeSuite(func() {
 	// Create Kubernetes API extensions clientset
 	apiextClient, err = apiextclient.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred(), "failed to create apiextensions clientset")
+
+	// Create OpenShift config client
+	configClient, err = configv1.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred(), "failed to create OpenShift config client")
 })
 
 // TestE2E runs the e2e test suite
