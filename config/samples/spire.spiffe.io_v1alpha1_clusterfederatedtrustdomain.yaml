@@ -1,0 +1,34 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterFederatedTrustDomain
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: partner-trust-domain
+spec:
+  # Required: The trust domain to federate with
+  trustDomain: "partner.example.org"
+  
+  # Required: Bundle endpoint URL for fetching trust bundles
+  bundleEndpointURL: "https://spire-server.partner.example.org:8443/bundle"
+  
+  # Required: Bundle endpoint profile configuration
+  bundleEndpointProfile:
+    type: "https_web"
+    # For https_spiffe profile, you would also need:
+    # endpointSPIFFEID: "spiffe://partner.example.org/spire/server"
+  
+  # Optional: Pre-configured trust domain bundle
+  # This can be populated initially and will be updated automatically
+  trustDomainBundle: |
+    -----BEGIN CERTIFICATE-----
+    MIIBKjCB0aADAgECAgEBMAoGCCqGSM49BAMCMBQxEjAQBgNVBAMMCUV4YW1wbGUg
+    MTAeFw0yMzEyMDEwOTIzMzlaFw0yNDEyMDEwOTIzMzlaMBQxEjAQBgNVBAMMCUV4
+    YW1wbGUgMTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABGvMdLyLhL8YPhBfNxLy
+    c1vYn3WZGUCg46+8P0w2hN+dVLyJ3Dxz2pOqMdGcRB4V5Gn4JxGKY+HfG6CpJzO2
+    jCGjITAfMB0GA1UdDgQWBBQoFX7ThjZ/YTFz3Y4L4e8Y6oJw9zAKBggqhkjOPQQD
+    AgNIADBFAiEA9v2/qBpXd8YX9c6eXq7PQVz4pRqKYH6Q8Y+2S7Dw9QJFAiAoJBSy
+    4u5Q6rEWnYgF5z4X8D5k6aHgOXCNQR8gLzCGbg==
+    -----END CERTIFICATE----- 

@@ -1,0 +1,45 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterStaticEntry
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: example-static-entry
+spec:
+  # Required: Parent SPIFFE ID (typically the SPIRE Agent)
+  parentID: "spiffe://example.org/spire/agent/k8s_psat/example-cluster/{{ .NodeSpec.UID }}"
+  
+  # Required: The SPIFFE ID for this entry
+  spiffeID: "spiffe://example.org/database/postgresql"
+  
+  # Required: Selectors that identify the workload
+  selectors:
+    - "k8s:ns:database"
+    - "k8s:sa:postgresql-service-account"
+    - "k8s:pod-label:app:postgresql"
+    - "k8s:container-name:postgres"
+  
+  # DNS names to include in X.509 SVID
+  dnsNames:
+    - "postgresql.database.svc.cluster.local"
+    - "postgres.example.org"
+    - "db.internal.example.org"
+  
+  # Federation with other trust domains
+  federatesWith:
+    - "partner.example.org"
+    - "backup.example.org"
+  
+  # TTL settings for different certificate types
+  x509SVIDTTL: "24h"
+  jwtSVIDTTL: "1h"
+  
+  # Administrative and operational flags
+  admin: false
+  downstream: false
+  storeSVID: true
+  
+  # Entry hint for debugging and documentation
+  hint: "PostgreSQL database server in production namespace" 
