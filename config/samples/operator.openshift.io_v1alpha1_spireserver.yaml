@@ -1,0 +1,69 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: cluster
+spec:
+  # Required fields
+  clusterName: "example-cluster"
+  trustDomain: "example.org"
+  
+  # JWT issuer for OIDC token validation
+  jwtIssuer: "oidc-discovery.example.org"
+  
+  # Data store configuration
+  datastore:
+    databaseType: "sqlite3"
+    connectionString: "/run/spire/data/datastore.sqlite3"
+    disableMigration: "false"
+    maxOpenConns: 100
+    maxIdleConns: 2
+    connMaxLifetime: 3600
+  
+  # Key manager configuration
+  keyManager:
+    diskEnabled: "true"
+    memoryEnabled: "false"
+  
+  # Resource requirements
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  # Node scheduling
+  nodeSelector:
+    kubernetes.io/os: linux
+    node-role.kubernetes.io/control-plane: ""
+  
+  # Pod tolerations for control plane nodes
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+  
+  # Pod affinity for high availability
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: spire-server
+            topologyKey: "kubernetes.io/hostname"
+  
+  # Custom labels for managed resources
+  labels:
+    environment: "production"
+    team: "security" 

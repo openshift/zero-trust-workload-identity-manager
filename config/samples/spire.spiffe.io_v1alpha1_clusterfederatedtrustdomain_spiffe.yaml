@@ -1,0 +1,21 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterFederatedTrustDomain
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: staging-trust-domain
+spec:
+  # Required: The trust domain to federate with
+  trustDomain: "staging.example.org"
+  
+  # Required: Bundle endpoint URL for SPIFFE-authenticated endpoint
+  bundleEndpointURL: "https://spire-server.staging.example.org:8443/bundle"
+  
+  # Required: Bundle endpoint profile using SPIFFE authentication
+  bundleEndpointProfile:
+    type: "https_spiffe"
+    # Required for https_spiffe profile: SPIFFE ID of the bundle endpoint
+    endpointSPIFFEID: "spiffe://staging.example.org/spire/server" 

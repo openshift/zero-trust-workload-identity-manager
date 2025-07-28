@@ -1,4 +1,12 @@
 ## Append samples of your project ##
 resources:
 - operator.openshift.io_v1alpha1_zerotrustworkloadidentitymanager.yaml
+- operator.openshift.io_v1alpha1_spireserver.yaml
+- operator.openshift.io_v1alpha1_spireagent.yaml
+- operator.openshift.io_v1alpha1_spireoidcdiscoveryprovider.yaml
+- operator.openshift.io_v1alpha1_spiffecsidriver.yaml
+- spire.spiffe.io_v1alpha1_clusterspiffeid.yaml
+- spire.spiffe.io_v1alpha1_clusterstaticentry.yaml
+- spire.spiffe.io_v1alpha1_clusterfederatedtrustdomain.yaml
+- spire.spiffe.io_v1alpha1_clusterfederatedtrustdomain_spiffe.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

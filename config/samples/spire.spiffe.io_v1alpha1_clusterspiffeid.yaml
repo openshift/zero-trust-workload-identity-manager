@@ -1,0 +1,61 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: example-workload
+spec:
+  # Required: SPIFFE ID template with dynamic values
+  spiffeIDTemplate: "spiffe://example.org/ns/{{ .PodSpec.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  
+  # Pod selector to target specific workloads
+  podSelector:
+    matchLabels:
+      app: web-server
+    matchExpressions:
+      - key: version
+        operator: In
+        values: ["v1", "v2"]
+  
+  # Namespace selector to limit scope
+  namespaceSelector:
+    matchLabels:
+      spiffe.io/trust-zone: "production"
+    matchExpressions:
+      - key: name
+        operator: NotIn
+        values: ["kube-system", "kube-public"]
+  
+  # Workload selector templates for SPIRE registration
+  workloadSelectorTemplates:
+    - "k8s:ns:{{ .PodSpec.Namespace }}"
+    - "k8s:sa:{{ .PodSpec.ServiceAccountName }}"
+    - "k8s:pod-label:app:{{ index .PodSpec.Labels \"app\" }}"
+    - "k8s:container-name:{{ (index .PodSpec.Containers 0).Name }}"
+  
+  # DNS name templates for X.509 SVIDs
+  dnsNameTemplates:
+    - "{{ .PodSpec.ServiceAccountName }}.{{ .PodSpec.Namespace }}.svc.cluster.local"
+    - "{{ index .PodSpec.Labels \"app\" }}.{{ .PodSpec.Namespace }}.example.org"
+  
+  # Enable automatic DNS name population
+  autoPopulateDNSNames: true
+  
+  # Federation with other trust domains
+  federatesWith:
+    - "partner.example.org"
+    - "staging.example.org"
+  
+  # TTL settings for certificates
+  ttl: "1h"
+  jwtTtl: "15m"
+  
+  # Administrative configuration
+  admin: false
+  downstream: false
+  
+  # Entry hint for debugging
+  hint: "Production web server workloads" 

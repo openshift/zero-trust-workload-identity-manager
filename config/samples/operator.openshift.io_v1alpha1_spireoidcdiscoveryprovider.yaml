@@ -1,0 +1,57 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireOIDCDiscoveryProvider
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: cluster
+spec:
+  # Required field
+  trustDomain: "example.org"
+  
+  # Replica configuration for high availability
+  replicaCount: 2
+  
+  # Resource requirements
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+  
+  # Node scheduling preferences
+  nodeSelector:
+    kubernetes.io/os: linux
+  
+  # Tolerations for control plane deployment
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+  
+  # Pod anti-affinity for distribution across nodes
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: spire-oidc-discovery-provider
+            topologyKey: "kubernetes.io/hostname"
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: spire-oidc-discovery-provider
+            topologyKey: "topology.kubernetes.io/zone"
+  
+  # Custom labels for managed resources
+  labels:
+    environment: "production"
+    team: "security"
+    component: "oidc-discovery" 

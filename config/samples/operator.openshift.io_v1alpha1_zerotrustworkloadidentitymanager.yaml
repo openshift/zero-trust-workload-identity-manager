@@ -6,6 +6,48 @@ metadata:
     app.kubernetes.io/created-by: zero-trust-workload-identity-manager
     app.kubernetes.io/part-of: zero-trust-workload-identity-manager
     app.kubernetes.io/managed-by: kustomize
-  name: zerotrustworkloadidentitymanager-sample
+  name: cluster
 spec:
-  # TODO(user): Add fields here
+  # Namespace for SPIRE components deployment
+  namespace: "zero-trust-workload-identity-manager"
+  
+  # Logging level (1-5, higher means more verbose)
+  logLevel: 2
+  
+  # Resource requirements for the operator
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+  
+  # Node scheduling preferences
+  nodeSelector:
+    kubernetes.io/os: linux
+  
+  # Tolerations for control plane deployment
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+  
+  # Pod affinity for optimal placement
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+  
+  # Labels to apply to all managed resources
+  labels:
+    environment: "production"
+    team: "security"
+    managed-by: "zero-trust-workload-identity-manager"
