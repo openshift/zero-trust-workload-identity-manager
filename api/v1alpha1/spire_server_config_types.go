@@ -42,6 +42,30 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Required
 	JwtIssuer string `json:"jwtIssuer"`
 
+	// caValidity is the validity period (TTL) for the SPIRE Server's own CA certificate.
+	// This determines how long the server's root or intermediate certificate is valid.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="24h"
+	CAValidity metav1.Duration `json:"caValidity"`
+
+	// defaultX509Validity is the default validity period (TTL) for X.509 SVIDs issued to workloads.
+	// This value is used if a specific TTL is not configured for a registration entry.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="1h"
+	DefaultX509Validity metav1.Duration `json:"defaultX509Validity"`
+
+	// defaultJWTValidity is the default validity period (TTL) for JWT SVIDs issued to workloads.
+	// This value is used if a specific TTL is not configured for a registration entry.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="5m"
+	DefaultJWTValidity metav1.Duration `json:"defaultJWTValidity"`
+
 	// keyManager has configs for the spire server key manager.
 	// +kubebuilder:validation:Optional
 	KeyManager *KeyManager `json:"keyManager,omitempty"`
