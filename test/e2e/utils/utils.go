@@ -162,6 +162,29 @@ func WaitForStatefulSetReady(ctx context.Context, clientset kubernetes.Interface
 		"statefulset '%s/%s' should become ready within %v", namespace, name, timeout)
 }
 
+// WaitForStatefulSetRollingUpdate waits for a StatefulSet rolling update to be processed by the controller
+// This ensures the controller has observed the changes, whether the update is in progress or already completed
+// initialGeneration should be recorded before making any changes to the StatefulSet
+func WaitForStatefulSetRollingUpdate(ctx context.Context, clientset kubernetes.Interface, name, namespace string, initialGeneration int64, timeout time.Duration) {
+	Eventually(func() bool {
+		sts, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get statefulset '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		// Check if generation has increased and controller has observed it
+		if sts.Generation > initialGeneration && sts.Status.ObservedGeneration >= sts.Generation {
+			fmt.Fprintf(GinkgoWriter, "statefulset '%s/%s' rolling update processed (generation %d->%d)\n", namespace, name, initialGeneration, sts.Generation)
+			return true
+		}
+
+		fmt.Fprintf(GinkgoWriter, "statefulset '%s/%s' waiting for rolling update (gen=%d->%d, observed=%d)\n", namespace, name, initialGeneration, sts.Generation, sts.Status.ObservedGeneration)
+		return false
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"statefulset '%s/%s' rolling update should be processed within %v", namespace, name, timeout)
+}
+
 // IsDaemonSetAvailable checks if a DaemonSet has all desired pods Up-to-date and Available
 func IsDaemonSetAvailable(ds *appsv1.DaemonSet) bool {
 	desired := ds.Status.DesiredNumberScheduled
@@ -186,6 +209,29 @@ func WaitForDaemonSetAvailable(ctx context.Context, clientset kubernetes.Interfa
 		return true
 	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
 		"daemonset '%s/%s' should become available within %v", namespace, name, timeout)
+}
+
+// WaitForDaemonSetRollingUpdate waits for a DaemonSet rolling update to be processed by the controller
+// This ensures the controller has observed the changes, whether the update is in progress or already completed
+// initialGeneration should be recorded before making any changes to the DaemonSet
+func WaitForDaemonSetRollingUpdate(ctx context.Context, clientset kubernetes.Interface, name, namespace string, initialGeneration int64, timeout time.Duration) {
+	Eventually(func() bool {
+		ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get daemonset '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		// Check if generation has increased and controller has observed it
+		if ds.Generation > initialGeneration && ds.Status.ObservedGeneration >= ds.Generation {
+			fmt.Fprintf(GinkgoWriter, "daemonset '%s/%s' rolling update processed (generation %d->%d)\n", namespace, name, initialGeneration, ds.Generation)
+			return true
+		}
+
+		fmt.Fprintf(GinkgoWriter, "daemonset '%s/%s' waiting for rolling update (gen=%d->%d, observed=%d)\n", namespace, name, initialGeneration, ds.Generation, ds.Status.ObservedGeneration)
+		return false
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"daemonset '%s/%s' rolling update should be processed within %v", namespace, name, timeout)
 }
 
 // WaitForCRConditionsTrue waits for all required conditions of the operator managed cluster CR object to be True within timeout
@@ -224,4 +270,31 @@ func WaitForCRConditionsTrue(ctx context.Context, k8sClient client.Client, cr cl
 		return true
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
 		"all conditions of '%T' object should be true within %v", cr, timeout)
+}
+
+// VerifyContainerResources verifies that all containers in the provided pods have the expected resource limits and requests
+func VerifyContainerResources(pods []corev1.Pod, expectedResources *corev1.ResourceRequirements) {
+	for _, pod := range pods {
+		for _, container := range pod.Spec.Containers {
+			// Verify limits
+			if expectedResources.Limits != nil {
+				for resourceName, expectedQuantity := range expectedResources.Limits {
+					actualQuantity := container.Resources.Limits[resourceName]
+					Expect(actualQuantity.String()).To(Equal(expectedQuantity.String()),
+						"resource limit '%s' should be '%s' for container '%s' in pod '%s'", resourceName, expectedQuantity.String(), container.Name, pod.Name)
+				}
+			}
+
+			// Verify requests
+			if expectedResources.Requests != nil {
+				for resourceName, expectedQuantity := range expectedResources.Requests {
+					actualQuantity := container.Resources.Requests[resourceName]
+					Expect(actualQuantity.String()).To(Equal(expectedQuantity.String()),
+						"resource request '%s' should be '%s' for container '%s' in pod '%s'", resourceName, expectedQuantity.String(), container.Name, pod.Name)
+				}
+			}
+
+			fmt.Fprintf(GinkgoWriter, "container '%s' in pod '%s' has expected resources\n", container.Name, pod.Name)
+		}
+	}
 }

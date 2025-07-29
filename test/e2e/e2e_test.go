@@ -26,7 +26,9 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
@@ -153,7 +155,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					},
 					Persistence: &operatorv1alpha1.Persistence{
 						Type:       "pvc",
-						Size:       "2Gi",
+						Size:       "1Gi",
 						AccessMode: "ReadWriteOncePod",
 					},
 					Datastore: &operatorv1alpha1.DataStore{
@@ -181,6 +183,60 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Waiting for SPIRE Server StatefulSet to become Ready")
 			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("custom resource limits and requests should apply to the SPIRE Server containers", func() {
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			// record initial generation of the StatefulSet before updating SpireServer object
+			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := statefulset.Generation
+
+			By("Patching SpireServer object with resource specifications")
+			expectedResources := &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+			}
+
+			spireServer.Spec.Resources = expectedResources
+			err = k8sClient.Update(testCtx, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer object with resources")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireServer resources modification")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.Resources = nil
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE Server StatefulSet rolling update to start")
+			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Server Pods have the expected resource limits and requests")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
 	})
 
@@ -220,6 +276,60 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Waiting for SPIRE Agent DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("custom resource limits and requests should apply to the SPIRE Agent containers", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			// record initial generation of the DaemonSet before updating SpireAgent object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with resource specifications")
+			expectedResources := &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+			}
+
+			spireAgent.Spec.Resources = expectedResources
+			err = k8sClient.Update(testCtx, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent object with resources")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent resources modification")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.Resources = nil
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Agent Pods have the expected resource limits and requests")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
 	})
 })
