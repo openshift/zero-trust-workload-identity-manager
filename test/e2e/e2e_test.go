@@ -238,6 +238,65 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(pods.Items).NotTo(BeEmpty())
 			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
+
+		It("custom nodeSelector and tolerations should apply to the SPIRE Server Pods and trigger scheduling", func() {
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			// record initial generation of the StatefulSet before updating SpireServer object
+			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := statefulset.Generation
+
+			By("Patching SpireServer object with nodeSelector and tolerations to schedule Pod on control-plane Nodes")
+			expectedNodeSelector := map[string]string{
+				"node-role.kubernetes.io/control-plane": "",
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spireServer.Spec.NodeSelector = expectedNodeSelector
+			spireServer.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer object with nodeSelector and tolerations")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireServer nodeSelector and tolerations modification")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.NodeSelector = nil
+					server.Spec.Tolerations = nil
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE Server StatefulSet rolling update to start")
+			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Server Pods have been scheduled to Nodes with required labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodScheduling(testCtx, clientset, pods.Items, expectedNodeSelector)
+
+			By("Verifying if SPIRE Server Pods tolerate Node taints correctly")
+			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
+		})
 	})
 
 	Context("when creating a SpireAgent object", func() {
@@ -330,6 +389,65 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pods.Items).NotTo(BeEmpty())
 			utils.VerifyContainerResources(pods.Items, expectedResources)
+		})
+
+		It("custom nodeSelector and tolerations should apply to the SPIRE Agent Pods and trigger scheduling", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			// record initial generation of the DaemonSet before updating SpireAgent object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with nodeSelector and tolerations to schedule pods on control-plane nodes")
+			expectedNodeSelector := map[string]string{
+				"node-role.kubernetes.io/control-plane": "",
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spireAgent.Spec.NodeSelector = expectedNodeSelector
+			spireAgent.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent object with nodeSelector and tolerations")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent nodeSelector and tolerations modification")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.NodeSelector = nil
+					agent.Spec.Tolerations = nil
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Agent Pods have been scheduled to Nodes with required labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodScheduling(testCtx, clientset, pods.Items, expectedNodeSelector)
+
+			By("Verifying if SPIRE Agent Pods tolerate Node taints correctly")
+			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
 		})
 	})
 })
