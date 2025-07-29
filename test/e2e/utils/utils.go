@@ -105,6 +105,31 @@ func WaitForCRDEstablished(ctx context.Context, apiextClient apiextclient.Interf
 		"CRD '%s' should be established within %v", name, timeout)
 }
 
+// IsPodRunning checks if a pod is in Running phase
+func IsPodRunning(pod *corev1.Pod) bool {
+	return pod.Status.Phase == corev1.PodRunning
+}
+
+// WaitForPodRunning waits for a specific pod to be in Running phase within timeout
+func WaitForPodRunning(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
+	Eventually(func() bool {
+		pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get pod '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		if !IsPodRunning(pod) {
+			fmt.Fprintf(GinkgoWriter, "pod '%s/%s' not running yet (phase=%s)\n", namespace, name, pod.Status.Phase)
+			return false
+		}
+
+		fmt.Fprintf(GinkgoWriter, "pod '%s/%s' is running on node '%s'\n", namespace, name, pod.Spec.NodeName)
+		return true
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"pod '%s/%s' should become running within %v", namespace, name, timeout)
+}
+
 // IsDeploymentAvailable checks if a Deployment has the Available condition set to True
 func IsDeploymentAvailable(deployment *appsv1.Deployment) bool {
 	// Check if deployment has Available condition set to True

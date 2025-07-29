@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -297,6 +299,124 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Verifying if SPIRE Server Pods tolerate Node taints correctly")
 			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
 		})
+
+		It("custom affinity should apply to the SPIRE Server Pods and trigger scheduling", func() {
+			By("Retrieving any SPIRE Server Pod and its Node for affinity testing")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			spireServerPod := pods.Items[0]
+			originalNodeName := spireServerPod.Spec.NodeName
+			fmt.Fprintf(GinkgoWriter, "pod '%s' is currently on node '%s'\n", spireServerPod.Name, originalNodeName)
+
+			By("Creating test Pod on the same Node as SPIRE Server Pod to simulate PodAntiAffinity")
+			testPodName := fmt.Sprintf("test-spire-server-%d", time.Now().Unix())
+			testPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testPodName,
+					Namespace: utils.OperatorNamespace,
+					Labels: map[string]string{
+						"statefulset.kubernetes.io/pod-name": spireServerPod.Name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					NodeName: originalNodeName,
+					Containers: []corev1.Container{
+						{
+							Name:    "dummy",
+							Image:   "docker.io/library/busybox:latest",
+							Command: []string{"sleep", "600"},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: &[]bool{false}[0],
+								RunAsNonRoot:             &[]bool{true}[0],
+								RunAsUser:                &[]int64{1000}[0],
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
+								},
+							},
+						},
+					},
+				},
+			}
+			_, err = clientset.CoreV1().Pods(utils.OperatorNamespace).Create(testCtx, testPod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to create test Pod")
+			DeferCleanup(func(ctx context.Context) {
+				By("Deleting test Pod")
+				clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(ctx, testPodName, metav1.DeleteOptions{})
+			})
+
+			By("Waiting for test Pod to become Running")
+			utils.WaitForPodRunning(testCtx, clientset, testPodName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			// record initial generation of the StatefulSet before updating SpireServer object
+			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := statefulset.Generation
+
+			By("Patching SpireServer object with PodAntiAffinity configuration")
+			expectedAffinity := &corev1.Affinity{
+				PodAntiAffinity: &corev1.PodAntiAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"statefulset.kubernetes.io/pod-name": spireServerPod.Name,
+								},
+							},
+							TopologyKey: "kubernetes.io/hostname",
+						},
+					},
+				},
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spireServer.Spec.Affinity = expectedAffinity
+			spireServer.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer object with affinity")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireServer affinity modification")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.Affinity = nil
+					server.Spec.Tolerations = nil
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE Server StatefulSet rolling update to start")
+			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Server Pod has been rescheduled to a different Node")
+			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newPods.Items).NotTo(BeEmpty())
+			Expect(newPods.Items[0].Spec.NodeName).NotTo(Equal(originalNodeName), "pod should be rescheduled to a different node")
+			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
+		})
 	})
 
 	Context("when creating a SpireAgent object", func() {
@@ -448,6 +568,98 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Verifying if SPIRE Agent Pods tolerate Node taints correctly")
 			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
+		})
+
+		It("custom affinity should apply to the SPIRE Agent Pods and trigger scheduling", func() {
+			By("Retrieving any SPIRE Agent Pod and its Node for affinity testing")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			spireAgentPod := pods.Items[0]
+			targetNodeName := spireAgentPod.Spec.NodeName
+			fmt.Fprintf(GinkgoWriter, "will use node '%s' as target\n", targetNodeName)
+
+			By("Labeling the target Node with test label to simulate NodeAffinity")
+			testLabelKey := "test.spire.agent/node-affinity"
+			testLabelValue := "true"
+
+			patchData := fmt.Sprintf(`{"metadata":{"labels":{"%s":"%s"}}}`, testLabelKey, testLabelValue)
+			_, err = clientset.CoreV1().Nodes().Patch(testCtx, targetNodeName, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to label node '%s'", targetNodeName)
+			DeferCleanup(func(ctx context.Context) {
+				By("Removing test label from Node")
+				patchData := fmt.Sprintf(`{"metadata":{"labels":{"%s":null}}}`, testLabelKey)
+				clientset.CoreV1().Nodes().Patch(ctx, targetNodeName, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+			})
+
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			// record initial generation of the DaemonSet before updating SpireAgent object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with NodeAffinity configuration")
+			expectedAffinity := &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      testLabelKey,
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{testLabelValue},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spireAgent.Spec.Affinity = expectedAffinity
+			spireAgent.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent object with affinity")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent affinity modification")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.Affinity = nil
+					agent.Spec.Tolerations = nil
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Agent Pod is constrained to the labeled Node")
+			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newPods.Items).To(HaveLen(1), "nodeAffinity should constrain daemonset to exactly one pod")
+			Expect(newPods.Items[0].Spec.NodeName).To(Equal(targetNodeName), "pod should be scheduled on the labeled node")
+			fmt.Fprintf(GinkgoWriter, "pod has been constrained to labeled node '%s'\n", targetNodeName)
 		})
 	})
 })
