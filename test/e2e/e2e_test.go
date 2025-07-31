@@ -56,8 +56,8 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		DeferCleanup(cancel)
 	})
 
-	Context("when installing the operator", func() {
-		It("should create a healthy operator Deployment", func() {
+	Context("Installation", func() {
+		It("Operator should be installed successfully", func() {
 			By("Waiting for all managed CRDs to be Established")
 			managedCRDs := []string{
 				"zerotrustworkloadidentitymanagers.operator.openshift.io",
@@ -88,7 +88,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
 		})
 
-		It("should recover from the Pod force deletion", func() {
+		It("Operator should recover from the force Pod deletion", func() {
 			By("Getting operator Pod")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.OperatorLabelSelector})
 			Expect(err).NotTo(HaveOccurred())
@@ -137,10 +137,8 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Waiting for operator Deployment to become Available again")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
 		})
-	})
 
-	Context("when creating a SpireServer object", func() {
-		It("should create a healthy SPIRE Server StatefulSet", func() {
+		It("SPIRE Server should be installed successfully by creating a SpireServer object", func() {
 			By("Creating SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -187,7 +185,46 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 
-		It("custom resource limits and requests should apply to the SPIRE Server containers", func() {
+		It("SPIRE Agent should be installed successfully by creating a SpireAgent object", func() {
+			By("Creating SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: operatorv1alpha1.SpireAgentSpec{
+					TrustDomain:     appDomain,
+					ClusterName:     clusterName,
+					BundleConfigMap: bundleConfigMap,
+					NodeAttestor: &operatorv1alpha1.NodeAttestor{
+						K8sPSATEnabled: "true",
+					},
+					WorkloadAttestors: &operatorv1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &operatorv1alpha1.WorkloadAttestorsVerification{
+							Type: "auto",
+						},
+					},
+				},
+			}
+			err := k8sClient.Create(testCtx, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to create SpireAgent object")
+
+			By("Waiting for all resource generation conditions in SpireAgent object to be True")
+			conditionTypes := []string{
+				"SpireAgentSCCGeneration",
+				"SpireAgentConfigMapGeneration",
+				"SpireAgentDaemonSetGeneration",
+			}
+			cr := &operatorv1alpha1.SpireAgent{}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+	})
+
+	Context("Common configurations", func() {
+		It("SPIRE Server containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{}
 			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
@@ -241,7 +278,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
 
-		It("custom nodeSelector and tolerations should apply to the SPIRE Server Pods and trigger scheduling", func() {
+		It("SPIRE Server nodeSelector and tolerations can be configured through CR", func() {
 			By("Getting SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{}
 			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
@@ -300,7 +337,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
 		})
 
-		It("custom affinity should apply to the SPIRE Server Pods and trigger scheduling", func() {
+		It("SPIRE Server affinity can be configured through CR", func() {
 			By("Retrieving any SPIRE Server Pod and its Node for affinity testing")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
 			Expect(err).NotTo(HaveOccurred())
@@ -417,47 +454,8 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(newPods.Items[0].Spec.NodeName).NotTo(Equal(originalNodeName), "pod should be rescheduled to a different node")
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
 		})
-	})
-
-	Context("when creating a SpireAgent object", func() {
-		It("should create a healthy SPIRE Agent DaemonSet", func() {
-			By("Creating SpireAgent object")
-			spireAgent := &operatorv1alpha1.SpireAgent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster",
-				},
-				Spec: operatorv1alpha1.SpireAgentSpec{
-					TrustDomain:     appDomain,
-					ClusterName:     clusterName,
-					BundleConfigMap: bundleConfigMap,
-					NodeAttestor: &operatorv1alpha1.NodeAttestor{
-						K8sPSATEnabled: "true",
-					},
-					WorkloadAttestors: &operatorv1alpha1.WorkloadAttestors{
-						K8sEnabled: "true",
-						WorkloadAttestorsVerification: &operatorv1alpha1.WorkloadAttestorsVerification{
-							Type: "auto",
-						},
-					},
-				},
-			}
-			err := k8sClient.Create(testCtx, spireAgent)
-			Expect(err).NotTo(HaveOccurred(), "failed to create SpireAgent object")
-
-			By("Waiting for all resource generation conditions in SpireAgent object to be True")
-			conditionTypes := []string{
-				"SpireAgentSCCGeneration",
-				"SpireAgentConfigMapGeneration",
-				"SpireAgentDaemonSetGeneration",
-			}
-			cr := &operatorv1alpha1.SpireAgent{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
-
-			By("Waiting for SPIRE Agent DaemonSet to become Available")
-			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
-		})
-
-		It("custom resource limits and requests should apply to the SPIRE Agent containers", func() {
+		
+		It("SPIRE Agent containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireAgent object")
 			spireAgent := &operatorv1alpha1.SpireAgent{}
 			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
@@ -511,7 +509,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
 
-		It("custom nodeSelector and tolerations should apply to the SPIRE Agent Pods and trigger scheduling", func() {
+		It("SPIRE Agent nodeSelector and tolerations can be configured through CR", func() {
 			By("Getting SpireAgent object")
 			spireAgent := &operatorv1alpha1.SpireAgent{}
 			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
@@ -570,7 +568,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
 		})
 
-		It("custom affinity should apply to the SPIRE Agent Pods and trigger scheduling", func() {
+		It("SPIRE Agent affinity can be configured through CR", func() {
 			By("Retrieving any SPIRE Agent Pod and its Node for affinity testing")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
 			Expect(err).NotTo(HaveOccurred())
