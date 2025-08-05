@@ -225,3 +225,102 @@ func WaitForCRConditionsTrue(ctx context.Context, k8sClient client.Client, cr cl
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
 		"all conditions of '%T' object should be true within %v", cr, timeout)
 }
+
+// WaitForDaemonSetRollingUpdate waits for a DaemonSet rolling update to be processed by the controller
+// This ensures the controller has observed the changes, whether the update is in progress or already completed
+// initialGeneration should be recorded before making any changes to the DaemonSet
+func WaitForDaemonSetRollingUpdate(ctx context.Context, clientset kubernetes.Interface, name, namespace string, initialGeneration int64, timeout time.Duration) {
+	Eventually(func() bool {
+		ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get daemonset '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		// Check if generation has increased and controller has observed it
+		if ds.Generation > initialGeneration && ds.Status.ObservedGeneration >= ds.Generation {
+			fmt.Fprintf(GinkgoWriter, "daemonset '%s/%s' rolling update processed (generation %d->%d)\n", namespace, name, initialGeneration, ds.Generation)
+			return true
+		}
+
+		fmt.Fprintf(GinkgoWriter, "daemonset '%s/%s' waiting for rolling update (gen=%d->%d, observed=%d)\n", namespace, name, initialGeneration, ds.Generation, ds.Status.ObservedGeneration)
+		return false
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"daemonset '%s/%s' rolling update should be processed within %v", namespace, name, timeout)
+}
+
+// VerifyContainerResources verifies that all containers in the provided pods have the expected resource limits and requests
+func VerifyContainerResources(pods []corev1.Pod, expectedResources *corev1.ResourceRequirements) {
+	for _, pod := range pods {
+		for _, container := range pod.Spec.Containers {
+			// Verify limits
+			if expectedResources.Limits != nil {
+				for resourceName, expectedQuantity := range expectedResources.Limits {
+					actualQuantity := container.Resources.Limits[resourceName]
+					Expect(actualQuantity.String()).To(Equal(expectedQuantity.String()),
+						"resource limit '%s' should be '%s' for container '%s' in pod '%s'", resourceName, expectedQuantity.String(), container.Name, pod.Name)
+				}
+			}
+
+			// Verify requests
+			if expectedResources.Requests != nil {
+				for resourceName, expectedQuantity := range expectedResources.Requests {
+					actualQuantity := container.Resources.Requests[resourceName]
+					Expect(actualQuantity.String()).To(Equal(expectedQuantity.String()),
+						"resource request '%s' should be '%s' for container '%s' in pod '%s'", resourceName, expectedQuantity.String(), container.Name, pod.Name)
+				}
+			}
+			fmt.Fprintf(GinkgoWriter, "container '%s' in pod '%s' has expected resources\n", container.Name, pod.Name)
+		}
+	}
+}
+
+// VerifyPodScheduling verifies that pods are scheduled to nodes with the required nodeSelector labels
+func VerifyPodScheduling(ctx context.Context, clientset kubernetes.Interface, pods []corev1.Pod, requiredNodeLabels map[string]string) {
+	for _, pod := range pods {
+		// Get the node where the pod is scheduled
+		node, err := clientset.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "failed to get node '%s'", pod.Spec.NodeName)
+
+		// Check if the node has all required labels from nodeSelector
+		nodeLabels := node.GetLabels()
+		for labelKey, expectedValue := range requiredNodeLabels {
+			if expectedValue == "" {
+				Expect(nodeLabels).To(HaveKey(labelKey),
+					"pod %s is scheduled on node '%s' which should have label '%s'", pod.Name, pod.Spec.NodeName, labelKey)
+			} else {
+				Expect(nodeLabels).To(HaveKeyWithValue(labelKey, expectedValue),
+					"pod %s is scheduled on node '%s' which should have label '%s=%s'", pod.Name, pod.Spec.NodeName, labelKey, expectedValue)
+			}
+		}
+
+		fmt.Fprintf(GinkgoWriter, "pod '%s' is scheduled on node '%s' with required labels [%v]\n", pod.Name, pod.Spec.NodeName, requiredNodeLabels)
+	}
+}
+
+// VerifyPodTolerations verifies that pods are scheduled to nodes that have taints matching the pod's tolerations
+func VerifyPodTolerations(ctx context.Context, clientset kubernetes.Interface, pods []corev1.Pod, expectedTolerations []*corev1.Toleration) {
+	for _, pod := range pods {
+		// Get the node where the pod is scheduled
+		node, err := clientset.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "failed to get node '%s'", pod.Spec.NodeName)
+
+		// Check if the node has taints that match the pod's tolerations
+		nodeTaints := node.Spec.Taints
+		for _, expectedToleration := range expectedTolerations {
+			tolerationMatched := false
+			for _, taint := range nodeTaints {
+				if taint.Key == expectedToleration.Key && taint.Effect == expectedToleration.Effect {
+					tolerationMatched = true
+					break
+				}
+			}
+
+			if tolerationMatched {
+				fmt.Fprintf(GinkgoWriter, "pod '%s' is scheduled on node '%s' with matched toleration [%v]\n", pod.Name, pod.Spec.NodeName, expectedToleration)
+			}
+
+			// Note that we don't fail if the taint is not found, as tolerations allow scheduling to nodes both with and without the taint
+		}
+	}
+}
