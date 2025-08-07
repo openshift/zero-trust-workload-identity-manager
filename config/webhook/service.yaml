@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-service
+  namespace: system
+  labels:
+    name: zero-trust-workload-identity-manager
+    app.kubernetes.io/name: service
+    app.kubernetes.io/instance: webhook-service
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: webhook-server-certs
+    service.beta.openshift.io/inject-cabundle: "true"
+spec:
+  ports:
+  - name: webhook-server
+    port: 443
+    protocol: TCP
+    targetPort: 9443
+  selector:
+    name: zero-trust-workload-identity-manager 
