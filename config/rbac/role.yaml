@@ -25,6 +25,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - admissionregistration.k8s.io
   resources:
   - validatingwebhookconfigurations
@@ -119,6 +127,19 @@ rules:
   - clusterroles
   - rolebindings
   - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  - routes/custom-host
   verbs:
   - create
   - delete

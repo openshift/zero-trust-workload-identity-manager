@@ -206,7 +206,7 @@ func TestBuildDeployment(t *testing.T) {
 			assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Spec.Template.Spec.ServiceAccountName)
 
 			// Check containers
-			require.Len(t, deployment.Spec.Template.Spec.Containers, 2)
+			require.Len(t, deployment.Spec.Template.Spec.Containers, 1)
 
 			oidcContainer := deployment.Spec.Template.Spec.Containers[0]
 			assert.Equal(t, "spiffe-oidc-discovery-provider", oidcContainer.Name)
@@ -214,16 +214,8 @@ func TestBuildDeployment(t *testing.T) {
 			assert.Contains(t, oidcContainer.Args, "-config")
 			assert.Contains(t, oidcContainer.Args, "/run/spire/oidc/config/oidc-discovery-provider.conf")
 
-			helperContainer := deployment.Spec.Template.Spec.Containers[1]
-			assert.Equal(t, "spiffe-helper", helperContainer.Name)
-			assert.Equal(t, utils.GetSpiffeHelperImage(), helperContainer.Image)
-
-			// Check init container
-			require.Len(t, deployment.Spec.Template.Spec.InitContainers, 1)
-			initContainer := deployment.Spec.Template.Spec.InitContainers[0]
-			assert.Equal(t, "init", initContainer.Name)
-			assert.Equal(t, utils.GetSpiffeHelperImage(), initContainer.Image)
-			assert.Contains(t, initContainer.Args, "-daemon-mode=false")
+			// Check that init containers are not present
+			require.Len(t, deployment.Spec.Template.Spec.InitContainers, 0)
 
 			// Check volumes
 			volumeNames := make([]string, len(deployment.Spec.Template.Spec.Volumes))
@@ -234,8 +226,7 @@ func TestBuildDeployment(t *testing.T) {
 				"spiffe-workload-api",
 				"spire-oidc-sockets",
 				"spire-oidc-config",
-				"certdir",
-				"ngnix-tmp",
+				"tls-certs",
 			}
 			for _, expectedVol := range expectedVolumes {
 				assert.Contains(t, volumeNames, expectedVol)

@@ -42,6 +42,20 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:=1
 	ReplicaCount int `json:"replicaCount,omitempty"`
 
+	// managedRoute is for enabling routes for oidc-discovery-provider, which can be indicated
+	// by setting `true` or `false`
+	// "true": Allows automatic exposure of OIDC discovery endpoints through a managed OpenShift Route (*.apps.).
+	// "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress, offering more control over routing behavior.
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedRoute string `json:"managedRoute,omitempty"`
+
+	// externalSecretRef is a reference to an externally managed secret that
+	// contains the TLS certificate for the oidc-discovery-provider Route host
+	// +kubebuilder:validation:Optional
+	ExternalSecretRef string `json:"externalSecretRef,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 

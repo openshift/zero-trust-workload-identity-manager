@@ -969,6 +969,11 @@ spec:
                 default: spire-agent.sock
                 description: agentSocketName is the name of the agent socket.
                 type: string
+              externalSecretRef:
+                description: |-
+                  externalSecretRef is a reference to an externally managed secret that
+                  contains the TLS certificate for the oidc-discovery-provider Route host
+                type: string
               jwtIssuer:
                 description: jwtIssuer is the JWT issuer url.
                 type: string
@@ -978,6 +983,17 @@ spec:
                 description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
+              managedRoute:
+                default: "true"
+                description: |-
+                  managedRoute is for enabling routes for oidc-discovery-provider, which can be indicated
+                  by setting `true` or `false`
+                  "true": Allows automatic exposure of OIDC discovery endpoints through a managed OpenShift Route (*.apps.).
+                  "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress, offering more control over routing behavior.
+                enum:
+                - "true"
+                - "false"
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string

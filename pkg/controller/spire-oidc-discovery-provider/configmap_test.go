@@ -34,8 +34,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 		// Verify ConfigMap data keys exist
 		require.Contains(t, result.Data, "oidc-discovery-provider.conf")
-		require.Contains(t, result.Data, "spiffe-helper.conf")
-		require.Contains(t, result.Data, "default.conf")
 
 		// Verify OIDC config JSON
 		var oidcConfig map[string]interface{}
@@ -61,10 +59,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "/spiffe-workload-api/spire-agent.sock", workloadAPI["socket_path"])
 		assert.Equal(t, "example.org", workloadAPI["trust_domain"])
-
-		// Verify spiffe-helper.conf contains default socket path
-		spiffeHelperConf := result.Data["spiffe-helper.conf"]
-		assert.Contains(t, spiffeHelperConf, `agent_address = "/spiffe-workload-api/spire-agent.sock"`)
 	})
 
 	t.Run("should generate ConfigMap with custom values", func(t *testing.T) {
@@ -119,10 +113,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "/spiffe-workload-api/custom-agent.sock", workloadAPI["socket_path"])
 		assert.Equal(t, "custom.domain.com", workloadAPI["trust_domain"])
-
-		// Verify spiffe-helper.conf contains custom socket path
-		spiffeHelperConf := result.Data["spiffe-helper.conf"]
-		assert.Contains(t, spiffeHelperConf, `agent_address = "/spiffe-workload-api/custom-agent.sock"`)
 	})
 
 	t.Run("should handle empty AgentSocketName with default", func(t *testing.T) {
@@ -185,91 +175,10 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		// Verify serving_cert_file structure
 		servingCertFile := oidcConfig["serving_cert_file"].(map[string]interface{})
 		assert.Equal(t, ":8443", servingCertFile["addr"])
-		assert.Equal(t, "/certs/tls.crt", servingCertFile["cert_file_path"])
-		assert.Equal(t, "/certs/tls.key", servingCertFile["key_file_path"])
+		assert.Equal(t, "/etc/oidc/tls/tls.crt", servingCertFile["cert_file_path"])
+		assert.Equal(t, "/etc/oidc/tls/tls.key", servingCertFile["key_file_path"])
 	})
 
-	t.Run("should generate valid spiffe-helper.conf content", func(t *testing.T) {
-		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain:     "example.org",
-				AgentSocketName: "custom.sock",
-			},
-		}
-
-		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
-
-		// Assert
-		require.NoError(t, err)
-
-		spiffeHelperConf := result.Data["spiffe-helper.conf"]
-
-		// Verify all expected lines are present
-		expectedLines := []string{
-			`agent_address = "/spiffe-workload-api/custom.sock"`,
-			`cert_dir = "/certs"`,
-			`svid_file_name = "tls.crt"`,
-			`svid_key_file_name = "tls.key"`,
-			`svid_bundle_file_name = "ca.pem"`,
-		}
-
-		for _, line := range expectedLines {
-			assert.Contains(t, spiffeHelperConf, line)
-		}
-	})
-
-	t.Run("should generate valid default.conf nginx content", func(t *testing.T) {
-		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain: "example.org",
-			},
-		}
-
-		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
-
-		// Assert
-		require.NoError(t, err)
-
-		defaultConf := result.Data["default.conf"]
-
-		// Verify nginx configuration elements
-		assert.Contains(t, defaultConf, "upstream oidc {")
-		assert.Contains(t, defaultConf, "server unix:/run/spire/oidc-sockets/spire-oidc-server.sock;")
-		assert.Contains(t, defaultConf, "listen            8080;")
-		assert.Contains(t, defaultConf, "listen       [::]:8080;")
-		assert.Contains(t, defaultConf, "proxy_pass http://oidc;")
-		assert.Contains(t, defaultConf, "location /stub_status {")
-		assert.Contains(t, defaultConf, "stub_status on;")
-	})
-
-	t.Run("should return error for invalid JSON marshaling scenario", func(t *testing.T) {
-		// This test would require mocking the json.MarshalIndent function
-		// For demonstration, we'll test with a valid case and ensure no error occurs
-		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain: "example.org",
-			},
-		}
-
-		result, err := GenerateOIDCConfigMapFromCR(cr)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-	})
-
-	t.Run("should handle nil CR gracefully", func(t *testing.T) {
-		// Act & Assert
-		result, err := GenerateOIDCConfigMapFromCR(nil)
-
-		// This will likely panic or cause issues, but let's test the behavior
-		// In a real scenario, you might want to add nil checks to the function
-		assert.Nil(t, result)
-		assert.Error(t, err)
-	})
 }
 
 // Test to verify JSON formatting

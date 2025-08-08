@@ -248,50 +248,6 @@ func TestGetSpireOIDCDiscoveryProviderImage(t *testing.T) {
 	})
 }
 
-func TestGetSpiffeHelperImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected string
-	}{
-		{
-			name:     "returns image when environment variable is set",
-			envValue: "spiffe-helper:v0.8.0",
-			expected: "spiffe-helper:v0.8.0",
-		},
-		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
-		},
-		{
-			name:     "returns image with registry and tag",
-			envValue: "ghcr.io/spiffe/spiffe-helper:main",
-			expected: "ghcr.io/spiffe/spiffe-helper:main",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(SpiffeHelperImageEnv, tt.envValue)
-			defer cleanup()
-
-			result := GetSpiffeHelperImage()
-			if result != tt.expected {
-				t.Errorf("GetSpiffeHelperImage() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(SpiffeHelperImageEnv)
-		result := GetSpiffeHelperImage()
-		if result != "" {
-			t.Errorf("GetSpiffeHelperImage() = %q, want empty string", result)
-		}
-	})
-}
-
 func TestGetNodeDriverRegistrarImage(t *testing.T) {
 	tests := []struct {
 		name     string
