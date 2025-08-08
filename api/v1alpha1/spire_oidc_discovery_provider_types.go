@@ -42,6 +42,13 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:=1
 	ReplicaCount int `json:"replicaCount,omitempty"`
 
+	// managedRoute is for enabling routes for oidc-discovery-provider, which can be indicated
+	// by setting `true` or `false`
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedRoute string `json:"managedRoute,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 

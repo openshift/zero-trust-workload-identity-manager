@@ -50,7 +50,6 @@ const (
 	SpiffeCSIDriverImageEnv            = "RELATED_IMAGE_SPIFFE_CSI_DRIVER"
 	SpireOIDCDiscoveryProviderImageEnv = "RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER"
 	SpireControllerManagerImageEnv     = "RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER"
-	SpiffeHelperImageEnv               = "RELATED_IMAGE_SPIFFE_HELPER"
 	NodeDriverRegistrarImageEnv        = "RELATED_IMAGE_NODE_DRIVER_REGISTRAR"
 	SpiffeCSIInitContainerImageEnv     = "RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER"
 )

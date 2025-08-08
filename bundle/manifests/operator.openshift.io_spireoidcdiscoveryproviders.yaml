@@ -978,6 +978,15 @@ spec:
                 description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
+              managedRoute:
+                default: "true"
+                description: |-
+                  managedRoute is for enabling routes for oidc-discovery-provider, which can be indicated
+                  by setting `true` or `false`
+                enum:
+                - "true"
+                - "false"
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string

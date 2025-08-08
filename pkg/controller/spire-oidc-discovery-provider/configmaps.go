@@ -7,6 +7,7 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -47,8 +48,8 @@ func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 		"log_level": "debug",
 		"serving_cert_file": map[string]string{
 			"addr":           ":8443",
-			"cert_file_path": "/certs/tls.crt",
-			"key_file_path":  "/certs/tls.key",
+			"cert_file_path": "/etc/oidc/tls/tls.crt",
+			"key_file_path":  "/etc/oidc/tls/tls.key",
 		},
 		"workload_api": map[string]string{
 			"socket_path":  "/spiffe-workload-api/" + agentSocketName,
@@ -60,32 +61,6 @@ func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal OIDC config: %w", err)
 	}
-
-	spiffeHelperConf := `agent_address = "/spiffe-workload-api/` + agentSocketName + `"
-cert_dir = "/certs"
-svid_file_name = "tls.crt"
-svid_key_file_name = "tls.key"
-svid_bundle_file_name = "ca.pem"`
-
-	defaultConf := `upstream oidc {
-  server unix:/run/spire/oidc-sockets/spire-oidc-server.sock;
-}
-
-server {
-  listen            8080;
-  listen       [::]:8080;
-
-  location / {
-    proxy_pass http://oidc;
-    proxy_set_header Host $host;
-  }
-
-  location /stub_status {
-    allow 127.0.0.1/32;
-    deny  all;
-    stub_status on;
-  }
-}`
 
 	labels := map[string]string{}
 	if dp.Spec.Labels != nil {
@@ -102,8 +77,6 @@ server {
 		},
 		Data: map[string]string{
 			"oidc-discovery-provider.conf": string(oidcJSON),
-			"spiffe-helper.conf":           spiffeHelperConf,
-			"default.conf":                 defaultConf,
 		},
 	}
 
