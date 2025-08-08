@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -32,6 +33,7 @@ func init() {
 	_ = storagev1.AddToScheme(scheme)
 	_ = admissionregistrationv1.AddToScheme(scheme)
 	_ = securityv1.AddToScheme(scheme)
+	_ = routev1.AddToScheme(scheme)
 
 	// Create a codec factory for this scheme
 	codecs = serializer.NewCodecFactory(scheme)

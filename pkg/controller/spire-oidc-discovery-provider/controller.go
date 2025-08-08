@@ -3,6 +3,7 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -30,10 +31,11 @@ import (
 const spireOidcDeploymentSpireOidcConfigHashAnnotationKey = "ztwim.openshift.io/spire-oidc-discovery-provider-config-hash"
 
 const (
-	SpireOIDCDeploymentGeneration  = "SpireOIDCDeploymentGeneration"
-	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
-	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
-	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
+	SpireOIDCDeploymentGeneration   = "SpireOIDCDeploymentGeneration"
+	SpireOIDCConfigMapGeneration    = "SpireOIDCConfigMapGeneration"
+	SpireOIDCSCCGeneration          = "SpireOIDCSCCGeneration"
+	SpireClusterSpiffeIDGeneration  = "SpireClusterSpiffeIDGeneration"
+	SpireOIDCManagedRouteGeneration = "SpireOIDCManagedRouteGeneration"
 )
 
 type reconcilerStatus struct {
@@ -290,6 +292,58 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		Reason:  "SpireOIDCDeploymentCreationSucceeded",
 		Message: "Spire OIDC Deployment created",
 	}
+
+	if utils.StringToBool(oidcDiscoveryProviderConfig.Spec.ManagedRoute) {
+		// Create Route for OIDC Discovery Provider
+		route := generateOIDCDiscoveryProviderRoute(&oidcDiscoveryProviderConfig)
+		if err = controllerutil.SetControllerReference(&oidcDiscoveryProviderConfig, route, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference for route")
+			reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "SpireOIDCManagedRouteGenerationFailed",
+				Message: err.Error(),
+			}
+			return ctrl.Result{}, err
+		}
+
+		var existingRoute routev1.Route
+		err = r.ctrlClient.Get(ctx, types.NamespacedName{
+			Name:      route.Name,
+			Namespace: route.Namespace,
+		}, &existingRoute)
+		if err != nil && kerrors.IsNotFound(err) {
+			if err = r.ctrlClient.Create(ctx, route); err != nil {
+				r.log.Error(err, "Failed to create route")
+				reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireOIDCManagedRouteCreationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, err
+			}
+			r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
+		} else if err != nil {
+			r.log.Error(err, "Failed to get existing route")
+			reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "SpireOIDCManagedRouteRetrievalFailed",
+				Message: err.Error(),
+			}
+			return ctrl.Result{}, err
+		}
+		reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "SpireOIDCManagedRouteCreationSucceeded",
+			Message: "Spire OIDC Managed Route created",
+		}
+	} else {
+		reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "SpireOIDCRouteCreationDisabled",
+			Message: "Spire OIDC Managed Route disabled",
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -331,6 +385,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err

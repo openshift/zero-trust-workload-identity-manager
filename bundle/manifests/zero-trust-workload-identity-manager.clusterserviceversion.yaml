@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-07-14T08:24:46Z"
+    createdAt: "2025-08-08T04:56:21Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -216,6 +216,19 @@ spec:
           - update
           - watch
         - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          - routes/custom-host
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - security.openshift.io
           resources:
           - securitycontextconstraints
@@ -317,8 +330,6 @@ spec:
                   value: ghcr.io/spiffe/oidc-discovery-provider:1.12.0
                 - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
                   value: ghcr.io/spiffe/spire-controller-manager:0.6.0
-                - name: RELATED_IMAGE_SPIFFE_HELPER
-                  value: ghcr.io/spiffe/spiffe-helper:0.9.1
                 - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
@@ -392,8 +403,6 @@ spec:
     name: spire-oidc-discovery-provider
   - image: ghcr.io/spiffe/spire-controller-manager:0.6.0
     name: spire-controller-manager
-  - image: ghcr.io/spiffe/spiffe-helper:0.9.1
-    name: spiffe-helper
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
     name: node-driver-registrar
   - image: registry.access.redhat.com/ubi9:latest
