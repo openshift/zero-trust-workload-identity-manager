@@ -521,6 +521,7 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 				Type: "cert-manager",
 				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
 					IssuerName: "spire-ca",
+					Namespace:  "test-namespace",
 				},
 			},
 			expectedKey: "cert-manager",
@@ -528,7 +529,7 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 				"issuer_name":  "spire-ca",
 				"issuer_kind":  "Issuer",
 				"issuer_group": "cert-manager.io",
-				"namespace":    utils.OperatorNamespace,
+				"namespace":    "test-namespace",
 			},
 		},
 		{
@@ -549,24 +550,7 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 				"issuer_kind":      "ClusterIssuer",
 				"issuer_group":     "cert-manager.io",
 				"namespace":        "cert-manager",
-				"kube_config_file": "/cert-manager-kubeconfig/kubeconfig",
-			},
-		},
-		{
-			name: "spire plugin",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{
-					ServerAddress:     "upstream-spire-server",
-					ServerPort:        "8081",
-					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
-				},
-			},
-			expectedKey: "spire",
-			expectedPlugins: map[string]interface{}{
-				"server_address":      "upstream-spire-server",
-				"server_port":         "8081",
-				"workload_api_socket": "/tmp/spire-agent/public/api.sock",
+				"kube_config_file": certManagerKubeConfigPath,
 			},
 		},
 		{
@@ -587,7 +571,7 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			expectedPlugins: map[string]interface{}{
 				"vault_addr":      "https://vault.example.org/",
 				"pki_mount_point": "test-pki",
-				"ca_cert_path":    "/vault-ca-cert/ca.crt",
+				"ca_cert_path":    defaultVaultCaCertpath,
 				"namespace":       "vault-ns",
 				"token_auth": map[string]interface{}{
 					"token": "hvs.test-token",
@@ -614,11 +598,11 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			expectedPlugins: map[string]interface{}{
 				"vault_addr":      "https://vault.example.org/",
 				"pki_mount_point": "pki",
-				"ca_cert_path":    "/vault-ca-cert/ca.crt",
+				"ca_cert_path":    defaultVaultCaCertpath,
 				"cert_auth": map[string]interface{}{
 					"cert_auth_mount_point": "cert",
-					"client_cert_path":      "/vault-client-cert/tls.crt",
-					"client_key_path":       "/vault-client-key/tls.key",
+					"client_cert_path":      vaultClientCertPath,
+					"client_key_path":       vaultClientKeyPath,
 					"cert_auth_role_name":   "spire-role",
 				},
 			},
@@ -642,7 +626,7 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			expectedPlugins: map[string]interface{}{
 				"vault_addr":      "https://vault.example.org/",
 				"pki_mount_point": "pki",
-				"ca_cert_path":    "/vault-ca-cert/ca.crt",
+				"ca_cert_path":    defaultVaultCaCertpath,
 				"approle_auth": map[string]interface{}{
 					"approle_auth_mount_point": "approle",
 					"approle_id":               "role-id-123",
@@ -669,7 +653,7 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			expectedPlugins: map[string]interface{}{
 				"vault_addr":      "https://vault.example.org/",
 				"pki_mount_point": "pki",
-				"ca_cert_path":    "/vault-ca-cert/ca.crt",
+				"ca_cert_path":    defaultVaultCaCertpath,
 				"k8s_auth": map[string]interface{}{
 					"k8s_auth_mount_point": "kubernetes",
 					"k8s_auth_role_name":   "spire-role",
@@ -695,11 +679,11 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			expectedPlugins: map[string]interface{}{
 				"vault_addr":      "https://vault.example.org/",
 				"pki_mount_point": "pki",
-				"ca_cert_path":    "/vault-ca-cert/ca.crt",
+				"ca_cert_path":    defaultVaultCaCertpath,
 				"k8s_auth": map[string]interface{}{
 					"k8s_auth_mount_point": "kubernetes",
 					"k8s_auth_role_name":   "spire-role",
-					"token_path":           "/var/run/secrets/kubernetes.io/serviceaccount/token",
+					"token_path":           k8sAuthTokenPath,
 				},
 			},
 		},
@@ -718,14 +702,6 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "upstreamAuthority.CertManager is not set",
-		},
-		{
-			name: "spire with missing config",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-			},
-			expectError: true,
-			errorMsg:    "upstreamAuthority.Spire is not set",
 		},
 		{
 			name: "vault with missing config",
@@ -854,19 +830,6 @@ func TestGenerateServerConfMapWithUpstreamAuthority(t *testing.T) {
 			},
 			expectPlugin: true,
 			pluginType:   "cert-manager",
-		},
-		{
-			name: "spire upstream authority",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{
-					ServerAddress:     "upstream-spire-server",
-					ServerPort:        "8081",
-					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
-				},
-			},
-			expectPlugin: true,
-			pluginType:   "spire",
 		},
 		{
 			name: "vault upstream authority with token auth",
@@ -1059,7 +1022,7 @@ func TestUpstreamAuthorityJSONOmitemptyBehavior(t *testing.T) {
 				"certManager": {"issuerName"},
 			},
 			expectedNestedAbsent: map[string][]string{
-				"certManager": {"issuerKind", "issuerGroup", "namespace", "kubeConfigSecretName"},
+				"certManager": {"issuerKind", "issuerGroup", "kubeConfigSecretName"},
 			},
 		},
 		{
@@ -1177,34 +1140,6 @@ func TestUpstreamAuthorityJSONOmitemptyBehavior(t *testing.T) {
 			},
 		},
 		{
-			name: "Spire config should include all fields",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{
-					ServerAddress:     "spire-server.example.com",
-					ServerPort:        "8081",
-					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
-				},
-			},
-			expectedPresent: []string{"type", "spire"},
-			expectedAbsent:  []string{"vault", "certManager"},
-			expectedNestedPresent: map[string][]string{
-				"spire": {"serverAddress", "serverPort", "workloadSocketApi"},
-			},
-		},
-		{
-			name: "Empty Spire config should omit all optional fields",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type:  "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{},
-			},
-			expectedPresent: []string{"type", "spire"},
-			expectedAbsent:  []string{"vault", "certManager"},
-			expectedNestedAbsent: map[string][]string{
-				"spire": {"serverAddress", "serverPort", "workloadSocketApi"},
-			},
-		},
-		{
 			name: "CertManager with empty strings should omit empty fields due to omitempty",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "cert-manager",
@@ -1212,16 +1147,16 @@ func TestUpstreamAuthorityJSONOmitemptyBehavior(t *testing.T) {
 					IssuerName:  "test-issuer",
 					IssuerKind:  "", // empty string should be omitted with omitempty
 					IssuerGroup: "", // empty string should be omitted with omitempty
-					Namespace:   "", // empty string should be omitted with omitempty
+					Namespace:   "test-namespace",
 				},
 			},
 			expectedPresent: []string{"type", "certManager"},
 			expectedAbsent:  []string{"spire", "vault"},
 			expectedNestedPresent: map[string][]string{
-				"certManager": {"issuerName"},
+				"certManager": {"issuerName", "namespace"},
 			},
 			expectedNestedAbsent: map[string][]string{
-				"certManager": {"issuerKind", "issuerGroup", "namespace", "kubeConfigSecretName"},
+				"certManager": {"issuerKind", "issuerGroup", "kubeConfigSecretName"},
 			},
 		},
 	}
@@ -1583,23 +1518,6 @@ func TestUpstreamAuthorityConfigMapGenerationEdgeCases(t *testing.T) {
 				"very-long-namespace-name-that-also-exceeds-normal-boundaries",
 			},
 		},
-		{
-			name: "Spire with IPv6 address should work",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{
-					ServerAddress:     "2001:db8::1",
-					ServerPort:        "8081",
-					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
-				},
-			},
-			expectedInConfigData: []string{
-				"server_address",
-				"server_port",
-				"workload_api_socket",
-				"2001:db8::1",
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -1675,7 +1593,7 @@ func TestUpstreamAuthoritySecretFieldsOmitemptyBehavior(t *testing.T) {
 				"certManager": {"issuerName"},
 			},
 			expectedNestedAbsent: map[string][]string{
-				"certManager": {"kube_config_file"},
+				"certManager": {"kubeConfigSecretName"},
 			},
 		},
 		{
@@ -1692,7 +1610,7 @@ func TestUpstreamAuthoritySecretFieldsOmitemptyBehavior(t *testing.T) {
 				"certManager": {"issuerName"},
 			},
 			expectedNestedAbsent: map[string][]string{
-				"certManager": {"kube_config_file"},
+				"certManager": {"kubeConfigSecretName"},
 			},
 		},
 		{
@@ -1706,7 +1624,7 @@ func TestUpstreamAuthoritySecretFieldsOmitemptyBehavior(t *testing.T) {
 			},
 			expectedPresent: []string{"type", "certManager"},
 			expectedNestedPresent: map[string][]string{
-				"certManager": {"issuerName", "kube_config_file"},
+				"certManager": {"issuerName", "kubeConfigSecretName"},
 			},
 		},
 		{
@@ -1928,55 +1846,7 @@ func TestGetUpstreamAuthoritySecretMountsEdgeCases(t *testing.T) {
 			},
 			expectedMounts: []secretMountInfo{},
 		},
-		{
-			name: "vault with empty CaCertSecret should still mount (required field)",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "vault",
-				Vault: &v1alpha1.UpstreamAuthorityVault{
-					CaCertSecret: "", // empty but still creates mount since it's required
-					TokenAuth: &v1alpha1.TokenAuth{
-						Token: "test-token",
-					},
-				},
-			},
-			expectedMounts: []secretMountInfo{
-				{
-					secretName: "",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
-				},
-			},
-		},
-		{
-			name: "vault with CertAuth but empty secret names should still mount",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "vault",
-				Vault: &v1alpha1.UpstreamAuthorityVault{
-					CaCertSecret: "vault-ca-secret",
-					CertAuth: &v1alpha1.CertAuth{
-						ClientCertSecret: "", // empty but still creates mount
-						ClientKeySecret:  "", // empty but still creates mount
-					},
-				},
-			},
-			expectedMounts: []secretMountInfo{
-				{
-					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
-				},
-				{
-					secretName: "",
-					mountPath:  "/vault-client-cert",
-					volumeName: "vault-client-cert",
-				},
-				{
-					secretName: "",
-					mountPath:  "/vault-client-key",
-					volumeName: "vault-client-key",
-				},
-			},
-		},
+
 		{
 			name: "vault with all cert auth secrets should mount all",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
@@ -1992,18 +1862,18 @@ func TestGetUpstreamAuthoritySecretMountsEdgeCases(t *testing.T) {
 			expectedMounts: []secretMountInfo{
 				{
 					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
 				},
 				{
 					secretName: "client-cert-secret",
-					mountPath:  "/vault-client-cert",
-					volumeName: "vault-client-cert",
+					mountPath:  vaultClientCertMountPath,
+					volumeName: vaultClientCertVolumeName,
 				},
 				{
 					secretName: "client-key-secret",
-					mountPath:  "/vault-client-key",
-					volumeName: "vault-client-key",
+					mountPath:  vaultClientKeyMountPath,
+					volumeName: vaultClientKeyVolumeName,
 				},
 			},
 		},
@@ -2029,8 +1899,8 @@ func TestGetUpstreamAuthoritySecretMountsEdgeCases(t *testing.T) {
 			expectedMounts: []secretMountInfo{
 				{
 					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
 				},
 			},
 		},
@@ -2083,7 +1953,7 @@ func TestUpstreamAuthoritySecretPathIntegration(t *testing.T) {
 					KubeConfigSecretName: "kubeconfig-secret",
 				},
 			},
-			expectedConfigPaths:  []string{"/cert-manager-kubeconfig/kubeconfig"},
+			expectedConfigPaths:  []string{certManagerKubeConfigPath},
 			expectedSecretMounts: 1,
 		},
 		{
@@ -2110,7 +1980,7 @@ func TestUpstreamAuthoritySecretPathIntegration(t *testing.T) {
 					},
 				},
 			},
-			expectedConfigPaths:  []string{"/vault-ca-cert/ca.crt"},
+			expectedConfigPaths:  []string{defaultVaultCaCertpath},
 			expectedSecretMounts: 1,
 		},
 		{
@@ -2129,24 +1999,11 @@ func TestUpstreamAuthoritySecretPathIntegration(t *testing.T) {
 				},
 			},
 			expectedConfigPaths: []string{
-				"/vault-ca-cert/ca.crt",
-				"/vault-client-cert/tls.crt",
-				"/vault-client-key/tls.key",
+				defaultVaultCaCertpath,
+				vaultClientCertPath,
+				vaultClientKeyPath,
 			},
 			expectedSecretMounts: 3,
-		},
-		{
-			name: "spire upstream authority should not reference any secret paths",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{
-					ServerAddress:     "upstream-spire-server",
-					ServerPort:        "8081",
-					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
-				},
-			},
-			expectedConfigPaths:  []string{},
-			expectedSecretMounts: 0,
 		},
 	}
 
@@ -2194,6 +2051,118 @@ func TestUpstreamAuthoritySecretPathIntegration(t *testing.T) {
 			for _, expectedPath := range tt.expectedConfigPaths {
 				if !strings.Contains(configData, expectedPath) {
 					t.Errorf("Expected path %q to be referenced in server config, but it was not found. Config: %s", expectedPath, configData)
+				}
+			}
+		})
+	}
+}
+
+// TestUpstreamAuthoritySecretValidationInStatefulSet tests that stateful set properly validates secret names
+func TestUpstreamAuthoritySecretValidationInStatefulSet(t *testing.T) {
+	tests := []struct {
+		name                string
+		upstreamAuth        *v1alpha1.UpstreamAuthority
+		expectedVolumeNames []string // volumes that should be created
+		excludedVolumeNames []string // volumes that should NOT be created due to empty secret names
+	}{
+		{
+			name: "vault with empty CaCertSecret should not create volume",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					CaCertSecret: "", // empty - should not create volume
+					TokenAuth: &v1alpha1.TokenAuth{
+						Token: "test-token",
+					},
+				},
+			},
+			expectedVolumeNames: []string{},
+			excludedVolumeNames: []string{vaultCaCertVolumeName},
+		},
+		{
+			name: "vault with mixed empty and valid secret names",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "vault",
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					CaCertSecret: "vault-ca-secret", // valid - should create volume
+					CertAuth: &v1alpha1.CertAuth{
+						ClientCertSecret: "",                  // empty - should not create volume
+						ClientKeySecret:  "client-key-secret", // valid - should create volume
+					},
+				},
+			},
+			expectedVolumeNames: []string{vaultCaCertVolumeName, vaultClientKeyVolumeName},
+			excludedVolumeNames: []string{vaultClientCertVolumeName},
+		},
+		{
+			name: "cert-manager with empty KubeConfigSecretName should not create volume",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "cert-manager",
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName:           "test-issuer",
+					KubeConfigSecretName: "", // empty - should not create volume
+				},
+			},
+			expectedVolumeNames: []string{},
+			excludedVolumeNames: []string{certManagerKubeConfigVolumeName},
+		},
+		{
+			name: "cert-manager with valid KubeConfigSecretName should create volume",
+			upstreamAuth: &v1alpha1.UpstreamAuthority{
+				Type: "cert-manager",
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName:           "test-issuer",
+					KubeConfigSecretName: "kubeconfig-secret", // valid - should create volume
+				},
+			},
+			expectedVolumeNames: []string{certManagerKubeConfigVolumeName},
+			excludedVolumeNames: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := createValidConfig()
+			config.UpstreamAuthority = tt.upstreamAuth
+
+			// Generate stateful set
+			sts := GenerateSpireServerStatefulSet(config, "test-hash", "test-hash")
+			volumes := sts.Spec.Template.Spec.Volumes
+
+			// Check that expected volumes exist
+			for _, expectedVolume := range tt.expectedVolumeNames {
+				found := false
+				for _, volume := range volumes {
+					if volume.Name == expectedVolume {
+						found = true
+						// Verify it's a secret volume with non-empty secret name
+						if volume.Secret == nil {
+							t.Errorf("Expected volume %q to be a secret volume", expectedVolume)
+						} else if volume.Secret.SecretName == "" {
+							t.Errorf("Expected volume %q to have non-empty secret name", expectedVolume)
+						}
+						// Note: DefaultMode validation removed as per user's StatefulSet changes
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected volume %q not found in stateful set", expectedVolume)
+				}
+			}
+
+			// Check that excluded volumes do NOT exist
+			for _, excludedVolume := range tt.excludedVolumeNames {
+				for _, volume := range volumes {
+					if volume.Name == excludedVolume {
+						t.Errorf("Unexpected volume %q found in stateful set (should have been excluded due to empty secret name)", excludedVolume)
+					}
+				}
+			}
+
+			// Verify no volumes have empty secret names
+			for _, volume := range volumes {
+				if volume.Secret != nil && volume.Secret.SecretName == "" {
+					t.Errorf("Volume %q has empty secret name, which will cause Kubernetes deployment failure", volume.Name)
 				}
 			}
 		})

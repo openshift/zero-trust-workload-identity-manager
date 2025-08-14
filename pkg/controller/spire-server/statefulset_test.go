@@ -316,29 +316,17 @@ func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "cert-manager",
 				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "spire-ca",
-					KubeConfigSecretName: "kubeconfig-secret",
+					IssuerName:           "test-issuer",
+					KubeConfigSecretName: "my-kubeconfig-secret",
 				},
 			},
 			expectedMounts: []secretMountInfo{
 				{
-					secretName: "kubeconfig-secret",
-					mountPath:  "/cert-manager-kubeconfig",
-					volumeName: "cert-manager-kubeconfig",
+					secretName: "my-kubeconfig-secret",
+					mountPath:  certManagerKubeConfigMountPath,
+					volumeName: certManagerKubeConfigVolumeName,
 				},
 			},
-		},
-		{
-			name: "spire upstream authority",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "spire",
-				Spire: &v1alpha1.UpstreamAuthoritySpire{
-					ServerAddress:     "upstream-spire-server",
-					ServerPort:        "8081",
-					WorkloadSocketAPI: "/tmp/spire-agent/public/api.sock",
-				},
-			},
-			expectedMounts: []secretMountInfo{},
 		},
 		{
 			name: "vault with token auth",
@@ -356,8 +344,8 @@ func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
 			expectedMounts: []secretMountInfo{
 				{
 					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
 				},
 			},
 		},
@@ -379,18 +367,18 @@ func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
 			expectedMounts: []secretMountInfo{
 				{
 					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
 				},
 				{
 					secretName: "client-cert-secret",
-					mountPath:  "/vault-client-cert",
-					volumeName: "vault-client-cert",
+					mountPath:  vaultClientCertMountPath,
+					volumeName: vaultClientCertVolumeName,
 				},
 				{
 					secretName: "client-key-secret",
-					mountPath:  "/vault-client-key",
-					volumeName: "vault-client-key",
+					mountPath:  vaultClientKeyMountPath,
+					volumeName: vaultClientKeyVolumeName,
 				},
 			},
 		},
@@ -412,8 +400,8 @@ func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
 			expectedMounts: []secretMountInfo{
 				{
 					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
 				},
 			},
 		},
@@ -434,8 +422,8 @@ func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
 			expectedMounts: []secretMountInfo{
 				{
 					secretName: "vault-ca-secret",
-					mountPath:  "/vault-ca-cert",
-					volumeName: "vault-ca-cert",
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
 				},
 			},
 		},

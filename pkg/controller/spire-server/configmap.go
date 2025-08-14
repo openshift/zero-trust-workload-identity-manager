@@ -19,13 +19,24 @@ import (
 )
 
 const (
-	// defaultVaultCaCertpath is the default path for Vault CA certificate
-	defaultVaultCaCertpath = "/vault-ca-cert/ca.crt"
-	// Vault authentication secret mount paths
-	vaultClientCertPath = "/vault-client-cert/tls.crt"
-	vaultClientKeyPath  = "/vault-client-key/tls.key"
-	// Cert-manager kubeconfig path
-	certManagerKubeConfigPath = "/cert-manager-kubeconfig/kubeconfig"
+	// Mount paths (directories where secrets are mounted)
+	certManagerKubeConfigMountPath = "/cert-manager-kubeconfig"
+	vaultCaCertMountPath           = "/vault-ca-cert"
+	vaultClientCertMountPath       = "/vault-client-cert"
+	vaultClientKeyMountPath        = "/vault-client-key"
+
+	// Volume names (used in Kubernetes volume definitions)
+	certManagerKubeConfigVolumeName = "cert-manager-kubeconfig"
+	vaultCaCertVolumeName           = "vault-ca-cert"
+	vaultClientCertVolumeName       = "vault-client-cert"
+	vaultClientKeyVolumeName        = "vault-client-key"
+
+	// Full file paths (mount path + filename)
+	certManagerKubeConfigPath = certManagerKubeConfigMountPath + "/kubeconfig"
+	defaultVaultCaCertpath    = vaultCaCertMountPath + "/ca.crt"
+	vaultClientCertPath       = vaultClientCertMountPath + "/tls.crt"
+	vaultClientKeyPath        = vaultClientKeyMountPath + "/tls.key"
+
 	// Kubernetes auth token path
 	k8sAuthTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 )
@@ -211,21 +222,6 @@ func generateUpstreamAuthorityPlugin(upstreamAuthority *v1alpha1.UpstreamAuthori
 		return map[string]interface{}{
 			"cert-manager": map[string]interface{}{
 				"plugin_data": pluginData,
-			},
-		}, nil
-
-	case "spire":
-		if upstreamAuthority.Spire == nil {
-			return nil, errors.New("upstreamAuthority.Spire is not set")
-		}
-
-		return map[string]interface{}{
-			"spire": map[string]interface{}{
-				"plugin_data": map[string]interface{}{
-					"server_address":      upstreamAuthority.Spire.ServerAddress,
-					"server_port":         upstreamAuthority.Spire.ServerPort,
-					"workload_api_socket": upstreamAuthority.Spire.WorkloadSocketAPI,
-				},
 			},
 		}, nil
 
