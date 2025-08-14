@@ -53,4 +53,7 @@ const (
 	SpiffeHelperImageEnv               = "RELATED_IMAGE_SPIFFE_HELPER"
 	NodeDriverRegistrarImageEnv        = "RELATED_IMAGE_NODE_DRIVER_REGISTRAR"
 	SpiffeCSIInitContainerImageEnv     = "RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER"
+
+	// Pause reconciliation flag
+	ReconciliationPausedEnv = "ZTWIM_PAUSE_RECONCILIATION"
 )

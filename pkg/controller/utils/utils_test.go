@@ -14,6 +14,35 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func TestIsReconciliationPaused(t *testing.T) {
+	// Ensure clean state
+	os.Unsetenv(ReconciliationPausedEnv)
+
+	// default: not set -> false
+	if IsReconciliationPaused() {
+		t.Fatalf("expected false when %s not set", ReconciliationPausedEnv)
+	}
+
+	// truthy variants
+	for _, v := range []string{"true", "TRUE", "1"} {
+		os.Setenv(ReconciliationPausedEnv, v)
+		if !IsReconciliationPaused() {
+			t.Fatalf("expected true for value %q", v)
+		}
+	}
+
+	// falsy variants and invalid
+	for _, v := range []string{"false", "FALSE", "0", "", "not-a-bool"} {
+		os.Setenv(ReconciliationPausedEnv, v)
+		if v == "" {
+			os.Unsetenv(ReconciliationPausedEnv)
+		}
+		if IsReconciliationPaused() {
+			t.Fatalf("expected false for value %q", v)
+		}
+	}
+}
+
 // Helper function to set environment variable and return cleanup function
 func setEnvVar(key, value string) func() {
 	original := os.Getenv(key)

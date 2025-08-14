@@ -3,8 +3,10 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	securityv1 "github.com/openshift/api/security/v1"
@@ -136,6 +138,19 @@ func GenerateMapHash(m map[string]string) string {
 	// Compute the hash
 	hash := sha256.Sum256([]byte(builder.String()))
 	return hex.EncodeToString(hash[:])
+}
+
+// IsReconciliationPaused returns true if the global pause env flag is set to a truthy value.
+func IsReconciliationPaused() bool {
+	val, ok := os.LookupEnv(ReconciliationPausedEnv)
+	if !ok {
+		return false
+	}
+	b, err := strconv.ParseBool(strings.TrimSpace(val))
+	if err != nil {
+		return false
+	}
+	return b
 }
 
 func StringToBool(s string) bool {

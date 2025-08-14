@@ -68,6 +68,10 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 }
 
 func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if utils.IsReconciliationPaused() {
+		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+		return ctrl.Result{}, nil
+	}
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &spiffeCSIDriver); err != nil {
 		if kerrors.IsNotFound(err) {

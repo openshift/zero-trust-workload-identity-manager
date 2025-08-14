@@ -73,6 +73,10 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 }
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if utils.IsReconciliationPaused() {
+		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+		return ctrl.Result{}, nil
+	}
 	var server v1alpha1.SpireServer
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &server); err != nil {
 		if kerrors.IsNotFound(err) {

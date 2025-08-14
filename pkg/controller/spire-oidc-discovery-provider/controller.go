@@ -69,6 +69,11 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.log.Info("Reconciling SpireOIDCDiscoveryProvider controller")
 
+	if utils.IsReconciliationPaused() {
+		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+		return ctrl.Result{}, nil
+	}
+
 	var oidcDiscoveryProviderConfig v1alpha1.SpireOIDCDiscoveryProvider
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &oidcDiscoveryProviderConfig); err != nil {
 		if kerrors.IsNotFound(err) {
