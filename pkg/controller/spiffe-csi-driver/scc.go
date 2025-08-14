@@ -2,6 +2,7 @@ package spiffe_csi_driver
 
 import (
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -11,7 +12,8 @@ import (
 func generateSpiffeCSIDriverSCC() *securityv1.SecurityContextConstraints {
 	return &securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "spire-spiffe-csi-driver",
+			Name:   "spire-spiffe-csi-driver",
+			Labels: utils.SpiffeCSIDriverLabels(nil),
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{

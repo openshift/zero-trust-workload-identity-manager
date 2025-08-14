@@ -5,6 +5,7 @@ import (
 
 	storagev1 "k8s.io/api/storage/v1"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,8 +33,11 @@ func TestGetSpiffeCsiObject(t *testing.T) {
 	expectedLabels := map[string]string{
 		"security.openshift.io/csi-ephemeral-volume-profile": "restricted",
 		"app.kubernetes.io/name":                             "spiffe-csi-driver",
+		"app.kubernetes.io/instance":                         "cluster-zero-trust-workload-identity-manager",
+		"app.kubernetes.io/component":                        "csi",
 		"app.kubernetes.io/managed-by":                       "zero-trust-workload-identity-manager",
 		"app.kubernetes.io/part-of":                          "zero-trust-workload-identity-manager",
+		"app.kubernetes.io/version":                          version.SpiffeCsiVersion,
 	}
 	assert.Equal(t, expectedLabels, csiDriver.Labels)
 }
