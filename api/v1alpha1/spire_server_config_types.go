@@ -176,20 +176,9 @@ type CASubject struct {
 // It supports different plugins such as SPIRE, Vault, and cert-manager for upstream CA integration.
 type UpstreamAuthority struct {
 	// Type specifies the type of upstream authority plugin to use.
-	// Allowed values: "spire", "vault", "cert-manager".
+	// Allowed values: "vault", "cert-manager".
 	// It determines which one of the optional configurations below should be populated.
 	Type string `json:"type,omitempty"`
-
-	// spire plugin uses credentials fetched from the Workload API to call an upstream
-	// SPIRE server in the same trust domain, requesting an intermediate signing certificate to use as the server's
-	// X.509 signing authority.
-	// The SVIDs minted in a nested configuration are valid in the entire trust domain, not only in the scope of the
-	// server that originated the SVID.
-	// In the case of X509-SVID, this is easily achieved because of the chaining semantics that X.509 has.
-	// On the other hand, for JWT-SVID, this capability is accomplished by propagating every JWT-SVID public
-	// signing key to the whole topology.
-	// +kubebuilder:validation:Optional
-	Spire *UpstreamAuthoritySpire `json:"spire,omitempty"`
 
 	// vault plugin signs intermediate CA certificates for SPIRE using the Vault PKI Engine.
 	// The plugin does not support the PublishJWTKey RPC and is therefore not appropriate for use in nested
@@ -212,7 +201,7 @@ type UpstreamAuthority struct {
 type UpstreamAuthorityCertManager struct {
 	// issuerName is the name of the issuer to reference in CertificateRequests.
 	// +kubebuilder:validation:Required
-	IssuerName string `json:"issuerName,omitempty"`
+	IssuerName string `json:"issuerName"`
 
 	// issuerKind is the kind of the issuer to reference in CertificateRequests. Defaults to "Issuer" if empty.
 	// +kubebuilder:validation:Optional
@@ -226,7 +215,7 @@ type UpstreamAuthorityCertManager struct {
 
 	// namespace in which to create CertificateRequests for signing.
 	// +kubebuilder:validation:Required
-	Namespace string `json:"namespace,omitempty"`
+	Namespace string `json:"namespace"`
 
 	// kubeConfigSecretName is the name of the Kubernetes Secret that stores the kubeconfig
 	// used to connect to the Kubernetes cluster where cert-manager is running.
@@ -277,22 +266,22 @@ type UpstreamAuthorityVault struct {
 type TokenAuth struct {
 	// Token is the Vault token string.
 	// +kubebuilder:validation:Required
-	Token string `json:"token,omitempty"`
+	Token string `json:"token"`
 }
 
 // CertAuth configures the Vault client certificate authentication method.
 type CertAuth struct {
 	// CertAuthMountPoint is the mount point where the TLS certificate auth method is enabled.
 	// +kubebuilder:validation:Required
-	CertAuthMountPoint string `json:"certAuthMountPoint,omitempty"`
+	CertAuthMountPoint string `json:"certAuthMountPoint"`
 
 	// ClientCertSecret is the name of the Kubernetes secret containing the client certificate (PEM).
 	// +kubebuilder:validation:Required
-	ClientCertSecret string `json:"clientCertSecret,omitempty"`
+	ClientCertSecret string `json:"clientCertSecret"`
 
 	// ClientKeySecret is the name of the Kubernetes secret containing the client private key (PEM).
 	// +kubebuilder:validation:Required
-	ClientKeySecret string `json:"clientKeySecret,omitempty"`
+	ClientKeySecret string `json:"clientKeySecret"`
 
 	// CertAuthRoleName is the name of the Vault role to authenticate against, Default to trying all roles.
 	// +kubebuilder:validation:Optional
@@ -303,50 +292,30 @@ type CertAuth struct {
 type AppRoleAuth struct {
 	// AppRoleMountPoint is the mount point where the AppRole auth method is enabled (e.g., "approle").
 	// +kubebuilder:validation:Required
-	AppRoleMountPoint string `json:"appRoleMountPoint,omitempty"`
+	AppRoleMountPoint string `json:"appRoleMountPoint"`
 
 	// AppRoleID is the AppRole ID used for authentication.
 	// +kubebuilder:validation:Required
-	AppRoleID string `json:"appRoleID,omitempty"`
+	AppRoleID string `json:"appRoleID"`
 
 	// AppRoleSecretID is the AppRole SecretID used for authentication.
 	// +kubebuilder:validation:Required
-	AppRoleSecretID string `json:"appRoleSecretID,omitempty"`
+	AppRoleSecretID string `json:"appRoleSecretID"`
 }
 
 // K8sAuth configures the Vault Kubernetes authentication method.
 type K8sAuth struct {
 	// K8sAuthMountPoint is the mount point where the Kubernetes auth method is enabled (e.g., "kubernetes").
 	// +kubebuilder:validation:Required
-	K8sAuthMountPoint string `json:"k8sAuthMountPoint,omitempty"`
+	K8sAuthMountPoint string `json:"k8sAuthMountPoint"`
 
 	// K8sAuthRoleName is the name of the Vault role the plugin authenticates against.
 	// +kubebuilder:validation:Required
-	K8sAuthRoleName string `json:"k8sAuthRoleName,omitempty"`
+	K8sAuthRoleName string `json:"k8sAuthRoleName"`
 
 	// TokenPath is the path to the Kubernetes ServiceAccount token file.
 	// +kubebuilder:validation:Required
-	TokenPath string `json:"tokenPath,omitempty"`
-}
-
-// UpstreamAuthoritySpire contains the configuration required to use another
-// SPIRE Server within the same trust domain as the upstream authority.
-// This plugin fetches an intermediate signing certificate by communicating
-// with the upstream SPIRE Server via its Workload API.
-type UpstreamAuthoritySpire struct {
-	// serverAddress is the IP address or DNS name of the upstream SPIRE Server
-	// in the same trust domain.
-	// +kubebuilder:validation:Required
-	ServerAddress string `json:"serverAddress,omitempty"`
-
-	// serverPort is the port number on which the upstream SPIRE Server is listening.
-	// +kubebuilder:validation:Required
-	ServerPort string `json:"serverPort,omitempty"`
-
-	// workloadSocketApi is the path to the SPIRE Workload API socket (Unix only).
-	// This socket is used to fetch credentials from the local SPIRE Agent.
-	// +kubebuilder:validation:Required
-	WorkloadSocketAPI string `json:"workloadSocketApi,omitempty"`
+	TokenPath string `json:"tokenPath"`
 }
 
 // SpireServerStatus defines the observed state of spire-server related reconciliation made by operator

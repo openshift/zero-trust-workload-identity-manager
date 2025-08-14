@@ -1278,40 +1278,10 @@ spec:
                     - issuerName
                     - namespace
                     type: object
-                  spire:
-                    description: |-
-                      spire plugin uses credentials fetched from the Workload API to call an upstream
-                      SPIRE server in the same trust domain, requesting an intermediate signing certificate to use as the server's
-                      X.509 signing authority.
-                      The SVIDs minted in a nested configuration are valid in the entire trust domain, not only in the scope of the
-                      server that originated the SVID.
-                      In the case of X509-SVID, this is easily achieved because of the chaining semantics that X.509 has.
-                      On the other hand, for JWT-SVID, this capability is accomplished by propagating every JWT-SVID public
-                      signing key to the whole topology.
-                    properties:
-                      serverAddress:
-                        description: |-
-                          serverAddress is the IP address or DNS name of the upstream SPIRE Server
-                          in the same trust domain.
-                        type: string
-                      serverPort:
-                        description: serverPort is the port number on which the upstream
-                          SPIRE Server is listening.
-                        type: string
-                      workloadSocketApi:
-                        description: |-
-                          workloadSocketApi is the path to the SPIRE Workload API socket (Unix only).
-                          This socket is used to fetch credentials from the local SPIRE Agent.
-                        type: string
-                    required:
-                    - serverAddress
-                    - serverPort
-                    - workloadSocketApi
-                    type: object
                   type:
                     description: |-
                       Type specifies the type of upstream authority plugin to use.
-                      Allowed values: "spire", "vault", "cert-manager".
+                      Allowed values: "vault", "cert-manager".
                       It determines which one of the optional configurations below should be populated.
                     type: string
                   vault:

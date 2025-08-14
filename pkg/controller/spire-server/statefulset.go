@@ -37,8 +37,8 @@ func getUpstreamAuthoritySecretMounts(upstreamAuthority *v1alpha1.UpstreamAuthor
 			upstreamAuthority.CertManager.KubeConfigSecretName != "" {
 			secretMounts = append(secretMounts, secretMountInfo{
 				secretName: upstreamAuthority.CertManager.KubeConfigSecretName,
-				mountPath:  "/cert-manager-kubeconfig",
-				volumeName: "cert-manager-kubeconfig",
+				mountPath:  certManagerKubeConfigMountPath,
+				volumeName: certManagerKubeConfigVolumeName,
 			})
 		}
 
@@ -46,25 +46,31 @@ func getUpstreamAuthoritySecretMounts(upstreamAuthority *v1alpha1.UpstreamAuthor
 		if upstreamAuthority.Vault != nil {
 			vault := upstreamAuthority.Vault
 
-			// Always mount CA certificate
-			secretMounts = append(secretMounts, secretMountInfo{
-				secretName: vault.CaCertSecret,
-				mountPath:  "/vault-ca-cert",
-				volumeName: "vault-ca-cert",
-			})
+			// Only mount CA certificate if secret name is provided
+			if vault.CaCertSecret != "" {
+				secretMounts = append(secretMounts, secretMountInfo{
+					secretName: vault.CaCertSecret,
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
+				})
+			}
 
 			// Mount client certificate and key if cert auth is configured
 			if vault.CertAuth != nil {
-				secretMounts = append(secretMounts, secretMountInfo{
-					secretName: vault.CertAuth.ClientCertSecret,
-					mountPath:  "/vault-client-cert",
-					volumeName: "vault-client-cert",
-				})
-				secretMounts = append(secretMounts, secretMountInfo{
-					secretName: vault.CertAuth.ClientKeySecret,
-					mountPath:  "/vault-client-key",
-					volumeName: "vault-client-key",
-				})
+				if vault.CertAuth.ClientCertSecret != "" {
+					secretMounts = append(secretMounts, secretMountInfo{
+						secretName: vault.CertAuth.ClientCertSecret,
+						mountPath:  vaultClientCertMountPath,
+						volumeName: vaultClientCertVolumeName,
+					})
+				}
+				if vault.CertAuth.ClientKeySecret != "" {
+					secretMounts = append(secretMounts, secretMountInfo{
+						secretName: vault.CertAuth.ClientKeySecret,
+						mountPath:  vaultClientKeyMountPath,
+						volumeName: vaultClientKeyVolumeName,
+					})
+				}
 			}
 		}
 	}
@@ -119,6 +125,11 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 
 	// Add secret volumes
 	for _, secretMount := range secretMounts {
+		// Add validation to ensure secret name is not empty
+		if secretMount.secretName == "" {
+			continue // Skip mounting volumes with empty secret names
+		}
+
 		volumes = append(volumes, corev1.Volume{
 			Name: secretMount.volumeName,
 			VolumeSource: corev1.VolumeSource{
