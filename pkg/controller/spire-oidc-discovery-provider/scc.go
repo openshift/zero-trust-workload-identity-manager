@@ -11,15 +11,10 @@ import (
 
 // generateSpireOIDCDiscoveryProviderSCC returns a SecurityContextConstraints object for spire-oidc-discovery-provider
 func generateSpireOIDCDiscoveryProviderSCC(config *v1alpha1.SpireOIDCDiscoveryProvider) *securityv1.SecurityContextConstraints {
-	labels := map[string]string{}
-	for key, value := range config.Spec.Labels {
-		labels[key] = value
-	}
-	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
 	return &securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "spire-spiffe-oidc-discovery-provider",
-			Labels: labels,
+			Labels: utils.SpireOIDCDiscoveryProviderLabels(config.Spec.Labels),
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{

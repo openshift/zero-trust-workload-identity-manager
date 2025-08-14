@@ -24,9 +24,9 @@ const (
 	OperatorLabelSelector  = "name=zero-trust-workload-identity-manager"
 
 	SpireServerStatefulSetName = "spire-server"
-	SpireServerPodLabel        = "app.kubernetes.io/name=server"
+	SpireServerPodLabel        = "app.kubernetes.io/name=spire-server"
 	SpireAgentDaemonSetName    = "spire-agent"
-	SpireAgentPodLabel         = "app.kubernetes.io/name=agent"
+	SpireAgentPodLabel         = "app.kubernetes.io/name=spire-agent"
 
 	DefaultInterval = 10 * time.Second
 	ShortInterval   = 5 * time.Second

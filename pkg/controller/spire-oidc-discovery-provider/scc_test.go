@@ -31,10 +31,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 		// Verify ObjectMeta
 		assert.Equal(t, "spire-spiffe-oidc-discovery-provider", result.ObjectMeta.Name)
 
-		// Should have the managed-by label added
-		expectedLabels := map[string]string{
-			utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-		}
+		// Should have the standardized labels
+		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(nil)
 		assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)
 	})
 
@@ -61,13 +59,7 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Should have custom labels plus the managed-by label
-		expectedLabels := map[string]string{
-			"app":                      "spire-oidc",
-			"version":                  "v1.0.0",
-			"component":                "security",
-			"custom-key":               "custom-value",
-			utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-		}
+		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(customLabels)
 		assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)
 	})
 
@@ -254,10 +246,8 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 		// Assert
 		require.NotNil(t, result)
 
-		// Should only have the managed-by label
-		expectedLabels := map[string]string{
-			utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-		}
+		// Should have the standardized labels
+		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(nil)
 		assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)
 	})
 
@@ -278,11 +268,12 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 		result := generateSpireOIDCDiscoveryProviderSCC(config)
 
 		// Assert
-		// The function should overwrite the existing managed-by label
-		expectedLabels := map[string]string{
-			utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+		// The function should use standardized labels with custom labels preserved
+		configLabels := map[string]string{
+			utils.AppManagedByLabelKey: "existing-value",
 			"other-label":              "other-value",
 		}
+		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(configLabels)
 		assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)
 	})
 
@@ -315,32 +306,21 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC(t *testing.T) {
 // Table-driven test for different label scenarios
 func TestGenerateSpireOIDCDiscoveryProviderSCC_LabelScenarios(t *testing.T) {
 	testCases := []struct {
-		name           string
-		inputLabels    map[string]string
-		expectedLabels map[string]string
+		name        string
+		inputLabels map[string]string
 	}{
 		{
 			name:        "empty labels map",
 			inputLabels: map[string]string{},
-			expectedLabels: map[string]string{
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-			},
 		},
 		{
 			name:        "nil labels map",
 			inputLabels: nil,
-			expectedLabels: map[string]string{
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-			},
 		},
 		{
 			name: "single custom label",
 			inputLabels: map[string]string{
 				"app": "spire",
-			},
-			expectedLabels: map[string]string{
-				"app":                      "spire",
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
 			},
 		},
 		{
@@ -350,21 +330,11 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC_LabelScenarios(t *testing.T) {
 				"version":   "1.0",
 				"component": "oidc",
 			},
-			expectedLabels: map[string]string{
-				"app":                      "spire",
-				"version":                  "1.0",
-				"component":                "oidc",
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-			},
 		},
 		{
 			name: "override managed-by label",
 			inputLabels: map[string]string{
 				utils.AppManagedByLabelKey: "original-value",
-				"other":                    "label",
-			},
-			expectedLabels: map[string]string{
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
 				"other":                    "label",
 			},
 		},
@@ -380,8 +350,9 @@ func TestGenerateSpireOIDCDiscoveryProviderSCC_LabelScenarios(t *testing.T) {
 				},
 			}
 			result := generateSpireOIDCDiscoveryProviderSCC(config)
+			expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(tc.inputLabels)
 
-			assert.Equal(t, tc.expectedLabels, result.ObjectMeta.Labels)
+			assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)
 		})
 	}
 }

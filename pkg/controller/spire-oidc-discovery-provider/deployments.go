@@ -10,19 +10,15 @@ import (
 )
 
 func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfigMapHash string) *appsv1.Deployment {
-	labels := map[string]string{
-		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-		"app.kubernetes.io/instance": "spire",
-		"component":                  "oidc-discovery-provider",
-		"release":                    "spire",
-		"release-namespace":          "zero-trust-workload-identity-manager",
-		utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-	}
 
-	if config.Spec.Labels != nil {
-		for k, v := range config.Spec.Labels {
-			labels[k] = v
-		}
+	// Generate standardized labels once and reuse them
+	labels := utils.SpireOIDCDiscoveryProviderLabels(config.Spec.Labels)
+
+	// For selectors, we need only the core identifying labels (without custom user labels)
+	selectorLabels := map[string]string{
+		"app.kubernetes.io/name":      labels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  labels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
 	replicas := int32(1)
@@ -42,10 +38,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-					"app.kubernetes.io/instance": "spire",
-				},
+				MatchLabels: selectorLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{

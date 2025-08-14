@@ -18,7 +18,7 @@ func TestGetSpireControllerManagerValidatingWebhookConfiguration(t *testing.T) {
 	// Metadata check
 	assert.Equal(t, "spire-controller-manager-webhook", vwc.Name)
 	assert.Contains(t, vwc.Labels, "app.kubernetes.io/name")
-	assert.Equal(t, "server", vwc.Labels["app.kubernetes.io/name"])
+	assert.Equal(t, "spire-controller-manager", vwc.Labels["app.kubernetes.io/name"])
 
 	// NOTE: ValidatingWebhookConfiguration is cluster-scoped, so Namespace is empty.
 	// assert.Equal(t, "zero-trust-workload-identity-manager", vwc.Namespace) // Remove this test

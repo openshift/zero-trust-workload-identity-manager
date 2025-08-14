@@ -101,6 +101,16 @@ func DecodeValidatingWebhookConfigurationByBytes(objBytes []byte) *admissionregi
 	return obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
 }
 
+// SetLabel sets a label key/value on the given object metadata labels map.
+// If the labels map is nil, it initializes it.
+func SetLabel(labels map[string]string, key, value string) map[string]string {
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[key] = value
+	return labels
+}
+
 // GenerateConfigHashFromString returns a SHA256 hex string of the trimmed input string
 func GenerateConfigHashFromString(data string) string {
 	normalized := strings.TrimSpace(data) // Removes leading/trailing whitespace and newlines

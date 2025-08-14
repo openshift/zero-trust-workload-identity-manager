@@ -124,7 +124,6 @@ metadata:
   labels:
     app.kubernetes.io/name: spiffe-csi-driver
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "0.2.6"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 
@@ -152,7 +151,6 @@ metadata:
   labels:
     app.kubernetes.io/name: "agent"
     app.kubernetes.io/instance: "spire"
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 subjects:
@@ -187,7 +185,6 @@ metadata:
   labels:
     app.kubernetes.io/name: "agent"
     app.kubernetes.io/instance: "spire"
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 rules:
@@ -222,7 +219,6 @@ metadata:
   labels:
     app.kubernetes.io/name: "agent"
     app.kubernetes.io/instance: "spire"
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"`)
 
@@ -249,7 +245,6 @@ metadata:
   labels:
     app.kubernetes.io/name: agent
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 spec:
@@ -286,7 +281,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 subjects:
@@ -322,7 +316,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 rules:
@@ -356,7 +349,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 roleRef:
@@ -392,7 +384,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 rules:
@@ -463,7 +454,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 roleRef:
@@ -500,7 +490,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 rules:
@@ -538,7 +527,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 spec:
@@ -575,7 +563,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 webhooks:
@@ -632,7 +619,6 @@ metadata:
   labels:
     app.kubernetes.io/name: spiffe-oidc-discovery-provider
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 
@@ -661,7 +647,6 @@ metadata:
   labels:
     app.kubernetes.io/name: spiffe-oidc-discovery-provider
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 spec:
@@ -698,7 +683,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 subjects:
@@ -733,7 +717,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 rules:
@@ -774,7 +757,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 
@@ -803,7 +785,6 @@ metadata:
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
-    app.kubernetes.io/version: "1.12.0"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 spec:

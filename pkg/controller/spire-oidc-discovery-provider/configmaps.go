@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -87,18 +86,11 @@ server {
   }
 }`
 
-	labels := map[string]string{}
-	if dp.Spec.Labels != nil {
-		for key, value := range dp.Spec.Labels {
-			labels[key] = value
-		}
-	}
-	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireOIDCDiscoveryProviderLabels(dp.Spec.Labels),
 		},
 		Data: map[string]string{
 			"oidc-discovery-provider.conf": string(oidcJSON),

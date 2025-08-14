@@ -6,7 +6,6 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -41,13 +40,8 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 		}
 
 		// Check standard labels
-		expectedLabels := map[string]string{
-			"app.kubernetes.io/name":       "server",
-			"app.kubernetes.io/instance":   "spire",
-			"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
-			"app.kubernetes.io/component":  "server",
-			"custom-label":                 "test-value",
-		}
+		customLabels := map[string]string{"custom-label": "test-value"}
+		expectedLabels := utils.SpireServerLabels(customLabels)
 
 		for k, v := range expectedLabels {
 			if statefulSet.Labels[k] != v {
@@ -232,12 +226,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 		statefulSet := GenerateSpireServerStatefulSet(configWithNilLabels, serverConfigHash, controllerConfigHash)
 
 		// Verify we have all standard labels
-		expectedLabels := map[string]string{
-			"app.kubernetes.io/name":       "server",
-			"app.kubernetes.io/instance":   "spire",
-			"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
-			"app.kubernetes.io/component":  "server",
-		}
+		expectedLabels := utils.SpireServerLabels(nil)
 
 		for k, v := range expectedLabels {
 			if statefulSet.Labels[k] != v {
@@ -257,12 +246,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 		statefulSet := GenerateSpireServerStatefulSet(configWithEmptyLabels, serverConfigHash, controllerConfigHash)
 
 		// Verify we have all standard labels
-		expectedLabels := map[string]string{
-			"app.kubernetes.io/name":       "server",
-			"app.kubernetes.io/instance":   "spire",
-			"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
-			"app.kubernetes.io/component":  "server",
-		}
+		expectedLabels := utils.SpireServerLabels(nil)
 
 		for k, v := range expectedLabels {
 			if statefulSet.Labels[k] != v {
@@ -304,14 +288,14 @@ func findContainerByName(containers []corev1.Container, name string) *corev1.Con
 // This is essentially a copy of the function being tested, used to detect regressions
 func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
-	labels := map[string]string{
-		"app.kubernetes.io/name":       "server",
-		"app.kubernetes.io/instance":   "spire",
-		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
-		"app.kubernetes.io/component":  "server",
-	}
-	for k, v := range config.Labels {
-		labels[k] = v
+	// Use the same standardized labeling as the actual implementation
+	labels := utils.SpireServerLabels(config.Labels)
+
+	// For selectors, we need only the core identifying labels (without custom user labels)
+	selectorLabels := map[string]string{
+		"app.kubernetes.io/name":      labels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  labels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
 	return &appsv1.StatefulSet{
@@ -324,7 +308,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 			Replicas:    pointer.Int32(1),
 			ServiceName: "spire-server",
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: selectorLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -406,7 +390,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
+					ObjectMeta: metav1.ObjectMeta{Name: "spire-data", Labels: labels},
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 						Resources: corev1.VolumeResourceRequirements{

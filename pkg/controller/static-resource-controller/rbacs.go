@@ -70,50 +70,60 @@ func (r *StaticResourceReconciler) listStaticRoleBindings() []*rbacv1.RoleBindin
 
 func (r *StaticResourceReconciler) getSpireAgentClusterRole() *rbacv1.ClusterRole {
 	spireAgentClusterRole := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleAssetName))
+	spireAgentClusterRole.Labels = utils.SpireAgentLabels(spireAgentClusterRole.Labels)
 	return spireAgentClusterRole
 }
 
 func (r *StaticResourceReconciler) getSpireAgentClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	spireAgentClusterRoleBinding := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleBindingAssetName))
+	spireAgentClusterRoleBinding.Labels = utils.SpireAgentLabels(spireAgentClusterRoleBinding.Labels)
 	return spireAgentClusterRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireBundleRole() *rbacv1.Role {
 	spireBundleRole := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireBundleRoleAssetName))
+	spireBundleRole.Labels = utils.SpireServerLabels(spireBundleRole.Labels)
 	return spireBundleRole
 }
 
 func (r *StaticResourceReconciler) getSpireBundleRoleBinding() *rbacv1.RoleBinding {
 	spireBundleRoleBinding := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireBundleRoleBindingAssetName))
+	spireBundleRoleBinding.Labels = utils.SpireServerLabels(spireBundleRoleBinding.Labels)
 	return spireBundleRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerClusterRole() *rbacv1.ClusterRole {
 	spireControllerManagerClusterRole := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleAssetName))
+	spireControllerManagerClusterRole.Labels = utils.SpireControllerManagerLabels(spireControllerManagerClusterRole.Labels)
 	return spireControllerManagerClusterRole
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	spireControllerManagerClusterRoleBinding := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleBindingAssetName))
+	spireControllerManagerClusterRoleBinding.Labels = utils.SpireControllerManagerLabels(spireControllerManagerClusterRoleBinding.Labels)
 	return spireControllerManagerClusterRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerLeaderElectionRole() *rbacv1.Role {
 	spireControllerManagerLeaderElectionRole := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleAssetName))
+	spireControllerManagerLeaderElectionRole.Labels = utils.SpireControllerManagerLabels(spireControllerManagerLeaderElectionRole.Labels)
 	return spireControllerManagerLeaderElectionRole
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerLeaderElectionRoleBinding() *rbacv1.RoleBinding {
 	spireControllerManagerLeaderElectionRoleBinding := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleBindingAssetName))
+	spireControllerManagerLeaderElectionRoleBinding.Labels = utils.SpireControllerManagerLabels(spireControllerManagerLeaderElectionRoleBinding.Labels)
 	return spireControllerManagerLeaderElectionRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireServerClusterRole() *rbacv1.ClusterRole {
 	spireServerClusterRole := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireServerClusterRoleAssetName))
+	spireServerClusterRole.Labels = utils.SpireServerLabels(spireServerClusterRole.Labels)
 	return spireServerClusterRole
 }
 
 func (r *StaticResourceReconciler) getSpireServerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	spireServerClusterRoleBinding := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireServerClusterRoleBindingAssetName))
+	spireServerClusterRoleBinding.Labels = utils.SpireServerLabels(spireServerClusterRoleBinding.Labels)
 	return spireServerClusterRoleBinding
 }
