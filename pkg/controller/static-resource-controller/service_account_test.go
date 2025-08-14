@@ -1,6 +1,7 @@
 package static_resource_controller
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"testing"
@@ -17,7 +18,7 @@ func TestGetSpiffeCsiDriverServiceAccount(t *testing.T) {
 	expectedLabels := map[string]string{
 		"app.kubernetes.io/name":       "spiffe-csi-driver",
 		"app.kubernetes.io/instance":   "spire",
-		"app.kubernetes.io/version":    "0.2.6",
+		"app.kubernetes.io/version":    version.SpiffeCsiVersion,
 		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 		"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
 	}
@@ -89,24 +90,24 @@ func TestStaticResourceReconciler_ListStaticServiceAccount(t *testing.T) {
 	// spiffe-csi-driver SA
 	spiffeCsi := serviceAccounts[0]
 	assert.Equal(t, "spire-spiffe-csi-driver", spiffeCsi.Name)
-	assert.Equal(t, "0.2.6", spiffeCsi.Labels["app.kubernetes.io/version"])
+	assert.Equal(t, version.SpiffeCsiVersion, spiffeCsi.Labels["app.kubernetes.io/version"])
 	assert.Equal(t, "spiffe-csi-driver", spiffeCsi.Labels["app.kubernetes.io/name"])
 
 	// spire-agent SA
 	spireAgent := serviceAccounts[1]
 	assert.Equal(t, "spire-agent", spireAgent.Name)
-	assert.Equal(t, "1.12.0", spireAgent.Labels["app.kubernetes.io/version"])
+	assert.Equal(t, version.SpireAgentVersion, spireAgent.Labels["app.kubernetes.io/version"])
 	assert.Equal(t, "agent", spireAgent.Labels["app.kubernetes.io/name"])
 
 	// spire-spiffe-oidc-discovery-provider SA
 	spireOIDC := serviceAccounts[2]
 	assert.Equal(t, "spire-spiffe-oidc-discovery-provider", spireOIDC.Name)
-	assert.Equal(t, "1.12.0", spireOIDC.Labels["app.kubernetes.io/version"])
+	assert.Equal(t, version.SpireOIDCDiscoveryProviderVersion, spireOIDC.Labels["app.kubernetes.io/version"])
 	assert.Equal(t, "spiffe-oidc-discovery-provider", spireOIDC.Labels["app.kubernetes.io/name"])
 
 	// spire-server SA
 	spireServer := serviceAccounts[3]
 	assert.Equal(t, "spire-server", spireServer.Name)
-	assert.Equal(t, "1.12.0", spireServer.Labels["app.kubernetes.io/version"])
+	assert.Equal(t, version.SpireServerVersion, spireServer.Labels["app.kubernetes.io/version"])
 	assert.Equal(t, "server", spireServer.Labels["app.kubernetes.io/name"])
 }

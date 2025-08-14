@@ -6,6 +6,7 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -46,6 +47,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			"app.kubernetes.io/instance":   "spire",
 			"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 			"app.kubernetes.io/component":  "server",
+			"app.kubernetes.io/version":    version.SpireServerVersion,
 			"custom-label":                 "test-value",
 		}
 
@@ -237,6 +239,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			"app.kubernetes.io/instance":   "spire",
 			"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 			"app.kubernetes.io/component":  "server",
+			"app.kubernetes.io/version":    version.SpireServerVersion,
 		}
 
 		for k, v := range expectedLabels {
@@ -262,6 +265,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			"app.kubernetes.io/instance":   "spire",
 			"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 			"app.kubernetes.io/component":  "server",
+			"app.kubernetes.io/version":    version.SpireServerVersion,
 		}
 
 		for k, v := range expectedLabels {
@@ -309,6 +313,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 		"app.kubernetes.io/instance":   "spire",
 		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 		"app.kubernetes.io/component":  "server",
+		"app.kubernetes.io/version":    version.SpireServerVersion,
 	}
 	for k, v := range config.Labels {
 		labels[k] = v

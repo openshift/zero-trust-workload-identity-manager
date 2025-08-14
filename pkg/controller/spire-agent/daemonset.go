@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 )
 
 func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfigHash string) *appsv1.DaemonSet {
@@ -19,7 +20,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 			Labels: map[string]string{
 				"app.kubernetes.io/name":      "agent",
 				"app.kubernetes.io/instance":  "spire",
-				"app.kubernetes.io/version":   "1.11.2",
+				"app.kubernetes.io/version":   version.SpireAgentVersion,
 				"app.kubernetes.io/component": "default",
 				utils.AppManagedByLabelKey:    utils.AppManagedByLabelValue,
 			},

@@ -3,6 +3,7 @@ package spire_oidc_discovery_provider
 import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,6 +14,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 	labels := map[string]string{
 		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
 		"app.kubernetes.io/instance": "spire",
+		"app.kubernetes.io/version":  version.SpireOIDCDiscoveryProviderVersion,
 		"component":                  "oidc-discovery-provider",
 		"release":                    "spire",
 		"release-namespace":          "zero-trust-workload-identity-manager",

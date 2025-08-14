@@ -1,6 +1,7 @@
 package spire_oidc_discovery_provider
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"testing"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -190,6 +191,7 @@ func TestBuildDeployment(t *testing.T) {
 			expectedLabels := map[string]string{
 				"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
 				"app.kubernetes.io/instance": "spire",
+				"app.kubernetes.io/version":  version.SpireOIDCDiscoveryProviderVersion,
 				"component":                  "oidc-discovery-provider",
 				"release":                    "spire",
 				"release-namespace":          "zero-trust-workload-identity-manager",

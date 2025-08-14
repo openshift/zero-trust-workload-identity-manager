@@ -5,6 +5,8 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
 	rbacv1 "k8s.io/api/rbac/v1"
+
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 )
 
 func (r *StaticResourceReconciler) CreateOrApplyRbacResources(ctx context.Context) error {
@@ -70,50 +72,60 @@ func (r *StaticResourceReconciler) listStaticRoleBindings() []*rbacv1.RoleBindin
 
 func (r *StaticResourceReconciler) getSpireAgentClusterRole() *rbacv1.ClusterRole {
 	spireAgentClusterRole := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleAssetName))
+	spireAgentClusterRole.Labels = utils.SetLabel(spireAgentClusterRole.Labels, "app.kubernetes.io/version", version.SpireAgentVersion)
 	return spireAgentClusterRole
 }
 
 func (r *StaticResourceReconciler) getSpireAgentClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	spireAgentClusterRoleBinding := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleBindingAssetName))
+	spireAgentClusterRoleBinding.Labels = utils.SetLabel(spireAgentClusterRoleBinding.Labels, "app.kubernetes.io/version", version.SpireAgentVersion)
 	return spireAgentClusterRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireBundleRole() *rbacv1.Role {
 	spireBundleRole := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireBundleRoleAssetName))
+	spireBundleRole.Labels = utils.SetLabel(spireBundleRole.Labels, "app.kubernetes.io/version", version.SpireServerVersion)
 	return spireBundleRole
 }
 
 func (r *StaticResourceReconciler) getSpireBundleRoleBinding() *rbacv1.RoleBinding {
 	spireBundleRoleBinding := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireBundleRoleBindingAssetName))
+	spireBundleRoleBinding.Labels = utils.SetLabel(spireBundleRoleBinding.Labels, "app.kubernetes.io/version", version.SpireServerVersion)
 	return spireBundleRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerClusterRole() *rbacv1.ClusterRole {
 	spireControllerManagerClusterRole := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleAssetName))
+	spireControllerManagerClusterRole.Labels = utils.SetLabel(spireControllerManagerClusterRole.Labels, "app.kubernetes.io/version", version.SpireControllerManagerVersion)
 	return spireControllerManagerClusterRole
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	spireControllerManagerClusterRoleBinding := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleBindingAssetName))
+	spireControllerManagerClusterRoleBinding.Labels = utils.SetLabel(spireControllerManagerClusterRoleBinding.Labels, "app.kubernetes.io/version", version.SpireControllerManagerVersion)
 	return spireControllerManagerClusterRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerLeaderElectionRole() *rbacv1.Role {
 	spireControllerManagerLeaderElectionRole := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleAssetName))
+	spireControllerManagerLeaderElectionRole.Labels = utils.SetLabel(spireControllerManagerLeaderElectionRole.Labels, "app.kubernetes.io/version", version.SpireControllerManagerVersion)
 	return spireControllerManagerLeaderElectionRole
 }
 
 func (r *StaticResourceReconciler) getSpireControllerManagerLeaderElectionRoleBinding() *rbacv1.RoleBinding {
 	spireControllerManagerLeaderElectionRoleBinding := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleBindingAssetName))
+	spireControllerManagerLeaderElectionRoleBinding.Labels = utils.SetLabel(spireControllerManagerLeaderElectionRoleBinding.Labels, "app.kubernetes.io/version", version.SpireControllerManagerVersion)
 	return spireControllerManagerLeaderElectionRoleBinding
 }
 
 func (r *StaticResourceReconciler) getSpireServerClusterRole() *rbacv1.ClusterRole {
 	spireServerClusterRole := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireServerClusterRoleAssetName))
+	spireServerClusterRole.Labels = utils.SetLabel(spireServerClusterRole.Labels, "app.kubernetes.io/version", version.SpireServerVersion)
 	return spireServerClusterRole
 }
 
 func (r *StaticResourceReconciler) getSpireServerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	spireServerClusterRoleBinding := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireServerClusterRoleBindingAssetName))
+	spireServerClusterRoleBinding.Labels = utils.SetLabel(spireServerClusterRoleBinding.Labels, "app.kubernetes.io/version", version.SpireServerVersion)
 	return spireServerClusterRoleBinding
 }

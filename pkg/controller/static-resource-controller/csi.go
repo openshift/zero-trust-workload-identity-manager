@@ -7,6 +7,7 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 )
 
 func (r *StaticResourceReconciler) CreateSpiffeCsiDriver(ctx context.Context) error {
@@ -23,5 +24,6 @@ func (r *StaticResourceReconciler) CreateSpiffeCsiDriver(ctx context.Context) er
 
 func (r *StaticResourceReconciler) getSpiffeCsiObject() *storagev1.CSIDriver {
 	csiDriver := utils.DecodeCsiDriverObjBytes(assets.MustAsset(utils.SpiffeCsiDriverAssetName))
+	csiDriver.Labels = utils.SetLabel(csiDriver.Labels, "app.kubernetes.io/version", version.SpiffeCsiVersion)
 	return csiDriver
 }

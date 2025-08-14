@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"sigs.k8s.io/yaml"
 	"strings"
 
@@ -197,7 +198,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 			Labels: map[string]string{
 				"app.kubernetes.io/name":     "server",
 				"app.kubernetes.io/instance": "spire",
-				"app.kubernetes.io/version":  "1.12.0",
+				"app.kubernetes.io/version":  version.SpireControllerManagerVersion,
 				utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
 			},
 		},
