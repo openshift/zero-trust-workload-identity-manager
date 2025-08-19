@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,8 +74,8 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 }
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if utils.IsReconciliationPaused() {
-		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+	if utils.IsAutoReconcileDisabled() {
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
 		return ctrl.Result{}, nil
 	}
 	var server v1alpha1.SpireServer

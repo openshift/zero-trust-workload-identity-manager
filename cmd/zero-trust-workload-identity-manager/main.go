@@ -42,6 +42,7 @@ import (
 	spireOIDCDiscoveryProviderController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-oidc-discovery-provider"
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
 	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 
 	securityv1 "github.com/openshift/api/security/v1"
@@ -68,6 +69,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var unsupportedAddonFeatures string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -79,6 +81,10 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&unsupportedAddonFeatures, "unsupported-addon-features", "",
+		"Enables unsupported addon features. Format: \"Feature1=true,Feature2=false,Feature3=true\". "+
+			"Currently supported features: DISABLE_AUTO_RECONCILE (disables automatic reconciliation to allow manual management). "+
+			"Multiple features can be enabled simultaneously. Use with caution as these features are experimental.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -86,6 +92,18 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// Initialize feature gates
+	if err := featuregate.InitializeFeatureGates(unsupportedAddonFeatures); err != nil {
+		setupLog.Error(err, "failed to initialize feature gates")
+		os.Exit(1)
+	}
+
+	// Log enabled feature gates
+	gates := featuregate.GetFeatureGates()
+	if len(gates) > 0 {
+		setupLog.Info("Feature gates enabled", "gates", gates)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will

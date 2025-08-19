@@ -2,10 +2,12 @@ package spire_oidc_discovery_provider
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,8 +71,8 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.log.Info("Reconciling SpireOIDCDiscoveryProvider controller")
 
-	if utils.IsReconciliationPaused() {
-		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+	if utils.IsAutoReconcileDisabled() {
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
 		return ctrl.Result{}, nil
 	}
 

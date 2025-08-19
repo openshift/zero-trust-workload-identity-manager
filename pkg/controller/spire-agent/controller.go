@@ -3,8 +3,7 @@ package spire_agent
 import (
 	"context"
 	"fmt"
-	securityv1 "github.com/openshift/api/security/v1"
-	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -29,8 +28,11 @@ import (
 
 	"github.com/go-logr/logr"
 
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 )
 
 type reconcilerStatus struct {
@@ -72,8 +74,8 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 }
 
 func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if utils.IsReconciliationPaused() {
-		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+	if utils.IsAutoReconcileDisabled() {
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
 		return ctrl.Result{}, nil
 	}
 	var agent v1alpha1.SpireAgent

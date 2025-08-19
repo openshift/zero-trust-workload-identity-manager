@@ -14,32 +14,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestIsReconciliationPaused(t *testing.T) {
-	// Ensure clean state
-	os.Unsetenv(ReconciliationPausedEnv)
+func TestIsAutoReconcileDisabled(t *testing.T) {
+	// Test that IsAutoReconcileDisabled delegates to featuregate.IsAutoReconcileDisabled()
+	// Since we can't easily mock the featuregate package here, we'll just test that
+	// the function returns false when no feature gates are configured
 
-	// default: not set -> false
-	if IsReconciliationPaused() {
-		t.Fatalf("expected false when %s not set", ReconciliationPausedEnv)
-	}
-
-	// truthy variants
-	for _, v := range []string{"true", "TRUE", "1"} {
-		os.Setenv(ReconciliationPausedEnv, v)
-		if !IsReconciliationPaused() {
-			t.Fatalf("expected true for value %q", v)
-		}
-	}
-
-	// falsy variants and invalid
-	for _, v := range []string{"false", "FALSE", "0", "", "not-a-bool"} {
-		os.Setenv(ReconciliationPausedEnv, v)
-		if v == "" {
-			os.Unsetenv(ReconciliationPausedEnv)
-		}
-		if IsReconciliationPaused() {
-			t.Fatalf("expected false for value %q", v)
-		}
+	// With no feature gates configured, should return false
+	if IsAutoReconcileDisabled() {
+		t.Fatal("expected false when no feature gates are configured")
 	}
 }
 

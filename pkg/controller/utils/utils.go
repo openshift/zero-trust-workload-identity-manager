@@ -3,13 +3,12 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"os"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -140,17 +139,9 @@ func GenerateMapHash(m map[string]string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// IsReconciliationPaused returns true if the global pause env flag is set to a truthy value.
-func IsReconciliationPaused() bool {
-	val, ok := os.LookupEnv(ReconciliationPausedEnv)
-	if !ok {
-		return false
-	}
-	b, err := strconv.ParseBool(strings.TrimSpace(val))
-	if err != nil {
-		return false
-	}
-	return b
+// IsAutoReconcileDisabled returns true if the DISABLE_AUTO_RECONCILE feature gate is enabled.
+func IsAutoReconcileDisabled() bool {
+	return featuregate.IsAutoReconcileDisabled()
 }
 
 func StringToBool(s string) bool {

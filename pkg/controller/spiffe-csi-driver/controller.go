@@ -3,8 +3,10 @@ package spiffe_csi_driver
 import (
 	"context"
 	"fmt"
+
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -68,8 +70,8 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 }
 
 func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if utils.IsReconciliationPaused() {
-		r.log.Info("Reconciliation paused by environment flag", "env", utils.ReconciliationPausedEnv)
+	if utils.IsAutoReconcileDisabled() {
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
 		return ctrl.Result{}, nil
 	}
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
