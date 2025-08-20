@@ -3,7 +3,6 @@ package spire_oidc_discovery_provider
 import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,20 +10,15 @@ import (
 )
 
 func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfigMapHash string) *appsv1.Deployment {
-	labels := map[string]string{
-		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-		"app.kubernetes.io/instance": "spire",
-		"app.kubernetes.io/version":  version.SpireOIDCDiscoveryProviderVersion,
-		"component":                  "oidc-discovery-provider",
-		"release":                    "spire",
-		"release-namespace":          "zero-trust-workload-identity-manager",
-		utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-	}
 
-	if config.Spec.Labels != nil {
-		for k, v := range config.Spec.Labels {
-			labels[k] = v
-		}
+	// Generate standardized labels once and reuse them
+	labels := utils.SpireOIDCDiscoveryProviderLabels(config.Spec.Labels)
+
+	// For selectors, we need only the core identifying labels (without custom user labels)
+	selectorLabels := map[string]string{
+		"app.kubernetes.io/name":      labels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  labels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
 	replicas := int32(1)
@@ -44,14 +38,11 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-					"app.kubernetes.io/instance": "spire",
-				},
+				MatchLabels: selectorLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
+					Labels:      selectorLabels,
 					Annotations: map[string]string{ // replace with actual checksum if needed
 					},
 				},

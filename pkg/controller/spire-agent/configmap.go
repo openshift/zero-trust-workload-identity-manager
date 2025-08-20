@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -80,19 +79,11 @@ func GenerateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent) (*corev1
 
 	spireAgentConfigHash := utils.GenerateConfigHash(agentConfigJSON)
 
-	labels := map[string]string{
-		"app":                       "spire-agent",
-		utils.AppManagedByLabelKey:  utils.AppManagedByLabelValue,
-		"app.kubernetes.io/version": version.SpireAgentVersion,
-	}
-	for key, value := range spireAgentConfig.Spec.Labels {
-		labels[key] = value
-	}
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireAgentLabels(spireAgentConfig.Spec.Labels),
 			Annotations: map[string]string{
 				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
 			},

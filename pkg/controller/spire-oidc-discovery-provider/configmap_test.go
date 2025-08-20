@@ -7,7 +7,6 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,12 +89,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		expectedLabels := map[string]string{}
-		for k, v := range customLabels {
-			expectedLabels[k] = v
-		}
-		expectedLabels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
-		expectedLabels["app.kubernetes.io/version"] = version.SpireOIDCDiscoveryProviderVersion
+		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(customLabels)
 
 		// Verify ConfigMap metadata with custom labels
 		assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)

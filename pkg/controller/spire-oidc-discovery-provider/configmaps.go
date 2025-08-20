@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -87,24 +86,16 @@ server {
   }
 }`
 
-	labels := map[string]string{}
-	for key, value := range cr.Spec.Labels {
-		labels[key] = value
-	}
-	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
-	labels["app.kubernetes.io/version"] = version.SpireOIDCDiscoveryProviderVersion
-	configMap := &corev1.ConfigMap{
+	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireOIDCDiscoveryProviderLabels(cr.Spec.Labels),
 		},
 		Data: map[string]string{
 			"oidc-discovery-provider.conf": string(oidcJSON),
 			"spiffe-helper.conf":           spiffeHelperConf,
 			"default.conf":                 defaultConf,
 		},
-	}
-
-	return configMap, nil
+	}, nil
 }

@@ -9,29 +9,29 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 )
 
 func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfigHash string) *appsv1.DaemonSet {
+
+	// Generate standardized labels once and reuse them
+	labels := utils.SpireAgentLabels(config.Labels)
+
+	// For selectors, we need only the core identifying labels (without custom user labels)
+	selectorLabels := map[string]string{
+		"app.kubernetes.io/name":      labels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  labels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
+	}
+
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":      "agent",
-				"app.kubernetes.io/instance":  "spire",
-				"app.kubernetes.io/version":   version.SpireAgentVersion,
-				"app.kubernetes.io/component": "default",
-				utils.AppManagedByLabelKey:    utils.AppManagedByLabelValue,
-			},
+			Labels:    labels,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/name":      "agent",
-					"app.kubernetes.io/instance":  "spire",
-					"app.kubernetes.io/component": "default",
-				},
+				MatchLabels: selectorLabels,
 			},
 			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
 				Type: appsv1.RollingUpdateDaemonSetStrategyType,
@@ -45,11 +45,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 						"kubectl.kubernetes.io/default-container":            "spire-agent",
 						spireAgentDaemonSetSpireAgentConfigHashAnnotationKey: spireAgentConfigHash,
 					},
-					Labels: map[string]string{
-						"app.kubernetes.io/name":      "agent",
-						"app.kubernetes.io/instance":  "spire",
-						"app.kubernetes.io/component": "default",
-					},
+					Labels: selectorLabels,
 				},
 				Spec: corev1.PodSpec{
 					HostPID:            true,

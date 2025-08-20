@@ -47,18 +47,12 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 	if err != nil {
 		return nil, err
 	}
-	labels := map[string]string{}
-	for key, value := range config.Labels {
-		labels[key] = value
-	}
-	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
-	labels["app.kubernetes.io/version"] = version.SpireServerVersion
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 		Data: map[string]string{
 			"server.conf": string(confJSON),
@@ -252,11 +246,7 @@ func generateControllerManagerConfigMap(configYAML string) *corev1.ConfigMap {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-controller-manager",
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app":                       "spire-controller-manager",
-				utils.AppManagedByLabelKey:  utils.AppManagedByLabelValue,
-				"app.kubernetes.io/version": version.SpireControllerManagerVersion,
-			},
+			Labels:    utils.SpireControllerManagerLabels(nil),
 		},
 		Data: map[string]string{
 			"controller-manager-config.yaml": configYAML,

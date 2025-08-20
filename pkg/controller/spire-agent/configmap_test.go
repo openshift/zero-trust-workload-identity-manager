@@ -6,7 +6,6 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -402,11 +401,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 			assert.Equal(t, tt.expectedConfigMapNamespace, cm.Namespace)
 
 			// Validate required labels
-			expectedLabels := map[string]string{
-				"app":                       "spire-agent",
-				utils.AppManagedByLabelKey:  utils.AppManagedByLabelValue,
-				"app.kubernetes.io/version": version.SpireAgentVersion,
-			}
+			expectedLabels := utils.SpireAgentLabels(nil)
 
 			// Add custom labels from the SpireAgentConfig
 			for key, value := range tt.spireAgentConfig.Spec.Labels {
@@ -577,10 +572,6 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 	assert.NotEmpty(t, hash)
 
 	// Should only have the required labels
-	expectedLabels := map[string]string{
-		"app":                       "spire-agent",
-		utils.AppManagedByLabelKey:  utils.AppManagedByLabelValue,
-		"app.kubernetes.io/version": version.SpireAgentVersion,
-	}
+	expectedLabels := utils.SpireAgentLabels(nil)
 	assert.Equal(t, expectedLabels, cm.Labels)
 }

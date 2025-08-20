@@ -6,7 +6,6 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -29,21 +28,18 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 		t.Errorf("Expected namespace '%s', got '%s'", utils.OperatorNamespace, daemonSet.Namespace)
 	}
 
-	expectedLabels := map[string]string{
-		"app.kubernetes.io/name":     "spiffe-csi-driver",
-		"app.kubernetes.io/instance": "spire",
-		"app.kubernetes.io/version":  version.SpiffeCsiVersion,
-		utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-	}
+	expectedLabels := utils.SpiffeCSIDriverLabels(nil)
 
 	if !reflect.DeepEqual(daemonSet.Labels, expectedLabels) {
 		t.Errorf("Expected labels %v, got %v", expectedLabels, daemonSet.Labels)
 	}
 
-	// Test Selector
+	// Test Selector - using centralized labeling approach
+	allLabels := utils.SpiffeCSIDriverLabels(nil)
 	expectedSelectorLabels := map[string]string{
-		"app.kubernetes.io/name":     "spiffe-csi-driver",
-		"app.kubernetes.io/instance": "spire",
+		"app.kubernetes.io/name":      allLabels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  allLabels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": allLabels["app.kubernetes.io/component"],
 	}
 
 	if !reflect.DeepEqual(daemonSet.Spec.Selector.MatchLabels, expectedSelectorLabels) {
