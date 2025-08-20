@@ -1,11 +1,12 @@
 package spiffe_csi_driver
 
 import (
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"reflect"
 	"testing"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -31,6 +32,7 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 	expectedLabels := map[string]string{
 		"app.kubernetes.io/name":     "spiffe-csi-driver",
 		"app.kubernetes.io/instance": "spire",
+		"app.kubernetes.io/version":  version.SpiffeCsiVersion,
 		utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
 	}
 

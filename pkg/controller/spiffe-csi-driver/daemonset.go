@@ -3,6 +3,7 @@ package spiffe_csi_driver
 import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 			Labels: map[string]string{
 				"app.kubernetes.io/name":     "spiffe-csi-driver",
 				"app.kubernetes.io/instance": "spire",
+				"app.kubernetes.io/version":  version.SpiffeCsiVersion,
 				utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
 			},
 		},
