@@ -312,23 +312,6 @@ func TestGetUpstreamAuthoritySecretMounts(t *testing.T) {
 			expectedMounts: []secretMountInfo{},
 		},
 		{
-			name: "cert-manager with kubeconfig",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "my-kubeconfig-secret",
-				},
-			},
-			expectedMounts: []secretMountInfo{
-				{
-					secretName: "my-kubeconfig-secret",
-					mountPath:  certManagerKubeConfigMountPath,
-					volumeName: certManagerKubeConfigVolumeName,
-				},
-			},
-		},
-		{
 			name: "vault with token auth",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "vault",
@@ -481,20 +464,6 @@ func TestGenerateSpireServerStatefulSetWithSecretMounts(t *testing.T) {
 			expectedVolumeMounts:     []string{},
 			expectedBasicVolumeCount: 5,
 			expectedBasicMountCount:  4,
-		},
-		{
-			name: "cert-manager with kubeconfig",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "spire-ca",
-					KubeConfigSecretName: "kubeconfig-secret",
-				},
-			},
-			expectedSecretVolumes:    []string{"cert-manager-kubeconfig"},
-			expectedVolumeMounts:     []string{"cert-manager-kubeconfig"},
-			expectedBasicVolumeCount: 6,
-			expectedBasicMountCount:  5,
 		},
 		{
 			name: "vault with cert auth",
@@ -660,19 +629,6 @@ func TestGenerateSpireServerStatefulSetSecretVolumeMapping(t *testing.T) {
 		upstreamAuth      *v1alpha1.UpstreamAuthority
 		expectedSecretMap map[string]string // volumeName -> secretName
 	}{
-		{
-			name: "cert-manager with kubeconfig",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "spire-ca",
-					KubeConfigSecretName: "my-kubeconfig-secret",
-				},
-			},
-			expectedSecretMap: map[string]string{
-				"cert-manager-kubeconfig": "my-kubeconfig-secret",
-			},
-		},
 		{
 			name: "vault with cert auth",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{

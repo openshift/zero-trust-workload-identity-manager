@@ -32,16 +32,6 @@ func getUpstreamAuthoritySecretMounts(upstreamAuthority *v1alpha1.UpstreamAuthor
 	}
 
 	switch upstreamAuthority.Type {
-	case "cert-manager":
-		if upstreamAuthority.CertManager != nil &&
-			upstreamAuthority.CertManager.KubeConfigSecretName != "" {
-			secretMounts = append(secretMounts, secretMountInfo{
-				secretName: upstreamAuthority.CertManager.KubeConfigSecretName,
-				mountPath:  certManagerKubeConfigMountPath,
-				volumeName: certManagerKubeConfigVolumeName,
-			})
-		}
-
 	case "vault":
 		if upstreamAuthority.Vault != nil {
 			vault := upstreamAuthority.Vault
