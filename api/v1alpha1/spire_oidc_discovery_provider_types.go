@@ -33,7 +33,7 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:="spire-agent.sock"
 	AgentSocketName string `json:"agentSocketName,omitempty"`
 
-	// jwtIssuer is the path to JWT issuer.
+	// jwtIssuer is the JWT issuer url.
 	// +kubebuilder:validation:Required
 	JwtIssuer string `json:"jwtIssuer,omitempty"`
 

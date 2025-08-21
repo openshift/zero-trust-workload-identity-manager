@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -26,8 +25,11 @@ func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	// Determine trust domain
 	trustDomain := dp.Spec.TrustDomain
 
-	// JWT Issuer fallback
-	jwtIssuer := stripProtocol(dp.Spec.JwtIssuer)
+	// JWT Issuer validation and normalization
+	jwtIssuer, err := utils.StripProtocolFromJWTIssuer(dp.Spec.JwtIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JWT issuer URL: %w", err)
+	}
 
 	// OIDC config map data
 	oidcConfig := map[string]interface{}{
@@ -104,16 +106,4 @@ server {
 	}
 
 	return configMap, nil
-}
-
-// stripProtocol removes "http://" or "https://"" from the beginning of a string.
-// If no protocol prefix is found, it returns the original string unmodified.
-func stripProtocol(url string) string {
-	if strings.HasPrefix(url, "https://") {
-		return strings.TrimPrefix(url, "https://")
-	}
-	if strings.HasPrefix(url, "http://") {
-		return strings.TrimPrefix(url, "http://")
-	}
-	return url
 }

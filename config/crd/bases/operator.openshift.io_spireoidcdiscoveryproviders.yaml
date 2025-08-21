@@ -970,7 +970,7 @@ spec:
                 description: agentSocketName is the name of the agent socket.
                 type: string
               jwtIssuer:
-                description: jwtIssuer is the path to JWT issuer.
+                description: jwtIssuer is the JWT issuer url.
                 type: string
               labels:
                 additionalProperties:

@@ -1058,7 +1058,7 @@ spec:
                 - maxOpenConns
                 type: object
               jwtIssuer:
-                description: jwtIssuer is the JWT issuer domain.
+                description: jwtIssuer is the JWT issuer url.
                 type: string
               keyManager:
                 description: keyManager has configs for the spire server key manager.

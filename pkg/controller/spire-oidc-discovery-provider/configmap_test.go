@@ -17,7 +17,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain: "example.org",
-				JwtIssuer:   "oidc-discovery.example.org",
+				JwtIssuer:   "https://oidc-discovery.example.org",
 			},
 		}
 
@@ -77,7 +77,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
 				TrustDomain:     "custom.domain.com",
 				AgentSocketName: "custom-agent.sock",
-				JwtIssuer:       "custom-jwt-issuer.example.com",
+				JwtIssuer:       "https://custom-jwt-issuer.example.com",
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: customLabels,
 				},
@@ -284,7 +284,7 @@ func TestGenerateOIDCConfigMapFromCR_TrustDomains(t *testing.T) {
 		{
 			name:        "custom jwt issuer",
 			trustDomain: "example.com",
-			jwtIssuer:   "custom.issuer.com",
+			jwtIssuer:   "https://custom.issuer.com",
 			expectedJWT: "custom.issuer.com",
 		},
 	}
@@ -333,60 +333,4 @@ func TestOIDCConfigJSONFormatting(t *testing.T) {
 	var temp interface{}
 	err = json.Unmarshal([]byte(oidcJSON), &temp)
 	assert.NoError(t, err)
-}
-
-func TestStripProtocol(t *testing.T) {
-	testCases := []struct {
-		name     string // A descriptive name for the test case
-		inputURL string // The input URL to the stripProtocol function
-		expected string // The expected output after stripping the protocol
-	}{
-		{
-			name:     "should strip https prefix",
-			inputURL: "https://example.com",
-			expected: "example.com",
-		},
-		{
-			name:     "should strip http prefix",
-			inputURL: "http://example.com",
-			expected: "example.com",
-		},
-		{
-			name:     "should return original string if no protocol prefix exists",
-			inputURL: "example.com",
-			expected: "example.com",
-		},
-		{
-			name:     "should handle an empty string gracefully",
-			inputURL: "",
-			expected: "",
-		},
-		{
-			name:     "should handle a string that is only the https prefix",
-			inputURL: "https://",
-			expected: "",
-		},
-		{
-			name:     "should handle a string that is only the http prefix",
-			inputURL: "http://",
-			expected: "",
-		},
-		{
-			name:     "should not strip protocol if it appears in the middle of the string",
-			inputURL: "my-site-[https://-is-cool.com](https://-is-cool.com)",
-			expected: "my-site-[https://-is-cool.com](https://-is-cool.com)",
-		},
-		{
-			name:     "should handle url with path and query parameters",
-			inputURL: "https://example.com/path?query=1",
-			expected: "example.com/path?query=1",
-		},
-	}
-	// Iterate over the defined test cases
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actualResult := stripProtocol(tc.inputURL)
-			assert.Equal(t, tc.expected, actualResult)
-		})
-	}
 }

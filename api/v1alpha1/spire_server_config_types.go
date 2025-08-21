@@ -38,7 +38,7 @@ type SpireServerSpec struct {
 	// +kubebuilder:default:=spire-bundle
 	BundleConfigMap string `json:"bundleConfigMap"`
 
-	// jwtIssuer is the JWT issuer domain.
+	// jwtIssuer is the JWT issuer url.
 	// +kubebuilder:validation:Required
 	JwtIssuer string `json:"jwtIssuer"`
 
