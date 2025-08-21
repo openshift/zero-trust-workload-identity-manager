@@ -1264,12 +1264,6 @@ spec:
                         description: issuerName is the name of the issuer to reference
                           in CertificateRequests.
                         type: string
-                      kubeConfigSecretName:
-                        description: |-
-                          kubeConfigSecretName is the name of the Kubernetes Secret that stores the kubeconfig
-                          used to connect to the Kubernetes cluster where cert-manager is running.
-                          If empty, in-cluster configuration will be used.
-                        type: string
                       namespace:
                         description: namespace in which to create CertificateRequests
                           for signing.

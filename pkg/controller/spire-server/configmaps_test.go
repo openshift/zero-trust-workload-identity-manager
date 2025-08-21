@@ -537,20 +537,18 @@ func TestGenerateUpstreamAuthorityPlugin(t *testing.T) {
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "cert-manager",
 				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "spire-ca",
-					IssuerKind:           "ClusterIssuer",
-					IssuerGroup:          "cert-manager.io",
-					Namespace:            "cert-manager",
-					KubeConfigSecretName: "kubeconfig-secret",
+					IssuerName:  "spire-ca",
+					IssuerKind:  "ClusterIssuer",
+					IssuerGroup: "cert-manager.io",
+					Namespace:   "cert-manager",
 				},
 			},
 			expectedKey: "cert-manager",
 			expectedPlugins: map[string]interface{}{
-				"issuer_name":      "spire-ca",
-				"issuer_kind":      "ClusterIssuer",
-				"issuer_group":     "cert-manager.io",
-				"namespace":        "cert-manager",
-				"kube_config_file": certManagerKubeConfigPath,
+				"issuer_name":  "spire-ca",
+				"issuer_kind":  "ClusterIssuer",
+				"issuer_group": "cert-manager.io",
+				"namespace":    "cert-manager",
 			},
 		},
 		{
@@ -1022,7 +1020,7 @@ func TestUpstreamAuthorityJSONOmitemptyBehavior(t *testing.T) {
 				"certManager": {"issuerName"},
 			},
 			expectedNestedAbsent: map[string][]string{
-				"certManager": {"issuerKind", "issuerGroup", "kubeConfigSecretName"},
+				"certManager": {"issuerKind", "issuerGroup"},
 			},
 		},
 		{
@@ -1030,17 +1028,16 @@ func TestUpstreamAuthorityJSONOmitemptyBehavior(t *testing.T) {
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "cert-manager",
 				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					IssuerKind:           "ClusterIssuer",
-					IssuerGroup:          "cert-manager.io",
-					Namespace:            "test-namespace",
-					KubeConfigSecretName: "kubeconfig-secret",
+					IssuerName:  "test-issuer",
+					IssuerKind:  "ClusterIssuer",
+					IssuerGroup: "cert-manager.io",
+					Namespace:   "test-namespace",
 				},
 			},
 			expectedPresent: []string{"type", "certManager"},
 			expectedAbsent:  []string{"spire", "vault"},
 			expectedNestedPresent: map[string][]string{
-				"certManager": {"issuerName", "issuerKind", "issuerGroup", "namespace", "kubeConfigSecretName"},
+				"certManager": {"issuerName", "issuerKind", "issuerGroup", "namespace"},
 			},
 		},
 		{
@@ -1156,7 +1153,7 @@ func TestUpstreamAuthorityJSONOmitemptyBehavior(t *testing.T) {
 				"certManager": {"issuerName", "namespace"},
 			},
 			expectedNestedAbsent: map[string][]string{
-				"certManager": {"issuerKind", "issuerGroup", "kubeConfigSecretName"},
+				"certManager": {"issuerKind", "issuerGroup"},
 			},
 		},
 	}
@@ -1580,54 +1577,6 @@ func TestUpstreamAuthoritySecretFieldsOmitemptyBehavior(t *testing.T) {
 		expectedNestedAbsent  map[string][]string
 	}{
 		{
-			name: "CertManager without KubeConfigSecretName should omit it",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName: "test-issuer",
-					// KubeConfigSecretName not set - should be omitted
-				},
-			},
-			expectedPresent: []string{"type", "certManager"},
-			expectedNestedPresent: map[string][]string{
-				"certManager": {"issuerName"},
-			},
-			expectedNestedAbsent: map[string][]string{
-				"certManager": {"kubeConfigSecretName"},
-			},
-		},
-		{
-			name: "CertManager with empty KubeConfigSecretName should omit it",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "", // empty string should be omitted
-				},
-			},
-			expectedPresent: []string{"type", "certManager"},
-			expectedNestedPresent: map[string][]string{
-				"certManager": {"issuerName"},
-			},
-			expectedNestedAbsent: map[string][]string{
-				"certManager": {"kubeConfigSecretName"},
-			},
-		},
-		{
-			name: "CertManager with KubeConfigSecretName should include it",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "kubeconfig-secret",
-				},
-			},
-			expectedPresent: []string{"type", "certManager"},
-			expectedNestedPresent: map[string][]string{
-				"certManager": {"issuerName", "kubeConfigSecretName"},
-			},
-		},
-		{
 			name: "Vault with empty CaCertSecret should omit it",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "vault",
@@ -1836,18 +1785,6 @@ func TestGetUpstreamAuthoritySecretMountsEdgeCases(t *testing.T) {
 			expectedMounts: []secretMountInfo{},
 		},
 		{
-			name: "cert-manager with empty KubeConfigSecretName should not mount",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "", // empty string should not create mount
-				},
-			},
-			expectedMounts: []secretMountInfo{},
-		},
-
-		{
 			name: "vault with all cert auth secrets should mount all",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
 				Type: "vault",
@@ -1944,18 +1881,6 @@ func TestUpstreamAuthoritySecretPathIntegration(t *testing.T) {
 		expectedConfigPaths  []string // paths that should appear in generated config
 		expectedSecretMounts int      // number of secret mounts expected
 	}{
-		{
-			name: "cert-manager with kubeconfig secret should reference correct path",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "kubeconfig-secret",
-				},
-			},
-			expectedConfigPaths:  []string{certManagerKubeConfigPath},
-			expectedSecretMounts: 1,
-		},
 		{
 			name: "cert-manager without kubeconfig should not reference any secret path",
 			upstreamAuth: &v1alpha1.UpstreamAuthority{
@@ -2093,30 +2018,6 @@ func TestUpstreamAuthoritySecretValidationInStatefulSet(t *testing.T) {
 			},
 			expectedVolumeNames: []string{vaultCaCertVolumeName, vaultClientKeyVolumeName},
 			excludedVolumeNames: []string{vaultClientCertVolumeName},
-		},
-		{
-			name: "cert-manager with empty KubeConfigSecretName should not create volume",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "", // empty - should not create volume
-				},
-			},
-			expectedVolumeNames: []string{},
-			excludedVolumeNames: []string{certManagerKubeConfigVolumeName},
-		},
-		{
-			name: "cert-manager with valid KubeConfigSecretName should create volume",
-			upstreamAuth: &v1alpha1.UpstreamAuthority{
-				Type: "cert-manager",
-				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
-					IssuerName:           "test-issuer",
-					KubeConfigSecretName: "kubeconfig-secret", // valid - should create volume
-				},
-			},
-			expectedVolumeNames: []string{certManagerKubeConfigVolumeName},
-			excludedVolumeNames: []string{},
 		},
 	}
 

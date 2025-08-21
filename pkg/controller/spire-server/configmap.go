@@ -20,22 +20,19 @@ import (
 
 const (
 	// Mount paths (directories where secrets are mounted)
-	certManagerKubeConfigMountPath = "/cert-manager-kubeconfig"
-	vaultCaCertMountPath           = "/vault-ca-cert"
-	vaultClientCertMountPath       = "/vault-client-cert"
-	vaultClientKeyMountPath        = "/vault-client-key"
+	vaultCaCertMountPath     = "/vault-ca-cert"
+	vaultClientCertMountPath = "/vault-client-cert"
+	vaultClientKeyMountPath  = "/vault-client-key"
 
 	// Volume names (used in Kubernetes volume definitions)
-	certManagerKubeConfigVolumeName = "cert-manager-kubeconfig"
-	vaultCaCertVolumeName           = "vault-ca-cert"
-	vaultClientCertVolumeName       = "vault-client-cert"
-	vaultClientKeyVolumeName        = "vault-client-key"
+	vaultCaCertVolumeName     = "vault-ca-cert"
+	vaultClientCertVolumeName = "vault-client-cert"
+	vaultClientKeyVolumeName  = "vault-client-key"
 
 	// Full file paths (mount path + filename)
-	certManagerKubeConfigPath = certManagerKubeConfigMountPath + "/kubeconfig"
-	defaultVaultCaCertpath    = vaultCaCertMountPath + "/ca.crt"
-	vaultClientCertPath       = vaultClientCertMountPath + "/tls.crt"
-	vaultClientKeyPath        = vaultClientKeyMountPath + "/tls.key"
+	defaultVaultCaCertpath = vaultCaCertMountPath + "/ca.crt"
+	vaultClientCertPath    = vaultClientCertMountPath + "/tls.crt"
+	vaultClientKeyPath     = vaultClientKeyMountPath + "/tls.key"
 
 	// Kubernetes auth token path
 	k8sAuthTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -212,11 +209,6 @@ func generateUpstreamAuthorityPlugin(upstreamAuthority *v1alpha1.UpstreamAuthori
 			"issuer_kind":  getOrDefault(upstreamAuthority.CertManager.IssuerKind, "Issuer"),
 			"issuer_group": getOrDefault(upstreamAuthority.CertManager.IssuerGroup, "cert-manager.io"),
 			"namespace":    upstreamAuthority.CertManager.Namespace,
-		}
-
-		// Add kubeconfig file path if secret is specified
-		if upstreamAuthority.CertManager.KubeConfigSecretName != "" {
-			pluginData["kube_config_file"] = certManagerKubeConfigPath
 		}
 
 		return map[string]interface{}{

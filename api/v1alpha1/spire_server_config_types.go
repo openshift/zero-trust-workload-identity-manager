@@ -216,12 +216,6 @@ type UpstreamAuthorityCertManager struct {
 	// namespace in which to create CertificateRequests for signing.
 	// +kubebuilder:validation:Required
 	Namespace string `json:"namespace"`
-
-	// kubeConfigSecretName is the name of the Kubernetes Secret that stores the kubeconfig
-	// used to connect to the Kubernetes cluster where cert-manager is running.
-	// If empty, in-cluster configuration will be used.
-	// +kubebuilder:validation:Optional
-	KubeConfigSecretName string `json:"kubeConfigSecretName,omitempty"`
 }
 
 // UpstreamAuthorityVault contains the configuration required to use
