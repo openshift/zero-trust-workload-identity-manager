@@ -59,7 +59,7 @@ type SpireServerSpec struct {
 	Datastore *DataStore `json:"datastore,omitempty"`
 
 	// UpstreamAuthority configures the upstream certificate authority plugin used by the SPIRE Server.
-	// This may be one of the supported plugins: "spire", "vault", or "cert-manager".
+	// This may be one of the supported plugins: "vault" or "cert-manager".
 	// If not specified, the SPIRE Server will not use an upstream authority.
 	// +kubebuilder:validation:Optional
 	UpstreamAuthority *UpstreamAuthority `json:"upstreamAuthority,omitempty"`
@@ -173,7 +173,7 @@ type CASubject struct {
 
 // UpstreamAuthority defines the configuration for the upstream certificate authority
 // that SPIRE Server will use to obtain its signing certificate.
-// It supports different plugins such as SPIRE, Vault, and cert-manager for upstream CA integration.
+// It supports different plugins such as vault, and cert-manager for upstream CA integration.
 type UpstreamAuthority struct {
 	// Type specifies the type of upstream authority plugin to use.
 	// Allowed values: "vault", "cert-manager".
