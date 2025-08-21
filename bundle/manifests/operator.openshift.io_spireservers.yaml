@@ -1239,7 +1239,7 @@ spec:
               upstreamAuthority:
                 description: |-
                   UpstreamAuthority configures the upstream certificate authority plugin used by the SPIRE Server.
-                  This may be one of the supported plugins: "spire", "vault", or "cert-manager".
+                  This may be one of the supported plugins: "vault" or "cert-manager".
                   If not specified, the SPIRE Server will not use an upstream authority.
                 properties:
                   certManager:
