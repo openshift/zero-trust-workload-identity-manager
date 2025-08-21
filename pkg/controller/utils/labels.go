@@ -11,7 +11,6 @@ const (
 	StandardInstance       = "cluster-zero-trust-workload-identity-manager"
 
 	// Component values
-	ComponentOperator     = "operator"
 	ComponentCSI          = "csi"
 	ComponentControlPlane = "control-plane"
 	ComponentNodeAgent    = "node-agent"
@@ -55,5 +54,5 @@ func SpiffeCSIDriverLabels(customLabels map[string]string) map[string]string {
 }
 
 func SpireControllerManagerLabels(customLabels map[string]string) map[string]string {
-	return StandardizedLabels("spire-controller-manager", ComponentOperator, version.SpireControllerManagerVersion, customLabels)
+	return StandardizedLabels("spire-controller-manager", ComponentControlPlane, version.SpireControllerManagerVersion, customLabels)
 }
