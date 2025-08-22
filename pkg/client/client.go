@@ -25,6 +25,7 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
@@ -45,6 +46,7 @@ var (
 		&appsv1.DaemonSet{},
 		&appsv1.StatefulSet{},
 		&admissionregistrationv1.ValidatingWebhookConfiguration{},
+		&routev1.Route{},
 	}
 
 	cacheResourceWithoutReqSelectors = []client.Object{
@@ -73,6 +75,7 @@ var (
 		&v1alpha1.SpiffeCSIDriver{},
 		&v1alpha1.SpireServer{},
 		&v1alpha1.SpireOIDCDiscoveryProvider{},
+		&routev1.Route{},
 	}
 )
 

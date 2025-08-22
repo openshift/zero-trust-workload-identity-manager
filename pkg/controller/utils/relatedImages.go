@@ -42,14 +42,6 @@ func GetSpireOIDCDiscoveryProviderImage() string {
 	return spireOIDCDiscoveryProviderImage
 }
 
-func GetSpiffeHelperImage() string {
-	spiffeHelperImage := os.Getenv(SpiffeHelperImageEnv)
-	if spiffeHelperImage == "" {
-		return ""
-	}
-	return spiffeHelperImage
-}
-
 func GetNodeDriverRegistrarImage() string {
 	nodeDriverRegistrarImage := os.Getenv(NodeDriverRegistrarImageEnv)
 	if nodeDriverRegistrarImage == "" {
