@@ -43,6 +43,7 @@ import (
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
 	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
+	webhookpkg "github.com/openshift/zero-trust-workload-identity-manager/pkg/webhook"
 
 	securityv1 "github.com/openshift/api/security/v1"
 
@@ -204,6 +205,11 @@ func main() {
 	}
 	if err = spireOIDCDiscoveryProviderControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup spire OIDC discovery provider controller manager")
+	}
+
+	// Register validating webhooks via pkg/webhook
+	if err := webhookpkg.Register(mgr); err != nil {
+		exitOnError(err, "unable to register validating webhooks")
 	}
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
