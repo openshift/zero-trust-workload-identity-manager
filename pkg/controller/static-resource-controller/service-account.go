@@ -6,6 +6,7 @@ import (
 
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 )
 
 func (r *StaticResourceReconciler) CreateOrApplyServiceAccountResources(ctx context.Context) error {
@@ -29,20 +30,24 @@ func (r *StaticResourceReconciler) listStaticServiceAccount() []*corev1.ServiceA
 
 func (r *StaticResourceReconciler) getSpiffeCsiDriverServiceAccount() *corev1.ServiceAccount {
 	spiffeCsiDriverServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpiffeCsiDriverServiceAccountAssetName))
+	spiffeCsiDriverServiceAccount.Labels = utils.SetLabel(spiffeCsiDriverServiceAccount.Labels, "app.kubernetes.io/version", version.SpiffeCsiVersion)
 	return spiffeCsiDriverServiceAccount
 }
 
 func (r *StaticResourceReconciler) getSpireAgentServiceAccount() *corev1.ServiceAccount {
 	spireAgentServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireAgentServiceAccountAssetName))
+	spireAgentServiceAccount.Labels = utils.SetLabel(spireAgentServiceAccount.Labels, "app.kubernetes.io/version", version.SpireAgentVersion)
 	return spireAgentServiceAccount
 }
 
 func (r *StaticResourceReconciler) getSpireServerServiceAccount() *corev1.ServiceAccount {
 	spireSeverServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireServerServiceAccountAssetName))
+	spireSeverServiceAccount.Labels = utils.SetLabel(spireSeverServiceAccount.Labels, "app.kubernetes.io/version", version.SpireServerVersion)
 	return spireSeverServiceAccount
 }
 
 func (r *StaticResourceReconciler) getSpireOIDCDiscoveryProviderServiceAccount() *corev1.ServiceAccount {
 	spireOIDCDiscoveryProviderServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireOIDCDiscoveryProviderServiceAccountAssetName))
+	spireOIDCDiscoveryProviderServiceAccount.Labels = utils.SetLabel(spireOIDCDiscoveryProviderServiceAccount.Labels, "app.kubernetes.io/version", version.SpireOIDCDiscoveryProviderVersion)
 	return spireOIDCDiscoveryProviderServiceAccount
 }

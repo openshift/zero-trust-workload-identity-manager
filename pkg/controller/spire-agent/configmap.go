@@ -79,18 +79,11 @@ func GenerateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent) (*corev1
 
 	spireAgentConfigHash := utils.GenerateConfigHash(agentConfigJSON)
 
-	labels := map[string]string{
-		"app":                      "spire-agent",
-		utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-	}
-	for key, value := range spireAgentConfig.Spec.Labels {
-		labels[key] = value
-	}
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireAgentLabels(spireAgentConfig.Spec.Labels),
 			Annotations: map[string]string{
 				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
 			},

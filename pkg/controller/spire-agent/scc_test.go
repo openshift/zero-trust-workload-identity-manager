@@ -22,12 +22,7 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	}
 
 	scc := generateSpireAgentSCC(config)
-
-	expectedLabels := map[string]string{
-		"app":                      "spire-agent",
-		utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-		"custom-label":             "custom-value",
-	}
+	expectedLabels := utils.SpireAgentLabels(customLabels)
 
 	if scc.Name != "spire-agent" {
 		t.Errorf("expected SCC name to be 'spire-agent', got %s", scc.Name)

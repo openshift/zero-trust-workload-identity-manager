@@ -86,23 +86,16 @@ server {
   }
 }`
 
-	labels := map[string]string{}
-	for key, value := range cr.Spec.Labels {
-		labels[key] = value
-	}
-	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
-	configMap := &corev1.ConfigMap{
+	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireOIDCDiscoveryProviderLabels(cr.Spec.Labels),
 		},
 		Data: map[string]string{
 			"oidc-discovery-provider.conf": string(oidcJSON),
 			"spiffe-helper.conf":           spiffeHelperConf,
 			"default.conf":                 defaultConf,
 		},
-	}
-
-	return configMap, nil
+	}, nil
 }

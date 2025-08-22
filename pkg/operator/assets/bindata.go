@@ -80,6 +80,7 @@ metadata:
   labels:
     security.openshift.io/csi-ephemeral-volume-profile: restricted
     app.kubernetes.io/name: spiffe-csi-driver
+    app.kubernetes.io/version: "0.2.7"
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
 
