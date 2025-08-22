@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-06-14T09:05:02Z"
+    createdAt: "2025-08-19T10:19:59Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -302,11 +302,13 @@ spec:
               containers:
               - args:
                 - --health-probe-bind-address=:8081
+                - --unsupported-addon-features=$(UNSUPPORTED_ADDON_FEATURES)
                 command:
                 - /usr/bin/zero-trust-workload-identity-manager
                 env:
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
+                - name: UNSUPPORTED_ADDON_FEATURES
                 - name: RELATED_IMAGE_SPIRE_SERVER
                   value: ghcr.io/spiffe/spire-server:1.12.0
                 - name: RELATED_IMAGE_SPIRE_AGENT

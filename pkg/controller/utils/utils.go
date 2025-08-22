@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -136,6 +137,11 @@ func GenerateMapHash(m map[string]string) string {
 	// Compute the hash
 	hash := sha256.Sum256([]byte(builder.String()))
 	return hex.EncodeToString(hash[:])
+}
+
+// IsAutoReconcileDisabled returns true if the DISABLE_AUTO_RECONCILE feature gate is enabled.
+func IsAutoReconcileDisabled() bool {
+	return featuregate.IsAutoReconcileDisabled()
 }
 
 func StringToBool(s string) bool {

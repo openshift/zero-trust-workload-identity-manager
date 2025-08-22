@@ -3,6 +3,7 @@ package static_resource_controller
 import (
 	"context"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -136,6 +137,10 @@ func hasControllerManagedLabel(obj client.Object) bool {
 // Reconcile function to checks for the ZeroTrustWorkloadIdentityManager and creates the static resources required for
 // the operands to be used, and reflect the reconciliation status on the ZeroTrustWorkloadIdentityManager CR.
 func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if utils.IsAutoReconcileDisabled() {
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
+		return ctrl.Result{}, nil
+	}
 	var config v1alpha1.ZeroTrustWorkloadIdentityManager
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)
 	if err != nil {
