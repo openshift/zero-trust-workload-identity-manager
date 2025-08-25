@@ -970,8 +970,7 @@ spec:
                 description: agentSocketName is the name of the agent socket.
                 type: string
               jwtIssuer:
-                description: jwtIssuer is the path to JWT issuer. Defaults to "oidc-discovery.<trustDomain>"
-                  if unset
+                description: jwtIssuer is the JWT issuer url.
                 type: string
               labels:
                 additionalProperties:
@@ -1098,6 +1097,7 @@ spec:
                 description: trustDomain to be used for the SPIFFE identifiers
                 type: string
             required:
+            - jwtIssuer
             - trustDomain
             type: object
           status:

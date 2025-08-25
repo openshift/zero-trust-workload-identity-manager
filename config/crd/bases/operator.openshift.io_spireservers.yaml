@@ -1058,8 +1058,7 @@ spec:
                 - maxOpenConns
                 type: object
               jwtIssuer:
-                description: jwtIssuer is the JWT issuer domain. Defaults to oidc-discovery.$trustDomain
-                  if unset
+                description: jwtIssuer is the JWT issuer url.
                 type: string
               keyManager:
                 description: keyManager has configs for the spire server key manager.
@@ -1239,6 +1238,7 @@ spec:
                 type: string
             required:
             - clusterName
+            - jwtIssuer
             - trustDomain
             type: object
           status:

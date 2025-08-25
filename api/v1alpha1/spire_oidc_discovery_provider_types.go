@@ -33,8 +33,8 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:="spire-agent.sock"
 	AgentSocketName string `json:"agentSocketName,omitempty"`
 
-	// jwtIssuer is the path to JWT issuer. Defaults to "oidc-discovery.<trustDomain>" if unset
-	// +kubebuilder:validation:Optional
+	// jwtIssuer is the JWT issuer url.
+	// +kubebuilder:validation:Required
 	JwtIssuer string `json:"jwtIssuer,omitempty"`
 
 	// replicaCount is the number of replicas for the OIDC provider.
