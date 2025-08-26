@@ -145,9 +145,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					Name: "cluster",
 				},
 				Spec: operatorv1alpha1.SpireServerSpec{
-					TrustDomain:     appDomain,
-					ClusterName:     clusterName,
-					BundleConfigMap: bundleConfigMap,
+					TrustDomain:         appDomain,
+					ClusterName:         clusterName,
+					BundleConfigMap:     bundleConfigMap,
+					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
+					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
+					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
 					CASubject: &operatorv1alpha1.CASubject{
 						CommonName:   appDomain,
 						Country:      "US",
@@ -454,7 +457,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(newPods.Items[0].Spec.NodeName).NotTo(Equal(originalNodeName), "pod should be rescheduled to a different node")
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
 		})
-		
+
 		It("SPIRE Agent containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireAgent object")
 			spireAgent := &operatorv1alpha1.SpireAgent{}
