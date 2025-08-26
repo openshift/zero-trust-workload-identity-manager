@@ -149,6 +149,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					ClusterName:     clusterName,
 					BundleConfigMap: bundleConfigMap,
 					JwtIssuer:       fmt.Sprintf("https://oidc-discovery.%s", appDomain),
+					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
+					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
+					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
 					CASubject: &operatorv1alpha1.CASubject{
 						CommonName:   appDomain,
 						Country:      "US",
