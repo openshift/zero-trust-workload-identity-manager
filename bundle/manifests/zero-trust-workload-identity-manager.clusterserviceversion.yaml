@@ -6,6 +6,314 @@ metadata:
       [
         {
           "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpiffeCSIDriver",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "affinity": {
+              "nodeAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                  "nodeSelectorTerms": [
+                    {
+                      "matchExpressions": [
+                        {
+                          "key": "kubernetes.io/arch",
+                          "operator": "In",
+                          "values": [
+                            "amd64",
+                            "arm64"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "labels": {
+              "component": "csi-driver",
+              "environment": "production",
+              "team": "security"
+            },
+            "nodeSelector": {
+              "kubernetes.io/os": "linux"
+            },
+            "pluginName": "csi.spiffe.io",
+            "resources": {
+              "limits": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              }
+            },
+            "tolerations": [
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/control-plane",
+                "operator": "Exists"
+              },
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/master",
+                "operator": "Exists"
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpireAgent",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "affinity": {
+              "nodeAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                  "nodeSelectorTerms": [
+                    {
+                      "matchExpressions": [
+                        {
+                          "key": "kubernetes.io/arch",
+                          "operator": "In",
+                          "values": [
+                            "amd64",
+                            "arm64"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "bundleConfigMap": "spire-bundle",
+            "clusterName": "example-cluster",
+            "labels": {
+              "component": "spire-agent",
+              "environment": "production",
+              "team": "security"
+            },
+            "nodeAttestor": {
+              "k8sPSATEnabled": "true"
+            },
+            "nodeSelector": {
+              "kubernetes.io/os": "linux"
+            },
+            "resources": {
+              "limits": {
+                "cpu": "200m",
+                "memory": "256Mi"
+              },
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              }
+            },
+            "tolerations": [
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/control-plane",
+                "operator": "Exists"
+              },
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/master",
+                "operator": "Exists"
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ],
+            "trustDomain": "example.org"
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpireOIDCDiscoveryProvider",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "affinity": {
+              "podAntiAffinity": {
+                "preferredDuringSchedulingIgnoredDuringExecution": [
+                  {
+                    "podAffinityTerm": {
+                      "labelSelector": {
+                        "matchLabels": {
+                          "app": "spire-oidc-discovery-provider"
+                        }
+                      },
+                      "topologyKey": "kubernetes.io/hostname"
+                    },
+                    "weight": 100
+                  },
+                  {
+                    "podAffinityTerm": {
+                      "labelSelector": {
+                        "matchLabels": {
+                          "app": "spire-oidc-discovery-provider"
+                        }
+                      },
+                      "topologyKey": "topology.kubernetes.io/zone"
+                    },
+                    "weight": 50
+                  }
+                ]
+              }
+            },
+            "labels": {
+              "component": "oidc-discovery",
+              "environment": "production",
+              "team": "security"
+            },
+            "nodeSelector": {
+              "kubernetes.io/os": "linux"
+            },
+            "replicaCount": 2,
+            "resources": {
+              "limits": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "requests": {
+                "cpu": "25m",
+                "memory": "32Mi"
+              }
+            },
+            "tolerations": [
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/control-plane",
+                "operator": "Exists"
+              }
+            ],
+            "trustDomain": "example.org"
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpireServer",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "affinity": {
+              "podAntiAffinity": {
+                "preferredDuringSchedulingIgnoredDuringExecution": [
+                  {
+                    "podAffinityTerm": {
+                      "labelSelector": {
+                        "matchLabels": {
+                          "app": "spire-server"
+                        }
+                      },
+                      "topologyKey": "kubernetes.io/hostname"
+                    },
+                    "weight": 100
+                  }
+                ]
+              }
+            },
+            "clusterName": "example-cluster",
+            "datastore": {
+              "connMaxLifetime": 3600,
+              "connectionString": "/run/spire/data/datastore.sqlite3",
+              "databaseType": "sqlite3",
+              "disableMigration": "false",
+              "maxIdleConns": 2,
+              "maxOpenConns": 100
+            },
+            "jwtIssuer": "oidc-discovery.example.org",
+            "keyManager": {
+              "diskEnabled": "true",
+              "memoryEnabled": "false"
+            },
+            "labels": {
+              "environment": "production",
+              "team": "security"
+            },
+            "nodeSelector": {
+              "kubernetes.io/os": "linux",
+              "node-role.kubernetes.io/control-plane": ""
+            },
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            },
+            "tolerations": [
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/control-plane",
+                "operator": "Exists"
+              },
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/master",
+                "operator": "Exists"
+              }
+            ],
+            "trustDomain": "example.org"
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
           "kind": "ZeroTrustWorkloadIdentityManager",
           "metadata": {
             "labels": {
@@ -14,15 +322,211 @@ metadata:
               "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
               "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
             },
-            "name": "zerotrustworkloadidentitymanager-sample"
+            "name": "cluster"
           },
-          "spec": null
+          "spec": {
+            "affinity": {
+              "nodeAffinity": {
+                "preferredDuringSchedulingIgnoredDuringExecution": [
+                  {
+                    "preference": {
+                      "matchExpressions": [
+                        {
+                          "key": "node-role.kubernetes.io/control-plane",
+                          "operator": "Exists"
+                        }
+                      ]
+                    },
+                    "weight": 100
+                  }
+                ]
+              }
+            },
+            "labels": {
+              "environment": "production",
+              "managed-by": "zero-trust-workload-identity-manager",
+              "team": "security"
+            },
+            "logLevel": 2,
+            "namespace": "zero-trust-workload-identity-manager",
+            "nodeSelector": {
+              "kubernetes.io/os": "linux"
+            },
+            "resources": {
+              "limits": {
+                "cpu": "200m",
+                "memory": "256Mi"
+              },
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              }
+            },
+            "tolerations": [
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/control-plane",
+                "operator": "Exists"
+              },
+              {
+                "effect": "NoSchedule",
+                "key": "node-role.kubernetes.io/master",
+                "operator": "Exists"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterFederatedTrustDomain",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "partner-trust-domain"
+          },
+          "spec": {
+            "bundleEndpointProfile": {
+              "type": "https_web"
+            },
+            "bundleEndpointURL": "https://spire-server.partner.example.org:8443/bundle",
+            "trustDomain": "partner.example.org",
+            "trustDomainBundle": "-----BEGIN CERTIFICATE-----\nMIIBKjCB0aADAgECAgEBMAoGCCqGSM49BAMCMBQxEjAQBgNVBAMMCUV4YW1wbGUg\nMTAeFw0yMzEyMDEwOTIzMzlaFw0yNDEyMDEwOTIzMzlaMBQxEjAQBgNVBAMMCUV4\nYW1wbGUgMTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABGvMdLyLhL8YPhBfNxLy\nc1vYn3WZGUCg46+8P0w2hN+dVLyJ3Dxz2pOqMdGcRB4V5Gn4JxGKY+HfG6CpJzO2\njCGjITAfMB0GA1UdDgQWBBQoFX7ThjZ/YTFz3Y4L4e8Y6oJw9zAKBggqhkjOPQQD\nAgNIADBFAiEA9v2/qBpXd8YX9c6eXq7PQVz4pRqKYH6Q8Y+2S7Dw9QJFAiAoJBSy\n4u5Q6rEWnYgF5z4X8D5k6aHgOXCNQR8gLzCGbg==\n-----END CERTIFICATE----- "
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterFederatedTrustDomain",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "staging-trust-domain"
+          },
+          "spec": {
+            "bundleEndpointProfile": {
+              "endpointSPIFFEID": "spiffe://staging.example.org/spire/server",
+              "type": "https_spiffe"
+            },
+            "bundleEndpointURL": "https://spire-server.staging.example.org:8443/bundle",
+            "trustDomain": "staging.example.org"
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterSPIFFEID",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "example-workload"
+          },
+          "spec": {
+            "admin": false,
+            "autoPopulateDNSNames": true,
+            "dnsNameTemplates": [
+              "{{ .PodSpec.ServiceAccountName }}.{{ .PodSpec.Namespace }}.svc.cluster.local",
+              "{{ index .PodSpec.Labels \"app\" }}.{{ .PodSpec.Namespace }}.example.org"
+            ],
+            "downstream": false,
+            "federatesWith": [
+              "partner.example.org",
+              "staging.example.org"
+            ],
+            "hint": "Production web server workloads",
+            "jwtTtl": "15m",
+            "namespaceSelector": {
+              "matchExpressions": [
+                {
+                  "key": "name",
+                  "operator": "NotIn",
+                  "values": [
+                    "kube-system",
+                    "kube-public"
+                  ]
+                }
+              ],
+              "matchLabels": {
+                "spiffe.io/trust-zone": "production"
+              }
+            },
+            "podSelector": {
+              "matchExpressions": [
+                {
+                  "key": "version",
+                  "operator": "In",
+                  "values": [
+                    "v1",
+                    "v2"
+                  ]
+                }
+              ],
+              "matchLabels": {
+                "app": "web-server"
+              }
+            },
+            "spiffeIDTemplate": "spiffe://example.org/ns/{{ .PodSpec.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}",
+            "ttl": "1h",
+            "workloadSelectorTemplates": [
+              "k8s:ns:{{ .PodSpec.Namespace }}",
+              "k8s:sa:{{ .PodSpec.ServiceAccountName }}",
+              "k8s:pod-label:app:{{ index .PodSpec.Labels \"app\" }}",
+              "k8s:container-name:{{ (index .PodSpec.Containers 0).Name }}"
+            ]
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterStaticEntry",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "example-static-entry"
+          },
+          "spec": {
+            "admin": false,
+            "dnsNames": [
+              "postgresql.database.svc.cluster.local",
+              "postgres.example.org",
+              "db.internal.example.org"
+            ],
+            "downstream": false,
+            "federatesWith": [
+              "partner.example.org",
+              "backup.example.org"
+            ],
+            "hint": "PostgreSQL database server in production namespace",
+            "jwtSVIDTTL": "1h",
+            "parentID": "spiffe://example.org/spire/agent/k8s_psat/example-cluster/{{ .NodeSpec.UID }}",
+            "selectors": [
+              "k8s:ns:database",
+              "k8s:sa:postgresql-service-account",
+              "k8s:pod-label:app:postgresql",
+              "k8s:container-name:postgres"
+            ],
+            "spiffeID": "spiffe://example.org/database/postgresql",
+            "storeSVID": true,
+            "x509SVIDTTL": "24h"
+          }
         }
       ]
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-06-14T09:05:02Z"
+    createdAt: "2025-07-28T06:36:05Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
