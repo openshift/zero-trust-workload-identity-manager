@@ -14,6 +14,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func TestIsAutoReconcileDisabled(t *testing.T) {
+	// Test that IsAutoReconcileDisabled delegates to featuregate.IsAutoReconcileDisabled()
+	// Since we can't easily mock the featuregate package here, we'll just test that
+	// the function returns false when no feature gates are configured
+
+	// With no feature gates configured, should return false
+	if IsAutoReconcileDisabled() {
+		t.Fatal("expected false when no feature gates are configured")
+	}
+}
+
 // Helper function to set environment variable and return cleanup function
 func setEnvVar(key, value string) func() {
 	original := os.Getenv(key)

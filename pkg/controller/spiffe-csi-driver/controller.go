@@ -3,8 +3,10 @@ package spiffe_csi_driver
 import (
 	"context"
 	"fmt"
+
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -102,6 +104,24 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 	}(reconcileStatus)
+
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(spiffeCSIDriver.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
 
 	SpiffeCsiSCC := generateSpiffeCSIDriverSCC()
 	if err := controllerutil.SetControllerReference(&spiffeCSIDriver, SpiffeCsiSCC, r.scheme); err != nil {

@@ -3,6 +3,7 @@ package static_resource_controller
 import (
 	"context"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -183,6 +184,25 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 		}
 	}(reconcileStatus)
+
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(config.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
+
 	err = r.CreateOrApplyRbacResources(ctx)
 	if err != nil {
 		r.log.Error(err, "failed to create or apply rbac resources")

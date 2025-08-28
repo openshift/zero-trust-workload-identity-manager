@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -107,6 +108,23 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}(reconcileStatus)
 
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(server.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
 	if server.Spec.JwtIssuer == "" {
 		server.Spec.JwtIssuer = "https://oidc-discovery." + server.Spec.TrustDomain
 	}

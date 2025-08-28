@@ -2,10 +2,12 @@ package spire_oidc_discovery_provider
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/featuregate"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -102,6 +104,24 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			}
 		}
 	}(reconcileStatus)
+
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(oidcDiscoveryProviderConfig.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
 
 	if oidcDiscoveryProviderConfig.Spec.JwtIssuer == "" {
 		oidcDiscoveryProviderConfig.Spec.JwtIssuer = "oidc-discovery." + oidcDiscoveryProviderConfig.Spec.TrustDomain
