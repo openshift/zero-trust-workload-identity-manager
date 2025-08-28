@@ -16,6 +16,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/pointer"
@@ -142,6 +143,16 @@ func GenerateMapHash(m map[string]string) string {
 // IsAutoReconcileDisabled returns true if the DISABLE_AUTO_RECONCILE feature gate is enabled.
 func IsAutoReconcileDisabled() bool {
 	return featuregate.IsAutoReconcileDisabled()
+}
+
+// HasCondition checks if a condition with the given type already exists in the conditions slice
+func HasCondition(conditions []metav1.Condition, conditionType string) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType {
+			return true
+		}
+	}
+	return false
 }
 
 func StringToBool(s string) bool {

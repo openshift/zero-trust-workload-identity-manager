@@ -4,7 +4,7 @@ const (
 	// UnsupportedAddonFeaturesEnv Environment variable for unsupported addon features
 	UnsupportedAddonFeaturesEnv = "UNSUPPORTED_ADDON_FEATURES"
 
-	// DisableAutoReconcileFeature Feature gates
-	DisableAutoReconcileFeature = "DISABLE_AUTO_RECONCILE"
+	// TechPreviewFeature Feature gates
+	TechPreviewFeature = "TECH_PREVIEW"
 	// Add more feature gates here as needed
 )

@@ -70,10 +70,6 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 }
 
 func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if utils.IsAutoReconcileDisabled() {
-		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
-		return ctrl.Result{}, nil
-	}
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &spiffeCSIDriver); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -108,6 +104,24 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 	}(reconcileStatus)
+
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(spiffeCSIDriver.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
 
 	SpiffeCsiSCC := generateSpiffeCSIDriverSCC()
 	if err := controllerutil.SetControllerReference(&spiffeCSIDriver, SpiffeCsiSCC, r.scheme); err != nil {

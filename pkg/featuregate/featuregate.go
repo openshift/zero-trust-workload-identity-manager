@@ -85,7 +85,7 @@ func GetFeatureGates() map[string]bool {
 
 // IsAutoReconcileDisabled returns true if the DISABLE_AUTO_RECONCILE feature gate is enabled
 func IsAutoReconcileDisabled() bool {
-	return IsFeatureGateEnabled(DisableAutoReconcileFeature)
+	return IsFeatureGateEnabled(TechPreviewFeature)
 }
 
 // GetEnabledFeatures returns a slice of all enabled feature gate names

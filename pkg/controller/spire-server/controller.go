@@ -74,10 +74,6 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 }
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if utils.IsAutoReconcileDisabled() {
-		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
-		return ctrl.Result{}, nil
-	}
 	var server v1alpha1.SpireServer
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &server); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -112,6 +108,23 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}(reconcileStatus)
 
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(server.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
 	if server.Spec.JwtIssuer == "" {
 		server.Spec.JwtIssuer = "https://oidc-discovery." + server.Spec.TrustDomain
 	}

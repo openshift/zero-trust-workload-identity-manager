@@ -137,10 +137,6 @@ func hasControllerManagedLabel(obj client.Object) bool {
 // Reconcile function to checks for the ZeroTrustWorkloadIdentityManager and creates the static resources required for
 // the operands to be used, and reflect the reconciliation status on the ZeroTrustWorkloadIdentityManager CR.
 func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if utils.IsAutoReconcileDisabled() {
-		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.DisableAutoReconcileFeature)
-		return ctrl.Result{}, nil
-	}
 	var config v1alpha1.ZeroTrustWorkloadIdentityManager
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)
 	if err != nil {
@@ -188,6 +184,25 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 		}
 	}(reconcileStatus)
+
+	if utils.IsAutoReconcileDisabled() {
+		reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.TechPreviewFeatureGateEnabled,
+			Message: "FeatureGate is enabled",
+		}
+		r.log.Info("Auto-reconciliation disabled to allow manual management", "feature", featuregate.TechPreviewFeature)
+		return ctrl.Result{}, nil
+	} else {
+		if utils.HasCondition(config.Status.ConditionalStatus.Conditions, utils.FeatureGateStatusType) {
+			reconcileStatus[utils.FeatureGateStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.TechPreviewFeatureGateDisabled,
+				Message: "FeatureGate is disabled",
+			}
+		}
+	}
+
 	err = r.CreateOrApplyRbacResources(ctx)
 	if err != nil {
 		r.log.Error(err, "failed to create or apply rbac resources")

@@ -131,12 +131,12 @@ func TestIsAutoReconcileDisabled(t *testing.T) {
 		},
 		{
 			name:             "direct feature gate enabled",
-			featureGateFlags: "DISABLE_AUTO_RECONCILE=true",
+			featureGateFlags: "TECH_PREVIEW=true",
 			expectedDisabled: true,
 		},
 		{
 			name:             "direct feature gate disabled",
-			featureGateFlags: "DISABLE_AUTO_RECONCILE=false",
+			featureGateFlags: "TECH_PREVIEW=false",
 			expectedDisabled: false,
 		},
 	}
