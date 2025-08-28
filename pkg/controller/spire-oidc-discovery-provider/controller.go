@@ -39,6 +39,7 @@ const (
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
 	ConfigurationValidation        = "ConfigurationValidation"
 	SpireOIDCManagedRouteGeneration = "SpireOIDCManagedRouteGeneration"
+	ManagedRouteGeneration         = "ManagedRouteGeneration"
 )
 
 type reconcilerStatus struct {
@@ -334,7 +335,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		if err != nil && kerrors.IsNotFound(err) {
 			if err = r.ctrlClient.Create(ctx, route); err != nil {
 				r.log.Error(err, "Failed to create route")
-				reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+				reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
 					Reason:  "SpireOIDCManagedRouteCreationFailed",
 					Message: err.Error(),
@@ -342,24 +343,36 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 				return ctrl.Result{}, err
 			}
 			r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
-		} else if err != nil {
+		} else if err == nil {
+			updateManagedRouteSpec(&existingRoute, route)
+			if err = r.ctrlClient.Update(ctx, &existingRoute); err != nil {
+				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
+				reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireOIDCManagedRouteCreationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, err
+			}
+			r.log.Info("Updated spire oidc discovery provider deployment")
+		} else {
 			r.log.Error(err, "Failed to get existing route")
-			reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+			reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  "SpireOIDCManagedRouteRetrievalFailed",
 				Message: err.Error(),
 			}
 			return ctrl.Result{}, err
 		}
-		reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+		reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
 			Status:  metav1.ConditionTrue,
 			Reason:  "SpireOIDCManagedRouteCreationSucceeded",
 			Message: "Spire OIDC Managed Route created",
 		}
 	} else {
-		reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionTrue,
-			Reason:  "SpireOIDCRouteCreationDisabled",
+		reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "SpireOIDCManagedRouteCreationDisabled",
 			Message: "Spire OIDC Managed Route disabled",
 		}
 	}
@@ -421,4 +434,13 @@ func needsUpdate(current, desired appsv1.Deployment) bool {
 		return true
 	}
 	return false
+}
+
+// updateManagedRouteSpec
+func updateManagedRouteSpec(current, desired *routev1.Route) {
+	current.Spec.Host = desired.Spec.Host
+	current.Spec.TLS.Termination = desired.Spec.TLS.Termination
+	current.Spec.TLS.InsecureEdgeTerminationPolicy = desired.Spec.TLS.InsecureEdgeTerminationPolicy
+	current.Spec.To.Kind = desired.Spec.To.Kind
+	current.Spec.To.Name = desired.Spec.To.Name
 }
