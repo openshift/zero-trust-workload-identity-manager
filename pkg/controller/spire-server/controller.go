@@ -37,6 +37,7 @@ const (
 	SpireServerConfigMapGeneration            = "SpireServerConfigMapGeneration"
 	SpireControllerManagerConfigMapGeneration = "SpireControllerManagerConfigMapGeneration"
 	SpireBundleConfigMapGeneration            = "SpireBundleConfigMapGeneration"
+	ConfigurationValidation                   = "ConfigurationValidation"
 )
 
 type reconcilerStatus struct {
@@ -107,8 +108,24 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}(reconcileStatus)
 
-	if server.Spec.JwtIssuer == "" {
-		server.Spec.JwtIssuer = "https://oidc-discovery." + server.Spec.TrustDomain
+	// Validate JWT issuer URL format to prevent unintended formats during server configuration
+	if err := utils.IsValidURL(server.Spec.JwtIssuer); err != nil {
+		r.log.Error(err, "Invalid JWT issuer URL in SpireServer configuration", "jwtIssuer", server.Spec.JwtIssuer)
+		reconcileStatus[ConfigurationValidation] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "InvalidJWTIssuerURL",
+			Message: fmt.Sprintf("JWT issuer URL validation failed: %v", err),
+		}
+		return ctrl.Result{}, err
+	}
+	// Only set to true if the condition previously existed as false
+	existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, ConfigurationValidation)
+	if existingCondition != nil && existingCondition.Status == metav1.ConditionFalse {
+		reconcileStatus[ConfigurationValidation] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "ValidJWTIssuerURL",
+			Message: "JWT issuer URL validation passed",
+		}
 	}
 
 	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)
