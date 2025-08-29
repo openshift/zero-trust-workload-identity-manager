@@ -37,6 +37,7 @@ const (
 	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
 	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
+	ManagedRouteReady              = "ManagedRouteReady"
 	ConfigurationValidation        = "ConfigurationValidation"
 	SpireOIDCManagedRouteGeneration = "SpireOIDCManagedRouteGeneration"
 	ManagedRouteGeneration         = "ManagedRouteGeneration"
@@ -317,11 +318,11 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	if utils.StringToBool(oidcDiscoveryProviderConfig.Spec.ManagedRoute) {
 		// Create Route for OIDC Discovery Provider
 		route := generateOIDCDiscoveryProviderRoute(&oidcDiscoveryProviderConfig)
-		if err = controllerutil.SetControllerReference(&oidcDiscoveryProviderConfig, route, r.scheme); err != nil {
+		if err = controllerutil.SetControllerReference(deployment, route, r.scheme); err != nil {
 			r.log.Error(err, "failed to set controller reference for route")
-			reconcileStatus[SpireOIDCManagedRouteGeneration] = reconcilerStatus{
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
-				Reason:  "SpireOIDCManagedRouteGenerationFailed",
+				Reason:  "ManagedRouteGenerationFailed",
 				Message: err.Error(),
 			}
 			return ctrl.Result{}, err
@@ -335,44 +336,43 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		if err != nil && kerrors.IsNotFound(err) {
 			if err = r.ctrlClient.Create(ctx, route); err != nil {
 				r.log.Error(err, "Failed to create route")
-				reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
-					Reason:  "SpireOIDCManagedRouteCreationFailed",
+					Reason:  "ManagedRouteCreationFailed",
 					Message: err.Error(),
 				}
 				return ctrl.Result{}, err
 			}
 			r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
-		} else if err == nil {
-			updateManagedRouteSpec(&existingRoute, route)
+		} else if err == nil && checkRouteConflict(&existingRoute, route) {
 			if err = r.ctrlClient.Update(ctx, &existingRoute); err != nil {
 				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
-				reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
-					Reason:  "SpireOIDCManagedRouteCreationFailed",
-					Message: err.Error(),
+					Reason:  "ManagedRouteConflict",
+					Message: "Conflict in manage route desired configuration",
 				}
 				return ctrl.Result{}, err
 			}
 			r.log.Info("Updated spire oidc discovery provider deployment")
 		} else {
 			r.log.Error(err, "Failed to get existing route")
-			reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  "SpireOIDCManagedRouteRetrievalFailed",
 				Message: err.Error(),
 			}
 			return ctrl.Result{}, err
 		}
-		reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 			Status:  metav1.ConditionTrue,
-			Reason:  "SpireOIDCManagedRouteCreationSucceeded",
+			Reason:  "ManagedRouteCreated",
 			Message: "Spire OIDC Managed Route created",
 		}
 	} else {
-		reconcileStatus[ManagedRouteGeneration] = reconcilerStatus{
+		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 			Status:  metav1.ConditionFalse,
-			Reason:  "SpireOIDCManagedRouteCreationDisabled",
+			Reason:  "ManagedRouteDisabled",
 			Message: "Spire OIDC Managed Route disabled",
 		}
 	}
@@ -436,11 +436,13 @@ func needsUpdate(current, desired appsv1.Deployment) bool {
 	return false
 }
 
-// updateManagedRouteSpec
-func updateManagedRouteSpec(current, desired *routev1.Route) {
-	current.Spec.Host = desired.Spec.Host
-	current.Spec.TLS.Termination = desired.Spec.TLS.Termination
-	current.Spec.TLS.InsecureEdgeTerminationPolicy = desired.Spec.TLS.InsecureEdgeTerminationPolicy
-	current.Spec.To.Kind = desired.Spec.To.Kind
-	current.Spec.To.Name = desired.Spec.To.Name
+// checkRouteConflict returns true if desired & current routes has conflicts else return false
+func checkRouteConflict(current, desired *routev1.Route) bool {
+	if current.Spec.TLS == nil || current.Spec.TLS.Termination != desired.Spec.TLS.Termination ||
+		current.Spec.Host != desired.Spec.Host ||
+		current.Spec.To.Name != desired.Spec.To.Name ||
+		current.Spec.To.Kind != desired.Spec.To.Kind {
+		return true
+	}
+	return false
 }
