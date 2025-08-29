@@ -315,10 +315,22 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		Message: "Spire OIDC Deployment created",
 	}
 
+	reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+		Status:  metav1.ConditionFalse,
+		Reason:  "ManagedRouteDisabled",
+		Message: "Spire OIDC Managed Route disabled",
+	}
+
 	if utils.StringToBool(oidcDiscoveryProviderConfig.Spec.ManagedRoute) {
 		// Create Route for OIDC Discovery Provider
+		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "ManagedRouteCreated",
+			Message: "Spire OIDC Managed Route created",
+		}
+
 		route := generateOIDCDiscoveryProviderRoute(&oidcDiscoveryProviderConfig)
-		if err = controllerutil.SetControllerReference(deployment, route, r.scheme); err != nil {
+		if err = controllerutil.SetControllerReference(&oidcDiscoveryProviderConfig, route, r.scheme); err != nil {
 			r.log.Error(err, "failed to set controller reference for route")
 			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
@@ -345,35 +357,21 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			}
 			r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
 		} else if err == nil && checkRouteConflict(&existingRoute, route) {
-			if err = r.ctrlClient.Update(ctx, &existingRoute); err != nil {
-				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
-				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
-					Status:  metav1.ConditionFalse,
-					Reason:  "ManagedRouteConflict",
-					Message: "Conflict in manage route desired configuration",
-				}
-				return ctrl.Result{}, err
+			r.log.Error(err, "Found conflicting managed route")
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "ManagedRouteConflict",
+				Message: "Conflict in manage route desired configuration",
 			}
-			r.log.Info("Updated spire oidc discovery provider deployment")
-		} else {
+			return ctrl.Result{}, err
+		} else if err != nil {
 			r.log.Error(err, "Failed to get existing route")
 			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
-				Reason:  "SpireOIDCManagedRouteRetrievalFailed",
+				Reason:  "ManagedRouteRetrievalFailed",
 				Message: err.Error(),
 			}
 			return ctrl.Result{}, err
-		}
-		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
-			Status:  metav1.ConditionTrue,
-			Reason:  "ManagedRouteCreated",
-			Message: "Spire OIDC Managed Route created",
-		}
-	} else {
-		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "ManagedRouteDisabled",
-			Message: "Spire OIDC Managed Route disabled",
 		}
 	}
 
@@ -441,7 +439,9 @@ func checkRouteConflict(current, desired *routev1.Route) bool {
 	if current.Spec.TLS == nil || current.Spec.TLS.Termination != desired.Spec.TLS.Termination ||
 		current.Spec.Host != desired.Spec.Host ||
 		current.Spec.To.Name != desired.Spec.To.Name ||
-		current.Spec.To.Kind != desired.Spec.To.Kind {
+		current.Spec.To.Kind != desired.Spec.To.Kind ||
+		current.Spec.Port == nil ||
+		current.Spec.Port.TargetPort != desired.Spec.Port.TargetPort {
 		return true
 	}
 	return false
