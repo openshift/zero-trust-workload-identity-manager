@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-06-14T09:05:02Z"
+    createdAt: "2025-08-29T11:05:54Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -382,17 +382,17 @@ spec:
   provider:
     name: Red Hat
   relatedImages:
-  - image: ghcr.io/spiffe/spire-server:1.12.0
+  - image: ghcr.io/spiffe/spire-server:1.12.4
     name: spire-server
-  - image: ghcr.io/spiffe/spire-agent:1.12.0
+  - image: ghcr.io/spiffe/spire-agent:1.12.4
     name: spire-agent
-  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.3
+  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.7
     name: spiffe-csi-driver
-  - image: ghcr.io/spiffe/oidc-discovery-provider:1.12.0
+  - image: ghcr.io/spiffe/oidc-discovery-provider:1.12.4
     name: spire-oidc-discovery-provider
-  - image: ghcr.io/spiffe/spire-controller-manager:0.6.0
+  - image: ghcr.io/spiffe/spire-controller-manager:0.6.2
     name: spire-controller-manager
-  - image: ghcr.io/spiffe/spiffe-helper:0.9.1
+  - image: ghcr.io/spiffe/spiffe-helper:0.10.0
     name: spiffe-helper
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
     name: node-driver-registrar

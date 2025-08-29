@@ -22,9 +22,9 @@ func generateSpireIODCDiscoveryProviderSpiffeID() *spiffev1alpha1.ClusterSPIFFEI
 			AutoPopulateDNSNames: true,
 			PodSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"component":         "oidc-discovery-provider",
-					"release":           "spire",
-					"release-namespace": "zero-trust-workload-identity-manager",
+					"app.kubernetes.io/name":      "spiffe-oidc-discovery-provider",
+					"app.kubernetes.io/instance":  "cluster-zero-trust-workload-identity-manager",
+					"app.kubernetes.io/component": "discovery",
 				},
 			},
 			NamespaceSelector: &metav1.LabelSelector{

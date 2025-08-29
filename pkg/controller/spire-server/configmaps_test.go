@@ -485,7 +485,7 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 			}
 
 			// Check labels
-			if cm.Labels["app"] != "spire-server" {
+			if cm.Labels["app.kubernetes.io/name"] != "spire-server" {
 				t.Errorf("Expected app label 'spire-server', got %q", cm.Labels["app"])
 			}
 

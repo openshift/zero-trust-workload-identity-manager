@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"sigs.k8s.io/yaml"
 	"strings"
 
@@ -190,12 +189,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 		Metadata: metav1.ObjectMeta{
 			Name:      "spire-controller-manager",
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":     "server",
-				"app.kubernetes.io/instance": "spire",
-				"app.kubernetes.io/version":  version.SpireControllerManagerVersion,
-				utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-			},
+			Labels:    utils.SpireControllerManagerLabels(config.Labels),
 		},
 		ControllerManagerConfig: spiffev1alpha.ControllerManagerConfig{
 			ClusterName: config.ClusterName,
@@ -262,11 +256,7 @@ func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.BundleConfigMap,
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app":                       "spire-server",
-				utils.AppManagedByLabelKey:  utils.AppManagedByLabelValue,
-				"app.kubernetes.io/version": version.SpireServerVersion,
-			},
+			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 	}, nil
 }
