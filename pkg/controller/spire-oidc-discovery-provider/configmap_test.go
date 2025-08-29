@@ -90,11 +90,10 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		// Assert
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		newLabels := customLabels
-		newLabels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
+		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(customLabels)
 
 		// Verify ConfigMap metadata with custom labels
-		assert.Equal(t, customLabels, result.ObjectMeta.Labels)
+		assert.Equal(t, expectedLabels, result.ObjectMeta.Labels)
 
 		// Verify OIDC config JSON with custom values
 		var oidcConfig map[string]interface{}

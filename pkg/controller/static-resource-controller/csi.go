@@ -23,5 +23,6 @@ func (r *StaticResourceReconciler) CreateSpiffeCsiDriver(ctx context.Context) er
 
 func (r *StaticResourceReconciler) getSpiffeCsiObject() *storagev1.CSIDriver {
 	csiDriver := utils.DecodeCsiDriverObjBytes(assets.MustAsset(utils.SpiffeCsiDriverAssetName))
+	csiDriver.Labels = utils.SpiffeCSIDriverLabels(csiDriver.Labels)
 	return csiDriver
 }

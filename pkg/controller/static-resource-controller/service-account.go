@@ -29,20 +29,24 @@ func (r *StaticResourceReconciler) listStaticServiceAccount() []*corev1.ServiceA
 
 func (r *StaticResourceReconciler) getSpiffeCsiDriverServiceAccount() *corev1.ServiceAccount {
 	spiffeCsiDriverServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpiffeCsiDriverServiceAccountAssetName))
+	spiffeCsiDriverServiceAccount.Labels = utils.SpiffeCSIDriverLabels(spiffeCsiDriverServiceAccount.Labels)
 	return spiffeCsiDriverServiceAccount
 }
 
 func (r *StaticResourceReconciler) getSpireAgentServiceAccount() *corev1.ServiceAccount {
 	spireAgentServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireAgentServiceAccountAssetName))
+	spireAgentServiceAccount.Labels = utils.SpireAgentLabels(spireAgentServiceAccount.Labels)
 	return spireAgentServiceAccount
 }
 
 func (r *StaticResourceReconciler) getSpireServerServiceAccount() *corev1.ServiceAccount {
 	spireSeverServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireServerServiceAccountAssetName))
+	spireSeverServiceAccount.Labels = utils.SpireServerLabels(spireSeverServiceAccount.Labels)
 	return spireSeverServiceAccount
 }
 
 func (r *StaticResourceReconciler) getSpireOIDCDiscoveryProviderServiceAccount() *corev1.ServiceAccount {
 	spireOIDCDiscoveryProviderServiceAccount := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireOIDCDiscoveryProviderServiceAccountAssetName))
+	spireOIDCDiscoveryProviderServiceAccount.Labels = utils.SpireOIDCDiscoveryProviderLabels(spireOIDCDiscoveryProviderServiceAccount.Labels)
 	return spireOIDCDiscoveryProviderServiceAccount
 }

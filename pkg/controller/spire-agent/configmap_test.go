@@ -401,10 +401,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 			assert.Equal(t, tt.expectedConfigMapNamespace, cm.Namespace)
 
 			// Validate required labels
-			expectedLabels := map[string]string{
-				"app":                      "spire-agent",
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-			}
+			expectedLabels := utils.SpireAgentLabels(nil)
 
 			// Add custom labels from the SpireAgentConfig
 			for key, value := range tt.spireAgentConfig.Spec.Labels {
@@ -575,9 +572,6 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 	assert.NotEmpty(t, hash)
 
 	// Should only have the required labels
-	expectedLabels := map[string]string{
-		"app":                      "spire-agent",
-		utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-	}
+	expectedLabels := utils.SpireAgentLabels(nil)
 	assert.Equal(t, expectedLabels, cm.Labels)
 }
