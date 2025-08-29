@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -36,7 +37,10 @@ const (
 	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
 	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
+	ManagedRouteReady              = "ManagedRouteReady"
 	ConfigurationValidation        = "ConfigurationValidation"
+	SpireOIDCManagedRouteGeneration = "SpireOIDCManagedRouteGeneration"
+	ManagedRouteGeneration         = "ManagedRouteGeneration"
 )
 
 type reconcilerStatus struct {
@@ -310,6 +314,67 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		Reason:  "SpireOIDCDeploymentCreationSucceeded",
 		Message: "Spire OIDC Deployment created",
 	}
+
+	reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+		Status:  metav1.ConditionFalse,
+		Reason:  "ManagedRouteDisabled",
+		Message: "Spire OIDC Managed Route disabled",
+	}
+
+	if utils.StringToBool(oidcDiscoveryProviderConfig.Spec.ManagedRoute) {
+		// Create Route for OIDC Discovery Provider
+		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "ManagedRouteCreated",
+			Message: "Spire OIDC Managed Route created",
+		}
+
+		route := generateOIDCDiscoveryProviderRoute(&oidcDiscoveryProviderConfig)
+		if err = controllerutil.SetControllerReference(&oidcDiscoveryProviderConfig, route, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference for route")
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "ManagedRouteGenerationFailed",
+				Message: err.Error(),
+			}
+			return ctrl.Result{}, err
+		}
+
+		var existingRoute routev1.Route
+		err = r.ctrlClient.Get(ctx, types.NamespacedName{
+			Name:      route.Name,
+			Namespace: route.Namespace,
+		}, &existingRoute)
+		if err != nil && kerrors.IsNotFound(err) {
+			if err = r.ctrlClient.Create(ctx, route); err != nil {
+				r.log.Error(err, "Failed to create route")
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "ManagedRouteCreationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, err
+			}
+			r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
+		} else if err == nil && checkRouteConflict(&existingRoute, route) {
+			r.log.Error(err, "Found conflicting managed route")
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "ManagedRouteConflict",
+				Message: "Conflict in manage route desired configuration",
+			}
+			return ctrl.Result{}, err
+		} else if err != nil {
+			r.log.Error(err, "Failed to get existing route")
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "ManagedRouteRetrievalFailed",
+				Message: err.Error(),
+			}
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -351,6 +416,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err
@@ -363,6 +429,19 @@ func needsUpdate(current, desired appsv1.Deployment) bool {
 	if current.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] {
 		return true
 	} else if utils.DeploymentSpecModified(&desired, &current) {
+		return true
+	}
+	return false
+}
+
+// checkRouteConflict returns true if desired & current routes has conflicts else return false
+func checkRouteConflict(current, desired *routev1.Route) bool {
+	if current.Spec.TLS == nil || current.Spec.TLS.Termination != desired.Spec.TLS.Termination ||
+		current.Spec.Host != desired.Spec.Host ||
+		current.Spec.To.Name != desired.Spec.To.Name ||
+		current.Spec.To.Kind != desired.Spec.To.Kind ||
+		current.Spec.Port == nil ||
+		current.Spec.Port.TargetPort != desired.Spec.Port.TargetPort {
 		return true
 	}
 	return false

@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	routev1 "github.com/openshift/api/route/v1"
 	"os"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -141,6 +142,10 @@ func main() {
 	}
 	if err := ctrlmgr.AddToScheme(scheme); err != nil {
 		exitOnError(err, "unable to add spiffev1alpha1 scheme")
+	}
+
+	if err := routev1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add routev1 scheme")
 	}
 
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
