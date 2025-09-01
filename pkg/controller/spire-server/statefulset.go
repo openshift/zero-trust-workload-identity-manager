@@ -16,6 +16,58 @@ import (
 const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
 const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
 
+// secretMountInfo represents information about a secret mount
+type secretMountInfo struct {
+	secretName string
+	mountPath  string
+	volumeName string
+}
+
+// getUpstreamAuthoritySecretMounts returns the required secret mounts for upstream authority configuration
+func getUpstreamAuthoritySecretMounts(upstreamAuthority *v1alpha1.UpstreamAuthority) []secretMountInfo {
+	var secretMounts []secretMountInfo
+
+	if upstreamAuthority == nil {
+		return secretMounts
+	}
+
+	switch upstreamAuthority.Type {
+	case "vault":
+		if upstreamAuthority.Vault != nil {
+			vault := upstreamAuthority.Vault
+
+			// Only mount CA certificate if secret name is provided
+			if vault.CaCertSecret != "" {
+				secretMounts = append(secretMounts, secretMountInfo{
+					secretName: vault.CaCertSecret,
+					mountPath:  vaultCaCertMountPath,
+					volumeName: vaultCaCertVolumeName,
+				})
+			}
+
+			// Mount client certificate and key if cert auth is configured
+			if vault.CertAuth != nil {
+				if vault.CertAuth.ClientCertSecret != "" {
+					secretMounts = append(secretMounts, secretMountInfo{
+						secretName: vault.CertAuth.ClientCertSecret,
+						mountPath:  vaultClientCertMountPath,
+						volumeName: vaultClientCertVolumeName,
+					})
+				}
+				if vault.CertAuth.ClientKeySecret != "" {
+					secretMounts = append(secretMounts, secretMountInfo{
+						secretName: vault.CertAuth.ClientKeySecret,
+						mountPath:  vaultClientKeyMountPath,
+						volumeName: vaultClientKeyVolumeName,
+					})
+				}
+			}
+		}
+	}
+
+	return secretMounts
+}
+
 func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
 	labels := map[string]string{
@@ -31,6 +83,53 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 	if config.Persistence != nil && config.Persistence.Size != "" {
 		volumeResourceRequest = config.Persistence.Size
 	}
+
+	// Get required secret mounts for upstream authority
+	secretMounts := getUpstreamAuthoritySecretMounts(config.UpstreamAuthority)
+
+	// Base volume mounts for spire-server container
+	spireServerVolumeMounts := []corev1.VolumeMount{
+		{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private"},
+		{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
+		{Name: "spire-data", MountPath: "/run/spire/data"},
+		{Name: "server-tmp", MountPath: "/tmp"},
+	}
+
+	// Add secret volume mounts
+	for _, secretMount := range secretMounts {
+		spireServerVolumeMounts = append(spireServerVolumeMounts, corev1.VolumeMount{
+			Name:      secretMount.volumeName,
+			MountPath: secretMount.mountPath,
+			ReadOnly:  true,
+		})
+	}
+
+	// Base volumes
+	volumes := []corev1.Volume{
+		{Name: "server-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "spire-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-server"}}}},
+		{Name: "spire-server-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
+	}
+
+	// Add secret volumes
+	for _, secretMount := range secretMounts {
+		// Add validation to ensure secret name is not empty
+		if secretMount.secretName == "" {
+			continue // Skip mounting volumes with empty secret names
+		}
+
+		volumes = append(volumes, corev1.Volume{
+			Name: secretMount.volumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secretMount.secretName,
+				},
+			},
+		})
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -80,13 +179,8 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
 							},
-							Resources: utils.DerefResourceRequirements(config.Resources),
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private"},
-								{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
-								{Name: "spire-data", MountPath: "/run/spire/data"},
-								{Name: "server-tmp", MountPath: "/tmp"},
-							},
+							Resources:    utils.DerefResourceRequirements(config.Resources),
+							VolumeMounts: spireServerVolumeMounts,
 						},
 						{
 							Name:            "spire-controller-manager",
@@ -114,13 +208,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
 					},
-					Volumes: []corev1.Volume{
-						{Name: "server-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-server"}}}},
-						{Name: "spire-server-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
-					},
+					Volumes:      volumes,
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),

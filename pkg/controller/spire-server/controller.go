@@ -186,7 +186,17 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		Message: "SpireServer config map resources applied",
 	}
 
-	spireServerConfJSON, err := marshalToJSON(generateServerConfMap(&server.Spec))
+	serverConfigMapData, err := generateServerConfMap(&server.Spec)
+	if err != nil {
+		r.log.Error(err, "failed to generate spire server config map data")
+		reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "SpireServerConfigMapGenerationFailed",
+			Message: "SpireServer config map data generation failed",
+		}
+	}
+
+	spireServerConfJSON, err := marshalToJSON(serverConfigMapData)
 	if err != nil {
 		r.log.Error(err, "failed to marshal spire server config map to JSON")
 		return ctrl.Result{}, err

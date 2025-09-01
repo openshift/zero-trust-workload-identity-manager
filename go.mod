@@ -1,6 +1,6 @@
 module github.com/openshift/zero-trust-workload-identity-manager
 
-go 1.23.4
+go 1.23
 
 require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
