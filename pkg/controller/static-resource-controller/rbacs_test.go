@@ -1,30 +1,43 @@
 package static_resource_controller
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 var requiredAgentResourceLabels = map[string]string{
-	"app.kubernetes.io/name":       "agent",
-	"app.kubernetes.io/instance":   "spire",
-	"app.kubernetes.io/version":    "1.12.0",
+	"app.kubernetes.io/name":       "spire-agent",
+	"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+	"app.kubernetes.io/component":  "node-agent",
+	"app.kubernetes.io/version":    version.SpireAgentVersion,
 	"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 	"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
 }
 
 var requiredServerResourceLabels = map[string]string{
-	"app.kubernetes.io/name":       "server",
-	"app.kubernetes.io/instance":   "spire",
-	"app.kubernetes.io/version":    "1.12.0",
+	"app.kubernetes.io/name":       "spire-server",
+	"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+	"app.kubernetes.io/component":  "control-plane",
+	"app.kubernetes.io/version":    version.SpireServerVersion,
+	"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+	"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+}
+
+var requiredControllerManagerResourceLabels = map[string]string{
+	"app.kubernetes.io/name":       "spire-controller-manager",
+	"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+	"app.kubernetes.io/component":  "control-plane",
+	"app.kubernetes.io/version":    version.SpireControllerManagerVersion,
 	"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 	"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
 }
 
 var requiredOIDCResourceLabels = map[string]string{
 	"app.kubernetes.io/name":       "spiffe-oidc-discovery-provider",
-	"app.kubernetes.io/instance":   "spire",
-	"app.kubernetes.io/version":    "1.12.0",
+	"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+	"app.kubernetes.io/component":  "discovery",
+	"app.kubernetes.io/version":    version.SpireOIDCDiscoveryProviderVersion,
 	"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
 	"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
 }
@@ -109,7 +122,7 @@ func TestSpireControllerManagerClusterRole(t *testing.T) {
 	assert.Equal(t, "spire-controller-manager", cr.Name)
 	assert.Equal(t, "ClusterRole", cr.Kind)
 
-	expectedLabels := requiredServerResourceLabels
+	expectedLabels := requiredControllerManagerResourceLabels
 	assert.Equal(t, expectedLabels, cr.Labels)
 
 	assert.True(t, len(cr.Rules) > 0)
@@ -122,7 +135,7 @@ func TestSpireControllerManagerClusterRoleBinding(t *testing.T) {
 	assert.Equal(t, "spire-controller-manager", crb.Name)
 	assert.Equal(t, "ClusterRoleBinding", crb.Kind)
 
-	expectedLabels := requiredServerResourceLabels
+	expectedLabels := requiredControllerManagerResourceLabels
 	assert.Equal(t, expectedLabels, crb.Labels)
 
 	assert.Equal(t, "ClusterRole", crb.RoleRef.Kind)
@@ -137,7 +150,7 @@ func TestSpireControllerManagerLeaderElectionRole(t *testing.T) {
 	assert.Equal(t, "spire-controller-manager-leader-election", role.Name)
 	assert.Equal(t, "Role", role.Kind)
 
-	expectedLabels := requiredServerResourceLabels
+	expectedLabels := requiredControllerManagerResourceLabels
 	assert.Equal(t, expectedLabels, role.Labels)
 
 	assert.NotEmpty(t, role.Rules)
@@ -150,7 +163,7 @@ func TestSpireControllerManagerLeaderElectionRoleBinding(t *testing.T) {
 	assert.Equal(t, "spire-controller-manager-leader-election", rb.Name)
 	assert.Equal(t, "RoleBinding", rb.Kind)
 
-	expectedLabels := requiredServerResourceLabels
+	expectedLabels := requiredControllerManagerResourceLabels
 	assert.Equal(t, expectedLabels, rb.Labels)
 
 	assert.Equal(t, "Role", rb.RoleRef.Kind)

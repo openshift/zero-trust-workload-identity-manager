@@ -23,5 +23,6 @@ func (r *StaticResourceReconciler) ApplyOrCreateValidatingWebhookConfiguration(c
 
 func (r *StaticResourceReconciler) GetSpireControllerManagerValidatingWebhookConfiguration() *admissionregistrationv1.ValidatingWebhookConfiguration {
 	spireControllerManagerValidatingWebhookConfiguration := utils.DecodeValidatingWebhookConfigurationByBytes(assets.MustAsset(utils.SpireControllerManagerValidatingWebhookConfigurationAssetName))
+	spireControllerManagerValidatingWebhookConfiguration.Labels = utils.SpireControllerManagerLabels(spireControllerManagerValidatingWebhookConfiguration.Labels)
 	return spireControllerManagerValidatingWebhookConfiguration
 }

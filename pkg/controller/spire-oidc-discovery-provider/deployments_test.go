@@ -63,9 +63,13 @@ func TestBuildDeployment(t *testing.T) {
 				labels := deployment.Labels
 				assert.Equal(t, "custom-value", labels["custom-label"])
 				assert.Equal(t, "test", labels["environment"])
-				assert.Equal(t, "override-name", labels["app.kubernetes.io/name"])
-				assert.Equal(t, "spire", labels["app.kubernetes.io/instance"])
-				assert.Equal(t, utils.AppManagedByLabelValue, labels[utils.AppManagedByLabelKey])
+				// Standard labels take priority and cannot be overridden
+				assert.Equal(t, "spiffe-oidc-discovery-provider", labels["app.kubernetes.io/name"])
+				assert.Equal(t, utils.StandardInstance, labels["app.kubernetes.io/instance"])
+				assert.Equal(t, utils.StandardManagedByValue, labels["app.kubernetes.io/managed-by"])
+				// Verify standardized labels are applied
+				assert.Equal(t, utils.ComponentDiscovery, labels["app.kubernetes.io/component"])
+				assert.Equal(t, utils.StandardPartOfValue, labels["app.kubernetes.io/part-of"])
 			},
 		},
 		{
@@ -186,25 +190,17 @@ func TestBuildDeployment(t *testing.T) {
 			assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Name)
 			assert.Equal(t, utils.OperatorNamespace, deployment.Namespace)
 
-			// Check default labels are always present
-			expectedLabels := map[string]string{
-				"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-				"app.kubernetes.io/instance": "spire",
-				"component":                  "oidc-discovery-provider",
-				"release":                    "spire",
-				"release-namespace":          "zero-trust-workload-identity-manager",
-				utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-			}
+			// Check labels using centralized approach
+			expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(tt.config.Spec.Labels)
+			assert.Equal(t, expectedLabels, deployment.Labels, "Expected standardized labels")
 
-			for k, v := range expectedLabels {
-				if tt.config.Spec.Labels == nil || tt.config.Spec.Labels[k] == "" {
-					assert.Equal(t, v, deployment.Labels[k], "Expected default label %s=%s", k, v)
-				}
+			// Check selector labels using centralized approach
+			expectedSelectorLabels := map[string]string{
+				"app.kubernetes.io/name":      expectedLabels["app.kubernetes.io/name"],
+				"app.kubernetes.io/instance":  expectedLabels["app.kubernetes.io/instance"],
+				"app.kubernetes.io/component": expectedLabels["app.kubernetes.io/component"],
 			}
-
-			// Check selector
-			assert.Equal(t, "spiffe-oidc-discovery-provider", deployment.Spec.Selector.MatchLabels["app.kubernetes.io/name"])
-			assert.Equal(t, "spire", deployment.Spec.Selector.MatchLabels["app.kubernetes.io/instance"])
+			assert.Equal(t, expectedSelectorLabels, deployment.Spec.Selector.MatchLabels, "Expected standardized selector labels")
 
 			// Check service account
 			assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Spec.Template.Spec.ServiceAccountName)

@@ -46,17 +46,12 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 	if err != nil {
 		return nil, err
 	}
-	labels := map[string]string{}
-	for key, value := range config.Labels {
-		labels[key] = value
-	}
-	labels[utils.AppManagedByLabelKey] = utils.AppManagedByLabelValue
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
 			Namespace: utils.OperatorNamespace,
-			Labels:    labels,
+			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 		Data: map[string]string{
 			"server.conf": string(confJSON),
@@ -194,12 +189,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 		Metadata: metav1.ObjectMeta{
 			Name:      "spire-controller-manager",
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":     "server",
-				"app.kubernetes.io/instance": "spire",
-				"app.kubernetes.io/version":  "1.12.0",
-				utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-			},
+			Labels:    utils.SpireControllerManagerLabels(config.Labels),
 		},
 		ControllerManagerConfig: spiffev1alpha.ControllerManagerConfig{
 			ClusterName: config.ClusterName,
@@ -250,10 +240,7 @@ func generateControllerManagerConfigMap(configYAML string) *corev1.ConfigMap {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-controller-manager",
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app":                      "spire-controller-manager",
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-			},
+			Labels:    utils.SpireControllerManagerLabels(nil),
 		},
 		Data: map[string]string{
 			"controller-manager-config.yaml": configYAML,
@@ -269,10 +256,7 @@ func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.BundleConfigMap,
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app":                      "spire-server",
-				utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-			},
+			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 	}, nil
 }

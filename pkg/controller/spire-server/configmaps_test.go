@@ -94,12 +94,12 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 				t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, cm.Namespace)
 			}
 
-			// Check labels
-			if cm.Labels[utils.AppManagedByLabelKey] != utils.AppManagedByLabelValue {
-				t.Errorf("Expected label %q to be %q, got %q",
-					utils.AppManagedByLabelKey,
-					utils.AppManagedByLabelValue,
-					cm.Labels[utils.AppManagedByLabelKey])
+			// Check labels - now using standardized labeling
+			expectedLabels := utils.SpireServerLabels(tt.config.Labels)
+			for k, v := range expectedLabels {
+				if cm.Labels[k] != v {
+					t.Errorf("Expected label %q to be %q, got %q", k, v, cm.Labels[k])
+				}
 			}
 
 			// Check custom labels
@@ -414,16 +414,12 @@ func TestGenerateControllerManagerConfigMap(t *testing.T) {
 		t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, cm.Namespace)
 	}
 
-	// Check labels
-	if cm.Labels["app"] != "spire-controller-manager" {
-		t.Errorf("Expected app label 'spire-controller-manager', got %q", cm.Labels["app"])
-	}
-
-	if cm.Labels[utils.AppManagedByLabelKey] != utils.AppManagedByLabelValue {
-		t.Errorf("Expected label %q to be %q, got %q",
-			utils.AppManagedByLabelKey,
-			utils.AppManagedByLabelValue,
-			cm.Labels[utils.AppManagedByLabelKey])
+	// Check labels - now using standardized labeling
+	expectedLabels := utils.SpireControllerManagerLabels(nil)
+	for k, v := range expectedLabels {
+		if cm.Labels[k] != v {
+			t.Errorf("Expected label %q to be %q, got %q", k, v, cm.Labels[k])
+		}
 	}
 
 	// Check data
@@ -489,7 +485,7 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 			}
 
 			// Check labels
-			if cm.Labels["app"] != "spire-server" {
+			if cm.Labels["app.kubernetes.io/name"] != "spire-server" {
 				t.Errorf("Expected app label 'spire-server', got %q", cm.Labels["app"])
 			}
 

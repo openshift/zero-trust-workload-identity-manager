@@ -1,6 +1,7 @@
 package static_resource_controller
 
 import (
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -26,7 +27,14 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 			name:      "spire-server",
 			kind:      "Service",
 			namespace: "zero-trust-workload-identity-manager",
-			labels:    requiredServerResourceLabels,
+			labels: map[string]string{
+				"app.kubernetes.io/name":       "spire-server",
+				"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+				"app.kubernetes.io/component":  "control-plane",
+				"app.kubernetes.io/version":    version.SpireServerVersion,
+				"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+				"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+			},
 			ports: []corev1.ServicePort{
 				{
 					Name:       "grpc",
@@ -42,15 +50,22 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 			},
 
 			selector: map[string]string{
-				"app.kubernetes.io/name":     "server",
-				"app.kubernetes.io/instance": "spire",
+				"app.kubernetes.io/name":     "spire-server",
+				"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 			},
 		},
 		{
 			name:      "spire-agent",
 			kind:      "Service",
 			namespace: "zero-trust-workload-identity-manager",
-			labels:    requiredAgentResourceLabels,
+			labels: map[string]string{
+				"app.kubernetes.io/name":       "spire-agent",
+				"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+				"app.kubernetes.io/component":  "node-agent",
+				"app.kubernetes.io/version":    version.SpireAgentVersion,
+				"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+				"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+			},
 			ports: []corev1.ServicePort{
 				{
 					Name:       "metrics",
@@ -59,15 +74,22 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 				},
 			},
 			selector: map[string]string{
-				"app.kubernetes.io/name":     "agent",
-				"app.kubernetes.io/instance": "spire",
+				"app.kubernetes.io/name":     "spire-agent",
+				"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 			},
 		},
 		{
 			name:      "spire-spiffe-oidc-discovery-provider",
 			kind:      "Service",
 			namespace: "zero-trust-workload-identity-manager",
-			labels:    requiredOIDCResourceLabels,
+			labels: map[string]string{
+				"app.kubernetes.io/name":       "spiffe-oidc-discovery-provider",
+				"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+				"app.kubernetes.io/component":  "discovery",
+				"app.kubernetes.io/version":    version.SpireOIDCDiscoveryProviderVersion,
+				"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+				"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+			},
 			ports: []corev1.ServicePort{
 				{
 					Name:       "https",
@@ -78,14 +100,21 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 			},
 			selector: map[string]string{
 				"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-				"app.kubernetes.io/instance": "spire",
+				"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 			},
 		},
 		{
 			name:      "spire-controller-manager-webhook",
 			kind:      "Service",
 			namespace: "zero-trust-workload-identity-manager",
-			labels:    requiredServerResourceLabels,
+			labels: map[string]string{
+				"app.kubernetes.io/name":       "spire-controller-manager",
+				"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+				"app.kubernetes.io/component":  "control-plane",
+				"app.kubernetes.io/version":    version.SpireControllerManagerVersion,
+				"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+				"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+			},
 			ports: []corev1.ServicePort{
 				{
 					Name:       "https",
@@ -95,8 +124,8 @@ func TestStaticResourceReconciler_ListStaticServiceResource(t *testing.T) {
 				},
 			},
 			selector: map[string]string{
-				"app.kubernetes.io/name":     "server",
-				"app.kubernetes.io/instance": "spire",
+				"app.kubernetes.io/name":     "spire-controller-manager",
+				"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 			},
 		},
 	}
@@ -153,7 +182,14 @@ func TestGetSpireServerService(t *testing.T) {
 	assert.Equal(t, "Service", svc.Kind)
 	assert.Equal(t, "zero-trust-workload-identity-manager", svc.Namespace)
 
-	expectedLabels := requiredServerResourceLabels
+	expectedLabels := map[string]string{
+		"app.kubernetes.io/name":       "spire-server",
+		"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+		"app.kubernetes.io/component":  "control-plane",
+		"app.kubernetes.io/version":    version.SpireServerVersion,
+		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+		"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+	}
 	assert.Equal(t, expectedLabels, svc.Labels)
 
 	assert.Len(t, svc.Spec.Ports, 2)
@@ -163,8 +199,8 @@ func TestGetSpireServerService(t *testing.T) {
 	assert.Equal(t, corev1.ProtocolTCP, svc.Spec.Ports[0].Protocol)
 
 	expectedSelector := map[string]string{
-		"app.kubernetes.io/name":     "server",
-		"app.kubernetes.io/instance": "spire",
+		"app.kubernetes.io/name":     "spire-server",
+		"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 	}
 	assert.Equal(t, expectedSelector, svc.Spec.Selector)
 }
@@ -177,7 +213,14 @@ func TestGetSpireOIDCDiscoveryProviderService(t *testing.T) {
 	assert.Equal(t, "Service", svc.Kind)
 	assert.Equal(t, "zero-trust-workload-identity-manager", svc.Namespace)
 
-	expectedLabels := requiredOIDCResourceLabels
+	expectedLabels := map[string]string{
+		"app.kubernetes.io/name":       "spiffe-oidc-discovery-provider",
+		"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+		"app.kubernetes.io/component":  "discovery",
+		"app.kubernetes.io/version":    version.SpireOIDCDiscoveryProviderVersion,
+		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+		"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+	}
 	assert.Equal(t, expectedLabels, svc.Labels)
 
 	assert.Len(t, svc.Spec.Ports, 1)
@@ -188,7 +231,7 @@ func TestGetSpireOIDCDiscoveryProviderService(t *testing.T) {
 
 	expectedSelector := map[string]string{
 		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
-		"app.kubernetes.io/instance": "spire",
+		"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 	}
 	assert.Equal(t, expectedSelector, svc.Spec.Selector)
 }
@@ -201,7 +244,14 @@ func TestGetSpireControllerMangerWebhookService(t *testing.T) {
 	assert.Equal(t, "Service", svc.Kind)
 	assert.Equal(t, "zero-trust-workload-identity-manager", svc.Namespace)
 
-	expectedLabels := requiredServerResourceLabels
+	expectedLabels := map[string]string{
+		"app.kubernetes.io/name":       "spire-controller-manager",
+		"app.kubernetes.io/instance":   "cluster-zero-trust-workload-identity-manager",
+		"app.kubernetes.io/component":  "control-plane",
+		"app.kubernetes.io/version":    version.SpireControllerManagerVersion,
+		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+		"app.kubernetes.io/part-of":    "zero-trust-workload-identity-manager",
+	}
 	assert.Equal(t, expectedLabels, svc.Labels)
 
 	assert.Len(t, svc.Spec.Ports, 1)
@@ -211,8 +261,8 @@ func TestGetSpireControllerMangerWebhookService(t *testing.T) {
 	assert.Equal(t, corev1.ProtocolTCP, svc.Spec.Ports[0].Protocol)
 
 	expectedSelector := map[string]string{
-		"app.kubernetes.io/name":     "server",
-		"app.kubernetes.io/instance": "spire",
+		"app.kubernetes.io/name":     "spire-controller-manager",
+		"app.kubernetes.io/instance": "cluster-zero-trust-workload-identity-manager",
 	}
 	assert.Equal(t, expectedSelector, svc.Spec.Selector)
 }

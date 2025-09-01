@@ -12,17 +12,10 @@ import (
 
 // generateSpireAgentSCC returns a SecurityContextConstraints object for spire-agent
 func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityContextConstraints {
-	labels := map[string]string{
-		"app":                      "spire-agent",
-		utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
-	}
-	for key, value := range config.Spec.Labels {
-		labels[key] = value
-	}
 	return &securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "spire-agent",
-			Labels: labels,
+			Labels: utils.SpireAgentLabels(config.Spec.Labels),
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{

@@ -34,9 +34,9 @@ func TestGenerateSpireIODCDiscoveryProviderSpiffeID(t *testing.T) {
 		// Verify PodSelector
 		require.NotNil(t, result.Spec.PodSelector)
 		expectedPodLabels := map[string]string{
-			"component":         "oidc-discovery-provider",
-			"release":           "spire",
-			"release-namespace": "zero-trust-workload-identity-manager",
+			"app.kubernetes.io/name":      "spiffe-oidc-discovery-provider",
+			"app.kubernetes.io/instance":  "cluster-zero-trust-workload-identity-manager",
+			"app.kubernetes.io/component": "discovery",
 		}
 		assert.Equal(t, expectedPodLabels, result.Spec.PodSelector.MatchLabels)
 

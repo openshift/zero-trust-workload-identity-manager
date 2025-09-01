@@ -16,17 +16,20 @@ import (
 const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
 const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
 
-func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServerConfigMapHash string,
+func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
+	spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
-	labels := map[string]string{
-		"app.kubernetes.io/name":       "server",
-		"app.kubernetes.io/instance":   "spire",
-		"app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
-		"app.kubernetes.io/component":  "server",
+
+	// Generate standardized labels once and reuse them
+	labels := utils.SpireServerLabels(config.Labels)
+
+	// For selectors, we need only the core identifying labels (without custom user labels)
+	selectorLabels := map[string]string{
+		"app.kubernetes.io/name":      labels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  labels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
-	for k, v := range config.Labels {
-		labels[k] = v
-	}
+
 	volumeResourceRequest := "1Gi"
 	if config.Persistence != nil && config.Persistence.Size != "" {
 		volumeResourceRequest = config.Persistence.Size
@@ -41,7 +44,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 			Replicas:    pointer.Int32(1),
 			ServiceName: "spire-server",
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: selectorLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -128,7 +131,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec, spireServe
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
+					ObjectMeta: metav1.ObjectMeta{Name: "spire-data", Labels: labels},
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 						Resources: corev1.VolumeResourceRequirements{

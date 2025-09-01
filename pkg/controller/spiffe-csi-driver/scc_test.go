@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -64,8 +65,9 @@ func testObjectMeta(t *testing.T, meta metav1.ObjectMeta) {
 		t.Errorf("Expected empty namespace, got '%s'", meta.Namespace)
 	}
 
-	if len(meta.Labels) > 0 {
-		t.Errorf("Expected no labels, got %v", meta.Labels)
+	expectedLabels := utils.SpiffeCSIDriverLabels(nil)
+	if !reflect.DeepEqual(meta.Labels, expectedLabels) {
+		t.Errorf("Expected labels %v, got %v", expectedLabels, meta.Labels)
 	}
 
 	if len(meta.Annotations) > 0 {

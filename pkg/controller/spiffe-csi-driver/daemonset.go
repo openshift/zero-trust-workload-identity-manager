@@ -10,22 +10,26 @@ import (
 )
 
 func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *appsv1.DaemonSet {
+
+	// Generate standardized labels once and reuse them
+	labels := utils.SpiffeCSIDriverLabels(config.Labels)
+
+	// For selectors, we need only the core identifying labels (without custom user labels)
+	selectorLabels := map[string]string{
+		"app.kubernetes.io/name":      labels["app.kubernetes.io/name"],
+		"app.kubernetes.io/instance":  labels["app.kubernetes.io/instance"],
+		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
+	}
+
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-csi-driver",
 			Namespace: utils.OperatorNamespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":     "spiffe-csi-driver",
-				"app.kubernetes.io/instance": "spire",
-				utils.AppManagedByLabelKey:   utils.AppManagedByLabelValue,
-			},
+			Labels:    labels,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/name":     "spiffe-csi-driver",
-					"app.kubernetes.io/instance": "spire",
-				},
+				MatchLabels: selectorLabels,
 			},
 			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
 				Type: appsv1.RollingUpdateDaemonSetStrategyType,
@@ -38,10 +42,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/name":     "spiffe-csi-driver",
-						"app.kubernetes.io/instance": "spire",
-					},
+					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "spire-spiffe-csi-driver",
