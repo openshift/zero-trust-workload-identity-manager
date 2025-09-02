@@ -86,9 +86,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	createOnlyMode := utils.IsInCreateOnlyMode(&agent, &r.createOnlyFlag)
 	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
-			"createOnlyAnnotation", utils.IsCreateOnlyMode(&agent),
-			"createOnlyFlag", r.createOnlyFlag)
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 	}
 
 	reconcileStatus := map[string]reconcilerStatus{}

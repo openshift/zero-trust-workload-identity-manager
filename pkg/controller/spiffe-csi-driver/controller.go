@@ -82,9 +82,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyFlag)
 	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
-			"createOnlyAnnotation", utils.IsCreateOnlyMode(&spiffeCSIDriver),
-			"createOnlyFlag", r.createOnlyFlag)
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 	}
 
 	reconcileStatus := map[string]reconcilerStatus{}

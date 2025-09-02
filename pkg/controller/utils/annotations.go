@@ -8,7 +8,7 @@ const (
 	CreateOnlyAnnotation = "ztwim.openshift.io/create-only"
 )
 
-func IsCreateOnlyMode(obj client.Object) bool {
+func IsCreateOnlyAnnotationEnabled(obj client.Object) bool {
 	if obj == nil {
 		return false
 	}
@@ -20,7 +20,7 @@ func IsCreateOnlyMode(obj client.Object) bool {
 }
 
 func IsInCreateOnlyMode(obj client.Object, createOnlyFlag *bool) bool {
-	currentCreateOnly := IsCreateOnlyMode(obj)
+	currentCreateOnly := IsCreateOnlyAnnotationEnabled(obj)
 	if currentCreateOnly {
 		*createOnlyFlag = true
 		return true

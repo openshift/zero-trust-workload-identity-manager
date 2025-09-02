@@ -132,9 +132,9 @@ func TestIsCreateOnlyMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsCreateOnlyMode(tt.obj)
+			result := IsCreateOnlyAnnotationEnabled(tt.obj)
 			if result != tt.expected {
-				t.Errorf("IsCreateOnlyMode() = %v, expected %v - %s", result, tt.expected, tt.description)
+				t.Errorf("IsCreateOnlyAnnotationEnabled() = %v, expected %v - %s", result, tt.expected, tt.description)
 			}
 		})
 	}

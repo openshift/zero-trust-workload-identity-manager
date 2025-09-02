@@ -163,9 +163,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	createOnlyMode := utils.IsInCreateOnlyMode(&config, &r.createOnlyFlag)
 	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
-			"createOnlyAnnotation", utils.IsCreateOnlyMode(&config),
-			"createOnlyFlag", r.createOnlyFlag)
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 	}
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {

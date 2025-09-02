@@ -88,9 +88,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	createOnlyMode := utils.IsInCreateOnlyMode(&server, &r.createOnlyFlag)
 	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
-			"createOnlyAnnotation", utils.IsCreateOnlyMode(&server),
-			"createOnlyFlag", r.createOnlyFlag)
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 	}
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
