@@ -47,11 +47,12 @@ type reconcilerStatus struct {
 
 // SpireOidcDiscoveryProviderReconciler reconciles a SpireOidcDiscoveryProvider object
 type SpireOidcDiscoveryProviderReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
+	createOnlyFlag bool
 }
 
 // New returns a new Reconciler instance.
@@ -61,11 +62,12 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 		return nil, err
 	}
 	return &SpireOidcDiscoveryProviderReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		scheme:         mgr.GetScheme(),
+		createOnlyFlag: false,
 	}, nil
 }
 
@@ -79,6 +81,13 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&oidcDiscoveryProviderConfig, &r.createOnlyFlag)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
+			"createOnlyAnnotation", utils.IsCreateOnlyMode(&oidcDiscoveryProviderConfig),
+			"createOnlyFlag", r.createOnlyFlag)
 	}
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
@@ -231,17 +240,21 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 		r.log.Info("Created ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 	} else if utils.GenerateMapHash(existingOidcCm.Data) != utils.GenerateMapHash(cm.Data) {
-		existingOidcCm.Data = cm.Data
-		if err = r.ctrlClient.Update(ctx, &existingOidcCm); err != nil {
-			r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-			reconcileStatus[SpireOIDCConfigMapGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireOIDCConfigMapCreationFailed",
-				Message: err.Error(),
+		if createOnlyMode {
+			r.log.Info("Skipping ConfigMap update due to create-only mode", "Namespace", cm.Namespace, "Name", cm.Name)
+		} else {
+			existingOidcCm.Data = cm.Data
+			if err = r.ctrlClient.Update(ctx, &existingOidcCm); err != nil {
+				r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
+				reconcileStatus[SpireOIDCConfigMapGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireOIDCConfigMapCreationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, err
+			r.log.Info("Updated ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 		}
-		r.log.Info("Updated ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 	} else if err != nil {
 		r.log.Error(err, "Failed to get ConfigMap")
 		reconcileStatus[SpireOIDCConfigMapGeneration] = reconcilerStatus{
@@ -285,17 +298,21 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 		r.log.Info("Created spire oidc discovery provider deployment")
 	} else if err == nil && needsUpdate(existingSpireOidcDeployment, *deployment) {
-		existingSpireOidcDeployment.Spec = deployment.Spec
-		if err = r.ctrlClient.Update(ctx, &existingSpireOidcDeployment); err != nil {
-			r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
-			reconcileStatus[SpireOIDCDeploymentGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireOIDCDeploymentCreationFailed",
-				Message: err.Error(),
+		if createOnlyMode {
+			r.log.Info("Skipping Deployment update due to create-only mode")
+		} else {
+			existingSpireOidcDeployment.Spec = deployment.Spec
+			if err = r.ctrlClient.Update(ctx, &existingSpireOidcDeployment); err != nil {
+				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
+				reconcileStatus[SpireOIDCDeploymentGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireOIDCDeploymentCreationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, err
+			r.log.Info("Updated spire oidc discovery provider deployment")
 		}
-		r.log.Info("Updated spire oidc discovery provider deployment")
 	} else if err != nil {
 		r.log.Error(err, "Failed to get existing spire oidc discovery provider deployment")
 		reconcileStatus[SpireOIDCDeploymentGeneration] = reconcilerStatus{

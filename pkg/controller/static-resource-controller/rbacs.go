@@ -5,41 +5,62 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
 	rbacv1 "k8s.io/api/rbac/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *StaticResourceReconciler) CreateOrApplyRbacResources(ctx context.Context) error {
+func (r *StaticResourceReconciler) CreateOrApplyRbacResources(ctx context.Context, createOnlyMode bool) error {
 	clusterRoleBindings := r.listStaticClusterRoleBindings()
 	roles := r.listStaticRoles()
 	roleBindings := r.listStaticRoleBindings()
 	clusterRoles := r.listStaticClusterRoles()
 
 	for _, clusterRole := range clusterRoles {
-		err := r.ctrlClient.CreateOrUpdateObject(ctx, clusterRole)
+		err := r.createOrUpdateResource(ctx, clusterRole, createOnlyMode, "ClusterRole")
 		if err != nil {
-			r.log.Error(err, "Failed to create or update ClusterRole object")
 			return err
 		}
 	}
 	for _, clusterRoleBinding := range clusterRoleBindings {
-		err := r.ctrlClient.CreateOrUpdateObject(ctx, clusterRoleBinding)
+		err := r.createOrUpdateResource(ctx, clusterRoleBinding, createOnlyMode, "ClusterRoleBinding")
 		if err != nil {
-			r.log.Error(err, "Failed to create or update ClusterRoleBinding object")
 			return err
 		}
 	}
 	for _, role := range roles {
-		err := r.ctrlClient.CreateOrUpdateObject(ctx, role)
+		err := r.createOrUpdateResource(ctx, role, createOnlyMode, "Role")
 		if err != nil {
-			r.log.Error(err, "Failed to create or update Role object")
 			return err
 		}
 	}
 	for _, roleBinding := range roleBindings {
-		err := r.ctrlClient.CreateOrUpdateObject(ctx, roleBinding)
+		err := r.createOrUpdateResource(ctx, roleBinding, createOnlyMode, "RoleBinding")
 		if err != nil {
-			r.log.Error(err, "Failed to create or update RoleBinding object")
 			return err
 		}
+	}
+	return nil
+}
+
+func (r *StaticResourceReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, createOnlyMode bool, resourceType string) error {
+	if createOnlyMode {
+		err := r.ctrlClient.Create(ctx, obj)
+		if err != nil && kerrors.IsAlreadyExists(err) {
+			r.log.Info("Skipping update due to create-only mode", "resourceType", resourceType, "name", obj.GetName())
+			return nil
+		}
+		if err != nil {
+			r.log.Error(err, "Failed to create resource", "resourceType", resourceType, "name", obj.GetName())
+			return err
+		}
+		r.log.Info("Created resource", "resourceType", resourceType, "name", obj.GetName())
+		return nil
+	}
+
+	err := r.ctrlClient.CreateOrUpdateObject(ctx, obj)
+	if err != nil {
+		r.log.Error(err, "Failed to create or update resource", "resourceType", resourceType, "name", obj.GetName())
+		return err
 	}
 	return nil
 }

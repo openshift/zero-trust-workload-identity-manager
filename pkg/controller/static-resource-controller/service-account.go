@@ -8,11 +8,10 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
 )
 
-func (r *StaticResourceReconciler) CreateOrApplyServiceAccountResources(ctx context.Context) error {
+func (r *StaticResourceReconciler) CreateOrApplyServiceAccountResources(ctx context.Context, createOnlyMode bool) error {
 	for _, serviceAccount := range r.listStaticServiceAccount() {
-		err := r.ctrlClient.CreateOrUpdateObject(ctx, serviceAccount)
+		err := r.createOrUpdateResource(ctx, serviceAccount, createOnlyMode, "ServiceAccount")
 		if err != nil {
-			r.log.Error(err, "unable to create or update Service resource")
 			return err
 		}
 	}

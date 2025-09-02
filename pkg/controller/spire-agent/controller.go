@@ -3,6 +3,7 @@ package spire_agent
 import (
 	"context"
 	"fmt"
+
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -49,11 +50,12 @@ const spireAgentDaemonSetSpireAgentConfigHashAnnotationKey = "ztwim.openshift.io
 
 // SpireAgentReconciler reconciles a SpireAgent object
 type SpireAgentReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
+	createOnlyFlag bool
 }
 
 // New returns a new Reconciler instance.
@@ -63,11 +65,12 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 		return nil, err
 	}
 	return &SpireAgentReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
+		scheme:         mgr.GetScheme(),
+		createOnlyFlag: false,
 	}, nil
 }
 
@@ -79,6 +82,13 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&agent, &r.createOnlyFlag)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
+			"createOnlyAnnotation", utils.IsCreateOnlyMode(&agent),
+			"createOnlyFlag", r.createOnlyFlag)
 	}
 
 	reconcileStatus := map[string]reconcilerStatus{}
@@ -167,17 +177,21 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		r.log.Info("Created spire agent ConfigMap")
 	} else if err == nil && existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] {
-		existingSpireAgentCM.Data = spireAgentConfigMap.Data
-		if err = r.ctrlClient.Update(ctx, &existingSpireAgentCM); err != nil {
-			r.log.Error(err, "failed to update spire-agent config map")
-			reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireAgentConfigMapGenerationFailed",
-				Message: err.Error(),
+		if createOnlyMode {
+			r.log.Info("Skipping ConfigMap update due to create-only mode")
+		} else {
+			existingSpireAgentCM.Data = spireAgentConfigMap.Data
+			if err = r.ctrlClient.Update(ctx, &existingSpireAgentCM); err != nil {
+				r.log.Error(err, "failed to update spire-agent config map")
+				reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireAgentConfigMapGenerationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
+			r.log.Info("Updated ConfigMap with new config")
 		}
-		r.log.Info("Updated ConfigMap with new config")
 	} else if err != nil {
 		reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
 			Status:  metav1.ConditionFalse,
@@ -218,12 +232,16 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		r.log.Info("Created spire agent DaemonSet")
 	} else if err == nil && needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
-		existingSpireAgentDaemonSet.Spec = spireAgentDaemonset.Spec
-		if err = r.ctrlClient.Update(ctx, &existingSpireAgentDaemonSet); err != nil {
-			r.log.Error(err, "failed to update spire agent config map")
-			return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
+		if createOnlyMode {
+			r.log.Info("Skipping DaemonSet update due to create-only mode")
+		} else {
+			existingSpireAgentDaemonSet.Spec = spireAgentDaemonset.Spec
+			if err = r.ctrlClient.Update(ctx, &existingSpireAgentDaemonSet); err != nil {
+				r.log.Error(err, "failed to update spire agent config map")
+				return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
+			}
+			r.log.Info("Updated spire agent DaemonSet")
 		}
-		r.log.Info("Updated spire agent DaemonSet")
 	} else if err != nil {
 		r.log.Error(err, "failed to update spire-agent daemonset")
 		reconcileStatus[SpireAgentDaemonSetGeneration] = reconcilerStatus{

@@ -49,11 +49,12 @@ type reconcilerStatus struct {
 
 // SpireServerReconciler reconciles a SpireServer object
 type SpireServerReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
+	createOnlyFlag bool
 }
 
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
@@ -66,11 +67,12 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 		return nil, err
 	}
 	return &SpireServerReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		scheme:         mgr.GetScheme(),
+		createOnlyFlag: false,
 	}, nil
 }
 
@@ -82,6 +84,13 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&server, &r.createOnlyFlag)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates",
+			"createOnlyAnnotation", utils.IsCreateOnlyMode(&server),
+			"createOnlyFlag", r.createOnlyFlag)
 	}
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
@@ -168,16 +177,20 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		r.log.Info("Created spire server ConfigMap")
 	} else if err == nil && existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] {
-		existingSpireServerCM.Data = spireServerConfigMap.Data
-		if err = r.ctrlClient.Update(ctx, &existingSpireServerCM); err != nil {
-			reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireServerConfigMapGenerationFailed",
-				Message: err.Error(),
+		if createOnlyMode {
+			r.log.Info("Skipping ConfigMap update due to create-only mode")
+		} else {
+			existingSpireServerCM.Data = spireServerConfigMap.Data
+			if err = r.ctrlClient.Update(ctx, &existingSpireServerCM); err != nil {
+				reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireServerConfigMapGenerationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
+			r.log.Info("Updated ConfigMap with new config")
 		}
-		r.log.Info("Updated ConfigMap with new config")
 	} else if err != nil {
 		reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
 			Status:  metav1.ConditionFalse,
@@ -236,14 +249,18 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		r.log.Info("Created spire controller manager ConfigMap")
 	} else if err == nil && existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] {
-		existingSpireControllerManagerCM.Data = spireControllerManagerConfigMap.Data
-		if err = r.ctrlClient.Update(ctx, &existingSpireControllerManagerCM); err != nil {
-			reconcileStatus[SpireControllerManagerConfigMapGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireControllerManagerConfigMapGenerationFailed",
-				Message: err.Error(),
+		if createOnlyMode {
+			r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
+		} else {
+			existingSpireControllerManagerCM.Data = spireControllerManagerConfigMap.Data
+			if err = r.ctrlClient.Update(ctx, &existingSpireControllerManagerCM); err != nil {
+				reconcileStatus[SpireControllerManagerConfigMapGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireControllerManagerConfigMapGenerationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
 		}
 		r.log.Info("Updated ConfigMap with new config")
 	} else if err != nil {
@@ -320,15 +337,19 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		r.log.Info("Created spire server StatefulSet")
 	} else if err == nil && needsUpdate(existingSTS, *sts) {
-		if err = r.ctrlClient.Update(ctx, sts); err != nil {
-			reconcileStatus[SpireServerStatefulSetGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireServerStatefulSetGenerationFailed",
-				Message: err.Error(),
+		if createOnlyMode {
+			r.log.Info("Skipping StatefulSet update due to create-only mode")
+		} else {
+			if err = r.ctrlClient.Update(ctx, sts); err != nil {
+				reconcileStatus[SpireServerStatefulSetGeneration] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "SpireServerStatefulSetGenerationFailed",
+					Message: err.Error(),
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to update StatefulSet: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to update StatefulSet: %w", err)
+			r.log.Info("Updated spire server StatefulSet")
 		}
-		r.log.Info("Updated spire server StatefulSet")
 	} else if err != nil {
 		r.log.Error(err, "failed to update spire server stateful set resource")
 		return ctrl.Result{}, err
