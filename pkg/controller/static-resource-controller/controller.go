@@ -161,10 +161,6 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&config, &r.createOnlyFlag)
-	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
-	}
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
 		originalStatus := config.Status.DeepCopy()
@@ -190,6 +186,26 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 		}
 	}(reconcileStatus)
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&config, &r.createOnlyFlag)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.CreateOnlyModeEnabled,
+			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+		}
+	} else {
+		existingCondition := apimeta.FindStatusCondition(config.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.CreateOnlyModeDisabled,
+				Message: "Create-only mode is disabled - annotation not present or set to false",
+			}
+		}
+	}
+
 	err = r.CreateOrApplyRbacResources(ctx, createOnlyMode)
 	if err != nil {
 		r.log.Error(err, "failed to create or apply rbac resources")

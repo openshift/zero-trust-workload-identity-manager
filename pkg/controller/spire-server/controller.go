@@ -86,10 +86,6 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&server, &r.createOnlyFlag)
-	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
-	}
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
 		originalStatus := server.Status.DeepCopy()
@@ -115,6 +111,25 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 		}
 	}(reconcileStatus)
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&server, &r.createOnlyFlag)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.CreateOnlyModeEnabled,
+			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+		}
+	} else {
+		existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.CreateOnlyModeDisabled,
+				Message: "Create-only mode is disabled - annotation not present or set to false",
+			}
+		}
+	}
 
 	// Validate JWT issuer URL format to prevent unintended formats during server configuration
 	if err := utils.IsValidURL(server.Spec.JwtIssuer); err != nil {

@@ -5,7 +5,10 @@ import (
 )
 
 const (
-	CreateOnlyAnnotation = "ztwim.openshift.io/create-only"
+	CreateOnlyAnnotation     = "ztwim.openshift.io/create-only"
+	CreateOnlyModeStatusType = "CreateOnlyMode"
+	CreateOnlyModeEnabled    = "CreateOnlyModeEnabled"
+	CreateOnlyModeDisabled   = "CreateOnlyModeDisabled"
 )
 
 func IsCreateOnlyAnnotationEnabled(obj client.Object) bool {

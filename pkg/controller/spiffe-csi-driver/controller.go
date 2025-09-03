@@ -80,11 +80,6 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyFlag)
-	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
-	}
-
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
 		originalStatus := spiffeCSIDriver.Status.DeepCopy()
@@ -110,6 +105,25 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 	}(reconcileStatus)
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyFlag)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.CreateOnlyModeEnabled,
+			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+		}
+	} else {
+		existingCondition := apimeta.FindStatusCondition(spiffeCSIDriver.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.CreateOnlyModeDisabled,
+				Message: "Create-only mode is disabled - annotation not present or set to false",
+			}
+		}
+	}
 
 	SpiffeCsiSCC := generateSpiffeCSIDriverSCC()
 	if err := controllerutil.SetControllerReference(&spiffeCSIDriver, SpiffeCsiSCC, r.scheme); err != nil {
