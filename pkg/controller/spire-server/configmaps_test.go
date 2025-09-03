@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestGenerateSpireServerConfigMap(t *testing.T) {
@@ -155,6 +157,21 @@ func TestGenerateServerConfMap(t *testing.T) {
 		t.Errorf("Expected jwt_issuer %q, got %v", validConfig.JwtIssuer, server["jwt_issuer"])
 	}
 
+	// Test CA TTL (direct comparison of metav1.Duration objects)
+	if server["ca_ttl"] != validConfig.CAValidity {
+		t.Errorf("Expected ca_ttl %v, got %v", validConfig.CAValidity, server["ca_ttl"])
+	}
+
+	// Test default X509 SVID TTL (direct comparison of metav1.Duration objects)
+	if server["default_x509_svid_ttl"] != validConfig.DefaultX509Validity {
+		t.Errorf("Expected default_x509_svid_ttl %v, got %v", validConfig.DefaultX509Validity, server["default_x509_svid_ttl"])
+	}
+
+	// Test default JWT SVID TTL (direct comparison of metav1.Duration objects)
+	if server["default_jwt_svid_ttl"] != validConfig.DefaultJWTValidity {
+		t.Errorf("Expected default_jwt_svid_ttl %v, got %v", validConfig.DefaultJWTValidity, server["default_jwt_svid_ttl"])
+	}
+
 	// Test CA subject
 	caSubjects, ok := server["ca_subject"].([]map[string]interface{})
 	if !ok || len(caSubjects) == 0 {
@@ -212,6 +229,129 @@ func TestGenerateServerConfMap(t *testing.T) {
 		t.Errorf("Expected namespace %q, got %v",
 			utils.OperatorNamespace,
 			bundleData["namespace"])
+	}
+}
+
+func TestGenerateServerConfMapTTLFields(t *testing.T) {
+	tests := []struct {
+		name                 string
+		caValidityDuration   string
+		defaultX509Duration  string
+		defaultJWTDuration   string
+		expectedCAValidity   metav1.Duration
+		expectedX509Validity metav1.Duration
+		expectedJWTValidity  metav1.Duration
+	}{
+		{
+			name:                 "Custom TTL values",
+			caValidityDuration:   "48h",
+			defaultX509Duration:  "2h",
+			defaultJWTDuration:   "30m",
+			expectedCAValidity:   metav1.Duration{Duration: mustParseDuration("48h")},
+			expectedX509Validity: metav1.Duration{Duration: mustParseDuration("2h")},
+			expectedJWTValidity:  metav1.Duration{Duration: mustParseDuration("30m")},
+		},
+		{
+			name:                 "Default TTL values",
+			caValidityDuration:   "24h",
+			defaultX509Duration:  "1h",
+			defaultJWTDuration:   "10m",
+			expectedCAValidity:   metav1.Duration{Duration: mustParseDuration("24h")},
+			expectedX509Validity: metav1.Duration{Duration: mustParseDuration("1h")},
+			expectedJWTValidity:  metav1.Duration{Duration: mustParseDuration("10m")},
+		},
+		{
+			name:                 "Short TTL values",
+			caValidityDuration:   "1h",
+			defaultX509Duration:  "15m",
+			defaultJWTDuration:   "5m",
+			expectedCAValidity:   metav1.Duration{Duration: mustParseDuration("1h")},
+			expectedX509Validity: metav1.Duration{Duration: mustParseDuration("15m")},
+			expectedJWTValidity:  metav1.Duration{Duration: mustParseDuration("5m")},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := createValidConfig()
+			config.CAValidity = tt.expectedCAValidity
+			config.DefaultX509Validity = tt.expectedX509Validity
+			config.DefaultJWTValidity = tt.expectedJWTValidity
+
+			confMap := generateServerConfMap(config)
+
+			server, ok := confMap["server"].(map[string]interface{})
+			if !ok {
+				t.Fatal("Failed to get server section")
+			}
+
+			// Test CA TTL (direct comparison of metav1.Duration objects)
+			if server["ca_ttl"] != config.CAValidity {
+				t.Errorf("Expected ca_ttl %v, got %v", config.CAValidity, server["ca_ttl"])
+			}
+
+			// Test default X509 SVID TTL (direct comparison of metav1.Duration objects)
+			if server["default_x509_svid_ttl"] != config.DefaultX509Validity {
+				t.Errorf("Expected default_x509_svid_ttl %v, got %v", config.DefaultX509Validity, server["default_x509_svid_ttl"])
+			}
+
+			// Test default JWT SVID TTL (direct comparison of metav1.Duration objects)
+			if server["default_jwt_svid_ttl"] != config.DefaultJWTValidity {
+				t.Errorf("Expected default_jwt_svid_ttl %v, got %v", config.DefaultJWTValidity, server["default_jwt_svid_ttl"])
+			}
+		})
+	}
+}
+
+func TestGenerateSpireServerConfigMapWithTTLFields(t *testing.T) {
+	// Test that the new TTL fields are properly included in the generated ConfigMap
+	config := createValidConfig()
+	config.CAValidity = metav1.Duration{Duration: mustParseDuration("48h")}
+	config.DefaultX509Validity = metav1.Duration{Duration: mustParseDuration("2h")}
+	config.DefaultJWTValidity = metav1.Duration{Duration: mustParseDuration("15m")}
+
+	cm, err := GenerateSpireServerConfigMap(config)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify config data exists
+	configData, exists := cm.Data["server.conf"]
+	if !exists {
+		t.Fatal("Expected server.conf data to exist in ConfigMap")
+	}
+
+	// Validate JSON
+	var configMap map[string]interface{}
+	if err := json.Unmarshal([]byte(configData), &configMap); err != nil {
+		t.Fatalf("Failed to unmarshal server.conf JSON: %v", err)
+	}
+
+	// Verify server section contains TTL fields
+	serverConfig, ok := configMap["server"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Failed to get server section from config")
+	}
+
+	// Check CA TTL is properly set (JSON marshaling converts Duration to string)
+	if caValidity, ok := serverConfig["ca_ttl"].(string); !ok {
+		t.Errorf("Expected ca_ttl to be a string, got %T", serverConfig["ca_ttl"])
+	} else if caValidity != config.CAValidity.Duration.String() {
+		t.Errorf("Expected ca_ttl %v, got %v", config.CAValidity.Duration.String(), caValidity)
+	}
+
+	// Check X509 TTL is properly set (JSON marshaling converts Duration to string)
+	if x509Validity, ok := serverConfig["default_x509_svid_ttl"].(string); !ok {
+		t.Errorf("Expected default_x509_svid_ttl to be a string, got %T", serverConfig["default_x509_svid_ttl"])
+	} else if x509Validity != config.DefaultX509Validity.Duration.String() {
+		t.Errorf("Expected default_x509_svid_ttl %v, got %v", config.DefaultX509Validity.Duration.String(), x509Validity)
+	}
+
+	// Check JWT TTL is properly set (JSON marshaling converts Duration to string)
+	if jwtValidity, ok := serverConfig["default_jwt_svid_ttl"].(string); !ok {
+		t.Errorf("Expected default_jwt_svid_ttl to be a string, got %T", serverConfig["default_jwt_svid_ttl"])
+	} else if jwtValidity != config.DefaultJWTValidity.Duration.String() {
+		t.Errorf("Expected default_jwt_svid_ttl %v, got %v", config.DefaultJWTValidity.Duration.String(), jwtValidity)
 	}
 }
 
@@ -523,5 +663,18 @@ func createValidConfig() *v1alpha1.SpireServerSpec {
 				"custom-label": "value",
 			},
 		},
+		// Add the new TTL configuration fields with default values
+		CAValidity:          metav1.Duration{Duration: mustParseDuration("24h")},
+		DefaultX509Validity: metav1.Duration{Duration: mustParseDuration("1h")},
+		DefaultJWTValidity:  metav1.Duration{Duration: mustParseDuration("10m")},
 	}
+}
+
+// Helper function to parse duration strings for testing
+func mustParseDuration(s string) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }

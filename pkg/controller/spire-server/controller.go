@@ -37,6 +37,7 @@ const (
 	SpireServerConfigMapGeneration            = "SpireServerConfigMapGeneration"
 	SpireControllerManagerConfigMapGeneration = "SpireControllerManagerConfigMapGeneration"
 	SpireBundleConfigMapGeneration            = "SpireBundleConfigMapGeneration"
+	SpireServerTTLValidation                  = "SpireServerTTLValidation"
 	ConfigurationValidation                   = "ConfigurationValidation"
 )
 
@@ -126,6 +127,11 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			Reason:  "ValidJWTIssuerURL",
 			Message: "JWT issuer URL validation passed",
 		}
+	}
+
+	// Perform TTL validation and handle warnings
+	if err := r.handleTTLValidation(ctx, &server, reconcileStatus); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)
@@ -389,4 +395,48 @@ func needsUpdate(current, desired appsv1.StatefulSet) bool {
 		return true
 	}
 	return false
+}
+
+// handleTTLValidation performs TTL validation and handles warnings, events, and status updates
+func (r *SpireServerReconciler) handleTTLValidation(ctx context.Context, server *v1alpha1.SpireServer, reconcileStatus map[string]reconcilerStatus) error {
+	ttlValidationResult := validateTTLDurationsWithWarnings(&server.Spec)
+
+	if ttlValidationResult.Error != nil {
+		r.log.Error(ttlValidationResult.Error, "TTL validation failed")
+		reconcileStatus[SpireServerTTLValidation] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "TTLValidationFailed",
+			Message: ttlValidationResult.Error.Error(),
+		}
+		return ttlValidationResult.Error
+	}
+
+	// Handle warnings
+	if len(ttlValidationResult.Warnings) > 0 {
+		// Log each warning
+		for _, warning := range ttlValidationResult.Warnings {
+			r.log.Info("TTL configuration warning", "warning", warning)
+		}
+
+		// Record events for each warning
+		for _, warning := range ttlValidationResult.Warnings {
+			r.eventRecorder.Event(server, corev1.EventTypeWarning, "TTLConfigurationWarning", warning)
+		}
+
+		// Set status condition with warning
+		reconcileStatus[SpireServerTTLValidation] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "TTLValidationWarning",
+			Message: ttlValidationResult.StatusMessage,
+		}
+	} else {
+		// No warnings - set success status
+		reconcileStatus[SpireServerTTLValidation] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  "TTLValidationSucceeded",
+			Message: "TTL configuration is valid",
+		}
+	}
+
+	return nil
 }

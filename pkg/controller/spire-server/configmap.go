@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sigs.k8s.io/yaml"
 	"strings"
+
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -137,10 +138,10 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 					"organization": []string{config.CASubject.Organization},
 				},
 			},
-			"ca_ttl":                "24h",
+			"ca_ttl":                config.CAValidity,
 			"data_dir":              "/run/spire/data",
-			"default_jwt_svid_ttl":  "1h",
-			"default_x509_svid_ttl": "4h",
+			"default_jwt_svid_ttl":  config.DefaultJWTValidity,
+			"default_x509_svid_ttl": config.DefaultX509Validity,
 			"jwt_issuer":            config.JwtIssuer,
 			"log_level":             "debug",
 			"trust_domain":          config.TrustDomain,
