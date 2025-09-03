@@ -46,7 +46,7 @@ type StaticResourceReconciler struct {
 	eventRecorder  record.EventRecorder
 	log            logr.Logger
 	scheme         *runtime.Scheme
-	createOnlyFlag bool
+	createOnlyMode bool
 }
 
 type reconcilerStatus struct {
@@ -113,7 +113,7 @@ func New(mgr ctrl.Manager) (*StaticResourceReconciler, error) {
 		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName),
 		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName),
 		scheme:         mgr.GetScheme(),
-		createOnlyFlag: false,
+		createOnlyMode: false,
 	}, nil
 }
 
@@ -187,7 +187,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}(reconcileStatus)
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&config, &r.createOnlyFlag)
+	createOnlyMode := utils.IsInCreateOnlyMode(&config, &r.createOnlyMode)
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
@@ -201,7 +201,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  utils.CreateOnlyModeDisabled,
-				Message: "Create-only mode is disabled - annotation not present or set to false",
+				Message: "Create-only mode is disabled",
 			}
 		}
 	}

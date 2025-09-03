@@ -51,7 +51,7 @@ type SpiffeCsiReconciler struct {
 	eventRecorder  record.EventRecorder
 	log            logr.Logger
 	scheme         *runtime.Scheme
-	createOnlyFlag bool
+	createOnlyMode bool
 }
 
 // New returns a new Reconciler instance.
@@ -66,7 +66,7 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
 		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
 		scheme:         mgr.GetScheme(),
-		createOnlyFlag: false,
+		createOnlyMode: false,
 	}, nil
 }
 
@@ -106,7 +106,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}(reconcileStatus)
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyFlag)
+	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyMode)
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
@@ -120,7 +120,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  utils.CreateOnlyModeDisabled,
-				Message: "Create-only mode is disabled - annotation not present or set to false",
+				Message: "Create-only mode is disabled",
 			}
 		}
 	}

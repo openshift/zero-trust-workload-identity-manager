@@ -52,7 +52,7 @@ type SpireOidcDiscoveryProviderReconciler struct {
 	eventRecorder  record.EventRecorder
 	log            logr.Logger
 	scheme         *runtime.Scheme
-	createOnlyFlag bool
+	createOnlyMode bool
 }
 
 // New returns a new Reconciler instance.
@@ -67,7 +67,7 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
 		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
 		scheme:         mgr.GetScheme(),
-		createOnlyFlag: false,
+		createOnlyMode: false,
 	}, nil
 }
 
@@ -108,7 +108,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 	}(reconcileStatus)
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&oidcDiscoveryProviderConfig, &r.createOnlyFlag)
+	createOnlyMode := utils.IsInCreateOnlyMode(&oidcDiscoveryProviderConfig, &r.createOnlyMode)
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
@@ -122,7 +122,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  utils.CreateOnlyModeDisabled,
-				Message: "Create-only mode is disabled - annotation not present or set to false",
+				Message: "Create-only mode is disabled",
 			}
 		}
 	}

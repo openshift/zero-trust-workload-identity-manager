@@ -54,7 +54,7 @@ type SpireServerReconciler struct {
 	eventRecorder  record.EventRecorder
 	log            logr.Logger
 	scheme         *runtime.Scheme
-	createOnlyFlag bool
+	createOnlyMode bool
 }
 
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
@@ -72,7 +72,7 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
 		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
 		scheme:         mgr.GetScheme(),
-		createOnlyFlag: false,
+		createOnlyMode: false,
 	}, nil
 }
 
@@ -112,7 +112,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}(reconcileStatus)
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&server, &r.createOnlyFlag)
+	createOnlyMode := utils.IsInCreateOnlyMode(&server, &r.createOnlyMode)
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
@@ -126,7 +126,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
 				Status:  metav1.ConditionFalse,
 				Reason:  utils.CreateOnlyModeDisabled,
-				Message: "Create-only mode is disabled - annotation not present or set to false",
+				Message: "Create-only mode is disabled",
 			}
 		}
 	}
