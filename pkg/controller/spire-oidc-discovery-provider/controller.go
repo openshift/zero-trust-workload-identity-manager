@@ -3,16 +3,22 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 	"fmt"
-
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -20,13 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const spireOidcDeploymentSpireOidcConfigHashAnnotationKey = "ztwim.openshift.io/spire-oidc-discovery-provider-config-hash"
@@ -36,6 +35,7 @@ const (
 	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
 	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
+	ManagedRouteReady              = "ManagedRouteReady"
 	ConfigurationValidation        = "ConfigurationValidation"
 )
 
@@ -100,8 +100,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			}
 			apimeta.SetStatusCondition(&oidcDiscoveryProviderConfig.Status.ConditionalStatus.Conditions, newCondition)
 		}
-		newConfig := oidcDiscoveryProviderConfig.DeepCopy()
 		if !equality.Semantic.DeepEqual(originalStatus, &oidcDiscoveryProviderConfig.Status) {
+			newConfig := oidcDiscoveryProviderConfig.DeepCopy()
 			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
 				r.log.Error(err, "failed to update status")
 			}
@@ -339,6 +339,12 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		Reason:  "SpireOIDCDeploymentCreationSucceeded",
 		Message: "Spire OIDC Deployment created",
 	}
+
+	err = r.managedRoute(ctx, reconcileStatus, &oidcDiscoveryProviderConfig)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -380,6 +386,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err
@@ -395,4 +402,104 @@ func needsUpdate(current, desired appsv1.Deployment) bool {
 		return true
 	}
 	return false
+}
+
+// checkRouteConflict returns true if desired & current routes has conflicts else return false
+func checkRouteConflict(current, desired *routev1.Route) bool {
+	return !equality.Semantic.DeepEqual(current.Spec, desired.Spec) || !equality.Semantic.DeepEqual(current.Labels, desired.Labels)
+}
+
+// managedRoute route creates/updates route when managedRoute is enabled else skips when disabled
+func (r *SpireOidcDiscoveryProviderReconciler) managedRoute(ctx context.Context, reconcileStatus map[string]reconcilerStatus, oidcDiscoveryProviderConfig *v1alpha1.SpireOIDCDiscoveryProvider) error {
+	if utils.StringToBool(oidcDiscoveryProviderConfig.Spec.ManagedRoute) {
+		// Create Route for OIDC Discovery Provider
+		route, err := generateOIDCDiscoveryProviderRoute(oidcDiscoveryProviderConfig)
+		if err != nil {
+			r.log.Error(err, "Failed to generate OIDC discovery provider route")
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  "ManagedRouteCreationFailed",
+				Message: err.Error(),
+			}
+			return err
+		}
+
+		var existingRoute routev1.Route
+		err = r.ctrlClient.Get(ctx, types.NamespacedName{
+			Name:      route.Name,
+			Namespace: route.Namespace,
+		}, &existingRoute)
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				if err = r.ctrlClient.Create(ctx, route); err != nil {
+					r.log.Error(err, "Failed to create route")
+					reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+						Status:  metav1.ConditionFalse,
+						Reason:  "ManagedRouteCreationFailed",
+						Message: err.Error(),
+					}
+					return err
+				}
+
+				// Set status when route is actually created
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+					Status:  metav1.ConditionTrue,
+					Reason:  "ManagedRouteCreated",
+					Message: "Spire OIDC Managed Route created",
+				}
+
+				r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
+			} else {
+				r.log.Error(err, "Failed to get existing route")
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "ManagedRouteRetrievalFailed",
+					Message: err.Error(),
+				}
+				return err
+			}
+		} else if checkRouteConflict(&existingRoute, route) {
+			r.log.Info("Found conflict in routes, updating route")
+			route.ResourceVersion = existingRoute.ResourceVersion
+
+			err = r.ctrlClient.Update(ctx, route)
+			if err != nil {
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+					Status:  metav1.ConditionFalse,
+					Reason:  "ManagedRouteUpdateFailed",
+					Message: err.Error(),
+				}
+				return err
+			}
+
+			// Set status when route is actually updated
+			reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+				Status:  metav1.ConditionTrue,
+				Reason:  "ManagedRouteUpdated",
+				Message: "Spire OIDC Managed Route updated",
+			}
+
+			r.log.Info("Updated route", "Namespace", route.Namespace, "Name", route.Name)
+		} else {
+			// Route exists and is up to date - only update status if it's currently not ready
+			existingCondition := apimeta.FindStatusCondition(oidcDiscoveryProviderConfig.Status.ConditionalStatus.Conditions, ManagedRouteReady)
+			if existingCondition == nil || existingCondition.Status != metav1.ConditionTrue {
+				reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+					Status:  metav1.ConditionTrue,
+					Reason:  "ManagedRouteReady",
+					Message: "Spire OIDC Managed Route is ready",
+				}
+			}
+			// If route is already ready, don't update the status to avoid overwriting the reason
+		}
+	} else {
+		// Only update status if it's currently enabled
+		reconcileStatus[ManagedRouteReady] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "ManagedRouteDisabled",
+			Message: "Spire OIDC Managed Route disabled",
+		}
+	}
+
+	return nil
 }

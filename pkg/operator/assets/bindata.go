@@ -644,6 +644,8 @@ kind: Service
 metadata:
   name: spire-spiffe-oidc-discovery-provider
   namespace: zero-trust-workload-identity-manager
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: oidc-serving-cert
   labels:
     app.kubernetes.io/name: spiffe-oidc-discovery-provider
     app.kubernetes.io/instance: spire

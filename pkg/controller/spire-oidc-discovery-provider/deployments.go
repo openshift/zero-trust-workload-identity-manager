@@ -48,19 +48,6 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "spire-spiffe-oidc-discovery-provider",
-					InitContainers: []corev1.Container{
-						{
-							Name:            "init",
-							Image:           utils.GetSpiffeHelperImage(),
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args:            []string{"-config", "/etc/spiffe-helper.conf", "-daemon-mode=false"},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},
-								{Name: "spire-oidc-config", MountPath: "/etc/spiffe-helper.conf", SubPath: "spiffe-helper.conf", ReadOnly: true},
-								{Name: "certdir", MountPath: "/certs"},
-							},
-						},
-					},
 					Volumes: []corev1.Volume{
 						{
 							Name: "spiffe-workload-api",
@@ -86,12 +73,12 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 							},
 						},
 						{
-							Name:         "certdir",
-							VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-						},
-						{
-							Name:         "ngnix-tmp",
-							VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+							Name: "tls-certs",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: "oidc-serving-cert",
+								},
+							},
 						},
 					},
 					Containers: []corev1.Container{
@@ -108,7 +95,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},
 								{Name: "spire-oidc-sockets", MountPath: "/run/spire/oidc-sockets", ReadOnly: false},
 								{Name: "spire-oidc-config", MountPath: "/run/spire/oidc/config/oidc-discovery-provider.conf", SubPath: "oidc-discovery-provider.conf", ReadOnly: true},
-								{Name: "certdir", MountPath: "/certs", ReadOnly: true},
+								{Name: "tls-certs", MountPath: "/etc/oidc/tls", ReadOnly: true},
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -129,18 +116,6 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 								},
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
-							},
-							Resources: utils.DerefResourceRequirements(config.Spec.Resources),
-						},
-						{
-							Name:            "spiffe-helper",
-							Image:           utils.GetSpiffeHelperImage(),
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args:            []string{"-config", "/etc/spiffe-helper.conf"},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},
-								{Name: "spire-oidc-config", MountPath: "/etc/spiffe-helper.conf", SubPath: "spiffe-helper.conf", ReadOnly: true},
-								{Name: "certdir", MountPath: "/certs"},
 							},
 							Resources: utils.DerefResourceRequirements(config.Spec.Resources),
 						},
