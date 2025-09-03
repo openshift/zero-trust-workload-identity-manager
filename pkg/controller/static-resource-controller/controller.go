@@ -41,11 +41,12 @@ const (
 )
 
 type StaticResourceReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
+	createOnlyMode bool
 }
 
 type reconcilerStatus struct {
@@ -107,11 +108,12 @@ func New(mgr ctrl.Manager) (*StaticResourceReconciler, error) {
 		return nil, err
 	}
 	return &StaticResourceReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerStaticResourceControllerName),
+		scheme:         mgr.GetScheme(),
+		createOnlyMode: false,
 	}, nil
 }
 
@@ -158,6 +160,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return ctrl.Result{}, err
 	}
+
 	reconcileStatus := map[string]reconcilerStatus{}
 	defer func(reconcileStatus map[string]reconcilerStatus) {
 		originalStatus := config.Status.DeepCopy()
@@ -183,7 +186,27 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 		}
 	}(reconcileStatus)
-	err = r.CreateOrApplyRbacResources(ctx)
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&config, &r.createOnlyMode)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.CreateOnlyModeEnabled,
+			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+		}
+	} else {
+		existingCondition := apimeta.FindStatusCondition(config.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.CreateOnlyModeDisabled,
+				Message: "Create-only mode is disabled",
+			}
+		}
+	}
+
+	err = r.CreateOrApplyRbacResources(ctx, createOnlyMode)
 	if err != nil {
 		r.log.Error(err, "failed to create or apply rbac resources")
 		r.eventRecorder.Event(&config, corev1.EventTypeWarning, "failed to create RBAC resources",
@@ -200,7 +223,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Reason:  "RBACResourceCreated",
 		Message: "All RBAC resources for operands created",
 	}
-	err = r.CreateOrApplyServiceAccountResources(ctx)
+	err = r.CreateOrApplyServiceAccountResources(ctx, createOnlyMode)
 	if err != nil {
 		r.log.Error(err, "failed to create or apply service accounts resources")
 		r.eventRecorder.Event(&config, corev1.EventTypeWarning, "failed to create Service Account resources",
@@ -217,7 +240,7 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Reason:  "ServiceAccountResourceCreated",
 		Message: "Service Account resources for operands are created",
 	}
-	err = r.CreateOrApplyServiceResources(ctx)
+	err = r.CreateOrApplyServiceResources(ctx, createOnlyMode)
 	if err != nil {
 		r.log.Error(err, "failed to create or apply services resources")
 		r.eventRecorder.Event(&config, corev1.EventTypeWarning, "failed to create Service resources",

@@ -3,6 +3,7 @@ package spiffe_csi_driver
 import (
 	"context"
 	"fmt"
+
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -45,11 +46,12 @@ const (
 
 // SpiffeCsiReconciler reconciles a SpiffeCsi object
 type SpiffeCsiReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
+	createOnlyMode bool
 }
 
 // New returns a new Reconciler instance.
@@ -59,11 +61,12 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 		return nil, err
 	}
 	return &SpiffeCsiReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
+		scheme:         mgr.GetScheme(),
+		createOnlyMode: false,
 	}, nil
 }
 
@@ -102,6 +105,25 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 	}(reconcileStatus)
+
+	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyMode)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+			Status:  metav1.ConditionTrue,
+			Reason:  utils.CreateOnlyModeEnabled,
+			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+		}
+	} else {
+		existingCondition := apimeta.FindStatusCondition(spiffeCSIDriver.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
+				Status:  metav1.ConditionFalse,
+				Reason:  utils.CreateOnlyModeDisabled,
+				Message: "Create-only mode is disabled",
+			}
+		}
+	}
 
 	SpiffeCsiSCC := generateSpiffeCSIDriverSCC()
 	if err := controllerutil.SetControllerReference(&spiffeCSIDriver, SpiffeCsiSCC, r.scheme); err != nil {
@@ -155,12 +177,16 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		r.log.Info("Created spiffe csi DaemonSet")
 	} else if err == nil && needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
-		existingSpiffeCsiDaemonSet.Spec = spiffeCsiDaemonset.Spec
-		if err = r.ctrlClient.Update(ctx, &existingSpiffeCsiDaemonSet); err != nil {
-			r.log.Error(err, "failed to update spiffe csi daemon set")
-			return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
+		if createOnlyMode {
+			r.log.Info("Skipping DaemonSet update due to create-only mode")
+		} else {
+			existingSpiffeCsiDaemonSet.Spec = spiffeCsiDaemonset.Spec
+			if err = r.ctrlClient.Update(ctx, &existingSpiffeCsiDaemonSet); err != nil {
+				r.log.Error(err, "failed to update spiffe csi daemon set")
+				return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
+			}
+			r.log.Info("Updated spiffe csi DaemonSet")
 		}
-		r.log.Info("Updated spiffe csi DaemonSet")
 	} else if err != nil {
 		r.log.Error(err, "Failed to get SpiffeCsiDaemon set")
 		reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
