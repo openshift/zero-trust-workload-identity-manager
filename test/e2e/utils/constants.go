@@ -23,10 +23,12 @@ const (
 	OperatorDeploymentName = "zero-trust-workload-identity-manager-controller-manager"
 	OperatorLabelSelector  = "name=zero-trust-workload-identity-manager"
 
-	SpireServerStatefulSetName = "spire-server"
-	SpireServerPodLabel        = "app.kubernetes.io/name=spire-server"
-	SpireAgentDaemonSetName    = "spire-agent"
-	SpireAgentPodLabel         = "app.kubernetes.io/name=spire-agent"
+	SpireServerStatefulSetName   = "spire-server"
+	SpireServerPodLabel          = "app.kubernetes.io/name=spire-server"
+	SpireAgentDaemonSetName      = "spire-agent"
+	SpireAgentPodLabel           = "app.kubernetes.io/name=spire-agent"
+	SpiffeCSIDriverDaemonSetName = "spire-spiffe-csi-driver"
+	SpiffeCSIDriverPodLabel      = "app.kubernetes.io/name=spiffe-csi-driver"
 
 	DefaultInterval = 10 * time.Second
 	ShortInterval   = 5 * time.Second
