@@ -145,10 +145,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					Name: "cluster",
 				},
 				Spec: operatorv1alpha1.SpireServerSpec{
-					TrustDomain:     appDomain,
-					ClusterName:     clusterName,
-					BundleConfigMap: bundleConfigMap,
-					JwtIssuer:       fmt.Sprintf("https://oidc-discovery.%s", appDomain),
+					TrustDomain:         appDomain,
+					ClusterName:         clusterName,
+					BundleConfigMap:     bundleConfigMap,
+					JwtIssuer:           fmt.Sprintf("https://oidc-discovery.%s", appDomain),
 					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
 					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
 					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
@@ -224,6 +224,29 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Waiting for SPIRE Agent DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("SPIFFE CSI Driver should be installed successfully by creating a SpiffeCSIDriver object", func() {
+			By("Creating SpiffeCSIDriver object")
+			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: operatorv1alpha1.SpiffeCSIDriverSpec{},
+			}
+			err := k8sClient.Create(testCtx, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to create SpiffeCSIDriver object")
+
+			By("Waiting for all resource generation conditions in SpiffeCSIDriver object to be True")
+			conditionTypes := []string{
+				"SpiffeCSISCCGeneration",
+				"SpiffeCSIDaemonSetGeneration",
+			}
+			cr := &operatorv1alpha1.SpiffeCSIDriver{}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 	})
 
@@ -458,7 +481,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(newPods.Items[0].Spec.NodeName).NotTo(Equal(originalNodeName), "pod should be rescheduled to a different node")
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
 		})
-		
+
 		It("SPIRE Agent containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireAgent object")
 			spireAgent := &operatorv1alpha1.SpireAgent{}
