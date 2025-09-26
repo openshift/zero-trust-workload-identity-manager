@@ -38,6 +38,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	var appDomain string
 	var clusterName string
 	var bundleConfigMap string
+	var JwtIssuer string
 
 	BeforeAll(func() {
 		By("Getting cluster base domain")
@@ -46,6 +47,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 		// declare shared variables for tests
 		appDomain = fmt.Sprintf("apps.%s", baseDomain)
+		JwtIssuer = fmt.Sprintf("https://oidc-discovery.%s", appDomain)
 		clusterName = "test01"
 		bundleConfigMap = "spire-bundle"
 	})
@@ -148,7 +150,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					TrustDomain:         appDomain,
 					ClusterName:         clusterName,
 					BundleConfigMap:     bundleConfigMap,
-					JwtIssuer:           fmt.Sprintf("https://oidc-discovery.%s", appDomain),
+					JwtIssuer:           JwtIssuer,
 					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
 					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
 					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
@@ -247,6 +249,35 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("SPIRE OIDC Discovery Provider should be installed successfully by creating a SpireOIDCDiscoveryProvider object", func() {
+			By("Creating SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: operatorv1alpha1.SpireOIDCDiscoveryProviderSpec{
+					TrustDomain: appDomain,
+					JwtIssuer:   JwtIssuer,
+				},
+			}
+			err := k8sClient.Create(testCtx, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to create SpireOIDCDiscoveryProvider object")
+
+			By("Waiting for all resource generation conditions in SpireOIDCDiscoveryProvider object to be True")
+			conditionTypes := []string{
+				"SpireOIDCConfigMapGeneration",
+				"SpireOIDCDeploymentGeneration",
+				"SpireClusterSpiffeIDGeneration",
+				"ManagedRouteReady",
+				"SpireOIDCSCCGeneration",
+			}
+			cr := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 	})
 
