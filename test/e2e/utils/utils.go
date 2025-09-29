@@ -110,6 +110,22 @@ func IsPodRunning(pod *corev1.Pod) bool {
 	return pod.Status.Phase == corev1.PodRunning
 }
 
+// IsPodReady checks if a pod has the Ready condition set to True
+func IsPodReady(pod *corev1.Pod) bool {
+	// Exclude the pod being terminated
+	if pod.DeletionTimestamp != nil {
+		return false
+	}
+
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+
+	return false
+}
+
 // WaitForPodRunning waits for a specific pod to be in Running phase within timeout
 func WaitForPodRunning(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
 	Eventually(func() bool {
@@ -142,6 +158,21 @@ func IsDeploymentAvailable(deployment *appsv1.Deployment) bool {
 	return false
 }
 
+// IsDeploymentRolloutComplete checks if a Deployment rollout is fully complete
+// This includes checking that the controller has observed the latest generation
+// and that all replicas are updated, available, and none are unavailable
+func IsDeploymentRolloutComplete(deployment *appsv1.Deployment) bool {
+	desired := int32(0)
+	if deployment.Spec.Replicas != nil {
+		desired = *deployment.Spec.Replicas
+	}
+
+	return deployment.Status.ObservedGeneration >= deployment.Generation &&
+		deployment.Status.UpdatedReplicas == desired &&
+		deployment.Status.AvailableReplicas == desired &&
+		deployment.Status.UnavailableReplicas == 0
+}
+
 // WaitForDeploymentAvailable waits for a Deployment to become Available within timeout
 func WaitForDeploymentAvailable(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
 	Eventually(func() bool {
@@ -156,10 +187,39 @@ func WaitForDeploymentAvailable(ctx context.Context, clientset kubernetes.Interf
 			return false
 		}
 
-		fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' is available\n", namespace, name)
+		if !IsDeploymentRolloutComplete(deployment) {
+			fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' rollout not complete yet (observed=%d/gen=%d, unavailable=%d)\n",
+				namespace, name, deployment.Status.ObservedGeneration, deployment.Generation, deployment.Status.UnavailableReplicas)
+			return false
+		}
+
+		fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' is available and rollout complete\n", namespace, name)
 		return true
 	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
-		"deployment '%s/%s' should become available within %v", namespace, name, timeout)
+		"deployment '%s/%s' should become available with complete rollout within %v", namespace, name, timeout)
+}
+
+// WaitForDeploymentRollingUpdate waits for a Deployment rolling update to be processed by the controller
+// This ensures the controller has observed the changes, whether the update is in progress or already completed
+// initialGeneration should be recorded before making any changes to the Deployment
+func WaitForDeploymentRollingUpdate(ctx context.Context, clientset kubernetes.Interface, name, namespace string, initialGeneration int64, timeout time.Duration) {
+	Eventually(func() bool {
+		deployment, err := clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get deployment '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		// Check if generation has increased and controller has observed it
+		if deployment.Generation > initialGeneration && deployment.Status.ObservedGeneration >= deployment.Generation {
+			fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' rolling update processed (generation %d->%d)\n", namespace, name, initialGeneration, deployment.Generation)
+			return true
+		}
+
+		fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' waiting for rolling update (gen=%d->%d, observed=%d)\n", namespace, name, initialGeneration, deployment.Generation, deployment.Status.ObservedGeneration)
+		return false
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"deployment '%s/%s' rolling update should be processed within %v", namespace, name, timeout)
 }
 
 // IsStatefulSetReady checks if a StatefulSet is Ready

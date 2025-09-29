@@ -38,7 +38,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	var appDomain string
 	var clusterName string
 	var bundleConfigMap string
-	var JwtIssuer string
+	var jwtIssuer string
 
 	BeforeAll(func() {
 		By("Getting cluster base domain")
@@ -47,7 +47,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 		// declare shared variables for tests
 		appDomain = fmt.Sprintf("apps.%s", baseDomain)
-		JwtIssuer = fmt.Sprintf("https://oidc-discovery.%s", appDomain)
+		jwtIssuer = fmt.Sprintf("https://oidc-discovery.%s", appDomain)
 		clusterName = "test01"
 		bundleConfigMap = "spire-bundle"
 	})
@@ -150,7 +150,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					TrustDomain:         appDomain,
 					ClusterName:         clusterName,
 					BundleConfigMap:     bundleConfigMap,
-					JwtIssuer:           JwtIssuer,
+					JwtIssuer:           jwtIssuer,
 					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
 					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
 					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
@@ -183,6 +183,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				"SpireControllerManagerConfigMapGeneration",
 				"SpireBundleConfigMapGeneration",
 				"SpireServerStatefulSetGeneration",
+				"SpireServerTTLValidation",
 			}
 			cr := &operatorv1alpha1.SpireServer{}
 			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
@@ -259,7 +260,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 				Spec: operatorv1alpha1.SpireOIDCDiscoveryProviderSpec{
 					TrustDomain: appDomain,
-					JwtIssuer:   JwtIssuer,
+					JwtIssuer:   jwtIssuer,
 				},
 			}
 			err := k8sClient.Create(testCtx, spireOIDCDiscoveryProvider)
@@ -716,6 +717,114 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(newPods.Items).To(HaveLen(1), "nodeAffinity should constrain daemonset to exactly one pod")
 			Expect(newPods.Items[0].Spec.NodeName).To(Equal(targetNodeName), "pod should be scheduled on the labeled node")
 			fmt.Fprintf(GinkgoWriter, "pod has been constrained to labeled node '%s'\n", targetNodeName)
+		})
+
+		It("SPIFFE CSI Driver containers resource limits and requests can be configured through CR", func() {
+			By("Getting SpiffeCSIDriver object")
+			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpiffeCSIDriver object")
+
+			// record initial generation of the DaemonSet before updating SpiffeCSIDriver object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpiffeCSIDriverDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpiffeCSIDriver object with resource specifications")
+			expectedResources := &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+			}
+
+			spiffeCSIDriver.Spec.Resources = expectedResources
+			err = k8sClient.Update(testCtx, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver object with resources")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpiffeCSIDriver resources modification")
+				driver := &operatorv1alpha1.SpiffeCSIDriver{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, driver); err == nil {
+					driver.Spec.Resources = nil
+					k8sClient.Update(ctx, driver)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIFFE CSI Driver Pods have the expected resource limits and requests")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyContainerResources(pods.Items, expectedResources)
+		})
+
+		It("SPIRE OIDC Discovery Provider containers resource limits and requests can be configured through CR", func() {
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			// record initial generation of the Deployment before updating SpireOIDCDiscoveryProvider object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := deployment.Generation
+
+			By("Patching SpireOIDCDiscoveryProvider object with resource specifications")
+			expectedResources := &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("50m"),
+					corev1.ResourceMemory: resource.MustParse("32Mi"),
+				},
+			}
+
+			spireOIDCDiscoveryProvider.Spec.Resources = expectedResources
+			err = k8sClient.Update(testCtx, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider object with resources")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireOIDCDiscoveryProvider resources modification")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.Resources = nil
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE OIDC Discovery Provider Pods have the expected resource limits and requests")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
 	})
 })
