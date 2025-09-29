@@ -634,11 +634,11 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(pods.Items).NotTo(BeEmpty())
 			spireAgentPod := pods.Items[0]
 			targetNodeName := spireAgentPod.Spec.NodeName
-			fmt.Fprintf(GinkgoWriter, "will use node '%s' as target\n", targetNodeName)
+			fmt.Fprintf(GinkgoWriter, "will use node '%s' as target to exclude\n", targetNodeName)
 
-			By("Labeling the target Node with test label to simulate NodeAffinity")
+			By("Labeling the target Node with test label to simulate NodeAffinity exclusion")
 			testLabelKey := "test.spire.agent/node-affinity"
-			testLabelValue := "true"
+			testLabelValue := "exclude"
 
 			patchData := fmt.Sprintf(`{"metadata":{"labels":{"%s":"%s"}}}`, testLabelKey, testLabelValue)
 			_, err = clientset.CoreV1().Nodes().Patch(testCtx, targetNodeName, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
@@ -659,7 +659,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			initialGen := daemonset.Generation
 
-			By("Patching SpireAgent object with NodeAffinity configuration")
+			By("Patching SpireAgent object with NodeAffinity configuration to exclude labeled nodes")
 			expectedAffinity := &corev1.Affinity{
 				NodeAffinity: &corev1.NodeAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
@@ -668,7 +668,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 								MatchExpressions: []corev1.NodeSelectorRequirement{
 									{
 										Key:      testLabelKey,
-										Operator: corev1.NodeSelectorOpIn,
+										Operator: corev1.NodeSelectorOpNotIn,
 										Values:   []string{testLabelValue},
 									},
 								},
@@ -711,12 +711,13 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Waiting for SPIRE Agent DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 
-			By("Verifying if SPIRE Agent Pod is constrained to the labeled Node")
+			By("Verifying if SPIRE Agent Pods are excluded from the labeled Node")
 			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(newPods.Items).To(HaveLen(1), "nodeAffinity should constrain daemonset to exactly one pod")
-			Expect(newPods.Items[0].Spec.NodeName).To(Equal(targetNodeName), "pod should be scheduled on the labeled node")
-			fmt.Fprintf(GinkgoWriter, "pod has been constrained to labeled node '%s'\n", targetNodeName)
+			for _, pod := range newPods.Items {
+				Expect(pod.Spec.NodeName).NotTo(Equal(targetNodeName), "pod should not be scheduled on the labeled node '%s'", targetNodeName)
+				fmt.Fprintf(GinkgoWriter, "pod '%s' correctly excluded from labeled node '%s', scheduled on '%s'\n", pod.Name, targetNodeName, pod.Spec.NodeName)
+			}
 		})
 
 		It("SPIFFE CSI Driver containers resource limits and requests can be configured through CR", func() {
@@ -830,6 +831,90 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Verifying if SPIFFE CSI Driver Pods tolerate Node taints correctly")
 			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
+		})
+
+		It("SPIFFE CSI Driver affinity can be configured through CR", func() {
+			By("Retrieving any SPIFFE CSI Driver Pod and its Node for affinity testing")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			spiffeCSIDriverPod := pods.Items[0]
+			targetNodeName := spiffeCSIDriverPod.Spec.NodeName
+			fmt.Fprintf(GinkgoWriter, "will use node '%s' as target to exclude\n", targetNodeName)
+
+			By("Labeling the target Node with test label to simulate NodeAffinity exclusion")
+			testLabelKey := "test.spiffe-csi-driver/node-affinity"
+			testLabelValue := "exclude"
+
+			patchData := fmt.Sprintf(`{"metadata":{"labels":{"%s":"%s"}}}`, testLabelKey, testLabelValue)
+			_, err = clientset.CoreV1().Nodes().Patch(testCtx, targetNodeName, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to label node '%s'", targetNodeName)
+			DeferCleanup(func(ctx context.Context) {
+				By("Removing test label from Node")
+				patchData := fmt.Sprintf(`{"metadata":{"labels":{"%s":null}}}`, testLabelKey)
+				clientset.CoreV1().Nodes().Patch(ctx, targetNodeName, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+			})
+
+			By("Getting SpiffeCSIDriver object")
+			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpiffeCSIDriver object")
+
+			// record initial generation of the DaemonSet before updating SpiffeCSIDriver object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpiffeCSIDriverDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpiffeCSIDriver object with NodeAffinity configuration to exclude labeled nodes")
+			expectedAffinity := &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      testLabelKey,
+										Operator: corev1.NodeSelectorOpNotIn,
+										Values:   []string{testLabelValue},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			spiffeCSIDriver.Spec.Affinity = expectedAffinity
+			err = k8sClient.Update(testCtx, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver object with affinity")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpiffeCSIDriver affinity modification")
+				driver := &operatorv1alpha1.SpiffeCSIDriver{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, driver); err == nil {
+					driver.Spec.Affinity = nil
+					k8sClient.Update(ctx, driver)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIFFE CSI Driver Pods are excluded from the labeled Node")
+			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			for _, pod := range newPods.Items {
+				Expect(pod.Spec.NodeName).NotTo(Equal(targetNodeName), "pod should not be scheduled on the labeled node '%s'", targetNodeName)
+				fmt.Fprintf(GinkgoWriter, "pod '%s' correctly excluded from labeled node '%s', scheduled on '%s'\n", pod.Name, targetNodeName, pod.Spec.NodeName)
+			}
 		})
 
 		It("SPIRE OIDC Discovery Provider containers resource limits and requests can be configured through CR", func() {
@@ -963,6 +1048,102 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 			By("Verifying if SPIRE OIDC Discovery Provider Pods tolerate Node taints correctly")
 			utils.VerifyPodTolerations(testCtx, clientset, newPods.Items, expectedToleration)
+		})
+
+		It("SPIRE OIDC Discovery Provider affinity can be configured through CR", func() {
+			By("Retrieving any SPIRE OIDC Discovery Provider Pod and its Node for affinity testing")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			spireOIDCDiscoveryProviderPod := pods.Items[0]
+			currentNodeName := spireOIDCDiscoveryProviderPod.Spec.NodeName
+			fmt.Fprintf(GinkgoWriter, "pod '%s' is currently on node '%s'\n", spireOIDCDiscoveryProviderPod.Name, currentNodeName)
+
+			By("Finding SPIFFE CSI Driver Pod on a different Node to simulate NodeAffinity")
+			csiDriverPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(csiDriverPods.Items).NotTo(BeEmpty())
+
+			var targetCSIDriverPod corev1.Pod
+			var targetNodeName string
+			for _, pod := range csiDriverPods.Items {
+				if pod.Spec.NodeName != "" && pod.Spec.NodeName != currentNodeName {
+					targetCSIDriverPod = pod
+					targetNodeName = pod.Spec.NodeName
+					break
+				}
+			}
+			Expect(targetNodeName).NotTo(BeEmpty(), "failed to find a different node with SPIFFE CSI Driver pod placed")
+			fmt.Fprintf(GinkgoWriter, "will use SPIFFE CSI Driver pod '%s' on node '%s' as affinity target\n", targetCSIDriverPod.Name, targetNodeName)
+
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			// record initial generation of the Deployment before updating SpireOIDCDiscoveryProvider object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := deployment.Generation
+
+			By("Patching SpireOIDCDiscoveryProvider object with NodeAffinity configuration")
+			expectedAffinity := &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "kubernetes.io/hostname",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{targetNodeName},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spireOIDCDiscoveryProvider.Spec.Affinity = expectedAffinity
+			spireOIDCDiscoveryProvider.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider object with affinity")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireOIDCDiscoveryProvider affinity modification")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.Affinity = nil
+					provider.Spec.Tolerations = nil
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Ready")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE OIDC Discovery Provider Pod has been rescheduled to the target Node")
+			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newPods.Items).NotTo(BeEmpty())
+			Expect(newPods.Items[0].Spec.NodeName).To(Equal(targetNodeName), "pod should be rescheduled to the target node")
+			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, targetNodeName)
 		})
 	})
 })
