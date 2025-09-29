@@ -579,9 +579,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			initialGen := daemonset.Generation
 
-			By("Patching SpireAgent object with nodeSelector and tolerations to schedule pods on control-plane nodes")
+			By("Patching SpireAgent object with nodeSelector and tolerations to schedule pods on all Linux nodes")
 			expectedNodeSelector := map[string]string{
-				"node-role.kubernetes.io/control-plane": "",
+				"kubernetes.io/os": "linux",
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
@@ -773,6 +773,65 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.VerifyContainerResources(pods.Items, expectedResources)
 		})
 
+		It("SPIFFE CSI Driver nodeSelector and tolerations can be configured through CR", func() {
+			By("Getting SpiffeCSIDriver object")
+			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpiffeCSIDriver object")
+
+			// record initial generation of the DaemonSet before updating SpiffeCSIDriver object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpiffeCSIDriverDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpiffeCSIDriver object with nodeSelector and tolerations to schedule pods on all Linux nodes")
+			expectedNodeSelector := map[string]string{
+				"kubernetes.io/os": "linux",
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spiffeCSIDriver.Spec.NodeSelector = expectedNodeSelector
+			spiffeCSIDriver.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver object with nodeSelector and tolerations")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpiffeCSIDriver nodeSelector and tolerations modification")
+				driver := &operatorv1alpha1.SpiffeCSIDriver{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, driver); err == nil {
+					driver.Spec.NodeSelector = nil
+					driver.Spec.Tolerations = nil
+					k8sClient.Update(ctx, driver)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIFFE CSI Driver Pods have been scheduled to Nodes with required labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodScheduling(testCtx, clientset, pods.Items, expectedNodeSelector)
+
+			By("Verifying if SPIFFE CSI Driver Pods tolerate Node taints correctly")
+			utils.VerifyPodTolerations(testCtx, clientset, pods.Items, expectedToleration)
+		})
+
 		It("SPIRE OIDC Discovery Provider containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireOIDCDiscoveryProvider object")
 			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
@@ -825,6 +884,85 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pods.Items).NotTo(BeEmpty())
 			utils.VerifyContainerResources(pods.Items, expectedResources)
+		})
+
+		It("SPIRE OIDC Discovery Provider nodeSelector and tolerations can be configured through CR", func() {
+			By("Finding a different Node with SPIFFE CSI Driver Pod placed to schedule OIDC Discovery Provider Pod")
+			oidcPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(oidcPods.Items).NotTo(BeEmpty())
+			currentNodeName := oidcPods.Items[0].Spec.NodeName
+
+			driverPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(driverPods.Items).NotTo(BeEmpty())
+
+			var targetNodeName string
+			for _, pod := range driverPods.Items {
+				if pod.Spec.NodeName != "" && pod.Spec.NodeName != currentNodeName {
+					targetNodeName = pod.Spec.NodeName
+					break
+				}
+			}
+			Expect(targetNodeName).NotTo(BeEmpty(), "failed to find a different node with SPIFFE CSI Driver pod placed")
+			fmt.Fprintf(GinkgoWriter, "will move SPIRE OIDC Discovery Provider pod from '%s' to '%s'\n", currentNodeName, targetNodeName)
+
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			// record initial generation of the Deployment before updating SpireOIDCDiscoveryProvider object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := deployment.Generation
+
+			By("Patching SpireOIDCDiscoveryProvider object with nodeSelector and tolerations to schedule Pod on node with SPIFFE CSI Driver")
+			expectedNodeSelector := map[string]string{
+				"kubernetes.io/hostname": targetNodeName,
+			}
+			expectedToleration := []*corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+
+			spireOIDCDiscoveryProvider.Spec.NodeSelector = expectedNodeSelector
+			spireOIDCDiscoveryProvider.Spec.Tolerations = expectedToleration
+			err = k8sClient.Update(testCtx, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider object with nodeSelector and tolerations")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireOIDCDiscoveryProvider nodeSelector and tolerations modification")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.NodeSelector = nil
+					provider.Spec.Tolerations = nil
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Ready")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE OIDC Discovery Provider Pods has been scheduled to the target Node with SPIFFE CSI Driver Pod")
+			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newPods.Items).NotTo(BeEmpty())
+			utils.VerifyPodScheduling(testCtx, clientset, newPods.Items, expectedNodeSelector)
+
+			By("Verifying if SPIRE OIDC Discovery Provider Pods tolerate Node taints correctly")
+			utils.VerifyPodTolerations(testCtx, clientset, newPods.Items, expectedToleration)
 		})
 	})
 })
