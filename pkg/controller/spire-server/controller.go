@@ -261,7 +261,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire controller manager ConfigMap")
-	} else if err == nil && existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] {
+	} else if err == nil && existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != spireControllerManagerConfigMap.Data["controller-manager-config.yaml"] {
 		if createOnlyMode {
 			r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
 		} else {
