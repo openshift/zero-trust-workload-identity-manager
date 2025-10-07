@@ -41,7 +41,7 @@ func TestGetSpireControllerManagerValidatingWebhookConfiguration(t *testing.T) {
 	assert.Equal(t, "zero-trust-workload-identity-manager", wh1.ClientConfig.Service.Namespace)
 	assert.Equal(t, "/validate-spire-spiffe-io-v1alpha1-clusterfederatedtrustdomain", strPtrValue(wh1.ClientConfig.Service.Path))
 	require.NotNil(t, wh1.FailurePolicy)
-	assert.Equal(t, admissionregistrationv1.Ignore, *wh1.FailurePolicy)
+	assert.Equal(t, admissionregistrationv1.Fail, *wh1.FailurePolicy)
 	require.NotNil(t, wh1.SideEffects)
 	assert.Equal(t, admissionregistrationv1.SideEffectClassNone, *wh1.SideEffects)
 
@@ -60,7 +60,7 @@ func TestGetSpireControllerManagerValidatingWebhookConfiguration(t *testing.T) {
 	assert.Equal(t, "zero-trust-workload-identity-manager", wh2.ClientConfig.Service.Namespace)
 	assert.Equal(t, "/validate-spire-spiffe-io-v1alpha1-clusterspiffeid", strPtrValue(wh2.ClientConfig.Service.Path))
 	require.NotNil(t, wh2.FailurePolicy)
-	assert.Equal(t, admissionregistrationv1.Ignore, *wh2.FailurePolicy)
+	assert.Equal(t, admissionregistrationv1.Fail, *wh2.FailurePolicy)
 	require.NotNil(t, wh2.SideEffects)
 	assert.Equal(t, admissionregistrationv1.SideEffectClassNone, *wh2.SideEffects)
 

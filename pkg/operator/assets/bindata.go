@@ -572,7 +572,7 @@ webhooks:
         name: spire-controller-manager-webhook
         namespace: zero-trust-workload-identity-manager
         path: /validate-spire-spiffe-io-v1alpha1-clusterfederatedtrustdomain
-    failurePolicy: Ignore # Actual value to be set by post install/upgrade hooks
+    failurePolicy: Fail # Actual value to be set by post install/upgrade hooks
     name: vclusterfederatedtrustdomain.kb.io
     rules:
       - apiGroups: ["spire.spiffe.io"]
@@ -586,7 +586,7 @@ webhooks:
         name: spire-controller-manager-webhook
         namespace: zero-trust-workload-identity-manager
         path: /validate-spire-spiffe-io-v1alpha1-clusterspiffeid
-    failurePolicy: Ignore # Actual value to be set by post install/upgrade hooks
+    failurePolicy: Fail # Actual value to be set by post install/upgrade hooks
     name: vclusterspiffeid.kb.io
     rules:
       - apiGroups: ["spire.spiffe.io"]

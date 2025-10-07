@@ -3,6 +3,7 @@ package spire_agent
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +23,7 @@ func GenerateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 			"trust_domain":      cfg.Spec.TrustDomain,
 		},
 		"health_checks": map[string]interface{}{
-			"bind_address":     "0.0.0.0",
+			"bind_address":     "127.0.0.1",
 			"bind_port":        9982,
 			"listener_enabled": true,
 			"live_path":        "/live",
