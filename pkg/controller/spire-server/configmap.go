@@ -66,7 +66,7 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interface{} {
 	return map[string]interface{}{
 		"health_checks": map[string]interface{}{
-			"bind_address":     "127.0.0.1",
+			"bind_address":     "0.0.0.0",
 			"bind_port":        "8080",
 			"listener_enabled": true,
 			"live_path":        "/live",
@@ -128,7 +128,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 		},
 		"server": map[string]interface{}{
 			"audit_log_enabled": false,
-			"bind_address":      "127.0.0.1",
+			"bind_address":      "0.0.0.0",
 			"bind_port":         "8081",
 			"ca_key_type":       "ec-p256",
 			"ca_subject": []map[string]interface{}{

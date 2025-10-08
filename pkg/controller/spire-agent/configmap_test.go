@@ -36,7 +36,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"trust_domain":      "example.org",
 				},
 				"health_checks": map[string]interface{}{
-					"bind_address":     "127.0.0.1",
+					"bind_address":     "0.0.0.0",
 					"bind_port":        9982,
 					"listener_enabled": true,
 					"live_path":        "/live",
@@ -78,7 +78,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"trust_domain":      "test.domain",
 				},
 				"health_checks": map[string]interface{}{
-					"bind_address":     "127.0.0.1",
+					"bind_address":     "0.0.0.0",
 					"bind_port":        9982,
 					"listener_enabled": true,
 					"live_path":        "/live",
@@ -130,7 +130,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"trust_domain":      "workload.domain",
 				},
 				"health_checks": map[string]interface{}{
-					"bind_address":     "127.0.0.1",
+					"bind_address":     "0.0.0.0",
 					"bind_port":        9982,
 					"listener_enabled": true,
 					"live_path":        "/live",
@@ -190,7 +190,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"trust_domain":      "full.domain",
 				},
 				"health_checks": map[string]interface{}{
-					"bind_address":     "127.0.0.1",
+					"bind_address":     "0.0.0.0",
 					"bind_port":        9982,
 					"listener_enabled": true,
 					"live_path":        "/live",
@@ -254,7 +254,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"trust_domain":      "disabled.domain",
 				},
 				"health_checks": map[string]interface{}{
-					"bind_address":     "127.0.0.1",
+					"bind_address":     "0.0.0.0",
 					"bind_port":        9982,
 					"listener_enabled": true,
 					"live_path":        "/live",
@@ -295,7 +295,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"trust_domain":      "workload-disabled.domain",
 				},
 				"health_checks": map[string]interface{}{
-					"bind_address":     "127.0.0.1",
+					"bind_address":     "0.0.0.0",
 					"bind_port":        9982,
 					"listener_enabled": true,
 					"live_path":        "/live",
@@ -439,7 +439,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 
 				// Validate health checks section
 				healthSection := configData["health_checks"].(map[string]interface{})
-				assert.Equal(t, "127.0.0.1", healthSection["bind_address"])
+				assert.Equal(t, "0.0.0.0", healthSection["bind_address"])
 				assert.Equal(t, float64(9982), healthSection["bind_port"])
 				assert.Equal(t, true, healthSection["listener_enabled"])
 
