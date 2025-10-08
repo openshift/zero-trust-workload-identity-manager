@@ -63,15 +63,15 @@ spec:
         - name: OPERATOR_NAME
           value: zero-trust-workload-identity-manager
         - name: RELATED_IMAGE_SPIRE_SERVER
-          value: ghcr.io/spiffe/spire-server:1.12.4
+          value: ghcr.io/spiffe/spire-server:1.13.1
         - name: RELATED_IMAGE_SPIRE_AGENT
-          value: ghcr.io/spiffe/spire-agent:1.12.4
+          value: ghcr.io/spiffe/spire-agent:1.13.1
         - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
-          value: ghcr.io/spiffe/spiffe-csi-driver:0.2.7
+          value: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
         - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
-          value: ghcr.io/spiffe/oidc-discovery-provider:1.12.4
+          value: ghcr.io/spiffe/oidc-discovery-provider:1.13.1
         - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-          value: ghcr.io/spiffe/spire-controller-manager:0.6.2
+          value: ghcr.io/spiffe/spire-controller-manager:0.6.3
         - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
           value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
         - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
