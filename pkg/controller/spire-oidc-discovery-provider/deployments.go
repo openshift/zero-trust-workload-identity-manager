@@ -31,9 +31,6 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 			Name:      "spire-spiffe-oidc-discovery-provider",
 			Namespace: utils.OperatorNamespace,
 			Labels:    labels,
-			Annotations: map[string]string{
-				spireOidcDeploymentSpireOidcConfigHashAnnotationKey: spireOidcConfigMapHash,
-			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -43,7 +40,8 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: map[string]string{ // replace with actual checksum if needed
+					Annotations: map[string]string{
+						spireOidcDeploymentSpireOidcConfigHashAnnotationKey: spireOidcConfigMapHash,
 					},
 				},
 				Spec: corev1.PodSpec{

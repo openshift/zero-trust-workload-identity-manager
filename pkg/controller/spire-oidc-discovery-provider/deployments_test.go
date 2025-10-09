@@ -30,7 +30,11 @@ func TestBuildDeployment(t *testing.T) {
 				assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Name)
 				assert.Equal(t, utils.OperatorNamespace, deployment.Namespace)
 				assert.Equal(t, int32(1), *deployment.Spec.Replicas)
-				assert.Equal(t, "test-hash-123", deployment.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey])
+				// Verify the annotation is on the pod template, not on the deployment itself
+				assert.Equal(t, "test-hash-123", deployment.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey])
+				// Verify the deployment itself doesn't have this annotation
+				_, exists := deployment.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey]
+				assert.False(t, exists, "Deployment annotations should not contain the config hash")
 			},
 		},
 		{
@@ -43,6 +47,27 @@ func TestBuildDeployment(t *testing.T) {
 			hash: "test-hash-456",
 			expected: func(deployment *appsv1.Deployment) {
 				assert.Equal(t, int32(3), *deployment.Spec.Replicas)
+			},
+		},
+		{
+			name: "config hash annotation is placed on pod template only",
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{},
+			},
+			hash: "config-hash-xyz",
+			expected: func(deployment *appsv1.Deployment) {
+				// The config hash annotation should be on the pod template
+				podAnnotations := deployment.Spec.Template.Annotations
+				require.NotNil(t, podAnnotations, "Pod template annotations should not be nil")
+				assert.Equal(t, "config-hash-xyz", podAnnotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey],
+					"Config hash should be in pod template annotations")
+
+				// The config hash annotation should NOT be on the deployment itself
+				deploymentAnnotations := deployment.Annotations
+				if deploymentAnnotations != nil {
+					_, exists := deploymentAnnotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey]
+					assert.False(t, exists, "Config hash should not be in deployment annotations")
+				}
 			},
 		},
 		{
