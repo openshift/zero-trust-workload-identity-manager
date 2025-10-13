@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -38,6 +37,7 @@ const spireOidcDeploymentSpireOidcConfigHashAnnotationKey = "ztwim.openshift.io/
 const (
 	SpireOIDCDeploymentGeneration  = "SpireOIDCDeploymentGeneration"
 	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
+	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
 	ManagedRouteReady              = "ManagedRouteReady"
 	ConfigurationValidation        = "ConfigurationValidation"
@@ -328,24 +328,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	return ctrl.Result{}, nil
 }
 
-func hasControllerManagedLabel(obj client.Object) bool {
-	val, ok := obj.GetLabels()[utils.AppManagedByLabelKey]
-	return ok && val == utils.AppManagedByLabelValue
-}
-
-// controllerManagedResources filters resources that have a specific label indicating they are managed
-var controllerManagedResources = predicate.Funcs{
-	UpdateFunc: func(e event.UpdateEvent) bool {
-		return hasControllerManagedLabel(e.ObjectNew)
-	},
-	CreateFunc: func(e event.CreateEvent) bool {
-		return hasControllerManagedLabel(e.Object)
-	},
-	DeleteFunc: func(e event.DeleteEvent) bool {
-		return hasControllerManagedLabel(e.Object)
-	},
-}
-
 func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Always enqueue the "cluster" CR for reconciliation
 	mapFunc := func(ctx context.Context, _ client.Object) []reconcile.Request {
@@ -358,7 +340,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		}
 	}
 
-	controllerManagedResourcePredicates := builder.WithPredicates(controllerManagedResources)
+	// Use component-specific predicate to only reconcile for discovery component resources
+	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentDiscovery))
 
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.SpireOIDCDiscoveryProvider{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
