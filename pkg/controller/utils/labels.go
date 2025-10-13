@@ -2,6 +2,9 @@ package utils
 
 import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/version"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -9,6 +12,9 @@ const (
 	StandardManagedByValue = "zero-trust-workload-identity-manager"
 	StandardPartOfValue    = "zero-trust-workload-identity-manager"
 	StandardInstance       = "cluster-zero-trust-workload-identity-manager"
+
+	// Label keys
+	AppComponentLabelKey = "app.kubernetes.io/component"
 
 	// Component values
 	ComponentCSI          = "csi"
@@ -56,4 +62,33 @@ func SpiffeCSIDriverLabels(customLabels map[string]string) map[string]string {
 
 func SpireControllerManagerLabels(customLabels map[string]string) map[string]string {
 	return StandardizedLabels("spire-controller-manager", ComponentControlPlane, version.SpireControllerManagerVersion, customLabels)
+}
+
+// hasControllerManagedLabelWithComponent checks if an object has both the managed-by label
+// and the specified component label
+func hasControllerManagedLabelWithComponent(obj client.Object, component string) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		return false
+	}
+	managedByVal, hasManagedBy := labels[AppManagedByLabelKey]
+	componentVal, hasComponent := labels[AppComponentLabelKey]
+	return hasManagedBy && managedByVal == AppManagedByLabelValue &&
+		hasComponent && componentVal == component
+}
+
+// ControllerManagedResourcesForComponent creates a predicate that filters resources by both
+// the managed-by label and the component label
+func ControllerManagedResourcesForComponent(component string) predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return hasControllerManagedLabelWithComponent(e.ObjectNew, component)
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			return hasControllerManagedLabelWithComponent(e.Object, component)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return hasControllerManagedLabelWithComponent(e.Object, component)
+		},
+	}
 }
