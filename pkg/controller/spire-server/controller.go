@@ -139,7 +139,8 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			Reason:  "InvalidJWTIssuerURL",
 			Message: fmt.Sprintf("JWT issuer URL validation failed: %v", err),
 		}
-		return ctrl.Result{}, err
+		// do not requeue if the user input validation error exist.
+		return ctrl.Result{}, nil
 	}
 	// Only set to true if the condition previously existed as false
 	existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, ConfigurationValidation)
@@ -153,7 +154,8 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Perform TTL validation and handle warnings
 	if err := r.handleTTLValidation(ctx, &server, reconcileStatus); err != nil {
-		return ctrl.Result{}, err
+		// do not requeue if the user input validation error exist.
+		return ctrl.Result{}, nil
 	}
 
 	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)

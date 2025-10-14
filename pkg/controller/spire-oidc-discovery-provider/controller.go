@@ -139,7 +139,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			Reason:  "InvalidJWTIssuerURL",
 			Message: fmt.Sprintf("JWT issuer URL validation failed: %v", err),
 		}
-		return ctrl.Result{}, err
+		// do not requeue if the user input validation error exist.
+		return ctrl.Result{}, nil
 	}
 
 	// Only set to true if the condition previously existed as false
