@@ -272,7 +272,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				"SpireOIDCDeploymentGeneration",
 				"SpireClusterSpiffeIDGeneration",
 				"ManagedRouteReady",
-				"SpireOIDCSCCGeneration",
 			}
 			cr := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
 			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)

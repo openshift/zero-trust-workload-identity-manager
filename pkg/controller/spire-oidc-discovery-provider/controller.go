@@ -3,21 +3,21 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-logr/logr"
-	routev1 "github.com/openshift/api/route/v1"
-	securityv1 "github.com/openshift/api/security/v1"
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
-	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
 	"k8s.io/client-go/tools/record"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +26,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	routev1 "github.com/openshift/api/route/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
 const spireOidcDeploymentSpireOidcConfigHashAnnotationKey = "ztwim.openshift.io/spire-oidc-discovery-provider-config-hash"
@@ -33,7 +38,6 @@ const spireOidcDeploymentSpireOidcConfigHashAnnotationKey = "ztwim.openshift.io/
 const (
 	SpireOIDCDeploymentGeneration  = "SpireOIDCDeploymentGeneration"
 	SpireOIDCConfigMapGeneration   = "SpireOIDCConfigMapGeneration"
-	SpireOIDCSCCGeneration         = "SpireOIDCSCCGeneration"
 	SpireClusterSpiffeIDGeneration = "SpireClusterSpiffeIDGeneration"
 	ManagedRouteReady              = "ManagedRouteReady"
 	ConfigurationValidation        = "ConfigurationValidation"
@@ -192,31 +196,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		Status:  metav1.ConditionTrue,
 		Reason:  "SpireClusterSpiffeIDCreationSucceeded",
 		Message: "Spire OIDC and default ClusterSpiffeID created successfully",
-	}
-	scc := generateSpireOIDCDiscoveryProviderSCC(&oidcDiscoveryProviderConfig)
-	if err = controllerutil.SetControllerReference(&oidcDiscoveryProviderConfig, scc, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		reconcileStatus[SpireOIDCSCCGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireOIDCSCCGenerationFailed",
-			Message: err.Error(),
-		}
-		return ctrl.Result{}, err
-	}
-	err = r.ctrlClient.Create(ctx, scc)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		reconcileStatus[SpireOIDCSCCGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireOIDCSCCCreationFailed",
-			Message: err.Error(),
-		}
-		r.log.Error(err, "Failed to create spire oidc discovery provider SCC")
-		return ctrl.Result{}, err
-	}
-	reconcileStatus[SpireOIDCSCCGeneration] = reconcilerStatus{
-		Status:  metav1.ConditionTrue,
-		Reason:  "SpireOIDCSCCCreationSucceeded",
-		Message: "Spire OIDC SCC created",
 	}
 
 	cm, err := GenerateOIDCConfigMapFromCR(&oidcDiscoveryProviderConfig)
@@ -385,7 +364,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName).
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
-		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
