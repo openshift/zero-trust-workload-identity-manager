@@ -3,6 +3,7 @@ package spire_agent
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"

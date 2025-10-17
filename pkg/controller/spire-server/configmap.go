@@ -130,7 +130,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 			"audit_log_enabled": false,
 			"bind_address":      "0.0.0.0",
 			"bind_port":         "8081",
-			"ca_key_type":       "rsa-2048",
+			"ca_key_type":       "ec-p256",
 			"ca_subject": []map[string]interface{}{
 				{
 					"common_name":  config.CASubject.CommonName,
