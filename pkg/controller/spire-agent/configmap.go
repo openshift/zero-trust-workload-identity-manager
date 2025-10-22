@@ -14,7 +14,8 @@ func GenerateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 	agentConf := map[string]interface{}{
 		"agent": map[string]interface{}{
 			"data_dir":          "/var/lib/spire",
-			"log_level":         "debug",
+			"log_level":         utils.GetLogLevelFromString(cfg.Spec.LogLevel),
+			"log_format":        utils.GetLogFormatFromString(cfg.Spec.LogFormat),
 			"retry_bootstrap":   true,
 			"server_address":    "spire-server.zero-trust-workload-identity-manager",
 			"server_port":       "443",

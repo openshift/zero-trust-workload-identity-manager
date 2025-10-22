@@ -1215,3 +1215,79 @@ func TestEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestGetLogLevelFromString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "returns default when empty string",
+			input:    "",
+			expected: LogLevelInfo,
+		},
+		{
+			name:     "returns input when non-empty string",
+			input:    "debug",
+			expected: "debug",
+		},
+		{
+			name:     "returns input for info level",
+			input:    "info",
+			expected: "info",
+		},
+		{
+			name:     "returns input for error level",
+			input:    "error",
+			expected: "error",
+		},
+		{
+			name:     "returns input for warn level",
+			input:    "warn",
+			expected: "warn",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetLogLevelFromString(tt.input)
+			if result != tt.expected {
+				t.Errorf("GetLogLevelFromString(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetLogFormatFromString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "returns default when empty string",
+			input:    "",
+			expected: LogFormatText,
+		},
+		{
+			name:     "returns input when non-empty string",
+			input:    "json",
+			expected: "json",
+		},
+		{
+			name:     "returns input for text format",
+			input:    "text",
+			expected: "text",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetLogFormatFromString(tt.input)
+			if result != tt.expected {
+				t.Errorf("GetLogFormatFromString(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

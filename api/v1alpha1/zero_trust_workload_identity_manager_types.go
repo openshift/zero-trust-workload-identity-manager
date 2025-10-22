@@ -62,13 +62,6 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 
 // ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerSpec struct {
-	// logLevel supports value range as per [kubernetes logging guidelines](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md#what-method-to-use).
-	// +kubebuilder:default:=1
-	// +kubebuilder:validation:Minimum:=1
-	// +kubebuilder:validation:Maximum:=5
-	// +kubebuilder:validation:Optional
-	LogLevel int32 `json:"logLevel,omitempty"`
-
 	// namespace to install the deployments and other resources managed by
 	// zero-trust-workload-identity-manager.
 	// +kubebuilder:validation:Optional
@@ -80,6 +73,7 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 
 // CommonConfig will have similar config required for all other APIs
 type CommonConfig struct {
+
 	// labels to apply to all resources managed by the API.
 	// +mapType=granular
 	// +kubebuilder:validation:Optional

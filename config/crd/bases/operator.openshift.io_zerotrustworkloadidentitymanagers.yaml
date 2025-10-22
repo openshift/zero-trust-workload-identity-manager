@@ -976,14 +976,6 @@ spec:
                 description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
-              logLevel:
-                default: 1
-                description: logLevel supports value range as per [kubernetes logging
-                  guidelines](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md#what-method-to-use).
-                format: int32
-                maximum: 5
-                minimum: 1
-                type: integer
               namespace:
                 default: zero-trust-workload-identity-manager
                 description: |-

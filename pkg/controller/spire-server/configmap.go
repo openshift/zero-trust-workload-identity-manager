@@ -143,7 +143,8 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 			"default_jwt_svid_ttl":  config.DefaultJWTValidity,
 			"default_x509_svid_ttl": config.DefaultX509Validity,
 			"jwt_issuer":            config.JwtIssuer,
-			"log_level":             "debug",
+			"log_level":             utils.GetLogLevelFromString(config.LogLevel),
+			"log_format":            utils.GetLogFormatFromString(config.LogFormat),
 			"trust_domain":          config.TrustDomain,
 		},
 		"telemetry": map[string]interface{}{

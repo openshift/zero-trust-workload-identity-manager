@@ -170,7 +170,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		assert.Equal(t, "/ready", healthChecks["ready_path"])
 
 		// Verify log_level
-		assert.Equal(t, "debug", oidcConfig["log_level"])
+		assert.Equal(t, "info", oidcConfig["log_level"])
+		assert.Equal(t, "text", oidcConfig["log_format"])
 
 		// Verify serving_cert_file structure
 		servingCertFile := oidcConfig["serving_cert_file"].(map[string]interface{})
