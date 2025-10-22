@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -22,8 +23,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
-
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -114,11 +113,7 @@ func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
 func (c *customCtrlClientImpl) Get(
 	ctx context.Context, key client.ObjectKey, obj client.Object,
 ) error {
-	err := c.Client.Get(ctx, key, obj)
-	if err != nil && kerrors.IsNotFound(err) {
-		return c.apiReader.Get(ctx, key, obj)
-	}
-	return err
+	return c.Client.Get(ctx, key, obj)
 }
 
 func (c *customCtrlClientImpl) List(
@@ -217,53 +212,59 @@ func (c *customCtrlClientImpl) CreateOrUpdateObject(ctx context.Context, obj cli
 	return err
 }
 
-func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
+// NewCacheBuilder returns a cache builder function that configures the manager's cache
+// with custom label selectors and informers. This function should be passed to the
+// manager's NewCache option to ensure a unified cache is used.
+func NewCacheBuilder() (cache.NewCacheFunc, error) {
 	spireServerManagedResourceAppManagedReq, err := labels.NewRequirement(utils.AppManagedByLabelKey, selection.Equals, []string{utils.AppManagedByLabelValue})
 	if err != nil {
 		return nil, err
 	}
 	managedResourceLabelReqSelector := labels.NewSelector().Add(*spireServerManagedResourceAppManagedReq)
-	customCacheObjects := map[client.Object]cache.ByObject{}
-	for _, resource := range cacheResources {
-		customCacheObjects[resource] = cache.ByObject{
-			Label: managedResourceLabelReqSelector,
+
+	return func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+		// Configure cache with custom label selectors
+		customCacheObjects := map[client.Object]cache.ByObject{}
+		for _, resource := range cacheResources {
+			customCacheObjects[resource] = cache.ByObject{
+				Label: managedResourceLabelReqSelector,
+			}
 		}
-	}
-	for _, resource := range cacheResourceWithoutReqSelectors {
-		customCacheObjects[resource] = cache.ByObject{}
-	}
-	customCacheOpts := cache.Options{
-		HTTPClient:                  mgr.GetHTTPClient(),
-		Scheme:                      mgr.GetScheme(),
-		Mapper:                      mgr.GetRESTMapper(),
-		ByObject:                    customCacheObjects,
-		ReaderFailOnMissingInformer: true,
-	}
-	customCache, err := cache.New(mgr.GetConfig(), customCacheOpts)
-	if err != nil {
-		return nil, err
-	}
-	for _, resource := range informerResources {
-		if _, err = customCache.GetInformer(context.Background(), resource); err != nil {
+		for _, resource := range cacheResourceWithoutReqSelectors {
+			customCacheObjects[resource] = cache.ByObject{}
+		}
+
+		// Merge custom cache objects with any existing ones from opts
+		if opts.ByObject == nil {
+			opts.ByObject = customCacheObjects
+		} else {
+			for k, v := range customCacheObjects {
+				opts.ByObject[k] = v
+			}
+		}
+
+		opts.ReaderFailOnMissingInformer = true
+
+		// Create the cache with the merged options
+		newCache, err := cache.New(config, opts)
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	err = mgr.Add(customCache)
-	if err != nil {
-		return nil, err
-	}
+		// Pre-register informers for all resources
+		for _, resource := range informerResources {
+			if _, err := newCache.GetInformer(context.Background(), resource); err != nil {
+				return nil, err
+			}
+		}
 
-	customClient, err := client.New(mgr.GetConfig(), client.Options{
-		HTTPClient: mgr.GetHTTPClient(),
-		Scheme:     mgr.GetScheme(),
-		Mapper:     mgr.GetRESTMapper(),
-		Cache: &client.CacheOptions{
-			Reader: customCache,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	return customClient, nil
+		return newCache, nil
+	}, nil
+}
+
+// BuildCustomClient now uses the manager's unified cache instead of creating a separate one.
+// This eliminates the race condition between manager and reconciler caches.
+func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
+	// Use the manager's client directly, which is backed by the unified cache
+	return mgr.GetClient(), nil
 }
