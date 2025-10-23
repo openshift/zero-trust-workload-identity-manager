@@ -39,7 +39,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
+					Labels: labels,
 					Annotations: map[string]string{
 						spireOidcDeploymentSpireOidcConfigHashAnnotationKey: spireOidcConfigMapHash,
 					},

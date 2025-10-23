@@ -1105,6 +1105,26 @@ spec:
                 description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
+              logFormat:
+                default: text
+                description: |-
+                  logFormat sets the logging format for the operand.
+                  Valid values are: text, json.
+                enum:
+                - text
+                - json
+                type: string
+              logLevel:
+                default: info
+                description: |-
+                  logLevel sets the logging level for the operand.
+                  Valid values are: debug, info, warn, error.
+                enum:
+                - debug
+                - info
+                - warn
+                - error
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string

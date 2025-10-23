@@ -39,6 +39,11 @@ func init() {
 	codecs = serializer.NewCodecFactory(scheme)
 }
 
+const (
+	LogLevelInfo  = "info"
+	LogFormatText = "text"
+)
+
 func DecodeClusterRoleObjBytes(objBytes []byte) *rbacv1.ClusterRole {
 	obj, err := runtime.Decode(codecs.UniversalDecoder(rbacv1.SchemeGroupVersion), objBytes)
 	if err != nil {
@@ -426,4 +431,18 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 		}
 	}
 	return false
+}
+
+func GetLogLevelFromString(logLevel string) string {
+	if logLevel == "" {
+		return LogLevelInfo
+	}
+	return logLevel
+}
+
+func GetLogFormatFromString(logFormat string) string {
+	if logFormat == "" {
+		return LogFormatText
+	}
+	return logFormat
 }

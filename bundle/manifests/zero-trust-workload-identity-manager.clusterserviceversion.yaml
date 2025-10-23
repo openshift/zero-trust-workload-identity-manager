@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-10-09T07:30:39Z"
+    createdAt: "2025-10-22T06:50:36Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -323,6 +323,7 @@ spec:
               containers:
               - args:
                 - --health-probe-bind-address=:8081
+                - --v=$(OPERATOR_LOG_LEVEL)
                 command:
                 - /usr/bin/zero-trust-workload-identity-manager
                 env:
@@ -342,6 +343,8 @@ spec:
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
                   value: registry.access.redhat.com/ubi9:latest
+                - name: OPERATOR_LOG_LEVEL
+                  value: "2"
                 image: openshift.io/zero-trust-workload-identity-manager:latest
                 livenessProbe:
                   httpGet:

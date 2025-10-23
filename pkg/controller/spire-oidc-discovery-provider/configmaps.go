@@ -31,7 +31,6 @@ func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT issuer URL: %w", err)
 	}
-
 	// OIDC config map data
 	oidcConfig := map[string]interface{}{
 		"domains": []string{
@@ -45,7 +44,8 @@ func GenerateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 			"live_path":  "/live",
 			"ready_path": "/ready",
 		},
-		"log_level": "debug",
+		"log_level":  utils.GetLogLevelFromString(dp.Spec.LogLevel),
+		"log_format": utils.GetLogFormatFromString(dp.Spec.LogFormat),
 		"serving_cert_file": map[string]string{
 			"addr":           ":8443",
 			"cert_file_path": "/etc/oidc/tls/tls.crt",

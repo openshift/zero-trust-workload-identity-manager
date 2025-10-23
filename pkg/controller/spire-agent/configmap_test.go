@@ -27,7 +27,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 			expected: map[string]interface{}{
 				"agent": map[string]interface{}{
 					"data_dir":          "/var/lib/spire",
-					"log_level":         "debug",
+					"log_level":         "info",
+					"log_format":        "text",
 					"retry_bootstrap":   true,
 					"server_address":    "spire-server.zero-trust-workload-identity-manager",
 					"server_port":       "443",
@@ -69,7 +70,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 			expected: map[string]interface{}{
 				"agent": map[string]interface{}{
 					"data_dir":          "/var/lib/spire",
-					"log_level":         "debug",
+					"log_level":         "info",
+					"log_format":        "text",
 					"retry_bootstrap":   true,
 					"server_address":    "spire-server.zero-trust-workload-identity-manager",
 					"server_port":       "443",
@@ -121,7 +123,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 			expected: map[string]interface{}{
 				"agent": map[string]interface{}{
 					"data_dir":          "/var/lib/spire",
-					"log_level":         "debug",
+					"log_level":         "info",
+					"log_format":        "text",
 					"retry_bootstrap":   true,
 					"server_address":    "spire-server.zero-trust-workload-identity-manager",
 					"server_port":       "443",
@@ -181,7 +184,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 			expected: map[string]interface{}{
 				"agent": map[string]interface{}{
 					"data_dir":          "/var/lib/spire",
-					"log_level":         "debug",
+					"log_level":         "info",
+					"log_format":        "text",
 					"retry_bootstrap":   true,
 					"server_address":    "spire-server.zero-trust-workload-identity-manager",
 					"server_port":       "443",
@@ -245,7 +249,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 			expected: map[string]interface{}{
 				"agent": map[string]interface{}{
 					"data_dir":          "/var/lib/spire",
-					"log_level":         "debug",
+					"log_level":         "info",
+					"log_format":        "text",
 					"retry_bootstrap":   true,
 					"server_address":    "spire-server.zero-trust-workload-identity-manager",
 					"server_port":       "443",
@@ -286,7 +291,8 @@ func TestGenerateAgentConfig(t *testing.T) {
 			expected: map[string]interface{}{
 				"agent": map[string]interface{}{
 					"data_dir":          "/var/lib/spire",
-					"log_level":         "debug",
+					"log_level":         "info",
+					"log_format":        "text",
 					"retry_bootstrap":   true,
 					"server_address":    "spire-server.zero-trust-workload-identity-manager",
 					"server_port":       "443",
@@ -435,7 +441,8 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 				agentSection := configData["agent"].(map[string]interface{})
 				assert.Equal(t, tt.spireAgentConfig.Spec.TrustDomain, agentSection["trust_domain"])
 				assert.Equal(t, "/var/lib/spire", agentSection["data_dir"])
-				assert.Equal(t, "debug", agentSection["log_level"])
+				assert.Equal(t, "info", agentSection["log_level"])
+				assert.Equal(t, "text", agentSection["log_format"])
 
 				// Validate health checks section
 				healthSection := configData["health_checks"].(map[string]interface{})

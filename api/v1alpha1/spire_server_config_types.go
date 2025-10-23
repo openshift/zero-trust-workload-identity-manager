@@ -24,6 +24,19 @@ type SpireServer struct {
 
 // SpireServerSpec will have specifications for configuration related to the spire server.
 type SpireServerSpec struct {
+	// logLevel sets the logging level for the operand.
+	// Valid values are: debug, info, warn, error.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=debug;info;warn;error
+	// +kubebuilder:default:="info"
+	LogLevel string `json:"logLevel,omitempty"`
+
+	// logFormat sets the logging format for the operand.
+	// Valid values are: text, json.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=text;json
+	// +kubebuilder:default:="text"
+	LogFormat string `json:"logFormat,omitempty"`
 
 	// trustDomain to be used for the SPIFFE identifiers
 	// +kubebuilder:validation:Required
