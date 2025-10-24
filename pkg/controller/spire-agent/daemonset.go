@@ -25,7 +25,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "spire-agent",
+			Name:      SpireAgentDaemonSetName,
 			Namespace: utils.OperatorNamespace,
 			Labels:    labels,
 		},
@@ -36,13 +36,13 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
 				Type: appsv1.RollingUpdateDaemonSetStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDaemonSet{
-					MaxUnavailable: &intstr.IntOrString{IntVal: 1},
+					MaxUnavailable: &intstr.IntOrString{IntVal: SpireAgentMaxUnavailable},
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						"kubectl.kubernetes.io/default-container":            "spire-agent",
+						SpireAgentAnnotationDefaultContainer:                 SpireAgentContainerName,
 						spireAgentDaemonSetSpireAgentConfigHashAnnotationKey: spireAgentConfigHash,
 					},
 					Labels: labels,
@@ -51,51 +51,51 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 					HostPID:            true,
 					HostNetwork:        true,
 					DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
-					ServiceAccountName: "spire-agent",
+					ServiceAccountName: SpireAgentServiceAccountName,
 					Containers: []corev1.Container{
 						{
-							Name:            "spire-agent",
+							Name:            SpireAgentContainerName,
 							Image:           utils.GetSpireAgentImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args:            []string{"-config", "/opt/spire/conf/agent/agent.conf"},
+							Args:            []string{SpireAgentArgConfig, SpireAgentConfigPath},
 							Env: []corev1.EnvVar{
-								{Name: "PATH", Value: "/opt/spire/bin:/bin"},
+								{Name: SpireAgentEnvPath, Value: SpireAgentEnvPathValue},
 								{
-									Name: "MY_NODE_NAME",
+									Name: SpireAgentEnvNodeName,
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "spec.nodeName"},
 									},
 								},
 							},
 							Ports: []corev1.ContainerPort{
-								{Name: "healthz", ContainerPort: 9982},
+								{Name: SpireAgentPortNameHealthz, ContainerPort: SpireAgentPortHealthz},
 							},
 							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 15,
-								PeriodSeconds:       60,
+								InitialDelaySeconds: SpireAgentLivenessInitialDelay,
+								PeriodSeconds:       SpireAgentLivenessPeriod,
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/live",
-										Port: intstr.FromString("healthz"),
+										Path: SpireAgentProbePathLive,
+										Port: intstr.FromString(SpireAgentPortNameHealthz),
 									},
 								},
 							},
 							ReadinessProbe: &corev1.Probe{
-								InitialDelaySeconds: 10,
-								PeriodSeconds:       30,
+								InitialDelaySeconds: SpireAgentReadinessInitialDelay,
+								PeriodSeconds:       SpireAgentReadinessPeriod,
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/ready",
-										Port: intstr.FromString("healthz"),
+										Path: SpireAgentProbePathReady,
+										Port: intstr.FromString(SpireAgentPortNameHealthz),
 									},
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spire-config", MountPath: "/opt/spire/conf/agent", ReadOnly: true},
-								{Name: "spire-agent-persistence", MountPath: "/var/lib/spire"},
-								{Name: "spire-bundle", MountPath: "/run/spire/bundle", ReadOnly: true},
-								{Name: "spire-agent-socket-dir", MountPath: "/tmp/spire-agent/public"},
-								{Name: "spire-token", MountPath: "/var/run/secrets/tokens"},
+								{Name: SpireAgentVolumeNameConfig, MountPath: SpireAgentMountPathConfig, ReadOnly: true},
+								{Name: SpireAgentVolumeNamePersistence, MountPath: SpireAgentMountPathPersistence},
+								{Name: SpireAgentVolumeNameBundle, MountPath: SpireAgentMountPathBundle, ReadOnly: true},
+								{Name: SpireAgentVolumeNameSocketDir, MountPath: SpireAgentMountPathSocketDir},
+								{Name: SpireAgentVolumeNameToken, MountPath: SpireAgentMountPathToken},
 							},
 							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
@@ -105,29 +105,29 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
 					Volumes: []corev1.Volume{
 						{
-							Name: "spire-config",
+							Name: SpireAgentVolumeNameConfig,
 							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-agent"}},
+								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireAgentConfigMapNameAgent}},
 							},
 						},
-						{Name: "spire-agent-admin-socket-dir", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-agent-persistence", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: SpireAgentVolumeNameAdminSocketDir, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: SpireAgentVolumeNamePersistence, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 						{
-							Name: "spire-bundle",
+							Name: SpireAgentVolumeNameBundle,
 							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-bundle"}},
+								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireAgentConfigMapNameBundle}},
 							},
 						},
 						{
-							Name: "spire-token",
+							Name: SpireAgentVolumeNameToken,
 							VolumeSource: corev1.VolumeSource{
 								Projected: &corev1.ProjectedVolumeSource{
 									Sources: []corev1.VolumeProjection{
 										{
 											ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-												Path:              "spire-agent",
-												ExpirationSeconds: int64Ptr(7200),
-												Audience:          "spire-server",
+												Path:              SpireAgentTokenPath,
+												ExpirationSeconds: int64Ptr(SpireAgentTokenExpirationSeconds),
+												Audience:          SpireAgentTokenAudience,
 											},
 										},
 									},
@@ -135,10 +135,10 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 							},
 						},
 						{
-							Name: "spire-agent-socket-dir",
+							Name: SpireAgentVolumeNameSocketDir,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/run/spire/agent-sockets",
+									Path: SpireAgentHostPathAgentSockets,
 									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
 								},
 							},

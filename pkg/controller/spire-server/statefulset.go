@@ -30,99 +30,99 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
-	volumeResourceRequest := "1Gi"
+	volumeResourceRequest := SpireServerDefaultVolumeSize
 	if config.Persistence != nil && config.Persistence.Size != "" {
 		volumeResourceRequest = config.Persistence.Size
 	}
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "spire-server",
+			Name:      SpireServerStatefulSetName,
 			Namespace: utils.OperatorNamespace,
 			Labels:    labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:    pointer.Int32(1),
-			ServiceName: "spire-server",
+			Replicas:    pointer.Int32(SpireServerDefaultReplicas),
+			ServiceName: SpireServerServiceName,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: selectorLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						"kubectl.kubernetes.io/default-container":                          "spire-server",
+						SpireServerAnnotationDefaultContainer:                              SpireServerContainerNameServer,
 						spireServerStatefulSetSpireServerConfigHashAnnotationKey:           spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: spireControllerMangerConfigMapHash,
 					},
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:    "spire-server",
+					ServiceAccountName:    SpireServerServiceAccountName,
 					ShareProcessNamespace: pointer.Bool(true),
 					Containers: []corev1.Container{
 						{
-							Name:            "spire-server",
+							Name:            SpireServerContainerNameServer,
 							Image:           utils.GetSpireServerImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args:            []string{"-expandEnv", "-config", "/run/spire/config/server.conf"},
+							Args:            []string{SpireServerArgExpandEnv, SpireServerArgConfig, SpireServerConfigPathServer},
 							Env: []corev1.EnvVar{
-								{Name: "PATH", Value: "/opt/spire/bin:/bin"},
+								{Name: SpireServerEnvPath, Value: SpireServerEnvPathValue},
 							},
 							Ports: []corev1.ContainerPort{
-								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
-								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: SpireServerPortNameGRPC, ContainerPort: SpireServerPortGRPC, Protocol: corev1.ProtocolTCP},
+								{Name: SpireServerPortNameHealthz, ContainerPort: SpireServerPortHealthz, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
-								InitialDelaySeconds: 15,
-								PeriodSeconds:       60,
-								TimeoutSeconds:      3,
-								FailureThreshold:    2,
+								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: SpireServerProbePathLive, Port: intstr.FromString(SpireServerPortNameHealthz)}},
+								InitialDelaySeconds: SpireServerLivenessInitialDelay,
+								PeriodSeconds:       SpireServerLivenessPeriod,
+								TimeoutSeconds:      SpireServerLivenessTimeout,
+								FailureThreshold:    SpireServerLivenessFailureThresh,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/ready", Port: intstr.FromString("healthz")}},
-								InitialDelaySeconds: 5,
-								PeriodSeconds:       5,
+								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: SpireServerProbePathReady, Port: intstr.FromString(SpireServerPortNameHealthz)}},
+								InitialDelaySeconds: SpireServerReadinessInitialDelay,
+								PeriodSeconds:       SpireServerReadinessPeriod,
 							},
 							Resources: utils.DerefResourceRequirements(config.Resources),
 							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private"},
-								{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
-								{Name: "spire-data", MountPath: "/run/spire/data"},
-								{Name: "server-tmp", MountPath: "/tmp"},
+								{Name: SpireServerVolumeNameServerSocket, MountPath: SpireServerMountPathServerSocket},
+								{Name: SpireServerVolumeNameConfig, MountPath: SpireServerMountPathConfig, ReadOnly: true},
+								{Name: SpireServerVolumeNameData, MountPath: SpireServerMountPathData},
+								{Name: SpireServerVolumeNameServerTmp, MountPath: SpireServerMountPathTmp},
 							},
 						},
 						{
-							Name:            "spire-controller-manager",
+							Name:            SpireServerContainerNameControllerManager,
 							Image:           utils.GetSpireControllerManagerImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args:            []string{"--config=controller-manager-config.yaml"},
+							Args:            []string{"--config=" + SpireServerConfigPathControllerManager},
 							Env: []corev1.EnvVar{
-								{Name: "ENABLE_WEBHOOKS", Value: "true"},
+								{Name: SpireServerEnvEnableWebhooks, Value: SpireServerEnvEnableWebhooksValue},
 							},
 							Ports: []corev1.ContainerPort{
-								{Name: "https", ContainerPort: 9443},
-								{Name: "healthz", ContainerPort: 8083},
+								{Name: SpireServerPortNameHTTPS, ContainerPort: SpireServerPortHTTPSCM},
+								{Name: SpireServerPortNameHealthz, ContainerPort: SpireServerPortHealthzCM},
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("healthz")}},
+								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: SpireServerProbePathHealthz, Port: intstr.FromString(SpireServerPortNameHealthz)}},
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromString("healthz")}},
+								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: SpireServerProbePathReadyz, Port: intstr.FromString(SpireServerPortNameHealthz)}},
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private", ReadOnly: true},
-								{Name: "controller-manager-config", MountPath: "/controller-manager-config.yaml", SubPath: "controller-manager-config.yaml", ReadOnly: true},
-								{Name: "spire-controller-manager-tmp", MountPath: "/tmp", SubPath: "spire-controller-manager"},
+								{Name: SpireServerVolumeNameServerSocket, MountPath: SpireServerMountPathServerSocket, ReadOnly: true},
+								{Name: SpireServerVolumeNameControllerConfig, MountPath: SpireServerMountPathControllerManagerConfig, SubPath: SpireServerConfigPathControllerManager, ReadOnly: true},
+								{Name: SpireServerVolumeNameControllerManagerTmp, MountPath: SpireServerMountPathControllerManagerTmp, SubPath: SpireServerSubPathControllerManagerTmp},
 							},
 							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
 					},
 					Volumes: []corev1.Volume{
-						{Name: "server-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-server"}}}},
-						{Name: "spire-server-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
+						{Name: SpireServerVolumeNameServerTmp, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: SpireServerVolumeNameConfig, VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireServerConfigMapNameServer}}}},
+						{Name: SpireServerVolumeNameServerSocket, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: SpireServerVolumeNameControllerManagerTmp, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: SpireServerVolumeNameControllerConfig, VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireServerConfigMapNameControllerManager}}}},
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
@@ -131,7 +131,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
+					ObjectMeta: metav1.ObjectMeta{Name: SpireServerPVCNameData},
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 						Resources: corev1.VolumeResourceRequirements{

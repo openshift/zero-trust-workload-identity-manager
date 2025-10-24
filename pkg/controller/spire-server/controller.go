@@ -2,6 +2,7 @@ package spire_server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -220,7 +221,13 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		Message: "SpireServer config map resources applied",
 	}
 
-	spireServerConfJSON, err := marshalToJSON(generateServerConfMap(&server.Spec))
+	// Generate config map data for hash calculation
+	serverConfMap, err := generateServerConfMap(&server.Spec)
+	if err != nil {
+		r.log.Error(err, "failed to generate spire server config map")
+		return ctrl.Result{}, err
+	}
+	spireServerConfJSON, err := json.Marshal(serverConfMap)
 	if err != nil {
 		r.log.Error(err, "failed to marshal spire server config map to JSON")
 		return ctrl.Result{}, err

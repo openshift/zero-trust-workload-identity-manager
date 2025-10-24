@@ -23,7 +23,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "spire-spiffe-csi-driver",
+			Name:      SpiffeCSIDaemonSetName,
 			Namespace: utils.OperatorNamespace,
 			Labels:    labels,
 		},
@@ -36,7 +36,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 				RollingUpdate: &appsv1.RollingUpdateDaemonSet{
 					MaxUnavailable: &intstr.IntOrString{
 						Type:   intstr.Int,
-						IntVal: 1,
+						IntVal: SpiffeCSIMaxUnavailable,
 					},
 				},
 			},
@@ -45,50 +45,50 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "spire-spiffe-csi-driver",
+					ServiceAccountName: SpiffeCSIServiceAccountName,
 					Affinity:           config.Affinity,
 					Tolerations:        utils.DerefTolerations(config.Tolerations),
 					NodeSelector:       utils.DerefNodeSelector(config.NodeSelector),
 					InitContainers: []corev1.Container{
 						{
-							Name:  "set-context",
+							Name:  SpiffeCSIInitContainerName,
 							Image: utils.GetSpiffeCsiInitContainerImage(),
 							Command: []string{
-								"chcon", "-Rvt", "container_file_t", "spire-agent-socket/",
+								SpiffeCSICommandChcon, SpiffeCSIArgRecursive, SpiffeCSIArgSELinuxType, SpiffeCSIArgTargetDir,
 							},
 							ImagePullPolicy: corev1.PullAlways,
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: boolPtr(true),
 								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"all"},
+									Drop: []corev1.Capability{SpiffeCSICapabilityDropAll},
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "spire-agent-socket-dir",
-									MountPath: "/spire-agent-socket",
+									Name:      SpiffeCSIVolumeNameAgentSocketDir,
+									MountPath: SpiffeCSIMountPathAgentSocket,
 								},
 							},
-							TerminationMessagePath:   "/dev/termination-log",
-							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+							TerminationMessagePath:   SpiffeCSITerminationMessagePath,
+							TerminationMessagePolicy: SpiffeCSITerminationMessageReadFileType,
 						},
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "spiffe-csi-driver",
+							Name:  SpiffeCSIContainerNameDriver,
 							Image: utils.GetSpiffeCSIDriverImage(),
 							Args: []string{
-								"-workload-api-socket-dir", "/spire-agent-socket",
-								"-plugin-name", "csi.spiffe.io",
-								"-csi-socket-path", "/spiffe-csi/csi.sock",
+								SpiffeCSIArgWorkloadAPISocketDir, SpiffeCSIWorkloadAPISocketDirPath,
+								SpiffeCSIArgPluginName, SpiffeCSIDefaultPluginName,
+								SpiffeCSIArgCSISocketPath, SpiffeCSISocketPath,
 							},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Env: []corev1.EnvVar{
 								{
-									Name: "MY_NODE_NAME",
+									Name: SpiffeCSIEnvMyNodeName,
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "spec.nodeName",
+											FieldPath: SpiffeCSIEnvFieldPath,
 										},
 									},
 								},
@@ -97,60 +97,60 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 								ReadOnlyRootFilesystem: boolPtr(true),
 								Privileged:             boolPtr(true),
 								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"all"},
+									Drop: []corev1.Capability{SpiffeCSICapabilityDropAll},
 								},
 							},
 							Resources: utils.DerefResourceRequirements(config.Resources),
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "spire-agent-socket-dir",
-									MountPath: "/spire-agent-socket",
+									Name:      SpiffeCSIVolumeNameAgentSocketDir,
+									MountPath: SpiffeCSIMountPathAgentSocket,
 									ReadOnly:  true,
 								},
 								{
-									Name:      "spiffe-csi-socket-dir",
-									MountPath: "/spiffe-csi",
+									Name:      SpiffeCSIVolumeNameCSISocketDir,
+									MountPath: SpiffeCSIMountPathCSISocket,
 								},
 								{
-									Name:             "mountpoint-dir",
-									MountPath:        "/var/lib/kubelet/pods",
+									Name:             SpiffeCSIVolumeNameMountpoint,
+									MountPath:        SpiffeCSIMountPathKubeletPods,
 									MountPropagation: mountPropagationPtr(corev1.MountPropagationBidirectional),
 								},
 							},
 						},
 						{
-							Name:  "node-driver-registrar",
+							Name:  SpiffeCSIContainerNameRegistrar,
 							Image: utils.GetNodeDriverRegistrarImage(),
 							Args: []string{
-								"-csi-address", "/spiffe-csi/csi.sock",
-								"-kubelet-registration-path", "/var/lib/kubelet/plugins/csi.spiffe.io/csi.sock",
-								"-health-port", "9809",
+								SpiffeCSIArgCSIAddress, SpiffeCSICSIAddressPath,
+								SpiffeCSIArgKubeletRegistrationPath, SpiffeCSIKubeletRegistrationPath,
+								SpiffeCSIArgHealthPort, SpiffeCSIHealthPort,
 							},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "spiffe-csi-socket-dir",
-									MountPath: "/spiffe-csi",
+									Name:      SpiffeCSIVolumeNameCSISocketDir,
+									MountPath: SpiffeCSIMountPathCSISocket,
 								},
 								{
-									Name:      "kubelet-plugin-registration-dir",
-									MountPath: "/registration",
+									Name:      SpiffeCSIVolumeNameKubeletPluginRegistration,
+									MountPath: SpiffeCSIMountPathKubeletPluginRegistration,
 								},
 							},
 							Ports: []corev1.ContainerPort{
 								{
-									ContainerPort: 9809,
-									Name:          "healthz",
+									ContainerPort: SpiffeCSIHealthPortInt,
+									Name:          SpiffeCSIPortNameHealthz,
 								},
 							},
 							Resources: utils.DerefResourceRequirements(config.Resources),
 							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 5,
-								TimeoutSeconds:      5,
+								InitialDelaySeconds: SpiffeCSIRegistrarLivenessInitialDelay,
+								TimeoutSeconds:      SpiffeCSIRegistrarLivenessTimeout,
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/healthz",
-										Port: intstr.FromString("healthz"),
+										Path: SpiffeCSIProbePathHealthz,
+										Port: intstr.FromString(SpiffeCSIPortNameHealthz),
 									},
 								},
 							},
@@ -158,38 +158,38 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 					},
 					Volumes: []corev1.Volume{
 						{
-							Name: "spire-agent-socket-dir",
+							Name: SpiffeCSIVolumeNameAgentSocketDir,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/run/spire/agent-sockets",
-									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
+									Path: SpiffeCSIHostPathAgentSockets,
+									Type: hostPathTypePtr(SpiffeCSIHostPathTypeDirectoryOrCreate),
 								},
 							},
 						},
 						{
-							Name: "spiffe-csi-socket-dir",
+							Name: SpiffeCSIVolumeNameCSISocketDir,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/var/lib/kubelet/plugins/csi.spiffe.io",
-									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
+									Path: SpiffeCSIHostPathCSIPlugin,
+									Type: hostPathTypePtr(SpiffeCSIHostPathTypeDirectoryOrCreate),
 								},
 							},
 						},
 						{
-							Name: "mountpoint-dir",
+							Name: SpiffeCSIVolumeNameMountpoint,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/var/lib/kubelet/pods",
-									Type: hostPathTypePtr(corev1.HostPathDirectory),
+									Path: SpiffeCSIHostPathKubeletPods,
+									Type: hostPathTypePtr(SpiffeCSIHostPathTypeDirectory),
 								},
 							},
 						},
 						{
-							Name: "kubelet-plugin-registration-dir",
+							Name: SpiffeCSIVolumeNameKubeletPluginRegistration,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/var/lib/kubelet/plugins_registry",
-									Type: hostPathTypePtr(corev1.HostPathDirectory),
+									Path: SpiffeCSIHostPathPluginsRegistry,
+									Type: hostPathTypePtr(SpiffeCSIHostPathTypeDirectory),
 								},
 							},
 						},

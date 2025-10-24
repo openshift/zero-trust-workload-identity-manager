@@ -11,12 +11,147 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/config"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	spiffev1alpha "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// buildSpireServerConfig creates a SpireServerConfig from the operator API spec
+func buildSpireServerConfig(spec *v1alpha1.SpireServerSpec) *config.SpireServerConfig {
+	serverConfig := &config.SpireServerConfig{
+		Server: config.ServerConfig{
+			BindAddress:        DefaultServerBindAddress,
+			BindPort:           DefaultServerBindPort,
+			TrustDomain:        spec.TrustDomain,
+			DataDir:            DefaultServerDataDir,
+			LogLevel:           utils.GetLogLevelFromString(spec.LogLevel),
+			LogFormat:          utils.GetLogFormatFromString(spec.LogFormat),
+			CAKeyType:          DefaultCAKeyType,
+			CATTL:              spec.CAValidity,
+			DefaultX509SVIDTTL: spec.DefaultX509Validity,
+			DefaultJWTSVIDTTL:  spec.DefaultJWTValidity,
+			JWTIssuer:          spec.JwtIssuer,
+			AuditLogEnabled:    false,
+			CASubject: []config.CASubject{
+				{
+					Country:      []string{spec.CASubject.Country},
+					Organization: []string{spec.CASubject.Organization},
+					CommonName:   spec.CASubject.CommonName,
+				},
+			},
+		},
+		HealthChecks: config.HealthChecks{
+			BindAddress:     DefaultHealthCheckBindAddress,
+			BindPort:        DefaultHealthCheckBindPort,
+			ListenerEnabled: true,
+			LivePath:        DefaultHealthCheckLivePath,
+			ReadyPath:       DefaultHealthCheckReadyPath,
+		},
+		Telemetry: &config.TelemetryConfig{
+			Prometheus: &config.PrometheusConfig{
+				Host: DefaultPrometheusHost,
+				Port: DefaultPrometheusPort,
+			},
+		},
+	}
+
+	// Build DataStore plugin configuration
+	dataStorePluginData := config.DataStorePluginData{
+		DatabaseType:     spec.Datastore.DatabaseType,
+		ConnectionString: spec.Datastore.ConnectionString,
+		MaxOpenConns:     spec.Datastore.MaxOpenConns,
+		MaxIdleConns:     spec.Datastore.MaxIdleConns,
+		DisableMigration: utils.StringToBool(spec.Datastore.DisableMigration),
+	}
+
+	// Add conn_max_lifetime with seconds unit if provided
+	if spec.Datastore.ConnMaxLifetime > 0 {
+		dataStorePluginData.ConnMaxLifetime = fmt.Sprintf("%ds", spec.Datastore.ConnMaxLifetime)
+	}
+
+	// Add TLS options if provided
+	if spec.Datastore.RootCAPath != "" {
+		dataStorePluginData.RootCAPath = spec.Datastore.RootCAPath
+	}
+	if spec.Datastore.ClientCertPath != "" {
+		dataStorePluginData.ClientCertPath = spec.Datastore.ClientCertPath
+	}
+	if spec.Datastore.ClientKeyPath != "" {
+		dataStorePluginData.ClientKeyPath = spec.Datastore.ClientKeyPath
+	}
+	if len(spec.Datastore.Options) > 0 {
+		dataStorePluginData.Options = spec.Datastore.Options
+	}
+
+	dataStorePlugin := config.PluginConfig{
+		"sql": config.PluginData{
+			PluginData: dataStorePluginData,
+		},
+	}
+
+	// Build KeyManager plugin configuration
+	var keyManagerPlugin config.PluginConfig
+	if spec.KeyManager != nil && utils.StringToBool(spec.KeyManager.MemoryEnabled) {
+		// Use memory-based key manager
+		keyManagerPlugin = config.PluginConfig{
+			"memory": config.PluginData{
+				PluginData: nil,
+			},
+		}
+	} else {
+		// Use disk-based key manager (default)
+		keyManagerPlugin = config.PluginConfig{
+			"disk": config.PluginData{
+				PluginData: config.KeyManagerPluginData{
+					KeysPath: DefaultKeyManagerKeysPath,
+				},
+			},
+		}
+	}
+
+	// Build NodeAttestor plugin configuration
+	clusterConfig := config.ClusterConfig{
+		AllowedNodeLabelKeys:    []string{},
+		AllowedPodLabelKeys:     []string{},
+		Audience:                []string{DefaultNodeAttestorAudience},
+		ServiceAccountAllowList: getNodeAttestorServiceAccountAllowList(),
+	}
+
+	nodeAttestorPlugin := config.PluginConfig{
+		"k8s_psat": config.PluginData{
+			PluginData: config.NodeAttestorPluginData{
+				Clusters: map[string]config.ClusterConfig{
+					spec.ClusterName: clusterConfig,
+				},
+			},
+		},
+	}
+
+	// Build Notifier plugin configuration
+	notifierPluginData := config.NotifierPluginData{
+		Namespace: utils.OperatorNamespace,
+		ConfigMap: spec.BundleConfigMap,
+	}
+
+	notifierPlugin := config.PluginConfig{
+		"k8sbundle": config.PluginData{
+			PluginData: notifierPluginData,
+		},
+	}
+
+	// Assemble all plugins
+	serverConfig.Plugins = config.ServerPlugins{
+		DataStore:    []config.PluginConfig{dataStorePlugin},
+		KeyManager:   []config.PluginConfig{keyManagerPlugin},
+		NodeAttestor: []config.PluginConfig{nodeAttestorPlugin},
+		Notifier:     []config.PluginConfig{notifierPlugin},
+	}
+
+	return serverConfig
+}
 
 type ControllerManagerConfigYAML struct {
 	Kind                                  string            `json:"kind"`
@@ -25,34 +160,41 @@ type ControllerManagerConfigYAML struct {
 	spiffev1alpha.ControllerManagerConfig `json:",inline"`
 }
 
-// GenerateSpireServerConfigMap generates the spire-server ConfigMap
-func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.ConfigMap, error) {
-	if config == nil {
-		return nil, fmt.Errorf("config is nil")
+// GenerateSpireServerConfigMap generates the spire-server ConfigMap using config structs
+func GenerateSpireServerConfigMap(spec *v1alpha1.SpireServerSpec) (*corev1.ConfigMap, error) {
+	if spec == nil {
+		return nil, fmt.Errorf("spec is nil")
 	}
-	if config.TrustDomain == "" {
+	if spec.TrustDomain == "" {
 		return nil, fmt.Errorf("trust_domain is empty")
 	}
-	if config.BundleConfigMap == "" {
+	if spec.ClusterName == "" {
+		return nil, fmt.Errorf("cluster name is empty")
+	}
+	if spec.BundleConfigMap == "" {
 		return nil, fmt.Errorf("bundle configmap is empty")
 	}
-	if config.Datastore == nil {
+	if spec.Datastore == nil {
 		return nil, fmt.Errorf("datastore configuration is required")
 	}
-	if config.CASubject == nil {
+	if spec.CASubject == nil {
 		return nil, fmt.Errorf("CASubject is empty")
 	}
-	confMap := generateServerConfMap(config)
-	confJSON, err := marshalToJSON(confMap)
+
+	// Build config struct from operator API spec
+	serverConfig := buildSpireServerConfig(spec)
+
+	// Marshal to JSON
+	confJSON, err := json.MarshalIndent(serverConfig, "", "  ")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal server config: %w", err)
 	}
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
 			Namespace: utils.OperatorNamespace,
-			Labels:    utils.SpireServerLabels(config.Labels),
+			Labels:    utils.SpireServerLabels(spec.Labels),
 		},
 		Data: map[string]string{
 			"server.conf": string(confJSON),
@@ -62,107 +204,24 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 	return cm, nil
 }
 
-// generateServerConfMap builds the server.conf structure as a Go map
-func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interface{} {
-	return map[string]interface{}{
-		"health_checks": map[string]interface{}{
-			"bind_address":     "0.0.0.0",
-			"bind_port":        "8080",
-			"listener_enabled": true,
-			"live_path":        "/live",
-			"ready_path":       "/ready",
-		},
-		"plugins": map[string]interface{}{
-			"DataStore": []map[string]interface{}{
-				{
-					"sql": map[string]interface{}{
-						"plugin_data": map[string]interface{}{
-							"connection_string": config.Datastore.ConnectionString,
-							"database_type":     config.Datastore.DatabaseType,
-							"disable_migration": utils.StringToBool(config.Datastore.DisableMigration),
-							"max_idle_conns":    config.Datastore.MaxIdleConns,
-							"max_open_conns":    config.Datastore.MaxOpenConns,
-						},
-					},
-				},
-			},
-			"KeyManager": []map[string]interface{}{
-				{
-					"disk": map[string]interface{}{
-						"plugin_data": map[string]interface{}{
-							"keys_path": "/run/spire/data/keys.json",
-						},
-					},
-				},
-			},
-			"NodeAttestor": []map[string]interface{}{
-				{
-					"k8s_psat": map[string]interface{}{
-						"plugin_data": map[string]interface{}{
-							"clusters": []map[string]interface{}{
-								{
-									config.ClusterName: map[string]interface{}{
-										"allowed_node_label_keys": []string{},
-										"allowed_pod_label_keys":  []string{},
-										"audience":                []string{"spire-server"},
-										"service_account_allow_list": []string{
-											"zero-trust-workload-identity-manager:spire-agent",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			"Notifier": []map[string]interface{}{
-				{
-					"k8sbundle": map[string]interface{}{
-						"plugin_data": map[string]interface{}{
-							"config_map": config.BundleConfigMap,
-							"namespace":  utils.OperatorNamespace,
-						},
-					},
-				},
-			},
-		},
-		"server": map[string]interface{}{
-			"audit_log_enabled": false,
-			"bind_address":      "0.0.0.0",
-			"bind_port":         "8081",
-			"ca_key_type":       "ec-p256",
-			"ca_subject": []map[string]interface{}{
-				{
-					"common_name":  config.CASubject.CommonName,
-					"country":      []string{config.CASubject.Country},
-					"organization": []string{config.CASubject.Organization},
-				},
-			},
-			"ca_ttl":                config.CAValidity,
-			"data_dir":              "/run/spire/data",
-			"default_jwt_svid_ttl":  config.DefaultJWTValidity,
-			"default_x509_svid_ttl": config.DefaultX509Validity,
-			"jwt_issuer":            config.JwtIssuer,
-			"log_level":             utils.GetLogLevelFromString(config.LogLevel),
-			"log_format":            utils.GetLogFormatFromString(config.LogFormat),
-			"trust_domain":          config.TrustDomain,
-		},
-		"telemetry": map[string]interface{}{
-			"Prometheus": map[string]interface{}{
-				"host": "0.0.0.0",
-				"port": "9402",
-			},
-		},
-	}
-}
+// generateServerConfMap builds the server.conf structure as a Go map (deprecated - kept for backward compatibility)
+// Use buildSpireServerConfig instead
+func generateServerConfMap(spec *v1alpha1.SpireServerSpec) (map[string]interface{}, error) {
+	// Build using the new config struct approach
+	serverConfig := buildSpireServerConfig(spec)
 
-// marshalToJSON marshals a map to JSON with indentation
-func marshalToJSON(data map[string]interface{}) ([]byte, error) {
-	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	// Convert struct to map for backward compatibility
+	jsonBytes, err := json.Marshal(serverConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal server.conf: %w", err)
+		return nil, fmt.Errorf("failed to marshal server config: %w", err)
 	}
-	return jsonBytes, nil
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to map: %w", err)
+	}
+
+	return result, nil
 }
 
 // generateConfigHash returns a SHA256 hex string of the trimmed input string

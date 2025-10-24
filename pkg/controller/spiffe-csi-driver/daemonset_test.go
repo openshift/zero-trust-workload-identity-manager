@@ -4,11 +4,15 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
@@ -478,4 +482,227 @@ func TestMountPropagationPtr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateSpiffeCsiDriverDaemonSet_WithConstants(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     v1alpha1.SpiffeCSIDriverSpec
+		validate func(t *testing.T, ds *appsv1.DaemonSet)
+	}{
+		{
+			name: "DaemonSet uses correct constants for metadata",
+			spec: v1alpha1.SpiffeCSIDriverSpec{},
+			validate: func(t *testing.T, ds *appsv1.DaemonSet) {
+				// Validate metadata
+				assert.Equal(t, SpiffeCSIDaemonSetName, ds.ObjectMeta.Name)
+
+				// Validate service account
+				assert.Equal(t, SpiffeCSIServiceAccountName, ds.Spec.Template.Spec.ServiceAccountName)
+
+				// Validate update strategy
+				assert.Equal(t, SpiffeCSIMaxUnavailable, ds.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable.IntVal)
+			},
+		},
+		{
+			name: "Init container uses correct constants",
+			spec: v1alpha1.SpiffeCSIDriverSpec{},
+			validate: func(t *testing.T, ds *appsv1.DaemonSet) {
+				require.Len(t, ds.Spec.Template.Spec.InitContainers, 1)
+				initContainer := ds.Spec.Template.Spec.InitContainers[0]
+
+				// Validate init container name
+				assert.Equal(t, SpiffeCSIInitContainerName, initContainer.Name)
+
+				// Validate command
+				expectedCommand := []string{SpiffeCSICommandChcon, SpiffeCSIArgRecursive, SpiffeCSIArgSELinuxType, SpiffeCSIArgTargetDir}
+				assert.Equal(t, expectedCommand, initContainer.Command)
+
+				// Validate termination message
+				assert.Equal(t, SpiffeCSITerminationMessagePath, initContainer.TerminationMessagePath)
+				assert.Equal(t, SpiffeCSITerminationMessageReadFileType, initContainer.TerminationMessagePolicy)
+
+				// Validate security context
+				require.NotNil(t, initContainer.SecurityContext)
+				assert.True(t, *initContainer.SecurityContext.Privileged)
+				require.Len(t, initContainer.SecurityContext.Capabilities.Drop, 1)
+				assert.Equal(t, corev1.Capability(SpiffeCSICapabilityDropAll), initContainer.SecurityContext.Capabilities.Drop[0])
+
+				// Validate volume mounts
+				require.Len(t, initContainer.VolumeMounts, 1)
+				assert.Equal(t, SpiffeCSIVolumeNameAgentSocketDir, initContainer.VolumeMounts[0].Name)
+				assert.Equal(t, SpiffeCSIMountPathAgentSocket, initContainer.VolumeMounts[0].MountPath)
+			},
+		},
+		{
+			name: "CSI driver container uses correct constants",
+			spec: v1alpha1.SpiffeCSIDriverSpec{},
+			validate: func(t *testing.T, ds *appsv1.DaemonSet) {
+				require.Len(t, ds.Spec.Template.Spec.Containers, 2)
+				csiDriver := ds.Spec.Template.Spec.Containers[0]
+
+				// Validate container name
+				assert.Equal(t, SpiffeCSIContainerNameDriver, csiDriver.Name)
+
+				// Validate arguments
+				expectedArgs := []string{
+					SpiffeCSIArgWorkloadAPISocketDir, SpiffeCSIWorkloadAPISocketDirPath,
+					SpiffeCSIArgPluginName, SpiffeCSIDefaultPluginName,
+					SpiffeCSIArgCSISocketPath, SpiffeCSISocketPath,
+				}
+				assert.Equal(t, expectedArgs, csiDriver.Args)
+
+				// Validate environment
+				require.Len(t, csiDriver.Env, 1)
+				assert.Equal(t, SpiffeCSIEnvMyNodeName, csiDriver.Env[0].Name)
+				assert.Equal(t, SpiffeCSIEnvFieldPath, csiDriver.Env[0].ValueFrom.FieldRef.FieldPath)
+
+				// Validate security context
+				require.NotNil(t, csiDriver.SecurityContext)
+				assert.True(t, *csiDriver.SecurityContext.ReadOnlyRootFilesystem)
+				assert.True(t, *csiDriver.SecurityContext.Privileged)
+
+				// Validate volume mounts
+				require.Len(t, csiDriver.VolumeMounts, 3)
+				assert.Equal(t, SpiffeCSIVolumeNameAgentSocketDir, csiDriver.VolumeMounts[0].Name)
+				assert.Equal(t, SpiffeCSIMountPathAgentSocket, csiDriver.VolumeMounts[0].MountPath)
+				assert.Equal(t, SpiffeCSIVolumeNameCSISocketDir, csiDriver.VolumeMounts[1].Name)
+				assert.Equal(t, SpiffeCSIMountPathCSISocket, csiDriver.VolumeMounts[1].MountPath)
+				assert.Equal(t, SpiffeCSIVolumeNameMountpoint, csiDriver.VolumeMounts[2].Name)
+				assert.Equal(t, SpiffeCSIMountPathKubeletPods, csiDriver.VolumeMounts[2].MountPath)
+			},
+		},
+		{
+			name: "Node driver registrar container uses correct constants",
+			spec: v1alpha1.SpiffeCSIDriverSpec{},
+			validate: func(t *testing.T, ds *appsv1.DaemonSet) {
+				require.Len(t, ds.Spec.Template.Spec.Containers, 2)
+				registrar := ds.Spec.Template.Spec.Containers[1]
+
+				// Validate container name
+				assert.Equal(t, SpiffeCSIContainerNameRegistrar, registrar.Name)
+
+				// Validate arguments
+				expectedArgs := []string{
+					SpiffeCSIArgCSIAddress, SpiffeCSICSIAddressPath,
+					SpiffeCSIArgKubeletRegistrationPath, SpiffeCSIKubeletRegistrationPath,
+					SpiffeCSIArgHealthPort, SpiffeCSIHealthPort,
+				}
+				assert.Equal(t, expectedArgs, registrar.Args)
+
+				// Validate ports
+				require.Len(t, registrar.Ports, 1)
+				assert.Equal(t, SpiffeCSIHealthPortInt, registrar.Ports[0].ContainerPort)
+				assert.Equal(t, SpiffeCSIPortNameHealthz, registrar.Ports[0].Name)
+
+				// Validate liveness probe
+				require.NotNil(t, registrar.LivenessProbe)
+				assert.Equal(t, SpiffeCSIRegistrarLivenessInitialDelay, registrar.LivenessProbe.InitialDelaySeconds)
+				assert.Equal(t, SpiffeCSIRegistrarLivenessTimeout, registrar.LivenessProbe.TimeoutSeconds)
+				assert.Equal(t, SpiffeCSIProbePathHealthz, registrar.LivenessProbe.HTTPGet.Path)
+
+				// Validate volume mounts
+				require.Len(t, registrar.VolumeMounts, 2)
+				assert.Equal(t, SpiffeCSIVolumeNameCSISocketDir, registrar.VolumeMounts[0].Name)
+				assert.Equal(t, SpiffeCSIMountPathCSISocket, registrar.VolumeMounts[0].MountPath)
+				assert.Equal(t, SpiffeCSIVolumeNameKubeletPluginRegistration, registrar.VolumeMounts[1].Name)
+				assert.Equal(t, SpiffeCSIMountPathKubeletPluginRegistration, registrar.VolumeMounts[1].MountPath)
+			},
+		},
+		{
+			name: "Volumes use correct constants",
+			spec: v1alpha1.SpiffeCSIDriverSpec{},
+			validate: func(t *testing.T, ds *appsv1.DaemonSet) {
+				volumes := ds.Spec.Template.Spec.Volumes
+				require.Len(t, volumes, 4)
+
+				// Validate agent socket volume
+				agentSocketVol := findVolume(volumes, SpiffeCSIVolumeNameAgentSocketDir)
+				require.NotNil(t, agentSocketVol)
+				require.NotNil(t, agentSocketVol.HostPath)
+				assert.Equal(t, SpiffeCSIHostPathAgentSockets, agentSocketVol.HostPath.Path)
+				assert.Equal(t, SpiffeCSIHostPathTypeDirectoryOrCreate, *agentSocketVol.HostPath.Type)
+
+				// Validate CSI socket volume
+				csiSocketVol := findVolume(volumes, SpiffeCSIVolumeNameCSISocketDir)
+				require.NotNil(t, csiSocketVol)
+				require.NotNil(t, csiSocketVol.HostPath)
+				assert.Equal(t, SpiffeCSIHostPathCSIPlugin, csiSocketVol.HostPath.Path)
+				assert.Equal(t, SpiffeCSIHostPathTypeDirectoryOrCreate, *csiSocketVol.HostPath.Type)
+
+				// Validate mountpoint volume
+				mountpointVol := findVolume(volumes, SpiffeCSIVolumeNameMountpoint)
+				require.NotNil(t, mountpointVol)
+				require.NotNil(t, mountpointVol.HostPath)
+				assert.Equal(t, SpiffeCSIHostPathKubeletPods, mountpointVol.HostPath.Path)
+				assert.Equal(t, SpiffeCSIHostPathTypeDirectory, *mountpointVol.HostPath.Type)
+
+				// Validate kubelet plugin registration volume
+				registrationVol := findVolume(volumes, SpiffeCSIVolumeNameKubeletPluginRegistration)
+				require.NotNil(t, registrationVol)
+				require.NotNil(t, registrationVol.HostPath)
+				assert.Equal(t, SpiffeCSIHostPathPluginsRegistry, registrationVol.HostPath.Path)
+				assert.Equal(t, SpiffeCSIHostPathTypeDirectory, *registrationVol.HostPath.Type)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := generateSpiffeCsiDriverDaemonSet(tt.spec)
+			require.NotNil(t, ds)
+			tt.validate(t, ds)
+		})
+	}
+}
+
+// Helper function to find a volume by name
+func findVolume(volumes []corev1.Volume, name string) *corev1.Volume {
+	for i := range volumes {
+		if volumes[i].Name == name {
+			return &volumes[i]
+		}
+	}
+	return nil
+}
+
+func TestSpiffeCsiDriverConstants(t *testing.T) {
+	// Validate constants are properly defined
+	t.Run("Metadata constants", func(t *testing.T) {
+		assert.Equal(t, "spire-spiffe-csi-driver", SpiffeCSIDaemonSetName)
+		assert.Equal(t, "spire-spiffe-csi-driver", SpiffeCSIServiceAccountName)
+		assert.Equal(t, int32(1), SpiffeCSIMaxUnavailable)
+	})
+
+	t.Run("Container name constants", func(t *testing.T) {
+		assert.Equal(t, "set-context", SpiffeCSIInitContainerName)
+		assert.Equal(t, "spiffe-csi-driver", SpiffeCSIContainerNameDriver)
+		assert.Equal(t, "node-driver-registrar", SpiffeCSIContainerNameRegistrar)
+	})
+
+	t.Run("Path constants", func(t *testing.T) {
+		assert.Equal(t, "/spire-agent-socket", SpiffeCSIMountPathAgentSocket)
+		assert.Equal(t, "/spiffe-csi", SpiffeCSIMountPathCSISocket)
+		assert.Equal(t, "/var/lib/kubelet/pods", SpiffeCSIMountPathKubeletPods)
+		assert.Equal(t, "/registration", SpiffeCSIMountPathKubeletPluginRegistration)
+	})
+
+	t.Run("Host path constants", func(t *testing.T) {
+		assert.Equal(t, "/run/spire/agent-sockets", SpiffeCSIHostPathAgentSockets)
+		assert.Equal(t, "/var/lib/kubelet/plugins/csi.spiffe.io", SpiffeCSIHostPathCSIPlugin)
+		assert.Equal(t, "/var/lib/kubelet/pods", SpiffeCSIHostPathKubeletPods)
+		assert.Equal(t, "/var/lib/kubelet/plugins_registry", SpiffeCSIHostPathPluginsRegistry)
+	})
+
+	t.Run("Port constants", func(t *testing.T) {
+		assert.Equal(t, int32(9809), SpiffeCSIHealthPortInt)
+		assert.Equal(t, "9809", SpiffeCSIHealthPort)
+		assert.Equal(t, "healthz", SpiffeCSIPortNameHealthz)
+	})
+
+	t.Run("Probe timing constants", func(t *testing.T) {
+		assert.Equal(t, int32(5), SpiffeCSIRegistrarLivenessInitialDelay)
+		assert.Equal(t, int32(5), SpiffeCSIRegistrarLivenessTimeout)
+		assert.Equal(t, "/healthz", SpiffeCSIProbePathHealthz)
+	})
 }
