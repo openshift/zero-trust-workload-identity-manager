@@ -71,8 +71,8 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	if !scc.AllowHostDirVolumePlugin {
 		t.Errorf("expected AllowHostDirVolumePlugin to be true")
 	}
-	if !scc.AllowHostIPC {
-		t.Errorf("expected AllowHostIPC to be true")
+	if scc.AllowHostIPC {
+		t.Errorf("expected AllowHostIPC to be false")
 	}
 	if !scc.AllowHostNetwork {
 		t.Errorf("expected AllowHostNetwork to be true")
@@ -83,11 +83,11 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	if !scc.AllowHostPorts {
 		t.Errorf("expected AllowHostPorts to be true")
 	}
-	if scc.AllowPrivilegeEscalation == nil || !*scc.AllowPrivilegeEscalation {
-		t.Errorf("expected AllowPrivilegeEscalation to be true")
+	if scc.AllowPrivilegeEscalation == nil || *scc.AllowPrivilegeEscalation {
+		t.Errorf("expected AllowPrivilegeEscalation to be false")
 	}
-	if !scc.AllowPrivilegedContainer {
-		t.Errorf("expected AllowPrivilegedContainer to be true")
+	if scc.AllowPrivilegedContainer {
+		t.Errorf("expected AllowPrivilegedContainer to be false")
 	}
 
 	if len(scc.AllowedCapabilities) != 0 {
