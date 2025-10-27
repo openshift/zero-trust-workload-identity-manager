@@ -192,8 +192,8 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if createOnlyMode {
 			r.log.Info("Skipping ConfigMap update due to create-only mode")
 		} else {
-			existingSpireAgentCM.Data = spireAgentConfigMap.Data
-			if err = r.ctrlClient.Update(ctx, &existingSpireAgentCM); err != nil {
+			spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
 				r.log.Error(err, "failed to update spire-agent config map")
 				reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
@@ -247,9 +247,9 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if createOnlyMode {
 			r.log.Info("Skipping DaemonSet update due to create-only mode")
 		} else {
-			existingSpireAgentDaemonSet.Spec = spireAgentDaemonset.Spec
-			if err = r.ctrlClient.Update(ctx, &existingSpireAgentDaemonSet); err != nil {
-				r.log.Error(err, "failed to update spire agent config map")
+			spireAgentDaemonset.ResourceVersion = existingSpireAgentDaemonSet.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireAgentDaemonset); err != nil {
+				r.log.Error(err, "failed to update spire agent DaemonSet")
 				return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
 			}
 			r.log.Info("Updated spire agent DaemonSet")

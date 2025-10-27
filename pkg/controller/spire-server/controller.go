@@ -195,8 +195,8 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if createOnlyMode {
 			r.log.Info("Skipping ConfigMap update due to create-only mode")
 		} else {
-			existingSpireServerCM.Data = spireServerConfigMap.Data
-			if err = r.ctrlClient.Update(ctx, &existingSpireServerCM); err != nil {
+			spireServerConfigMap.ResourceVersion = existingSpireServerCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireServerConfigMap); err != nil {
 				reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
 					Reason:  "SpireServerConfigMapGenerationFailed",
@@ -267,8 +267,8 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if createOnlyMode {
 			r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
 		} else {
-			existingSpireControllerManagerCM.Data = spireControllerManagerConfigMap.Data
-			if err = r.ctrlClient.Update(ctx, &existingSpireControllerManagerCM); err != nil {
+			spireControllerManagerConfigMap.ResourceVersion = existingSpireControllerManagerCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireControllerManagerConfigMap); err != nil {
 				reconcileStatus[SpireControllerManagerConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
 					Reason:  "SpireControllerManagerConfigMapGenerationFailed",
@@ -355,6 +355,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if createOnlyMode {
 			r.log.Info("Skipping StatefulSet update due to create-only mode")
 		} else {
+			sts.ResourceVersion = existingSTS.ResourceVersion
 			if err = r.ctrlClient.Update(ctx, sts); err != nil {
 				reconcileStatus[SpireServerStatefulSetGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,

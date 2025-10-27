@@ -235,8 +235,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		if createOnlyMode {
 			r.log.Info("Skipping ConfigMap update due to create-only mode", "Namespace", cm.Namespace, "Name", cm.Name)
 		} else {
-			existingOidcCm.Data = cm.Data
-			if err = r.ctrlClient.Update(ctx, &existingOidcCm); err != nil {
+			cm.ResourceVersion = existingOidcCm.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, cm); err != nil {
 				r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 				reconcileStatus[SpireOIDCConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
@@ -293,8 +293,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		if createOnlyMode {
 			r.log.Info("Skipping Deployment update due to create-only mode")
 		} else {
-			existingSpireOidcDeployment.Spec = deployment.Spec
-			if err = r.ctrlClient.Update(ctx, &existingSpireOidcDeployment); err != nil {
+			deployment.ResourceVersion = existingSpireOidcDeployment.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, deployment); err != nil {
 				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
 				reconcileStatus[SpireOIDCDeploymentGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
