@@ -278,3 +278,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.17.2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
+
+replace github.com/tdakkota/asciicheck => github.com/golangci/asciicheck v0.2.0
