@@ -317,12 +317,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				}
 			})
 
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
 			By("Waiting for SPIRE Server StatefulSet rolling update to start")
 			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
@@ -372,12 +366,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, server)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIRE Server StatefulSet rolling update to start")
 			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
@@ -493,12 +481,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				}
 			})
 
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
 			By("Waiting for SPIRE Server StatefulSet rolling update to start")
 			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
@@ -547,12 +529,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, agent)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
@@ -603,12 +579,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, agent)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
@@ -698,12 +668,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				}
 			})
 
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
 			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
@@ -754,12 +718,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				}
 			})
 
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
 			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
 
@@ -809,12 +767,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, driver)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
@@ -895,12 +847,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				}
 			})
 
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
 			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
@@ -950,12 +896,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, provider)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
 			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
@@ -1026,12 +966,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, provider)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
 			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
@@ -1124,12 +1058,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					k8sClient.Update(ctx, provider)
 				}
 			})
-
-			By("Restarting operator Pod") // TODO: remove this step once SPIRE-68 is fixed
-			err = clientset.CoreV1().Pods(utils.OperatorNamespace).DeleteCollection(testCtx, metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: utils.OperatorLabelSelector,
-			})
-			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
 			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)

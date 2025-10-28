@@ -40,6 +40,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	operatoropenshiftiov1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	spiffeCsiDriverController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spiffe-csi-driver"
 	spireAgentController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-agent"
 	spireOIDCDiscoveryProviderController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-oidc-discovery-provider"
@@ -153,6 +154,10 @@ func main() {
 		exitOnError(err, "unable to add routev1 scheme")
 	}
 
+	// Create unified cache builder to prevent race conditions between manager and reconciler caches
+	cacheBuilder, err := customClient.NewCacheBuilder()
+	exitOnError(err, "unable to create cache builder")
+
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -160,6 +165,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "24a59323.operator.openshift.io",
+		NewCache:               cacheBuilder,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
