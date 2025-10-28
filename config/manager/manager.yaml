@@ -82,6 +82,7 @@ spec:
         image: controller:latest
         name: manager
         securityContext:
+          readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
           capabilities:
             drop:

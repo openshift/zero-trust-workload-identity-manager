@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 )
 
 func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *appsv1.DaemonSet {
@@ -58,7 +59,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 							},
 							ImagePullPolicy: corev1.PullAlways,
 							SecurityContext: &corev1.SecurityContext{
-								Privileged: boolPtr(true),
+								Privileged: ptr.To(true),
 								Capabilities: &corev1.Capabilities{
 									Drop: []corev1.Capability{"all"},
 								},
@@ -94,8 +95,8 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 								},
 							},
 							SecurityContext: &corev1.SecurityContext{
-								ReadOnlyRootFilesystem: boolPtr(true),
-								Privileged:             boolPtr(true),
+								ReadOnlyRootFilesystem: ptr.To(true),
+								Privileged:             ptr.To(true),
 								Capabilities: &corev1.Capabilities{
 									Drop: []corev1.Capability{"all"},
 								},
@@ -198,10 +199,6 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 			},
 		},
 	}
-}
-
-func boolPtr(b bool) *bool {
-	return &b
 }
 
 func hostPathTypePtr(t corev1.HostPathType) *corev1.HostPathType {

@@ -374,38 +374,6 @@ func testVolumes(t *testing.T, volumes []corev1.Volume) {
 	}
 }
 
-func TestBoolPtr(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    bool
-		expected bool
-	}{
-		{
-			name:     "true value",
-			input:    true,
-			expected: true,
-		},
-		{
-			name:     "false value",
-			input:    false,
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := boolPtr(tt.input)
-			if result == nil {
-				t.Error("Expected non-nil pointer")
-				return
-			}
-			if *result != tt.expected {
-				t.Errorf("Expected %v, got %v", tt.expected, *result)
-			}
-		})
-	}
-}
-
 func TestHostPathTypePtr(t *testing.T) {
 	tests := []struct {
 		name     string

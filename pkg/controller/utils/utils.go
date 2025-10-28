@@ -9,6 +9,7 @@ import (
 
 	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
+	"k8s.io/utils/ptr"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -18,7 +19,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/utils/pointer"
 )
 
 var (
@@ -232,7 +232,7 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 	if dPod.ServiceAccountName != fPod.ServiceAccountName {
 		return true
 	}
-	if !pointer.BoolEqual(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
 	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
@@ -319,7 +319,7 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 	if dPod.ServiceAccountName != fPod.ServiceAccountName {
 		return true
 	}
-	if !pointer.BoolEqual(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
 	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
@@ -386,7 +386,7 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 	if dPod.ServiceAccountName != fPod.ServiceAccountName {
 		return true
 	}
-	if !pointer.BoolEqual(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
 	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {

@@ -4,6 +4,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -126,7 +127,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 										{
 											ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 												Path:              "spire-agent",
-												ExpirationSeconds: int64Ptr(7200),
+												ExpirationSeconds: ptr.To(int64(7200)),
 												Audience:          "spire-server",
 											},
 										},
@@ -148,10 +149,6 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 			},
 		},
 	}
-}
-
-func int64Ptr(val int64) *int64 {
-	return &val
 }
 
 func hostPathTypePtr(t corev1.HostPathType) *corev1.HostPathType {

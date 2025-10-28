@@ -271,30 +271,3 @@ func TestBuildDeployment(t *testing.T) {
 		})
 	}
 }
-
-func TestBoolPtr(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    bool
-		expected bool
-	}{
-		{
-			name:     "true value",
-			input:    true,
-			expected: true,
-		},
-		{
-			name:     "false value",
-			input:    false,
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := boolPtr(tt.input)
-			require.NotNil(t, result)
-			assert.Equal(t, tt.expected, *result)
-		})
-	}
-}

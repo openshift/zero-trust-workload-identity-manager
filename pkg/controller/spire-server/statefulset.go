@@ -6,8 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -41,7 +40,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 			Labels:    labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:    pointer.Int32(1),
+			Replicas:    ptr.To(int32(1)),
 			ServiceName: "spire-server",
 			Selector: &metav1.LabelSelector{
 				MatchLabels: selectorLabels,
@@ -57,9 +56,12 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:    "spire-server",
-					ShareProcessNamespace: pointer.Bool(true),
+					ShareProcessNamespace: ptr.To(true),
 					Containers: []corev1.Container{
 						{
+							SecurityContext: &corev1.SecurityContext{
+								ReadOnlyRootFilesystem: ptr.To(true),
+							},
 							Name:            "spire-server",
 							Image:           utils.GetSpireServerImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
@@ -92,6 +94,9 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 							},
 						},
 						{
+							SecurityContext: &corev1.SecurityContext{
+								ReadOnlyRootFilesystem: ptr.To(true),
+							},
 							Name:            "spire-controller-manager",
 							Image:           utils.GetSpireControllerManagerImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
