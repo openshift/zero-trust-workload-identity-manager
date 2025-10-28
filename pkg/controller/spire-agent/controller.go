@@ -3,6 +3,7 @@ package spire_agent
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
@@ -188,7 +189,8 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire agent ConfigMap")
-	} else if err == nil && existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] {
+	} else if err == nil && (existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
+		!reflect.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels)) {
 		if createOnlyMode {
 			r.log.Info("Skipping ConfigMap update due to create-only mode")
 		} else {
@@ -322,6 +324,8 @@ func needsUpdate(current, desired appsv1.DaemonSet) bool {
 	if current.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] {
 		return true
 	} else if utils.DaemonSetSpecModified(&desired, &current) {
+		return true
+	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
 		return true
 	}
 	return false
