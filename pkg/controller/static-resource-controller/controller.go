@@ -33,6 +33,7 @@ import (
 )
 
 const (
+	NetworkPolicyResourcesGeneration                  = "NetworkPolicyResourcesGeneration"
 	RBACResourcesGeneration                           = "RBACResourcesGeneration"
 	ServiceResourcesGeneration                        = "ServiceResourcesGeneration"
 	ServiceAccountResourcesGeneration                 = "ServiceAccountResourcesGeneration"
@@ -207,6 +208,24 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				Message: "Create-only mode is disabled",
 			}
 		}
+	}
+
+	err = r.CreateOrApplyNetworkPolicyResources(ctx, createOnlyMode)
+	if err != nil {
+		r.log.Error(err, "failed to create or apply network-policy resources")
+		r.eventRecorder.Event(&config, corev1.EventTypeWarning, "failed to create network-policy resources",
+			err.Error())
+		reconcileStatus[NetworkPolicyResourcesGeneration] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "NetworkPolicyResourceCreationFailed",
+			Message: err.Error(),
+		}
+		return ctrl.Result{}, err
+	}
+	reconcileStatus[NetworkPolicyResourcesGeneration] = reconcilerStatus{
+		Status:  metav1.ConditionTrue,
+		Reason:  "NetworkPolicyResourceCreated",
+		Message: "All NetworkPolicy resources for operands created",
 	}
 
 	err = r.CreateOrApplyRbacResources(ctx, createOnlyMode)
