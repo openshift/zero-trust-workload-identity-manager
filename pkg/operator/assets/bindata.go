@@ -1,5 +1,16 @@
 // Code generated for package assets by go-bindata DO NOT EDIT. (@generated)
 // sources:
+// bindata/network-policy/default-deny-networkpolicy.yaml
+// bindata/network-policy/spire-agent/spire-agent-allow-egress-to-api-server-networkpolicy.yaml
+// bindata/network-policy/spire-agent/spire-agent-allow-egress-to-spire-server-networkpolicy.yaml
+// bindata/network-policy/spire-agent/spire-agent-allow-ingress-to-metrics-networkpolicy.yaml
+// bindata/network-policy/spire-oidc-discovery-provider/spire-oidc-allow-ingress-to-8443-networkpolicy.yaml
+// bindata/network-policy/spire-server/spire-server-allow-egress-ingress-to-federation-networkpolicy.yaml
+// bindata/network-policy/spire-server/spire-server-allow-egress-to-api-server-networkpolicy.yaml
+// bindata/network-policy/spire-server/spire-server-allow-egress-to-dns-networkpolicy.yaml
+// bindata/network-policy/spire-server/spire-server-allow-ingress-to-8081-networkpolicy.yaml
+// bindata/network-policy/spire-server/spire-server-allow-ingress-to-metrics-networkpolicy.yaml
+// bindata/network-policy/spire-server/spire-server-allow-ingress-to-webhook-networkpolicy.yaml
 // bindata/spiffe-csi/spiffe-csi-csi-driver.yaml
 // bindata/spiffe-csi/spiffe-csi-service-account.yaml
 // bindata/spire-agent/spire-agent-cluster-role-binding.yaml
@@ -71,6 +82,384 @@ func (fi bindataFileInfo) IsDir() bool {
 // Sys return file is sys mode
 func (fi bindataFileInfo) Sys() interface{} {
 	return nil
+}
+
+var _networkPolicyDefaultDenyNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-deny-all
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    cert-manager.operator.openshift.io/owned-by: cert-manager
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+`)
+
+func networkPolicyDefaultDenyNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicyDefaultDenyNetworkpolicyYaml, nil
+}
+
+func networkPolicyDefaultDenyNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicyDefaultDenyNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/default-deny-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-agent-allow-egress-to-api-server
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 6443
+`)
+
+func networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-agent/spire-agent-allow-egress-to-api-server-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-agent-allow-egress-to-spire-server
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Egress
+  egress:
+    # Allow connection to SPIRE server
+    - ports:
+        - protocol: TCP
+          port: 8081
+`)
+
+func networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-agent/spire-agent-allow-egress-to-spire-server-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-agent-allow-ingress-to-metrics
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: openshift-monitoring
+      ports:
+        - protocol: TCP
+          port: 9402
+`)
+
+func networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-agent/spire-agent-allow-ingress-to-metrics-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-oidc-allow-ingress-to-8443
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spiffe-oidc-discovery-provider
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow HTTPS traffic from clients
+    - ports:
+        - protocol: TCP
+          port: 8443
+`)
+
+func networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYaml, nil
+}
+
+func networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-oidc-discovery-provider/spire-oidc-allow-ingress-to-8443-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-egress-ingress-to-federation
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow federation traffic
+    - ports:
+        - protocol: TCP
+          port: 8443
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 8443
+`)
+
+func networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-server/spire-server-allow-egress-ingress-to-federation-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-egress-to-api-server
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 6443
+`)
+
+func networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-server/spire-server-allow-egress-to-api-server-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-egress-to-dns
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - protocol: TCP
+          port: 5353
+        - protocol: UDP
+          port: 5353
+`)
+
+func networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-server/spire-server-allow-egress-to-dns-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-ingress-to-8081
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow SPIRE agents to connect
+    - ports:
+        - protocol: TCP
+          port: 8081
+`)
+
+func networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYaml, nil
+}
+
+func networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-server/spire-server-allow-ingress-to-8081-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-ingress-to-metrics
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: openshift-monitoring
+      ports:
+        - protocol: TCP
+          port: 9402  # SPIRE server metrics
+        - protocol: TCP
+          port: 8082  # SPIRE controller manager metrics
+`)
+
+func networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-server/spire-server-allow-ingress-to-metrics-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-ingress-to-webhook
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow webhook traffic
+    - ports:
+        - protocol: TCP
+          port: 9443
+`)
+
+func networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYamlBytes() ([]byte, error) {
+	return _networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYaml, nil
+}
+
+func networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYaml() (*asset, error) {
+	bytes, err := networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "network-policy/spire-server/spire-server-allow-ingress-to-webhook-networkpolicy.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
 }
 
 var _spiffeCsiSpiffeCsiCsiDriverYaml = []byte(`apiVersion: storage.k8s.io/v1
@@ -871,26 +1260,37 @@ func AssetNames() []string {
 
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
-	"spiffe-csi/spiffe-csi-csi-driver.yaml":                                               spiffeCsiSpiffeCsiCsiDriverYaml,
-	"spiffe-csi/spiffe-csi-service-account.yaml":                                          spiffeCsiSpiffeCsiServiceAccountYaml,
-	"spire-agent/spire-agent-cluster-role-binding.yaml":                                   spireAgentSpireAgentClusterRoleBindingYaml,
-	"spire-agent/spire-agent-cluster-role.yaml":                                           spireAgentSpireAgentClusterRoleYaml,
-	"spire-agent/spire-agent-service-account.yaml":                                        spireAgentSpireAgentServiceAccountYaml,
-	"spire-agent/spire-agent-service.yaml":                                                spireAgentSpireAgentServiceYaml,
-	"spire-bundle/spire-bundle-role-binding.yaml":                                         spireBundleSpireBundleRoleBindingYaml,
-	"spire-bundle/spire-bundle-role.yaml":                                                 spireBundleSpireBundleRoleYaml,
-	"spire-controller-manager/spire-controller-manager-cluster-role-binding.yaml":         spireControllerManagerSpireControllerManagerClusterRoleBindingYaml,
-	"spire-controller-manager/spire-controller-manager-cluster-role.yaml":                 spireControllerManagerSpireControllerManagerClusterRoleYaml,
-	"spire-controller-manager/spire-controller-manager-leader-election-role-binding.yaml": spireControllerManagerSpireControllerManagerLeaderElectionRoleBindingYaml,
-	"spire-controller-manager/spire-controller-manager-leader-election-role.yaml":         spireControllerManagerSpireControllerManagerLeaderElectionRoleYaml,
-	"spire-controller-manager/spire-controller-manager-webhook-service.yaml":              spireControllerManagerSpireControllerManagerWebhookServiceYaml,
-	"spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml":   spireControllerManagerSpireControllerManagerWebhookValidatingWebhookYaml,
-	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml":    spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceAccountYaml,
-	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml":            spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml,
-	"spire-server/spire-server-cluster-role-binding.yaml":                                 spireServerSpireServerClusterRoleBindingYaml,
-	"spire-server/spire-server-cluster-role.yaml":                                         spireServerSpireServerClusterRoleYaml,
-	"spire-server/spire-server-service-account.yaml":                                      spireServerSpireServerServiceAccountYaml,
-	"spire-server/spire-server-service.yaml":                                              spireServerSpireServerServiceYaml,
+	"network-policy/default-deny-networkpolicy.yaml":                                                   networkPolicyDefaultDenyNetworkpolicyYaml,
+	"network-policy/spire-agent/spire-agent-allow-egress-to-api-server-networkpolicy.yaml":             networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYaml,
+	"network-policy/spire-agent/spire-agent-allow-egress-to-spire-server-networkpolicy.yaml":           networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYaml,
+	"network-policy/spire-agent/spire-agent-allow-ingress-to-metrics-networkpolicy.yaml":               networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYaml,
+	"network-policy/spire-oidc-discovery-provider/spire-oidc-allow-ingress-to-8443-networkpolicy.yaml": networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYaml,
+	"network-policy/spire-server/spire-server-allow-egress-ingress-to-federation-networkpolicy.yaml":   networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYaml,
+	"network-policy/spire-server/spire-server-allow-egress-to-api-server-networkpolicy.yaml":           networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYaml,
+	"network-policy/spire-server/spire-server-allow-egress-to-dns-networkpolicy.yaml":                  networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYaml,
+	"network-policy/spire-server/spire-server-allow-ingress-to-8081-networkpolicy.yaml":                networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYaml,
+	"network-policy/spire-server/spire-server-allow-ingress-to-metrics-networkpolicy.yaml":             networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYaml,
+	"network-policy/spire-server/spire-server-allow-ingress-to-webhook-networkpolicy.yaml":             networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYaml,
+	"spiffe-csi/spiffe-csi-csi-driver.yaml":                                                            spiffeCsiSpiffeCsiCsiDriverYaml,
+	"spiffe-csi/spiffe-csi-service-account.yaml":                                                       spiffeCsiSpiffeCsiServiceAccountYaml,
+	"spire-agent/spire-agent-cluster-role-binding.yaml":                                                spireAgentSpireAgentClusterRoleBindingYaml,
+	"spire-agent/spire-agent-cluster-role.yaml":                                                        spireAgentSpireAgentClusterRoleYaml,
+	"spire-agent/spire-agent-service-account.yaml":                                                     spireAgentSpireAgentServiceAccountYaml,
+	"spire-agent/spire-agent-service.yaml":                                                             spireAgentSpireAgentServiceYaml,
+	"spire-bundle/spire-bundle-role-binding.yaml":                                                      spireBundleSpireBundleRoleBindingYaml,
+	"spire-bundle/spire-bundle-role.yaml":                                                              spireBundleSpireBundleRoleYaml,
+	"spire-controller-manager/spire-controller-manager-cluster-role-binding.yaml":                      spireControllerManagerSpireControllerManagerClusterRoleBindingYaml,
+	"spire-controller-manager/spire-controller-manager-cluster-role.yaml":                              spireControllerManagerSpireControllerManagerClusterRoleYaml,
+	"spire-controller-manager/spire-controller-manager-leader-election-role-binding.yaml":              spireControllerManagerSpireControllerManagerLeaderElectionRoleBindingYaml,
+	"spire-controller-manager/spire-controller-manager-leader-election-role.yaml":                      spireControllerManagerSpireControllerManagerLeaderElectionRoleYaml,
+	"spire-controller-manager/spire-controller-manager-webhook-service.yaml":                           spireControllerManagerSpireControllerManagerWebhookServiceYaml,
+	"spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml":                spireControllerManagerSpireControllerManagerWebhookValidatingWebhookYaml,
+	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml":                 spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceAccountYaml,
+	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml":                         spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml,
+	"spire-server/spire-server-cluster-role-binding.yaml":                                              spireServerSpireServerClusterRoleBindingYaml,
+	"spire-server/spire-server-cluster-role.yaml":                                                      spireServerSpireServerClusterRoleYaml,
+	"spire-server/spire-server-service-account.yaml":                                                   spireServerSpireServerServiceAccountYaml,
+	"spire-server/spire-server-service.yaml":                                                           spireServerSpireServerServiceYaml,
 }
 
 // AssetDir returns the file names below a certain
@@ -936,6 +1336,25 @@ type bintree struct {
 }
 
 var _bintree = &bintree{nil, map[string]*bintree{
+	"network-policy": {nil, map[string]*bintree{
+		"default-deny-networkpolicy.yaml": {networkPolicyDefaultDenyNetworkpolicyYaml, map[string]*bintree{}},
+		"spire-agent": {nil, map[string]*bintree{
+			"spire-agent-allow-egress-to-api-server-networkpolicy.yaml":   {networkPolicySpireAgentSpireAgentAllowEgressToApiServerNetworkpolicyYaml, map[string]*bintree{}},
+			"spire-agent-allow-egress-to-spire-server-networkpolicy.yaml": {networkPolicySpireAgentSpireAgentAllowEgressToSpireServerNetworkpolicyYaml, map[string]*bintree{}},
+			"spire-agent-allow-ingress-to-metrics-networkpolicy.yaml":     {networkPolicySpireAgentSpireAgentAllowIngressToMetricsNetworkpolicyYaml, map[string]*bintree{}},
+		}},
+		"spire-oidc-discovery-provider": {nil, map[string]*bintree{
+			"spire-oidc-allow-ingress-to-8443-networkpolicy.yaml": {networkPolicySpireOidcDiscoveryProviderSpireOidcAllowIngressTo8443NetworkpolicyYaml, map[string]*bintree{}},
+		}},
+		"spire-server": {nil, map[string]*bintree{
+			"spire-server-allow-egress-ingress-to-federation-networkpolicy.yaml": {networkPolicySpireServerSpireServerAllowEgressIngressToFederationNetworkpolicyYaml, map[string]*bintree{}},
+			"spire-server-allow-egress-to-api-server-networkpolicy.yaml":         {networkPolicySpireServerSpireServerAllowEgressToApiServerNetworkpolicyYaml, map[string]*bintree{}},
+			"spire-server-allow-egress-to-dns-networkpolicy.yaml":                {networkPolicySpireServerSpireServerAllowEgressToDnsNetworkpolicyYaml, map[string]*bintree{}},
+			"spire-server-allow-ingress-to-8081-networkpolicy.yaml":              {networkPolicySpireServerSpireServerAllowIngressTo8081NetworkpolicyYaml, map[string]*bintree{}},
+			"spire-server-allow-ingress-to-metrics-networkpolicy.yaml":           {networkPolicySpireServerSpireServerAllowIngressToMetricsNetworkpolicyYaml, map[string]*bintree{}},
+			"spire-server-allow-ingress-to-webhook-networkpolicy.yaml":           {networkPolicySpireServerSpireServerAllowIngressToWebhookNetworkpolicyYaml, map[string]*bintree{}},
+		}},
+	}},
 	"spiffe-csi": {nil, map[string]*bintree{
 		"spiffe-csi-csi-driver.yaml":      {spiffeCsiSpiffeCsiCsiDriverYaml, map[string]*bintree{}},
 		"spiffe-csi-service-account.yaml": {spiffeCsiSpiffeCsiServiceAccountYaml, map[string]*bintree{}},
