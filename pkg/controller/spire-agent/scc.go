@@ -19,16 +19,16 @@ func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityCont
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{
-			Type: securityv1.RunAsUserStrategyRunAsAny,
+			Type: securityv1.RunAsUserStrategyMustRunAsRange,
 		},
 		SELinuxContext: securityv1.SELinuxContextStrategyOptions{
-			Type: securityv1.SELinuxStrategyRunAsAny,
+			Type: securityv1.SELinuxStrategyMustRunAs,
 		},
 		SupplementalGroups: securityv1.SupplementalGroupsStrategyOptions{
-			Type: securityv1.SupplementalGroupsStrategyRunAsAny,
+			Type: securityv1.SupplementalGroupsStrategyMustRunAs,
 		},
 		FSGroup: securityv1.FSGroupStrategyOptions{
-			Type: securityv1.FSGroupStrategyRunAsAny,
+			Type: securityv1.FSGroupStrategyMustRunAs,
 		},
 		Users: []string{
 			"system:serviceaccount:zero-trust-workload-identity-manager:spire-agent",
@@ -41,7 +41,7 @@ func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityCont
 			securityv1.FSTypeEmptyDir,
 		},
 		AllowHostDirVolumePlugin: true,
-		AllowHostIPC:             true,
+		AllowHostIPC:             false,
 		AllowHostNetwork:         true,
 		AllowHostPID:             true,
 		AllowHostPorts:           true,
@@ -49,7 +49,9 @@ func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityCont
 		AllowPrivilegedContainer: true,
 		AllowedCapabilities:      []corev1.Capability{},
 		DefaultAddCapabilities:   []corev1.Capability{},
-		RequiredDropCapabilities: []corev1.Capability{},
-		Groups:                   []string{},
+		RequiredDropCapabilities: []corev1.Capability{
+			"ALL",
+		},
+		Groups: []string{},
 	}
 }

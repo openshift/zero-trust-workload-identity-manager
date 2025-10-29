@@ -99,6 +99,9 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 								{Name: "spire-token", MountPath: "/var/run/secrets/tokens"},
 							},
 							Resources: utils.DerefResourceRequirements(config.Resources),
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: ptr.To(true),
+							},
 						},
 					},
 					Affinity:     config.Affinity,
