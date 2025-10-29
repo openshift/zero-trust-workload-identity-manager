@@ -23,7 +23,7 @@ func (r *StaticResourceReconciler) listStaticNetworkPolicy() []*v1.NetworkPolicy
 	staticNetworkPolicies := []*v1.NetworkPolicy{}
 
 	// Add default deny policy
-	staticNetworkPolicies = append(staticNetworkPolicies, r.getDefaultDenyNetworkPolicy())
+	//staticNetworkPolicies = append(staticNetworkPolicies, r.getDefaultDenyNetworkPolicy())
 
 	// Add spire-agent policies
 	staticNetworkPolicies = append(staticNetworkPolicies,
