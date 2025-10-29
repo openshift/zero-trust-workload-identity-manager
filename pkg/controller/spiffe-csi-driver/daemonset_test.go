@@ -325,6 +325,25 @@ func testNodeDriverRegistrarContainer(t *testing.T, container corev1.Container) 
 			}
 		}
 	}
+
+	// Test SecurityContext
+	if container.SecurityContext == nil {
+		t.Error("Expected SecurityContext to be set")
+	} else {
+		if container.SecurityContext.Privileged == nil || !*container.SecurityContext.Privileged {
+			t.Error("Expected node-driver-registrar container to be privileged")
+		}
+
+		if container.SecurityContext.Capabilities == nil {
+			t.Error("Expected Capabilities to be set")
+		} else {
+			expectedCapabilities := []corev1.Capability{"all"}
+			if !reflect.DeepEqual(container.SecurityContext.Capabilities.Drop, expectedCapabilities) {
+				t.Errorf("Expected node-driver-registrar container capabilities drop %v, got %v",
+					expectedCapabilities, container.SecurityContext.Capabilities.Drop)
+			}
+		}
+	}
 }
 
 func testVolumes(t *testing.T, volumes []corev1.Volume) {

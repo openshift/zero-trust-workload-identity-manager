@@ -4,6 +4,7 @@ import (
 	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -17,16 +18,16 @@ func generateSpiffeCSIDriverSCC() *securityv1.SecurityContextConstraints {
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{
-			Type: securityv1.RunAsUserStrategyRunAsAny,
+			Type: securityv1.RunAsUserStrategyMustRunAsRange,
 		},
 		SELinuxContext: securityv1.SELinuxContextStrategyOptions{
-			Type: securityv1.SELinuxStrategyRunAsAny,
+			Type: securityv1.SELinuxStrategyMustRunAs,
 		},
 		SupplementalGroups: securityv1.SupplementalGroupsStrategyOptions{
-			Type: securityv1.SupplementalGroupsStrategyRunAsAny,
+			Type: securityv1.SupplementalGroupsStrategyMustRunAs,
 		},
 		FSGroup: securityv1.FSGroupStrategyOptions{
-			Type: securityv1.FSGroupStrategyRunAsAny,
+			Type: securityv1.FSGroupStrategyMustRunAs,
 		},
 		Users: []string{
 			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-csi-driver",
@@ -43,7 +44,9 @@ func generateSpiffeCSIDriverSCC() *securityv1.SecurityContextConstraints {
 		AllowHostPorts:           false,
 		AllowPrivilegeEscalation: ptr.To(true),
 		AllowPrivilegedContainer: true,
-		DefaultAddCapabilities:   nil,
-		RequiredDropCapabilities: nil,
+		DefaultAddCapabilities:   []corev1.Capability{},
+		RequiredDropCapabilities: []corev1.Capability{
+			"ALL",
+		},
 	}
 }

@@ -155,6 +155,12 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 									},
 								},
 							},
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: ptr.To(true),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"all"},
+								},
+							},
 						},
 					},
 					Volumes: []corev1.Volume{
