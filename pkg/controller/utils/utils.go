@@ -13,6 +13,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
@@ -31,6 +32,7 @@ func init() {
 	_ = corev1.AddToScheme(scheme)
 	_ = rbacv1.AddToScheme(scheme)
 	_ = storagev1.AddToScheme(scheme)
+	_ = networkingv1.AddToScheme(scheme)
 	_ = admissionregistrationv1.AddToScheme(scheme)
 	_ = securityv1.AddToScheme(scheme)
 	_ = routev1.AddToScheme(scheme)
@@ -106,6 +108,14 @@ func DecodeValidatingWebhookConfigurationByBytes(objBytes []byte) *admissionregi
 		panic(err)
 	}
 	return obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
+}
+
+func DecodeNetworkPolicyObjBytes(objBytes []byte) *networkingv1.NetworkPolicy {
+	obj, err := runtime.Decode(codecs.UniversalDecoder(networkingv1.SchemeGroupVersion), objBytes)
+	if err != nil {
+		panic(err)
+	}
+	return obj.(*networkingv1.NetworkPolicy)
 }
 
 // SetLabel sets a label key/value on the given object metadata labels map.
