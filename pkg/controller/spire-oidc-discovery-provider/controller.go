@@ -3,6 +3,7 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
 
@@ -231,12 +232,13 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 			return ctrl.Result{}, err
 		}
 		r.log.Info("Created ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-	} else if utils.GenerateMapHash(existingOidcCm.Data) != utils.GenerateMapHash(cm.Data) {
+	} else if err == nil && (utils.GenerateMapHash(existingOidcCm.Data) != utils.GenerateMapHash(cm.Data) ||
+		!reflect.DeepEqual(existingOidcCm.Labels, cm.Labels)) {
 		if createOnlyMode {
 			r.log.Info("Skipping ConfigMap update due to create-only mode", "Namespace", cm.Namespace, "Name", cm.Name)
 		} else {
-			existingOidcCm.Data = cm.Data
-			if err = r.ctrlClient.Update(ctx, &existingOidcCm); err != nil {
+			cm.ResourceVersion = existingOidcCm.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, cm); err != nil {
 				r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 				reconcileStatus[SpireOIDCConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
@@ -293,8 +295,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		if createOnlyMode {
 			r.log.Info("Skipping Deployment update due to create-only mode")
 		} else {
-			existingSpireOidcDeployment.Spec = deployment.Spec
-			if err = r.ctrlClient.Update(ctx, &existingSpireOidcDeployment); err != nil {
+			deployment.ResourceVersion = existingSpireOidcDeployment.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, deployment); err != nil {
 				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
 				reconcileStatus[SpireOIDCDeploymentGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
@@ -376,6 +378,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 // needsUpdate returns true if Deployment needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.Deployment) bool {
 	if current.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] {
+		return true
+	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
 		return true
 	} else if utils.DeploymentSpecModified(&desired, &current) {
 		return true

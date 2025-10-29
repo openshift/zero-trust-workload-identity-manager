@@ -3,6 +3,7 @@ package spiffe_csi_driver
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
@@ -180,8 +181,8 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if createOnlyMode {
 			r.log.Info("Skipping DaemonSet update due to create-only mode")
 		} else {
-			existingSpiffeCsiDaemonSet.Spec = spiffeCsiDaemonset.Spec
-			if err = r.ctrlClient.Update(ctx, &existingSpiffeCsiDaemonSet); err != nil {
+			spiffeCsiDaemonset.ResourceVersion = existingSpiffeCsiDaemonSet.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spiffeCsiDaemonset); err != nil {
 				r.log.Error(err, "failed to update spiffe csi daemon set")
 				return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
 			}
@@ -250,5 +251,10 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // needsUpdate returns true if DaemonSet needs to be updated.
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
-	return utils.DaemonSetSpecModified(&desired, &current)
+	if utils.DaemonSetSpecModified(&desired, &current) {
+		return true
+	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
+		return true
+	}
+	return false
 }

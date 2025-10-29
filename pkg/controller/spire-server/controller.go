@@ -3,6 +3,7 @@ package spire_server
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -191,12 +192,13 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire server ConfigMap")
-	} else if err == nil && existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] {
+	} else if err == nil && (existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] ||
+		!reflect.DeepEqual(existingSpireServerCM.Labels, spireServerConfigMap.Labels)) {
 		if createOnlyMode {
 			r.log.Info("Skipping ConfigMap update due to create-only mode")
 		} else {
-			existingSpireServerCM.Data = spireServerConfigMap.Data
-			if err = r.ctrlClient.Update(ctx, &existingSpireServerCM); err != nil {
+			spireServerConfigMap.ResourceVersion = existingSpireServerCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireServerConfigMap); err != nil {
 				reconcileStatus[SpireServerConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
 					Reason:  "SpireServerConfigMapGenerationFailed",
@@ -263,12 +265,13 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire controller manager ConfigMap")
-	} else if err == nil && existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != spireControllerManagerConfigMap.Data["controller-manager-config.yaml"] {
+	} else if err == nil && (existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != spireControllerManagerConfigMap.Data["controller-manager-config.yaml"] ||
+		!reflect.DeepEqual(existingSpireControllerManagerCM.Labels, spireControllerManagerConfigMap.Labels)) {
 		if createOnlyMode {
 			r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
 		} else {
-			existingSpireControllerManagerCM.Data = spireControllerManagerConfigMap.Data
-			if err = r.ctrlClient.Update(ctx, &existingSpireControllerManagerCM); err != nil {
+			spireControllerManagerConfigMap.ResourceVersion = existingSpireControllerManagerCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireControllerManagerConfigMap); err != nil {
 				reconcileStatus[SpireControllerManagerConfigMapGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
 					Reason:  "SpireControllerManagerConfigMapGenerationFailed",
@@ -355,6 +358,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if createOnlyMode {
 			r.log.Info("Skipping StatefulSet update due to create-only mode")
 		} else {
+			sts.ResourceVersion = existingSTS.ResourceVersion
 			if err = r.ctrlClient.Update(ctx, sts); err != nil {
 				reconcileStatus[SpireServerStatefulSetGeneration] = reconcilerStatus{
 					Status:  metav1.ConditionFalse,
@@ -426,6 +430,8 @@ func needsUpdate(current, desired appsv1.StatefulSet) bool {
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
+		return true
+	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
 		return true
 	} else if utils.StatefulSetSpecModified(&desired, &current) {
 		return true
