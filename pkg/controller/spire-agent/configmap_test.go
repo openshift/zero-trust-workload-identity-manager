@@ -702,7 +702,7 @@ func TestBuildSpireAgentConfig(t *testing.T) {
 				require.True(t, ok)
 				assert.False(t, waData.SkipKubeletVerification)
 				assert.True(t, waData.VerifyKubeletCertificate)
-				assert.Equal(t, "/var/lib/kubelet/pki", waData.KubeletCAPath)
+				assert.Equal(t, "/var/lib/kubelet/pki/kubelet-ca.crt", waData.KubeletCAPath)
 			},
 		},
 		{
@@ -766,7 +766,8 @@ func TestBuildSpireAgentConfig(t *testing.T) {
 
 				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
 				require.True(t, ok)
-				assert.False(t, waData.SkipKubeletVerification) // Let SPIRE decide
+				// Auto mode always skips verification as default for compatibility
+				assert.True(t, waData.SkipKubeletVerification)
 			},
 		},
 		{

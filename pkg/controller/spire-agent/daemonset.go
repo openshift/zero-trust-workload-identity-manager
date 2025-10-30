@@ -23,7 +23,19 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
-	return &appsv1.DaemonSet{
+	// Check if we need to mount kubelet PKI directory for verification
+	needsKubeletPKI := false
+	kubeletPKIPath := ""
+	if config.WorkloadAttestors != nil && config.WorkloadAttestors.WorkloadAttestorsVerification != nil {
+		verification := config.WorkloadAttestors.WorkloadAttestorsVerification
+		// Only mount kubelet PKI for hostCert mode
+		if verification.Type == "hostCert" && verification.HostCertBasePath != "" {
+			needsKubeletPKI = true
+			kubeletPKIPath = verification.HostCertBasePath
+		}
+	}
+
+	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      SpireAgentDaemonSetName,
 			Namespace: utils.OperatorNamespace,
@@ -90,64 +102,90 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 									},
 								},
 							},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: SpireAgentVolumeNameConfig, MountPath: SpireAgentMountPathConfig, ReadOnly: true},
-								{Name: SpireAgentVolumeNamePersistence, MountPath: SpireAgentMountPathPersistence},
-								{Name: SpireAgentVolumeNameBundle, MountPath: SpireAgentMountPathBundle, ReadOnly: true},
-								{Name: SpireAgentVolumeNameSocketDir, MountPath: SpireAgentMountPathSocketDir},
-								{Name: SpireAgentVolumeNameToken, MountPath: SpireAgentMountPathToken},
-							},
+							VolumeMounts: func() []corev1.VolumeMount {
+								mounts := []corev1.VolumeMount{
+									{Name: SpireAgentVolumeNameConfig, MountPath: SpireAgentMountPathConfig, ReadOnly: true},
+									{Name: SpireAgentVolumeNamePersistence, MountPath: SpireAgentMountPathPersistence},
+									{Name: SpireAgentVolumeNameBundle, MountPath: SpireAgentMountPathBundle, ReadOnly: true},
+									{Name: SpireAgentVolumeNameSocketDir, MountPath: SpireAgentMountPathSocketDir},
+									{Name: SpireAgentVolumeNameToken, MountPath: SpireAgentMountPathToken},
+								}
+								if needsKubeletPKI {
+									mounts = append(mounts, corev1.VolumeMount{
+										Name:      SpireAgentVolumeNameKubeletPKI,
+										MountPath: kubeletPKIPath,
+										ReadOnly:  true,
+									})
+								}
+								return mounts
+							}(),
 							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
-					Volumes: []corev1.Volume{
-						{
-							Name: SpireAgentVolumeNameConfig,
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireAgentConfigMapNameAgent}},
+					Volumes: func() []corev1.Volume {
+						volumes := []corev1.Volume{
+							{
+								Name: SpireAgentVolumeNameConfig,
+								VolumeSource: corev1.VolumeSource{
+									ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireAgentConfigMapNameAgent}},
+								},
 							},
-						},
-						{Name: SpireAgentVolumeNameAdminSocketDir, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: SpireAgentVolumeNamePersistence, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{
-							Name: SpireAgentVolumeNameBundle,
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireAgentConfigMapNameBundle}},
+							{Name: SpireAgentVolumeNameAdminSocketDir, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+							{Name: SpireAgentVolumeNamePersistence, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+							{
+								Name: SpireAgentVolumeNameBundle,
+								VolumeSource: corev1.VolumeSource{
+									ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: SpireAgentConfigMapNameBundle}},
+								},
 							},
-						},
-						{
-							Name: SpireAgentVolumeNameToken,
-							VolumeSource: corev1.VolumeSource{
-								Projected: &corev1.ProjectedVolumeSource{
-									Sources: []corev1.VolumeProjection{
-										{
-											ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-												Path:              SpireAgentTokenPath,
-												ExpirationSeconds: int64Ptr(SpireAgentTokenExpirationSeconds),
-												Audience:          SpireAgentTokenAudience,
+							{
+								Name: SpireAgentVolumeNameToken,
+								VolumeSource: corev1.VolumeSource{
+									Projected: &corev1.ProjectedVolumeSource{
+										Sources: []corev1.VolumeProjection{
+											{
+												ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+													Path:              SpireAgentTokenPath,
+													ExpirationSeconds: int64Ptr(SpireAgentTokenExpirationSeconds),
+													Audience:          SpireAgentTokenAudience,
+												},
 											},
 										},
 									},
 								},
 							},
-						},
-						{
-							Name: SpireAgentVolumeNameSocketDir,
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: SpireAgentHostPathAgentSockets,
-									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
+							{
+								Name: SpireAgentVolumeNameSocketDir,
+								VolumeSource: corev1.VolumeSource{
+									HostPath: &corev1.HostPathVolumeSource{
+										Path: SpireAgentHostPathAgentSockets,
+										Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
+									},
 								},
 							},
-						},
-					},
+						}
+						if needsKubeletPKI {
+							volumes = append(volumes, corev1.Volume{
+								Name: SpireAgentVolumeNameKubeletPKI,
+								VolumeSource: corev1.VolumeSource{
+									HostPath: &corev1.HostPathVolumeSource{
+										Path: kubeletPKIPath,
+										Type: hostPathTypePtr(corev1.HostPathDirectory),
+									},
+								},
+							})
+						}
+						return volumes
+					}(),
 				},
 			},
 		},
 	}
+
+	return ds
 }
 
 func int64Ptr(val int64) *int64 {

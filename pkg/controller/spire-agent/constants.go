@@ -65,6 +65,7 @@ const (
 	SpireAgentVolumeNameSocketDir      = "spire-agent-socket-dir"
 	SpireAgentVolumeNameToken          = "spire-token"
 	SpireAgentVolumeNameAdminSocketDir = "spire-agent-admin-socket-dir"
+	SpireAgentVolumeNameKubeletPKI     = "kubelet-pki"
 
 	// Mount paths
 	SpireAgentMountPathConfig      = "/opt/spire/conf/agent"

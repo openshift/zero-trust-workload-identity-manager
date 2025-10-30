@@ -235,33 +235,33 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 				assert.Contains(t, na, "k8s_psat")
 			},
 		},
-	{
-		name: "missing trust domain returns error",
-		spec: &v1alpha1.SpireServerSpec{
-			TrustDomain:     "",
-			ClusterName:     "test-cluster",
-			BundleConfigMap: "spire-bundle",
+		{
+			name: "missing trust domain returns error",
+			spec: &v1alpha1.SpireServerSpec{
+				TrustDomain:     "",
+				ClusterName:     "test-cluster",
+				BundleConfigMap: "spire-bundle",
+			},
+			expectError: true,
 		},
-		expectError: true,
-	},
-	{
-		name: "missing cluster name returns error",
-		spec: &v1alpha1.SpireServerSpec{
-			TrustDomain:     "example.org",
-			ClusterName:     "",
-			BundleConfigMap: "spire-bundle",
+		{
+			name: "missing cluster name returns error",
+			spec: &v1alpha1.SpireServerSpec{
+				TrustDomain:     "example.org",
+				ClusterName:     "",
+				BundleConfigMap: "spire-bundle",
+			},
+			expectError: true,
 		},
-		expectError: true,
-	},
-	{
-		name: "missing bundle configmap returns error",
-		spec: &v1alpha1.SpireServerSpec{
-			TrustDomain:     "example.org",
-			ClusterName:     "test-cluster",
-			BundleConfigMap: "",
+		{
+			name: "missing bundle configmap returns error",
+			spec: &v1alpha1.SpireServerSpec{
+				TrustDomain:     "example.org",
+				ClusterName:     "test-cluster",
+				BundleConfigMap: "",
+			},
+			expectError: true,
 		},
-		expectError: true,
-	},
 		{
 			name: "missing datastore returns error",
 			spec: &v1alpha1.SpireServerSpec{
@@ -521,16 +521,16 @@ func TestGenerateServerConfMapTTLFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := createValidConfig()
-		config.CAValidity = tt.expectedCAValidity
-		config.DefaultX509Validity = tt.expectedX509Validity
-		config.DefaultJWTValidity = tt.expectedJWTValidity
+			config.CAValidity = tt.expectedCAValidity
+			config.DefaultX509Validity = tt.expectedX509Validity
+			config.DefaultJWTValidity = tt.expectedJWTValidity
 
-		confMap, err := generateServerConfMap(config)
-		if err != nil {
-			t.Fatalf("Failed to generate server config map: %v", err)
-		}
+			confMap, err := generateServerConfMap(config)
+			if err != nil {
+				t.Fatalf("Failed to generate server config map: %v", err)
+			}
 
-		server, ok := confMap["server"].(map[string]interface{})
+			server, ok := confMap["server"].(map[string]interface{})
 			if !ok {
 				t.Fatal("Failed to get server section")
 			}

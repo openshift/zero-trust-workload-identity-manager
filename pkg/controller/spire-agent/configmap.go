@@ -85,23 +85,35 @@ func buildSpireAgentConfig(spec *v1alpha1.SpireAgentSpec) (*config.SpireAgentCon
 		if spec.WorkloadAttestors.WorkloadAttestorsVerification != nil {
 			verification := spec.WorkloadAttestors.WorkloadAttestorsVerification
 
-		switch verification.Type {
-		case "hostCert":
-			// Validate HostCertBasePath is non-empty when hostCert verification is enabled
-			if verification.HostCertBasePath == "" {
-				return nil, fmt.Errorf("hostCertBasePath is required when workload attestor verification type is 'hostCert'")
+			// Helper function to construct full CA file path
+			getKubeletCAPath := func() string {
+				if verification.HostCertBasePath == "" {
+					return ""
+				}
+				fileName := verification.HostCertFileName
+				if fileName == "" {
+					fileName = "kubelet-ca.crt" // Default CA filename
+				}
+				return verification.HostCertBasePath + "/" + fileName
 			}
-			workloadAttestorPluginData.SkipKubeletVerification = false
-			workloadAttestorPluginData.VerifyKubeletCertificate = true
-			workloadAttestorPluginData.KubeletCAPath = verification.HostCertBasePath
+
+			switch verification.Type {
+			case "hostCert":
+				// Validate HostCertBasePath is non-empty when hostCert verification is enabled
+				if verification.HostCertBasePath == "" {
+					return nil, fmt.Errorf("hostCertBasePath is required when workload attestor verification type is 'hostCert'")
+				}
+				workloadAttestorPluginData.SkipKubeletVerification = false
+				workloadAttestorPluginData.VerifyKubeletCertificate = true
+				workloadAttestorPluginData.KubeletCAPath = getKubeletCAPath()
 			case "apiServerCA":
 				workloadAttestorPluginData.SkipKubeletVerification = false
 				workloadAttestorPluginData.VerifyKubeletCertificate = true
-			case "skip":
+			case "skip", "auto":
+				// Skip mode: explicitly disable kubelet verification
+				// Auto mode: skip verification as default since we cannot reliably determine
+				// if kubelet CA paths are accessible in all environments (e.g., OpenShift)
 				workloadAttestorPluginData.SkipKubeletVerification = true
-			case "auto":
-				// Let SPIRE decide
-				workloadAttestorPluginData.SkipKubeletVerification = false
 			}
 		}
 
