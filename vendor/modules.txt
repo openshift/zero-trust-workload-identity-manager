@@ -952,7 +952,7 @@ github.com/subosito/gotenv
 # github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
 ## explicit
 github.com/t-yuki/gocover-cobertura
-# github.com/tdakkota/asciicheck v0.2.0
+# github.com/tdakkota/asciicheck v0.2.0 => github.com/golangci/asciicheck v0.2.0
 ## explicit; go 1.18
 github.com/tdakkota/asciicheck
 # github.com/tetafro/godot v1.4.16
@@ -2161,3 +2161,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 sigs.k8s.io/yaml/goyaml.v3
+# github.com/tdakkota/asciicheck => github.com/golangci/asciicheck v0.2.0
