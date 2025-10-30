@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -14,280 +13,447 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Helper function to set environment variable and return cleanup function
-func setEnvVar(key, value string) func() {
-	original := os.Getenv(key)
-	os.Setenv(key, value)
-	return func() {
-		if original == "" {
-			os.Unsetenv(key)
-		} else {
-			os.Setenv(key, original)
+func TestDecodeClusterRoleObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: test-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+`
+		result := DecodeClusterRoleObjBytes([]byte(yaml))
+		if result.Name != "test-cluster-role" {
+			t.Errorf("Expected name 'test-cluster-role', got %q", result.Name)
 		}
-	}
-}
+		if len(result.Rules) != 1 {
+			t.Errorf("Expected 1 rule, got %d", len(result.Rules))
+		}
+	})
 
-func TestGetSpireServerImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected string
-	}{
-		{
-			name:     "returns image when environment variable is set",
-			envValue: "spire-server:v1.2.3",
-			expected: "spire-server:v1.2.3",
-		},
-		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
-		},
-		{
-			name:     "returns image with registry and tag",
-			envValue: "registry.example.com/spire-server:latest",
-			expected: "registry.example.com/spire-server:latest",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(SpireServerImageEnv, tt.envValue)
-			defer cleanup()
-
-			result := GetSpireServerImage()
-			if result != tt.expected {
-				t.Errorf("GetSpireServerImage() = %q, want %q", result, tt.expected)
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
 			}
-		})
-	}
-
-	// Test when environment variable is not set at all
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(SpireServerImageEnv)
-		result := GetSpireServerImage()
-		if result != "" {
-			t.Errorf("GetSpireServerImage() = %q, want empty string", result)
-		}
+		}()
+		DecodeClusterRoleObjBytes([]byte("invalid yaml content"))
 	})
 }
 
-func TestGetSpireAgentImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected string
-	}{
-		{
-			name:     "returns image when environment variable is set",
-			envValue: "spire-agent:v1.2.3",
-			expected: "spire-agent:v1.2.3",
-		},
-		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
-		},
-		{
-			name:     "returns image with registry and tag",
-			envValue: "registry.example.com/spire-agent:latest",
-			expected: "registry.example.com/spire-agent:latest",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(SpireAgentImageEnv, tt.envValue)
-			defer cleanup()
-
-			result := GetSpireAgentImage()
-			if result != tt.expected {
-				t.Errorf("GetSpireAgentImage() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(SpireAgentImageEnv)
-		result := GetSpireAgentImage()
-		if result != "" {
-			t.Errorf("GetSpireAgentImage() = %q, want empty string", result)
+func TestDecodeClusterRoleBindingObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: test-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: test-role
+subjects:
+- kind: ServiceAccount
+  name: test-sa
+  namespace: default
+`
+		result := DecodeClusterRoleBindingObjBytes([]byte(yaml))
+		if result.Name != "test-binding" {
+			t.Errorf("Expected name 'test-binding', got %q", result.Name)
 		}
+		if result.RoleRef.Name != "test-role" {
+			t.Errorf("Expected roleRef 'test-role', got %q", result.RoleRef.Name)
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeClusterRoleBindingObjBytes([]byte("invalid yaml content"))
 	})
 }
 
-func TestGetSpiffeCSIDriverImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected string
-	}{
-		{
-			name:     "returns image when environment variable is set",
-			envValue: "spiffe-csi-driver:v0.2.3",
-			expected: "spiffe-csi-driver:v0.2.3",
-		},
-		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
-		},
-		{
-			name:     "returns image with registry and tag",
-			envValue: "gcr.io/spiffe-io/spiffe-csi-driver:latest",
-			expected: "gcr.io/spiffe-io/spiffe-csi-driver:latest",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(SpiffeCSIDriverImageEnv, tt.envValue)
-			defer cleanup()
-
-			result := GetSpiffeCSIDriverImage()
-			if result != tt.expected {
-				t.Errorf("GetSpiffeCSIDriverImage() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(SpiffeCSIDriverImageEnv)
-		result := GetSpiffeCSIDriverImage()
-		if result != "" {
-			t.Errorf("GetSpiffeCSIDriverImage() = %q, want empty string", result)
+func TestDecodeRoleObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: test-role
+  namespace: test-ns
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get"]
+`
+		result := DecodeRoleObjBytes([]byte(yaml))
+		if result.Name != "test-role" {
+			t.Errorf("Expected name 'test-role', got %q", result.Name)
 		}
+		if result.Namespace != "test-ns" {
+			t.Errorf("Expected namespace 'test-ns', got %q", result.Namespace)
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeRoleObjBytes([]byte("invalid yaml content"))
 	})
 }
 
-func TestGetSpireControllerManagerImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected string
-	}{
-		{
-			name:     "returns image when environment variable is set",
-			envValue: "spire-controller-manager:v0.13.0",
-			expected: "spire-controller-manager:v0.13.0",
-		},
-		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
-		},
-		{
-			name:     "returns image with registry and tag",
-			envValue: "ghcr.io/spiffe/spire-controller-manager:nightly",
-			expected: "ghcr.io/spiffe/spire-controller-manager:nightly",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(SpireControllerManagerImageEnv, tt.envValue)
-			defer cleanup()
-
-			result := GetSpireControllerManagerImage()
-			if result != tt.expected {
-				t.Errorf("GetSpireControllerManagerImage() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(SpireControllerManagerImageEnv)
-		result := GetSpireControllerManagerImage()
-		if result != "" {
-			t.Errorf("GetSpireControllerManagerImage() = %q, want empty string", result)
+func TestDecodeRoleBindingObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: test-role-binding
+  namespace: test-ns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: test-role
+subjects:
+- kind: ServiceAccount
+  name: test-sa
+  namespace: test-ns
+`
+		result := DecodeRoleBindingObjBytes([]byte(yaml))
+		if result.Name != "test-role-binding" {
+			t.Errorf("Expected name 'test-role-binding', got %q", result.Name)
 		}
+		if len(result.Subjects) != 1 {
+			t.Errorf("Expected 1 subject, got %d", len(result.Subjects))
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeRoleBindingObjBytes([]byte("invalid yaml content"))
 	})
 }
 
-func TestGetSpireOIDCDiscoveryProviderImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected string
-	}{
-		{
-			name:     "returns image when environment variable is set",
-			envValue: "oidc-discovery-provider:v1.9.0",
-			expected: "oidc-discovery-provider:v1.9.0",
-		},
-		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
-		},
-		{
-			name:     "returns image with registry and tag",
-			envValue: "ghcr.io/spiffe/oidc-discovery-provider:latest",
-			expected: "ghcr.io/spiffe/oidc-discovery-provider:latest",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(SpireOIDCDiscoveryProviderImageEnv, tt.envValue)
-			defer cleanup()
-
-			result := GetSpireOIDCDiscoveryProviderImage()
-			if result != tt.expected {
-				t.Errorf("GetSpireOIDCDiscoveryProviderImage() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(SpireOIDCDiscoveryProviderImageEnv)
-		result := GetSpireOIDCDiscoveryProviderImage()
-		if result != "" {
-			t.Errorf("GetSpireOIDCDiscoveryProviderImage() = %q, want empty string", result)
+func TestDecodeServiceObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: v1
+kind: Service
+metadata:
+  name: test-service
+  namespace: test-ns
+spec:
+  selector:
+    app: test
+  ports:
+  - port: 80
+    targetPort: 8080
+`
+		result := DecodeServiceObjBytes([]byte(yaml))
+		if result.Name != "test-service" {
+			t.Errorf("Expected name 'test-service', got %q", result.Name)
 		}
+		if len(result.Spec.Ports) != 1 {
+			t.Errorf("Expected 1 port, got %d", len(result.Spec.Ports))
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeServiceObjBytes([]byte("invalid yaml content"))
 	})
 }
 
-func TestGetNodeDriverRegistrarImage(t *testing.T) {
+func TestDecodeServiceAccountObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-sa
+  namespace: test-ns
+`
+		result := DecodeServiceAccountObjBytes([]byte(yaml))
+		if result.Name != "test-sa" {
+			t.Errorf("Expected name 'test-sa', got %q", result.Name)
+		}
+		if result.Namespace != "test-ns" {
+			t.Errorf("Expected namespace 'test-ns', got %q", result.Namespace)
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeServiceAccountObjBytes([]byte("invalid yaml content"))
+	})
+}
+
+func TestDecodeCsiDriverObjBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: test-driver
+spec:
+  attachRequired: false
+  podInfoOnMount: true
+`
+		result := DecodeCsiDriverObjBytes([]byte(yaml))
+		if result.Name != "test-driver" {
+			t.Errorf("Expected name 'test-driver', got %q", result.Name)
+		}
+		if result.Spec.AttachRequired == nil || *result.Spec.AttachRequired {
+			t.Error("Expected attachRequired to be false")
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeCsiDriverObjBytes([]byte("invalid yaml content"))
+	})
+}
+
+func TestDecodeValidatingWebhookConfigurationByBytes(t *testing.T) {
+	t.Run("valid YAML", func(t *testing.T) {
+		yaml := `apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: test-webhook
+webhooks:
+- name: test.example.com
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  clientConfig:
+    service:
+      name: test-service
+      namespace: test-ns
+      path: /validate
+`
+		result := DecodeValidatingWebhookConfigurationByBytes([]byte(yaml))
+		if result.Name != "test-webhook" {
+			t.Errorf("Expected name 'test-webhook', got %q", result.Name)
+		}
+		if len(result.Webhooks) != 1 {
+			t.Errorf("Expected 1 webhook, got %d", len(result.Webhooks))
+		}
+	})
+
+	t.Run("invalid YAML panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic for invalid YAML, but did not panic")
+			}
+		}()
+		DecodeValidatingWebhookConfigurationByBytes([]byte("invalid yaml content"))
+	})
+}
+
+func TestSetLabel(t *testing.T) {
 	tests := []struct {
 		name     string
-		envValue string
-		expected string
+		labels   map[string]string
+		key      string
+		value    string
+		expected map[string]string
 	}{
 		{
-			name:     "returns image when environment variable is set",
-			envValue: "node-driver-registrar:v2.8.0",
-			expected: "node-driver-registrar:v2.8.0",
+			name:     "nil labels map creates new map",
+			labels:   nil,
+			key:      "app",
+			value:    "test",
+			expected: map[string]string{"app": "test"},
 		},
 		{
-			name:     "returns empty string when environment variable is empty",
-			envValue: "",
-			expected: "",
+			name:     "empty labels map adds label",
+			labels:   map[string]string{},
+			key:      "env",
+			value:    "prod",
+			expected: map[string]string{"env": "prod"},
 		},
 		{
-			name:     "returns image with registry and tag",
-			envValue: "registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0",
-			expected: "registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0",
+			name:     "existing labels map adds new label",
+			labels:   map[string]string{"app": "test"},
+			key:      "version",
+			value:    "v1",
+			expected: map[string]string{"app": "test", "version": "v1"},
+		},
+		{
+			name:     "existing labels map updates existing label",
+			labels:   map[string]string{"app": "old"},
+			key:      "app",
+			value:    "new",
+			expected: map[string]string{"app": "new"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cleanup := setEnvVar(NodeDriverRegistrarImageEnv, tt.envValue)
-			defer cleanup()
+			result := SetLabel(tt.labels, tt.key, tt.value)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("SetLabel() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
 
-			result := GetNodeDriverRegistrarImage()
+func TestGenerateConfigHashFromString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple string",
+			input:    "test",
+			expected: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		},
+		{
+			name:     "string with leading/trailing whitespace",
+			input:    "  test  ",
+			expected: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		},
+		{
+			name:     "string with newlines",
+			input:    "\ntest\n",
+			expected: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		},
+		{
+			name:     "multiline config",
+			input:    "key1=value1\nkey2=value2",
+			expected: GenerateConfigHash([]byte("key1=value1\nkey2=value2")),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GenerateConfigHashFromString(tt.input)
 			if result != tt.expected {
-				t.Errorf("GetNodeDriverRegistrarImage() = %q, want %q", result, tt.expected)
+				t.Errorf("GenerateConfigHashFromString() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerateConfigHash(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		expected string
+	}{
+		{
+			name:     "simple bytes",
+			input:    []byte("test"),
+			expected: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		},
+		{
+			name:     "bytes with whitespace",
+			input:    []byte("  test  "),
+			expected: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+		},
+		{
+			name:     "empty bytes",
+			input:    []byte{},
+			expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		},
+		{
+			name:     "nil bytes",
+			input:    nil,
+			expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GenerateConfigHash(tt.input)
+			if result != tt.expected {
+				t.Errorf("GenerateConfigHash() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerateMapHash(t *testing.T) {
+	tests := []struct {
+		name  string
+		input map[string]string
+	}{
+		{
+			name:  "empty map",
+			input: map[string]string{},
+		},
+		{
+			name:  "single entry",
+			input: map[string]string{"key": "value"},
+		},
+		{
+			name:  "multiple entries",
+			input: map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"},
+		},
+		{
+			name:  "entries with whitespace",
+			input: map[string]string{"  key1  ": "  value1  ", "key2": "value2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test that it generates a valid hash (64 char hex string)
+			result := GenerateMapHash(tt.input)
+			if len(result) != 64 {
+				t.Errorf("GenerateMapHash() returned hash of length %d, want 64", len(result))
+			}
+
+			// Test that same input generates same hash
+			result2 := GenerateMapHash(tt.input)
+			if result != result2 {
+				t.Error("GenerateMapHash() should be deterministic")
+			}
+
+			// Test that order doesn't matter (keys are sorted)
+			if len(tt.input) > 1 {
+				// Create a new map with same entries (Go randomizes iteration order)
+				input2 := make(map[string]string)
+				for k, v := range tt.input {
+					input2[k] = v
+				}
+				result3 := GenerateMapHash(input2)
+				if result != result3 {
+					t.Error("GenerateMapHash() should produce same hash regardless of map iteration order")
+				}
 			}
 		})
 	}
 
-	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
-		os.Unsetenv(NodeDriverRegistrarImageEnv)
-		result := GetNodeDriverRegistrarImage()
-		if result != "" {
-			t.Errorf("GetNodeDriverRegistrarImage() = %q, want empty string", result)
+	// Test that different maps produce different hashes
+	t.Run("different maps produce different hashes", func(t *testing.T) {
+		hash1 := GenerateMapHash(map[string]string{"key": "value1"})
+		hash2 := GenerateMapHash(map[string]string{"key": "value2"})
+		if hash1 == hash2 {
+			t.Error("Different maps should produce different hashes")
 		}
 	})
 }
@@ -606,8 +772,8 @@ func TestDerefNodeSelector(t *testing.T) {
 				t.Errorf("DerefNodeSelector() = %+v, want %+v", result, tt.expected)
 			}
 
-			// Verify it's a copy (different memory address) when input is not nil
-			if tt.input != nil && len(tt.input) > 0 {
+			// Verify it's a copy (different memory address) when input has values
+			if len(tt.input) > 0 {
 				// Modify the result to ensure it doesn't affect the original
 				result["test"] = "modification"
 				if _, exists := tt.input["test"]; exists {
@@ -839,6 +1005,55 @@ func TestStatefulSetSpecModified(t *testing.T) {
 		}
 	})
 
+	t.Run("Container ImagePullPolicy modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		fetched.Spec.Template.Spec.Containers[0].ImagePullPolicy = corev1.PullNever
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ImagePullPolicy differs")
+		}
+	})
+
+	t.Run("Container Env modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		fetched.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{
+			Name:  "DIFFERENT",
+			Value: "value",
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container Env differs")
+		}
+	})
+
+	t.Run("Container Resources modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		fetched.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("200m")
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container Resources differ")
+		}
+	})
+
+	t.Run("Container VolumeMounts modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		fetched.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath = "/different/path"
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container VolumeMounts differ")
+		}
+	})
+
+	t.Run("Container name not found in fetched", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		// Change the container name in fetched so desired container won't be found
+		fetched.Spec.Template.Spec.Containers[0].Name = "different-name"
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container name in desired not found in fetched")
+		}
+	})
+
 	t.Run("VolumeClaimTemplates count modified", func(t *testing.T) {
 		desired := createStatefulSet()
 		fetched := createStatefulSet()
@@ -858,6 +1073,25 @@ func TestStatefulSetSpecModified(t *testing.T) {
 			t.Error("Expected true when VolumeClaimTemplate name differs")
 		}
 	})
+
+	t.Run("VolumeClaimTemplate AccessModes modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		fetched.Spec.VolumeClaimTemplates[0].Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when VolumeClaimTemplate AccessModes differ")
+		}
+	})
+
+	t.Run("VolumeClaimTemplate Resources.Requests modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		fetched.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("20Gi")
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when VolumeClaimTemplate Resources.Requests differ")
+		}
+	})
+
 }
 
 func TestDeploymentSpecModified(t *testing.T) {
@@ -970,6 +1204,34 @@ func TestDeploymentSpecModified(t *testing.T) {
 		}
 	})
 
+	t.Run("Container name not found in fetched", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		// Change the container name in fetched so desired container won't be found
+		fetched.Spec.Template.Spec.Containers[0].Name = "different-name"
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when container name in desired not found in fetched")
+		}
+	})
+
+	t.Run("Container image modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.Containers[0].Image = "nginx:1.21"
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when container image differs")
+		}
+	})
+
+	t.Run("Container args modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.Containers[0].Args = []string{"--different", "arg"}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when container args differ")
+		}
+	})
+
 	t.Run("ImagePullPolicy modified", func(t *testing.T) {
 		desired := createDeployment()
 		fetched := createDeployment()
@@ -1003,6 +1265,60 @@ func TestDeploymentSpecModified(t *testing.T) {
 		fetched.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath = "/different/path"
 		if !DeploymentSpecModified(desired, fetched) {
 			t.Error("Expected true when VolumeMounts differ")
+		}
+	})
+
+	t.Run("ServiceAccountName modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.ServiceAccountName = "different-sa"
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when ServiceAccountName differs")
+		}
+	})
+
+	t.Run("ShareProcessNamespace modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.ShareProcessNamespace = ptr.To(true)
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when ShareProcessNamespace differs")
+		}
+	})
+
+	t.Run("NodeSelector modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.NodeSelector["zone"] = "west"
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when NodeSelector differs")
+		}
+	})
+
+	t.Run("Affinity modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values = []string{"west"}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when Affinity differs")
+		}
+	})
+
+	t.Run("Tolerations modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Spec.Tolerations[0].Value = "different"
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when Tolerations differ")
+		}
+	})
+
+	t.Run("Template labels modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		fetched.Spec.Template.Labels["app"] = "different"
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when Template.Labels differ")
 		}
 	})
 }
@@ -1124,6 +1440,43 @@ func TestDaemonSetSpecModified(t *testing.T) {
 		}
 	})
 
+	t.Run("Container name not found in fetched", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		// Change the container name in fetched so desired container won't be found
+		fetched.Spec.Template.Spec.Containers[0].Name = "different-name"
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container name in desired not found in fetched")
+		}
+	})
+
+	t.Run("Container ImagePullPolicy modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.Containers[0].ImagePullPolicy = corev1.PullNever
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ImagePullPolicy differs")
+		}
+	})
+
+	t.Run("Container Args modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.Containers[0].Args = []string{"--different", "arg"}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container Args differ")
+		}
+	})
+
+	t.Run("Container VolumeMounts modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath = "/different/path"
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container VolumeMounts differ")
+		}
+	})
+
 	t.Run("Container resources modified", func(t *testing.T) {
 		desired := createDaemonSet()
 		fetched := createDaemonSet()
@@ -1133,8 +1486,53 @@ func TestDaemonSetSpecModified(t *testing.T) {
 		}
 	})
 
-	// Test the bug in the original code where Tolerations check uses NodeSelector length
-	t.Run("Tolerations check with empty NodeSelector", func(t *testing.T) {
+	t.Run("ServiceAccountName modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.ServiceAccountName = "different-sa"
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ServiceAccountName differs")
+		}
+	})
+
+	t.Run("ShareProcessNamespace modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.ShareProcessNamespace = ptr.To(true)
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ShareProcessNamespace differs")
+		}
+	})
+
+	t.Run("NodeSelector modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.NodeSelector["zone"] = "west"
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when NodeSelector differs")
+		}
+	})
+
+	t.Run("Affinity modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values = []string{"west"}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when Affinity differs")
+		}
+	})
+
+	t.Run("Tolerations modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		fetched.Spec.Template.Spec.Tolerations[0].Value = "different"
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when Tolerations differ")
+		}
+	})
+
+	// Test that Tolerations are properly detected regardless of NodeSelector
+	t.Run("Tolerations modified with empty NodeSelector", func(t *testing.T) {
 		desired := createDaemonSet()
 		fetched := createDaemonSet()
 
@@ -1145,10 +1543,46 @@ func TestDaemonSetSpecModified(t *testing.T) {
 		// Modify tolerations
 		fetched.Spec.Template.Spec.Tolerations[0].Value = "different"
 
-		// Due to the bug in the original code, this should return false
-		// because len(desired.Spec.Template.Spec.NodeSelector) == 0
-		if DaemonSetSpecModified(desired, fetched) {
-			t.Error("Expected false due to bug in original code - Tolerations check uses NodeSelector length")
+		// Should detect the tolerations change even with empty NodeSelector
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when Tolerations differ, regardless of NodeSelector")
+		}
+	})
+
+	// Test that empty desired Tolerations vs non-empty fetched triggers modification
+	t.Run("Desired has empty Tolerations but fetched has Tolerations", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+
+		// Desired has no tolerations
+		desired.Spec.Template.Spec.Tolerations = []corev1.Toleration{}
+
+		// Fetched has tolerations
+		// (fetched already has tolerations from createDaemonSet)
+
+		// Should detect the difference
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when desired has no Tolerations but fetched does")
+		}
+	})
+
+	// Test Env field comparison in DaemonSet
+	t.Run("Container Env modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+
+		// Add Env to containers
+		desired.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{
+			Name:  "ENV_VAR",
+			Value: "value",
+		}}
+		fetched.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{
+			Name:  "ENV_VAR",
+			Value: "different-value",
+		}}
+
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container Env differs")
 		}
 	})
 }
@@ -1182,7 +1616,7 @@ func TestEdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("Empty NodeSelector and Affinity", func(t *testing.T) {
+	t.Run("Empty desired NodeSelector vs non-empty fetched", func(t *testing.T) {
 		desired := &appsv1.Deployment{
 			Spec: appsv1.DeploymentSpec{
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
@@ -1209,9 +1643,90 @@ func TestEdgeCases(t *testing.T) {
 				},
 			},
 		}
-		// Should not trigger modification since desired NodeSelector is empty (len == 0)
-		if DeploymentSpecModified(desired, fetched) {
-			t.Error("Expected false when desired NodeSelector is empty")
+		// Should trigger modification since desired has empty NodeSelector but fetched has values
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when desired NodeSelector is empty but fetched has values")
+		}
+	})
+
+	t.Run("Nil desired Affinity vs non-nil fetched", func(t *testing.T) {
+		desired := &appsv1.StatefulSet{
+			Spec: appsv1.StatefulSetSpec{
+				Selector:    &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				ServiceName: "test",
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec: corev1.PodSpec{
+						Affinity:   nil, // Nil
+						Containers: []corev1.Container{{Name: "test", Image: "test"}},
+					},
+				},
+			},
+		}
+		fetched := &appsv1.StatefulSet{
+			Spec: appsv1.StatefulSetSpec{
+				Selector:    &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				ServiceName: "test",
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec: corev1.PodSpec{
+						Affinity: &corev1.Affinity{
+							NodeAffinity: &corev1.NodeAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+										MatchExpressions: []corev1.NodeSelectorRequirement{{
+											Key:      "zone",
+											Operator: corev1.NodeSelectorOpIn,
+											Values:   []string{"east"},
+										}},
+									}},
+								},
+							},
+						},
+						Containers: []corev1.Container{{Name: "test", Image: "test"}},
+					},
+				},
+			},
+		}
+		// Should trigger modification since desired has nil Affinity but fetched has values
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when desired Affinity is nil but fetched has values")
+		}
+	})
+
+	t.Run("Empty desired Tolerations vs non-empty fetched", func(t *testing.T) {
+		desired := &appsv1.Deployment{
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec: corev1.PodSpec{
+						Tolerations: []corev1.Toleration{}, // Empty
+						Containers:  []corev1.Container{{Name: "test", Image: "test"}},
+					},
+				},
+			},
+		}
+		fetched := &appsv1.Deployment{
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec: corev1.PodSpec{
+						Tolerations: []corev1.Toleration{{
+							Key:      "node-type",
+							Operator: corev1.TolerationOpEqual,
+							Value:    "test",
+							Effect:   corev1.TaintEffectNoSchedule,
+						}},
+						Containers: []corev1.Container{{Name: "test", Image: "test"}},
+					},
+				},
+			},
+		}
+		// Should trigger modification since desired has empty Tolerations but fetched has values
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when desired Tolerations is empty but fetched has values")
 		}
 	})
 }

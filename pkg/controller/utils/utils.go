@@ -156,10 +156,7 @@ func GenerateMapHash(m map[string]string) string {
 }
 
 func StringToBool(s string) bool {
-	if s == "true" {
-		return true
-	}
-	return false
+	return s == "true"
 }
 
 func DerefResourceRequirements(r *corev1.ResourceRequirements) corev1.ResourceRequirements {
@@ -235,13 +232,19 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+	if len(dPod.NodeSelector) > 0 && !reflect.DeepEqual(dPod.NodeSelector, fPod.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+	if !reflect.DeepEqual(dPod.Affinity, fPod.Affinity) {
+		return true
+	}
+	if len(dPod.Tolerations) != len(fPod.Tolerations) {
+		return true
+	}
+	if len(dPod.Tolerations) > 0 && !reflect.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
 		return true
 	}
 	if len(dPod.Containers) != len(fPod.Containers) {
@@ -322,13 +325,19 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+	if len(dPod.NodeSelector) > 0 && !reflect.DeepEqual(dPod.NodeSelector, fPod.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+	if !reflect.DeepEqual(dPod.Affinity, fPod.Affinity) {
+		return true
+	}
+	if len(dPod.Tolerations) != len(fPod.Tolerations) {
+		return true
+	}
+	if len(dPod.Tolerations) > 0 && !reflect.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
 		return true
 	}
 	if len(dPod.Containers) != len(fPod.Containers) {
@@ -389,13 +398,19 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+	if len(dPod.NodeSelector) > 0 && !reflect.DeepEqual(dPod.NodeSelector, fPod.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+	if !reflect.DeepEqual(dPod.Affinity, fPod.Affinity) {
+		return true
+	}
+	if len(dPod.Tolerations) != len(fPod.Tolerations) {
+		return true
+	}
+	if len(dPod.Tolerations) > 0 && !reflect.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
 		return true
 	}
 	if len(dPod.Containers) != len(fPod.Containers) {
@@ -421,6 +436,9 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 			return true
 		}
 		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+			return true
+		}
+		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
 			return true
 		}
 		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
