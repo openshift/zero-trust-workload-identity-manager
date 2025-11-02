@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func TestDecodeClusterRoleObjBytes(t *testing.T) {
@@ -1092,6 +1093,142 @@ func TestStatefulSetSpecModified(t *testing.T) {
 		}
 	})
 
+	t.Run("DNSPolicy modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirst
+		fetched.Spec.Template.Spec.DNSPolicy = corev1.DNSDefault
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when DNSPolicy differs")
+		}
+	})
+
+	t.Run("Volumes modified - ConfigMap", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "different-config"},
+				},
+			},
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ConfigMap volume differs")
+		}
+	})
+
+	t.Run("Volumes modified - Secret", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: "my-secret",
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: "different-secret",
+				},
+			},
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when Secret volume differs")
+		}
+	})
+
+	t.Run("InitContainers added", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init",
+			Image: "init:latest",
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when InitContainers differ")
+		}
+	})
+
+	t.Run("InitContainer image modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init",
+			Image: "init:v1",
+		}}
+		fetched.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init",
+			Image: "init:v2",
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when InitContainer image differs")
+		}
+	})
+
+	t.Run("Container Ports modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+		}}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 9090,
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container ports differ")
+		}
+	})
+
+	t.Run("Container ReadinessProbe modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/health",
+				},
+			},
+		}
+		fetched.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/ready",
+				},
+			},
+		}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ReadinessProbe differs")
+		}
+	})
+
+	t.Run("Container SecurityContext modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+			RunAsUser: ptr.To(int64(1000)),
+		}
+		fetched.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+			RunAsUser: ptr.To(int64(2000)),
+		}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when SecurityContext differs")
+		}
+	})
+
 }
 
 func TestDeploymentSpecModified(t *testing.T) {
@@ -1319,6 +1456,103 @@ func TestDeploymentSpecModified(t *testing.T) {
 		fetched.Spec.Template.Labels["app"] = "different"
 		if !DeploymentSpecModified(desired, fetched) {
 			t.Error("Expected true when Template.Labels differ")
+		}
+	})
+
+	t.Run("DNSPolicy modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirst
+		fetched.Spec.Template.Spec.DNSPolicy = corev1.DNSDefault
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when DNSPolicy differs")
+		}
+	})
+
+	t.Run("Volumes modified - EmptyDir", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "cache",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when volume count differs")
+		}
+	})
+
+	t.Run("InitContainers count modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init",
+			Image: "init:latest",
+		}}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when InitContainers differ")
+		}
+	})
+
+	t.Run("InitContainer args modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init",
+			Image: "init:latest",
+			Args:  []string{"arg1"},
+		}}
+		fetched.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init",
+			Image: "init:latest",
+			Args:  []string{"arg2"},
+		}}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when InitContainer args differ")
+		}
+	})
+
+	t.Run("Container Ports added", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolTCP,
+		}}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when container ports differ")
+		}
+	})
+
+	t.Run("Container LivenessProbe modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Containers[0].LivenessProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/healthz",
+					Port: intstr.FromInt(8080),
+				},
+			},
+		}
+		fetched.Spec.Template.Spec.Containers[0].LivenessProbe = nil
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when LivenessProbe differs")
+		}
+	})
+
+	t.Run("Container SecurityContext added", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+			Privileged: ptr.To(false),
+		}
+		fetched.Spec.Template.Spec.Containers[0].SecurityContext = nil
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when SecurityContext differs")
 		}
 	})
 }
@@ -1583,6 +1817,88 @@ func TestDaemonSetSpecModified(t *testing.T) {
 
 		if !DaemonSetSpecModified(desired, fetched) {
 			t.Error("Expected true when container Env differs")
+		}
+	})
+
+	t.Run("DNSPolicy modified", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+		fetched.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirst
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when DNSPolicy differs")
+		}
+	})
+
+	t.Run("Volumes modified - HostPath", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "hostpath",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/var/lib/data",
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "hostpath",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/var/lib/other",
+				},
+			},
+		}}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when HostPath volume differs")
+		}
+	})
+
+	t.Run("InitContainers not found by name", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init-setup",
+			Image: "setup:v1",
+		}}
+		fetched.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name:  "init-different",
+			Image: "setup:v1",
+		}}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when InitContainer name not found")
+		}
+	})
+
+	t.Run("Container Ports count differs", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+		}, {
+			ContainerPort: 9090,
+		}}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+		}}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container port count differs")
+		}
+	})
+
+	t.Run("Container ReadinessProbe added", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{
+					Port: intstr.FromInt(8080),
+				},
+			},
+		}
+		fetched.Spec.Template.Spec.Containers[0].ReadinessProbe = nil
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when ReadinessProbe is added")
 		}
 	})
 }

@@ -194,6 +194,182 @@ func DerefNodeSelector(selector map[string]string) map[string]string {
 	return result
 }
 
+// volumesEqual compares two volume slices for equality
+func volumesEqual(desired, fetched []corev1.Volume) bool {
+	if len(desired) == 0 && len(fetched) == 0 {
+		return true
+	}
+	if len(desired) != len(fetched) {
+		return false
+	}
+
+	// Create a map of fetched volumes by name for easier lookup
+	fetchedMap := make(map[string]corev1.Volume)
+	for _, v := range fetched {
+		fetchedMap[v.Name] = v
+	}
+
+	// Check each desired volume exists and matches in fetched
+	for _, desiredVol := range desired {
+		fetchedVol, exists := fetchedMap[desiredVol.Name]
+		if !exists {
+			return false
+		}
+
+		// Compare volume sources
+		// Check ConfigMap volume
+		if desiredVol.ConfigMap != nil {
+			if fetchedVol.ConfigMap == nil {
+				return false
+			}
+			if desiredVol.ConfigMap.Name != fetchedVol.ConfigMap.Name {
+				return false
+			}
+		}
+
+		// Check Secret volume
+		if desiredVol.Secret != nil {
+			if fetchedVol.Secret == nil {
+				return false
+			}
+			if desiredVol.Secret.SecretName != fetchedVol.Secret.SecretName {
+				return false
+			}
+			if !reflect.DeepEqual(desiredVol.Secret.Items, fetchedVol.Secret.Items) {
+				return false
+			}
+		}
+
+		// Check EmptyDir volume
+		if desiredVol.EmptyDir != nil {
+			if fetchedVol.EmptyDir == nil {
+				return false
+			}
+		}
+
+		// Check HostPath volume
+		if desiredVol.HostPath != nil {
+			if fetchedVol.HostPath == nil {
+				return false
+			}
+			if desiredVol.HostPath.Path != fetchedVol.HostPath.Path {
+				return false
+			}
+		}
+
+		// Check PersistentVolumeClaim volume
+		if desiredVol.PersistentVolumeClaim != nil {
+			if fetchedVol.PersistentVolumeClaim == nil {
+				return false
+			}
+			if desiredVol.PersistentVolumeClaim.ClaimName != fetchedVol.PersistentVolumeClaim.ClaimName {
+				return false
+			}
+		}
+
+		// Check Projected volume
+		if desiredVol.Projected != nil {
+			if fetchedVol.Projected == nil {
+				return false
+			}
+			if !reflect.DeepEqual(desiredVol.Projected, fetchedVol.Projected) {
+				return false
+			}
+		}
+
+		// Check CSI volume
+		if desiredVol.CSI != nil {
+			if fetchedVol.CSI == nil {
+				return false
+			}
+			if !reflect.DeepEqual(desiredVol.CSI, fetchedVol.CSI) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// containerSpecModified checks if a container spec has been modified
+func containerSpecModified(desired, fetched *corev1.Container) bool {
+	// Check basic container properties
+	if desired.Name != fetched.Name ||
+		desired.Image != fetched.Image ||
+		desired.ImagePullPolicy != fetched.ImagePullPolicy {
+		return true
+	}
+
+	// Check args
+	if !reflect.DeepEqual(desired.Args, fetched.Args) {
+		return true
+	}
+
+	// Check environment variables
+	if !reflect.DeepEqual(desired.Env, fetched.Env) {
+		return true
+	}
+
+	// Check ports
+	if len(desired.Ports) != len(fetched.Ports) {
+		return true
+	}
+	for _, fetchedPort := range fetched.Ports {
+		matched := false
+		for _, desiredPort := range desired.Ports {
+			if fetchedPort.ContainerPort == desiredPort.ContainerPort {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return true
+		}
+	}
+
+	// ReadinessProbe nil checks
+	if (desired.ReadinessProbe == nil) != (fetched.ReadinessProbe == nil) {
+		return true
+	}
+	if desired.ReadinessProbe != nil && fetched.ReadinessProbe != nil {
+		if (desired.ReadinessProbe.HTTPGet == nil) != (fetched.ReadinessProbe.HTTPGet == nil) {
+			return true
+		}
+		if desired.ReadinessProbe.HTTPGet != nil && fetched.ReadinessProbe.HTTPGet != nil {
+			if desired.ReadinessProbe.HTTPGet.Path != fetched.ReadinessProbe.HTTPGet.Path {
+				return true
+			}
+		}
+	}
+
+	// LivenessProbe nil checks
+	if (desired.LivenessProbe == nil) != (fetched.LivenessProbe == nil) {
+		return true
+	}
+	if desired.LivenessProbe != nil && fetched.LivenessProbe != nil {
+		if !reflect.DeepEqual(desired.LivenessProbe, fetched.LivenessProbe) {
+			return true
+		}
+	}
+
+	// SecurityContext nil check
+	if desired.SecurityContext != nil && !reflect.DeepEqual(desired.SecurityContext, fetched.SecurityContext) {
+		return true
+	}
+
+	// Check volume mounts
+	if !reflect.DeepEqual(desired.VolumeMounts, fetched.VolumeMounts) {
+		return true
+	}
+
+	// Check resources
+	if !reflect.DeepEqual(desired.Resources, fetched.Resources) {
+		return true
+	}
+
+	return false
+}
+
 func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 	if desired == nil || fetched == nil {
 		return true
@@ -232,6 +408,10 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
+	// Check DNSPolicy
+	if dPod.DNSPolicy != "" && dPod.DNSPolicy != fPod.DNSPolicy {
+		return true
+	}
 	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
 		return true
 	}
@@ -247,6 +427,11 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 	if len(dPod.Tolerations) > 0 && !reflect.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
 		return true
 	}
+	// Check volumes
+	if !volumesEqual(dPod.Volumes, fPod.Volumes) {
+		return true
+	}
+	// Check regular containers
 	if len(dPod.Containers) != len(fPod.Containers) {
 		return true
 	}
@@ -264,22 +449,29 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 		if !ok {
 			return true
 		}
-		if dCont.Image != fCont.Image {
+		if containerSpecModified(&dCont, &fCont) {
 			return true
 		}
-		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
+	}
+
+	// Check init containers
+	if len(dPod.InitContainers) != len(fPod.InitContainers) {
+		return true
+	}
+	dInitMap := map[string]corev1.Container{}
+	fInitMap := map[string]corev1.Container{}
+	for _, c := range dPod.InitContainers {
+		dInitMap[c.Name] = c
+	}
+	for _, c := range fPod.InitContainers {
+		fInitMap[c.Name] = c
+	}
+	for name, dInitCont := range dInitMap {
+		fInitCont, ok := fInitMap[name]
+		if !ok {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+		if containerSpecModified(&dInitCont, &fInitCont) {
 			return true
 		}
 	}
@@ -325,6 +517,10 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
+	// Check DNSPolicy
+	if dPod.DNSPolicy != "" && dPod.DNSPolicy != fPod.DNSPolicy {
+		return true
+	}
 	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
 		return true
 	}
@@ -340,6 +536,11 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 	if len(dPod.Tolerations) > 0 && !reflect.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
 		return true
 	}
+	// Check volumes
+	if !volumesEqual(dPod.Volumes, fPod.Volumes) {
+		return true
+	}
+	// Check regular containers
 	if len(dPod.Containers) != len(fPod.Containers) {
 		return true
 	}
@@ -356,22 +557,28 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 		if !ok {
 			return true
 		}
-		if dCont.Image != fCont.Image {
+		if containerSpecModified(&dCont, &fCont) {
 			return true
 		}
-		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
+	}
+	// Check init containers
+	if len(dPod.InitContainers) != len(fPod.InitContainers) {
+		return true
+	}
+	dInitMap := map[string]corev1.Container{}
+	fInitMap := map[string]corev1.Container{}
+	for _, c := range dPod.InitContainers {
+		dInitMap[c.Name] = c
+	}
+	for _, c := range fPod.InitContainers {
+		fInitMap[c.Name] = c
+	}
+	for name, dInitCont := range dInitMap {
+		fInitCont, ok := fInitMap[name]
+		if !ok {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+		if containerSpecModified(&dInitCont, &fInitCont) {
 			return true
 		}
 	}
@@ -398,6 +605,10 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
+	// Check DNSPolicy
+	if dPod.DNSPolicy != "" && dPod.DNSPolicy != fPod.DNSPolicy {
+		return true
+	}
 	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
 		return true
 	}
@@ -413,6 +624,11 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 	if len(dPod.Tolerations) > 0 && !reflect.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
 		return true
 	}
+	// Check volumes
+	if !volumesEqual(dPod.Volumes, fPod.Volumes) {
+		return true
+	}
+	// Check regular containers
 	if len(dPod.Containers) != len(fPod.Containers) {
 		return true
 	}
@@ -429,22 +645,28 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 		if !ok {
 			return true
 		}
-		if dCont.Image != fCont.Image {
+		if containerSpecModified(&dCont, &fCont) {
 			return true
 		}
-		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
+	}
+	// Check init containers
+	if len(dPod.InitContainers) != len(fPod.InitContainers) {
+		return true
+	}
+	dInitMap := map[string]corev1.Container{}
+	fInitMap := map[string]corev1.Container{}
+	for _, c := range dPod.InitContainers {
+		dInitMap[c.Name] = c
+	}
+	for _, c := range fPod.InitContainers {
+		fInitMap[c.Name] = c
+	}
+	for name, dInitCont := range dInitMap {
+		fInitCont, ok := fInitMap[name]
+		if !ok {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
-			return true
-		}
-		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+		if containerSpecModified(&dInitCont, &fInitCont) {
 			return true
 		}
 	}
