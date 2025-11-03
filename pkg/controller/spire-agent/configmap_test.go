@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/config"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestGenerateAgentConfig(t *testing.T) {
@@ -38,14 +42,14 @@ func TestGenerateAgentConfig(t *testing.T) {
 				},
 				"health_checks": map[string]interface{}{
 					"bind_address":     "0.0.0.0",
-					"bind_port":        9982,
+					"bind_port":        "9982", // String now due to struct marshaling
 					"listener_enabled": true,
 					"live_path":        "/live",
 					"ready_path":       "/ready",
 				},
 				"plugins": map[string]interface{}{
-					"KeyManager": []map[string]interface{}{
-						{"memory": map[string]interface{}{"plugin_data": nil}},
+					"KeyManager": []interface{}{ // Changed to []interface{} to match JSON unmarshaling
+						map[string]interface{}{"memory": map[string]interface{}{}}, // Empty map instead of nil
 					},
 				},
 				"telemetry": map[string]interface{}{
@@ -81,17 +85,17 @@ func TestGenerateAgentConfig(t *testing.T) {
 				},
 				"health_checks": map[string]interface{}{
 					"bind_address":     "0.0.0.0",
-					"bind_port":        9982,
+					"bind_port":        "9982",
 					"listener_enabled": true,
 					"live_path":        "/live",
 					"ready_path":       "/ready",
 				},
 				"plugins": map[string]interface{}{
-					"KeyManager": []map[string]interface{}{
-						{"memory": map[string]interface{}{"plugin_data": nil}},
+					"KeyManager": []interface{}{
+						map[string]interface{}{"memory": map[string]interface{}{}},
 					},
-					"NodeAttestor": []map[string]interface{}{
-						{
+					"NodeAttestor": []interface{}{
+						map[string]interface{}{
 							"k8s_psat": map[string]interface{}{
 								"plugin_data": map[string]interface{}{
 									"cluster": "test-cluster",
@@ -134,24 +138,23 @@ func TestGenerateAgentConfig(t *testing.T) {
 				},
 				"health_checks": map[string]interface{}{
 					"bind_address":     "0.0.0.0",
-					"bind_port":        9982,
+					"bind_port":        "9982",
 					"listener_enabled": true,
 					"live_path":        "/live",
 					"ready_path":       "/ready",
 				},
 				"plugins": map[string]interface{}{
-					"KeyManager": []map[string]interface{}{
-						{"memory": map[string]interface{}{"plugin_data": nil}},
+					"KeyManager": []interface{}{
+						map[string]interface{}{"memory": map[string]interface{}{}},
 					},
-					"WorkloadAttestor": []map[string]interface{}{
-						{
+					"WorkloadAttestor": []interface{}{
+						map[string]interface{}{
 							"k8s": map[string]interface{}{
 								"plugin_data": map[string]interface{}{
-									"disable_container_selectors":    true,
-									"node_name_env":                  "MY_NODE_NAME",
-									"use_new_container_locator":      false,
-									"verbose_container_locator_logs": false,
-									"skip_kubelet_verification":      true,
+									"disable_container_selectors": true,
+									"node_name_env":               "MY_NODE_NAME",
+									"skip_kubelet_verification":   true,
+									// Zero/false values omitted in JSON marshaling
 								},
 							},
 						},
@@ -195,17 +198,17 @@ func TestGenerateAgentConfig(t *testing.T) {
 				},
 				"health_checks": map[string]interface{}{
 					"bind_address":     "0.0.0.0",
-					"bind_port":        9982,
+					"bind_port":        "9982",
 					"listener_enabled": true,
 					"live_path":        "/live",
 					"ready_path":       "/ready",
 				},
 				"plugins": map[string]interface{}{
-					"KeyManager": []map[string]interface{}{
-						{"memory": map[string]interface{}{"plugin_data": nil}},
+					"KeyManager": []interface{}{
+						map[string]interface{}{"memory": map[string]interface{}{}},
 					},
-					"NodeAttestor": []map[string]interface{}{
-						{
+					"NodeAttestor": []interface{}{
+						map[string]interface{}{
 							"k8s_psat": map[string]interface{}{
 								"plugin_data": map[string]interface{}{
 									"cluster": "full-cluster",
@@ -213,15 +216,14 @@ func TestGenerateAgentConfig(t *testing.T) {
 							},
 						},
 					},
-					"WorkloadAttestor": []map[string]interface{}{
-						{
+					"WorkloadAttestor": []interface{}{
+						map[string]interface{}{
 							"k8s": map[string]interface{}{
 								"plugin_data": map[string]interface{}{
-									"disable_container_selectors":    false,
-									"node_name_env":                  "MY_NODE_NAME",
-									"use_new_container_locator":      true,
-									"verbose_container_locator_logs": false,
-									"skip_kubelet_verification":      true,
+									"node_name_env":             "MY_NODE_NAME",
+									"skip_kubelet_verification": true,
+									"use_new_container_locator": true,
+									// Zero/false values omitted in JSON marshaling
 								},
 							},
 						},
@@ -260,14 +262,14 @@ func TestGenerateAgentConfig(t *testing.T) {
 				},
 				"health_checks": map[string]interface{}{
 					"bind_address":     "0.0.0.0",
-					"bind_port":        9982,
+					"bind_port":        "9982",
 					"listener_enabled": true,
 					"live_path":        "/live",
 					"ready_path":       "/ready",
 				},
 				"plugins": map[string]interface{}{
-					"KeyManager": []map[string]interface{}{
-						{"memory": map[string]interface{}{"plugin_data": nil}},
+					"KeyManager": []interface{}{
+						map[string]interface{}{"memory": map[string]interface{}{}},
 					},
 				},
 				"telemetry": map[string]interface{}{
@@ -302,14 +304,14 @@ func TestGenerateAgentConfig(t *testing.T) {
 				},
 				"health_checks": map[string]interface{}{
 					"bind_address":     "0.0.0.0",
-					"bind_port":        9982,
+					"bind_port":        "9982",
 					"listener_enabled": true,
 					"live_path":        "/live",
 					"ready_path":       "/ready",
 				},
 				"plugins": map[string]interface{}{
-					"KeyManager": []map[string]interface{}{
-						{"memory": map[string]interface{}{"plugin_data": nil}},
+					"KeyManager": []interface{}{
+						map[string]interface{}{"memory": map[string]interface{}{}},
 					},
 				},
 				"telemetry": map[string]interface{}{
@@ -445,9 +447,13 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 				assert.Equal(t, "text", agentSection["log_format"])
 
 				// Validate health checks section
-				healthSection := configData["health_checks"].(map[string]interface{})
+				healthChecksVal, ok := configData["health_checks"]
+				assert.True(t, ok, "health_checks should exist in config")
+				healthSection, ok := healthChecksVal.(map[string]interface{})
+				assert.True(t, ok, "health_checks should be a map[string]interface{}")
 				assert.Equal(t, "0.0.0.0", healthSection["bind_address"])
-				assert.Equal(t, float64(9982), healthSection["bind_port"])
+				// bind_port is now a string due to struct JSON marshaling
+				assert.Equal(t, "9982", healthSection["bind_port"])
 				assert.Equal(t, true, healthSection["listener_enabled"])
 
 				// Validate plugins section
@@ -581,4 +587,314 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 	// Should only have the required labels
 	expectedLabels := utils.SpireAgentLabels(nil)
 	assert.Equal(t, expectedLabels, cm.Labels)
+}
+
+func TestBuildSpireAgentConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     *v1alpha1.SpireAgentSpec
+		validate func(t *testing.T, cfg *config.SpireAgentConfig)
+	}{
+		{
+			name: "minimal agent config",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				// Validate agent config
+				assert.Equal(t, "example.org", cfg.Agent.TrustDomain)
+				assert.Equal(t, "/var/lib/spire", cfg.Agent.DataDir)
+				assert.Equal(t, "info", cfg.Agent.LogLevel)  // Default from utils.GetLogLevelFromString
+				assert.Equal(t, "text", cfg.Agent.LogFormat) // Default from utils.GetLogFormatFromString
+				assert.True(t, cfg.Agent.RetryBootstrap)
+				assert.Equal(t, "spire-server.zero-trust-workload-identity-manager", cfg.Agent.ServerAddress)
+				assert.Equal(t, "443", cfg.Agent.ServerPort)
+				assert.Equal(t, "/tmp/spire-agent/public/spire-agent.sock", cfg.Agent.SocketPath)
+				assert.Equal(t, "/run/spire/bundle/bundle.crt", cfg.Agent.TrustBundlePath)
+
+				// Validate health checks
+				assert.Equal(t, "0.0.0.0", cfg.HealthChecks.BindAddress)
+				assert.Equal(t, "9982", cfg.HealthChecks.BindPort)
+				assert.True(t, cfg.HealthChecks.ListenerEnabled)
+
+				// Validate telemetry
+				require.NotNil(t, cfg.Telemetry)
+				require.NotNil(t, cfg.Telemetry.Prometheus)
+				assert.Equal(t, "0.0.0.0", cfg.Telemetry.Prometheus.Host)
+				assert.Equal(t, "9402", cfg.Telemetry.Prometheus.Port)
+
+				// Validate plugins - should only have KeyManager
+				require.Len(t, cfg.Plugins.KeyManager, 1)
+				memPlugin, ok := cfg.Plugins.KeyManager[0]["memory"]
+				require.True(t, ok)
+				assert.Nil(t, memPlugin.PluginData)
+
+				// No NodeAttestor or WorkloadAttestor by default
+				assert.Nil(t, cfg.Plugins.NodeAttestor)
+				assert.Nil(t, cfg.Plugins.WorkloadAttestor)
+			},
+		},
+		{
+			name: "agent config with k8s_psat node attestor",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "secure.example.org",
+				ClusterName: "production-cluster",
+				NodeAttestor: &v1alpha1.NodeAttestor{
+					K8sPSATEnabled: "true",
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				// Validate NodeAttestor plugin
+				require.Len(t, cfg.Plugins.NodeAttestor, 1)
+				psatPlugin, ok := cfg.Plugins.NodeAttestor[0]["k8s_psat"]
+				require.True(t, ok)
+
+				naData, ok := psatPlugin.PluginData.(config.AgentNodeAttestorPluginData)
+				require.True(t, ok)
+				assert.Equal(t, "production-cluster", naData.Cluster)
+			},
+		},
+		{
+			name: "agent config with k8s workload attestor - basic",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+				WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+					K8sEnabled:                "true",
+					DisableContainerSelectors: "false",
+					UseNewContainerLocator:    "true",
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				// Validate WorkloadAttestor plugin
+				require.Len(t, cfg.Plugins.WorkloadAttestor, 1)
+				k8sPlugin, ok := cfg.Plugins.WorkloadAttestor[0]["k8s"]
+				require.True(t, ok)
+
+				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
+				require.True(t, ok)
+				assert.False(t, waData.DisableContainerSelectors)
+				assert.Equal(t, "MY_NODE_NAME", waData.NodeNameEnv)
+				assert.True(t, waData.UseNewContainerLocator)
+				assert.False(t, waData.VerboseContainerLocatorLogs)
+				assert.True(t, waData.SkipKubeletVerification)
+			},
+		},
+		{
+			name: "agent config with workload attestor - hostCert verification",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+				WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+					K8sEnabled: "true",
+					WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+						Type:             "hostCert",
+						HostCertBasePath: "/var/lib/kubelet/pki",
+					},
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				require.Len(t, cfg.Plugins.WorkloadAttestor, 1)
+				k8sPlugin := cfg.Plugins.WorkloadAttestor[0]["k8s"]
+
+				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
+				require.True(t, ok)
+				assert.False(t, waData.SkipKubeletVerification)
+				assert.True(t, waData.VerifyKubeletCertificate)
+				assert.Equal(t, "/var/lib/kubelet/pki/kubelet-ca.crt", waData.KubeletCAPath)
+			},
+		},
+		{
+			name: "agent config with workload attestor - apiServerCA verification",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+				WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+					K8sEnabled: "true",
+					WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+						Type: "apiServerCA",
+					},
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				require.Len(t, cfg.Plugins.WorkloadAttestor, 1)
+				k8sPlugin := cfg.Plugins.WorkloadAttestor[0]["k8s"]
+
+				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
+				require.True(t, ok)
+				assert.False(t, waData.SkipKubeletVerification)
+				assert.True(t, waData.VerifyKubeletCertificate)
+			},
+		},
+		{
+			name: "agent config with workload attestor - skip verification",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+				WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+					K8sEnabled: "true",
+					WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+						Type: "skip",
+					},
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				require.Len(t, cfg.Plugins.WorkloadAttestor, 1)
+				k8sPlugin := cfg.Plugins.WorkloadAttestor[0]["k8s"]
+
+				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
+				require.True(t, ok)
+				assert.True(t, waData.SkipKubeletVerification)
+			},
+		},
+		{
+			name: "agent config with workload attestor - auto verification",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+				WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+					K8sEnabled: "true",
+					WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+						Type: "auto",
+					},
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				require.Len(t, cfg.Plugins.WorkloadAttestor, 1)
+				k8sPlugin := cfg.Plugins.WorkloadAttestor[0]["k8s"]
+
+				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
+				require.True(t, ok)
+				// Auto mode always skips verification as default for compatibility
+				assert.True(t, waData.SkipKubeletVerification)
+			},
+		},
+		{
+			name: "agent config with both node and workload attestors",
+			spec: &v1alpha1.SpireAgentSpec{
+				TrustDomain: "example.org",
+				ClusterName: "test-cluster",
+				NodeAttestor: &v1alpha1.NodeAttestor{
+					K8sPSATEnabled: "true",
+				},
+				WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+					K8sEnabled:                "true",
+					DisableContainerSelectors: "true",
+					UseNewContainerLocator:    "true",
+				},
+			},
+			validate: func(t *testing.T, cfg *config.SpireAgentConfig) {
+				// Both plugins should be present
+				require.Len(t, cfg.Plugins.NodeAttestor, 1)
+				require.Len(t, cfg.Plugins.WorkloadAttestor, 1)
+
+				// Validate NodeAttestor
+				psatPlugin := cfg.Plugins.NodeAttestor[0]["k8s_psat"]
+				naData, ok := psatPlugin.PluginData.(config.AgentNodeAttestorPluginData)
+				require.True(t, ok)
+				assert.Equal(t, "test-cluster", naData.Cluster)
+
+				// Validate WorkloadAttestor
+				k8sPlugin := cfg.Plugins.WorkloadAttestor[0]["k8s"]
+				waData, ok := k8sPlugin.PluginData.(config.WorkloadAttestorPluginData)
+				require.True(t, ok)
+				assert.True(t, waData.DisableContainerSelectors)
+				assert.True(t, waData.UseNewContainerLocator)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := buildSpireAgentConfig(tt.spec)
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			tt.validate(t, cfg)
+		})
+	}
+}
+
+func TestGenerateSpireAgentConfigMap_WithStructs(t *testing.T) {
+	tests := []struct {
+		name         string
+		agent        *v1alpha1.SpireAgent
+		validateCM   func(t *testing.T, cm *corev1.ConfigMap, hash string)
+		validateJSON func(t *testing.T, jsonData string)
+	}{
+		{
+			name: "valid agent config generates ConfigMap with correct structure",
+			agent: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "example.org",
+					ClusterName: "test-cluster",
+					NodeAttestor: &v1alpha1.NodeAttestor{
+						K8sPSATEnabled: "true",
+					},
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+					},
+				},
+			},
+			validateJSON: func(t *testing.T, jsonData string) {
+				var parsed map[string]interface{}
+				err := json.Unmarshal([]byte(jsonData), &parsed)
+				require.NoError(t, err)
+
+				// Validate top-level keys
+				assert.Contains(t, parsed, "agent")
+				assert.Contains(t, parsed, "plugins")
+				assert.Contains(t, parsed, "health_checks")
+				assert.Contains(t, parsed, "telemetry")
+
+				// Validate agent section
+				agent := parsed["agent"].(map[string]interface{})
+				assert.Equal(t, "example.org", agent["trust_domain"])
+				assert.Equal(t, "/var/lib/spire", agent["data_dir"])
+				assert.Equal(t, "info", agent["log_level"]) // Default from utils
+
+				// Validate plugins section
+				plugins := parsed["plugins"].(map[string]interface{})
+				assert.Contains(t, plugins, "KeyManager")
+				assert.Contains(t, plugins, "NodeAttestor")
+				assert.Contains(t, plugins, "WorkloadAttestor")
+
+				// Validate NodeAttestor structure
+				nodeAttestors := plugins["NodeAttestor"].([]interface{})
+				require.Len(t, nodeAttestors, 1)
+				na := nodeAttestors[0].(map[string]interface{})
+				assert.Contains(t, na, "k8s_psat")
+
+				// Validate WorkloadAttestor structure
+				workloadAttestors := plugins["WorkloadAttestor"].([]interface{})
+				require.Len(t, workloadAttestors, 1)
+				wa := workloadAttestors[0].(map[string]interface{})
+				assert.Contains(t, wa, "k8s")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cm, hash, err := GenerateSpireAgentConfigMap(tt.agent)
+
+			require.NoError(t, err)
+			require.NotNil(t, cm)
+			assert.NotEmpty(t, hash)
+
+			// Validate ConfigMap data
+			require.Contains(t, cm.Data, "agent.conf")
+			agentConfJSON := cm.Data["agent.conf"]
+			assert.NotEmpty(t, agentConfJSON)
+
+			if tt.validateJSON != nil {
+				tt.validateJSON(t, agentConfJSON)
+			}
+
+			// Ensure JSON is valid
+			var parsed map[string]interface{}
+			err = json.Unmarshal([]byte(agentConfJSON), &parsed)
+			require.NoError(t, err, "Generated JSON should be valid")
+		})
+	}
 }

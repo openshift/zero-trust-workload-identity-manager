@@ -21,14 +21,14 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
-	replicas := int32(1)
+	replicas := int32(SpireOIDCDefaultReplicaCount)
 	if config.Spec.ReplicaCount > 0 {
 		replicas = int32(config.Spec.ReplicaCount)
 	}
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "spire-spiffe-oidc-discovery-provider",
+			Name:      SpireOIDCDeploymentName,
 			Namespace: utils.OperatorNamespace,
 			Labels:    labels,
 		},
@@ -45,75 +45,75 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 					},
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "spire-spiffe-oidc-discovery-provider",
+					ServiceAccountName: SpireOIDCServiceAccountName,
 					Volumes: []corev1.Volume{
 						{
-							Name: "spiffe-workload-api",
+							Name: SpireOIDCVolumeNameWorkloadAPI,
 							VolumeSource: corev1.VolumeSource{
 								CSI: &corev1.CSIVolumeSource{
-									Driver:   "csi.spiffe.io",
+									Driver:   SpireOIDCCSIDriverName,
 									ReadOnly: boolPtr(true),
 								},
 							},
 						},
 						{
-							Name:         "spire-oidc-sockets",
+							Name:         SpireOIDCVolumeNameOIDCSockets,
 							VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 						},
 						{
-							Name: "spire-oidc-config",
+							Name: SpireOIDCVolumeNameOIDCConfig,
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "spire-spiffe-oidc-discovery-provider",
+										Name: SpireOIDCConfigMapName,
 									},
 								},
 							},
 						},
 						{
-							Name: "tls-certs",
+							Name: SpireOIDCVolumeNameTLSCerts,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: "oidc-serving-cert",
+									SecretName: SpireOIDCSecretName,
 								},
 							},
 						},
 					},
 					Containers: []corev1.Container{
 						{
-							Name:            "spiffe-oidc-discovery-provider",
+							Name:            SpireOIDCContainerName,
 							Image:           utils.GetSpireOIDCDiscoveryProviderImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args:            []string{"-config", "/run/spire/oidc/config/oidc-discovery-provider.conf"},
+							Args:            []string{SpireOIDCConfigFlag, SpireOIDCConfigPath},
 							Ports: []corev1.ContainerPort{
-								{Name: "healthz", ContainerPort: 8008},
-								{Name: "https", ContainerPort: 8443},
+								{Name: SpireOIDCPortNameHealthz, ContainerPort: SpireOIDCPortHealthz},
+								{Name: SpireOIDCPortNameHTTPS, ContainerPort: SpireOIDCPortHTTPS},
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},
-								{Name: "spire-oidc-sockets", MountPath: "/run/spire/oidc-sockets", ReadOnly: false},
-								{Name: "spire-oidc-config", MountPath: "/run/spire/oidc/config/oidc-discovery-provider.conf", SubPath: "oidc-discovery-provider.conf", ReadOnly: true},
-								{Name: "tls-certs", MountPath: "/etc/oidc/tls", ReadOnly: true},
+								{Name: SpireOIDCVolumeNameWorkloadAPI, MountPath: SpireOIDCMountPathWorkloadAPI, ReadOnly: true},
+								{Name: SpireOIDCVolumeNameOIDCSockets, MountPath: SpireOIDCMountPathOIDCSockets, ReadOnly: false},
+								{Name: SpireOIDCVolumeNameOIDCConfig, MountPath: SpireOIDCMountPathOIDCConfig, ReadOnly: true},
+								{Name: SpireOIDCVolumeNameTLSCerts, MountPath: SpireOIDCMountPathTLSCerts, ReadOnly: true},
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/ready",
-										Port: intstr.FromString("healthz"),
+										Path: SpireOIDCProbePathReady,
+										Port: intstr.FromString(SpireOIDCPortNameHealthz),
 									},
 								},
-								InitialDelaySeconds: 5,
-								PeriodSeconds:       5,
+								InitialDelaySeconds: SpireOIDCProbeInitialDelaySeconds,
+								PeriodSeconds:       SpireOIDCProbePeriodSeconds,
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/live",
-										Port: intstr.FromString("healthz"),
+										Path: SpireOIDCProbePathLive,
+										Port: intstr.FromString(SpireOIDCPortNameHealthz),
 									},
 								},
-								InitialDelaySeconds: 5,
-								PeriodSeconds:       5,
+								InitialDelaySeconds: SpireOIDCProbeInitialDelaySeconds,
+								PeriodSeconds:       SpireOIDCProbePeriodSeconds,
 							},
 							Resources: utils.DerefResourceRequirements(config.Spec.Resources),
 						},
