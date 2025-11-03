@@ -97,6 +97,7 @@ type CustomCtrlClient interface {
 	Exists(context.Context, client.ObjectKey, client.Object) (bool, error)
 	CreateOrUpdateObject(ctx context.Context, obj client.Object) error
 	StatusUpdateWithRetry(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error
+	GetClient() client.Client
 }
 
 func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
@@ -210,6 +211,11 @@ func (c *customCtrlClientImpl) CreateOrUpdateObject(ctx context.Context, obj cli
 		return c.Update(ctx, obj)
 	}
 	return err
+}
+
+// GetClient returns the underlying client.Client
+func (c *customCtrlClientImpl) GetClient() client.Client {
+	return c.Client
 }
 
 // NewCacheBuilder returns a cache builder function that configures the manager's cache

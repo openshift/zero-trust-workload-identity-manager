@@ -3,7 +3,7 @@ package utils
 const (
 
 	// Controller Names
-	ZeroTrustWorkloadIdentityManagerStaticResourceControllerName             = "zero-trust-workload-identity-manager-static-resource-controller"
+	ZeroTrustWorkloadIdentityManagerControllerName                           = "zero-trust-workload-identity-manager-zero-trust-workload-identity-manager"
 	ZeroTrustWorkloadIdentityManagerSpireServerControllerName                = "zero-trust-workload-identity-manager-spire-server-controller"
 	ZeroTrustWorkloadIdentityManagerSpireAgentControllerName                 = "zero-trust-workload-identity-manager-spire-agent-controller"
 	ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName            = "zero-trust-workload-identity-manager-spiffe-csi-driver-controller"

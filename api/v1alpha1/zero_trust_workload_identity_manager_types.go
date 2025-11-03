@@ -47,7 +47,44 @@ type ZeroTrustWorkloadIdentityManager struct {
 // ZeroTrustWorkloadIdentityManagerStatus defines the observed state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerStatus struct {
 	// conditions holds information of the current state of the zero-trust-workload-identity-manager deployment.
+	// This includes the aggregated status from all managed operand CRs.
 	ConditionalStatus `json:",inline,omitempty"`
+
+	// operands holds the status of each managed operand CR
+	// +optional
+	// +patchMergeKey=kind
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=kind
+	Operands []OperandStatus `json:"operands,omitempty"`
+}
+
+// OperandStatus represents the status of a managed operand CR
+type OperandStatus struct {
+	// name is the name of the operand (e.g., "cluster")
+	Name string `json:"name"`
+
+	// kind is the kind of the operand CR (e.g., "SpireServer", "SpireAgent")
+	Kind string `json:"kind"`
+
+	// ready indicates if the operand is ready
+	Ready bool `json:"ready"`
+
+	// message provides additional information about the operand status
+	// +optional
+	Message string `json:"message,omitempty"`
+
+	// lastTransitionTime is the last time the ready status changed
+	// +optional
+	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
+
+	// conditions from the operand CR (key conditions only)
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

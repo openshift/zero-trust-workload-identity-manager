@@ -7,7 +7,6 @@ import (
 
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,6 +14,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,19 +31,17 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-type reconcilerStatus struct {
-	Status  metav1.ConditionStatus
-	Message string
-	Reason  string
-}
-
 const (
-	SpireAgentDaemonSetGeneration = "SpireAgentDaemonSetGeneration"
-	SpireAgentConfigMapGeneration = "SpireAgentConfigMapGeneration"
-	SpireAgentSCCGeneration       = "SpireAgentSCCGeneration"
+	DaemonSetAvailable                  = "DaemonSetAvailable"
+	ConfigMapAvailable                  = "ConfigMapAvailable"
+	SecurityContextConstraintsAvailable = "SecurityContextConstraintsAvailable"
+	ServiceAccountAvailable             = "ServiceAccountAvailable"
+	ServiceAvailable                    = "ServiceAvailable"
+	RBACAvailable                       = "RBACAvailable"
 )
 
 const spireAgentDaemonSetSpireAgentConfigHashAnnotationKey = "ztwim.openshift.io/spire-agent-config-hash"
@@ -57,6 +55,11 @@ type SpireAgentReconciler struct {
 	scheme         *runtime.Scheme
 	createOnlyMode bool
 }
+
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
@@ -84,191 +87,54 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	reconcileStatus := map[string]reconcilerStatus{}
-	defer func(reconcileStatus map[string]reconcilerStatus) {
-		originalStatus := agent.Status.DeepCopy()
-		if agent.Status.ConditionalStatus.Conditions == nil {
-			agent.Status.ConditionalStatus = v1alpha1.ConditionalStatus{
-				Conditions: []metav1.Condition{},
-			}
+	statusMgr := status.NewManager(r.ctrlClient)
+	defer func() {
+		if err := statusMgr.ApplyStatus(ctx, &agent, func() *v1alpha1.ConditionalStatus {
+			return &agent.Status.ConditionalStatus
+		}); err != nil {
+			r.log.Error(err, "failed to update status")
 		}
-		for key, value := range reconcileStatus {
-			newCondition := metav1.Condition{
-				Type:               key,
-				Status:             value.Status,
-				Reason:             value.Reason,
-				Message:            value.Message,
-				LastTransitionTime: metav1.Now(),
-			}
-			apimeta.SetStatusCondition(&agent.Status.ConditionalStatus.Conditions, newCondition)
-		}
-		newConfig := agent.DeepCopy()
-		if !equality.Semantic.DeepEqual(originalStatus, &agent.Status) {
-			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
-				r.log.Error(err, "failed to update status")
-			}
-		}
-	}(reconcileStatus)
+	}()
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&agent, &r.createOnlyMode)
-	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
-		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
-			Status:  metav1.ConditionTrue,
-			Reason:  utils.CreateOnlyModeEnabled,
-			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
-		}
-	} else {
-		existingCondition := apimeta.FindStatusCondition(agent.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
-		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
-			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  utils.CreateOnlyModeDisabled,
-				Message: "Create-only mode is disabled",
-			}
-		}
-	}
+	// Handle create-only mode
+	createOnlyMode := r.handleCreateOnlyMode(&agent, statusMgr)
 
-	spireAgentSCC := generateSpireAgentSCC(&agent)
-	if err := controllerutil.SetControllerReference(&agent, spireAgentSCC, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		reconcileStatus[SpireAgentSCCGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentSCCGenerationFailed",
-			Message: err.Error(),
-		}
+	// Reconcile static resources (RBAC, ServiceAccount, Service)
+	if err := r.reconcileServiceAccount(ctx, &agent, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
-	err := r.ctrlClient.Create(ctx, spireAgentSCC)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "Failed to create SpireAgentSCC")
-		reconcileStatus[SpireAgentSCCGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentSCCGenerationFailed",
-			Message: err.Error(),
-		}
+
+	if err := r.reconcileService(ctx, &agent, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
-	reconcileStatus[SpireAgentSCCGeneration] = reconcilerStatus{
-		Status:  metav1.ConditionTrue,
-		Reason:  "SpireAgentSCCResourceCreated",
-		Message: "Spire Agent SCC resources applied",
+
+	if err := r.reconcileRBAC(ctx, &agent, statusMgr, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
 	}
-	spireAgentConfigMap, spireAgentConfigHash, err := GenerateSpireAgentConfigMap(&agent)
+
+	// Reconcile SCC
+	if err := r.reconcileSCC(ctx, &agent, statusMgr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile ConfigMap
+	configHash, err := r.reconcileConfigMap(ctx, &agent, statusMgr, createOnlyMode)
 	if err != nil {
-		r.log.Error(err, "failed to generate spire-agent config map")
-		reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentConfigMapGenerationFailed",
-			Message: err.Error(),
-		}
-		return ctrl.Result{}, err
-	}
-	// Set owner reference so GC cleans up when CR is deleted
-	if err = controllerutil.SetControllerReference(&agent, spireAgentConfigMap, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentConfigMapGenerationFailed",
-			Message: err.Error(),
-		}
 		return ctrl.Result{}, err
 	}
 
-	var existingSpireAgentCM corev1.ConfigMap
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentConfigMap.Name, Namespace: spireAgentConfigMap.Namespace}, &existingSpireAgentCM)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spireAgentConfigMap); err != nil {
-			r.log.Error(err, "failed to create spire-agent config map")
-			reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireAgentConfigMapGenerationFailed",
-				Message: err.Error(),
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to create ConfigMap: %w", err)
-		}
-		r.log.Info("Created spire agent ConfigMap")
-	} else if err == nil && (existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
-		!reflect.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode")
-		} else {
-			spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
-				r.log.Error(err, "failed to update spire-agent config map")
-				reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-					Status:  metav1.ConditionFalse,
-					Reason:  "SpireAgentConfigMapGenerationFailed",
-					Message: err.Error(),
-				}
-				return ctrl.Result{}, fmt.Errorf("failed to update ConfigMap: %w", err)
-			}
-			r.log.Info("Updated ConfigMap with new config")
-		}
-	} else if err != nil {
-		reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentConfigMapGenerationFailed",
-			Message: err.Error(),
-		}
-		return ctrl.Result{}, err
-	}
-	reconcileStatus[SpireAgentConfigMapGeneration] = reconcilerStatus{
-		Status:  metav1.ConditionTrue,
-		Reason:  "SpireAgentConfigMapResourceCreated",
-		Message: "Spire Agent ConfigMap resources applied",
-	}
-
-	spireAgentDaemonset := generateSpireAgentDaemonSet(agent.Spec, spireAgentConfigHash)
-	if err = controllerutil.SetControllerReference(&agent, spireAgentDaemonset, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		reconcileStatus[SpireAgentDaemonSetGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentDaemonSetGenerationFailed",
-			Message: err.Error(),
-		}
+	// Reconcile DaemonSet
+	if err := r.reconcileDaemonSet(ctx, &agent, statusMgr, createOnlyMode, configHash); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Create or Update DaemonSet
-	var existingSpireAgentDaemonSet appsv1.DaemonSet
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentDaemonset.Name, Namespace: spireAgentDaemonset.Namespace}, &existingSpireAgentDaemonSet)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spireAgentDaemonset); err != nil {
-			r.log.Error(err, "failed to create spire-agent daemonset")
-			reconcileStatus[SpireAgentDaemonSetGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpireAgentDaemonSetGenerationFailed",
-				Message: err.Error(),
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to create DaemonSet: %w", err)
-		}
-		r.log.Info("Created spire agent DaemonSet")
-	} else if err == nil && needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
-		if createOnlyMode {
-			r.log.Info("Skipping DaemonSet update due to create-only mode")
-		} else {
-			spireAgentDaemonset.ResourceVersion = existingSpireAgentDaemonSet.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireAgentDaemonset); err != nil {
-				r.log.Error(err, "failed to update spire agent DaemonSet")
-				return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
-			}
-			r.log.Info("Updated spire agent DaemonSet")
-		}
-	} else if err != nil {
-		r.log.Error(err, "failed to update spire-agent daemonset")
-		reconcileStatus[SpireAgentDaemonSetGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpireAgentDaemonSetGenerationFailed",
-			Message: err.Error(),
-		}
-		return ctrl.Result{}, err
-	}
-	reconcileStatus[SpireAgentDaemonSetGeneration] = reconcilerStatus{
-		Status:  metav1.ConditionTrue,
-		Reason:  "SpireAgentDaemonSetResourceCreated",
-		Message: "Spire Agent DaemonSet is created",
-	}
+	// Set consolidated success status after all static resources are created
+	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
+		"All RBAC resources available",
+		metav1.ConditionTrue)
+	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
+		"All Service resources available",
+		metav1.ConditionTrue)
 
 	return ctrl.Result{}, nil
 }
@@ -293,11 +159,169 @@ func (r *SpireAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName).
 		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&rbacv1.ClusterRole{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&rbacv1.ClusterRoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// handleCreateOnlyMode checks and updates the create-only mode status
+func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, statusMgr *status.Manager) bool {
+	createOnlyMode := utils.IsInCreateOnlyMode(agent, &r.createOnlyMode)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeEnabled,
+			"Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+			metav1.ConditionTrue)
+	} else {
+		existingCondition := apimeta.FindStatusCondition(agent.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeDisabled,
+				"Create-only mode is disabled",
+				metav1.ConditionFalse)
+		}
+	}
+	return createOnlyMode
+}
+
+// reconcileSCC reconciles the Spire Agent Security Context Constraints
+func (r *SpireAgentReconciler) reconcileSCC(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
+	spireAgentSCC := generateSpireAgentSCC(agent)
+	if err := controllerutil.SetControllerReference(agent, spireAgentSCC, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference")
+		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpireAgentSCCGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	err := r.ctrlClient.Create(ctx, spireAgentSCC)
+	if err != nil && !kerrors.IsAlreadyExists(err) {
+		r.log.Error(err, "Failed to create SpireAgentSCC")
+		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpireAgentSCCGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpireAgentSCCResourceCreated",
+		"Spire Agent SCC resources applied",
+		metav1.ConditionTrue)
+	return nil
+}
+
+// reconcileConfigMap reconciles the Spire Agent ConfigMap
+func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
+	spireAgentConfigMap, spireAgentConfigHash, err := GenerateSpireAgentConfigMap(agent)
+	if err != nil {
+		r.log.Error(err, "failed to generate spire-agent config map")
+		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return "", err
+	}
+
+	if err = controllerutil.SetControllerReference(agent, spireAgentConfigMap, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference")
+		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return "", err
+	}
+
+	var existingSpireAgentCM corev1.ConfigMap
+	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentConfigMap.Name, Namespace: spireAgentConfigMap.Namespace}, &existingSpireAgentCM)
+	if err != nil && kerrors.IsNotFound(err) {
+		if err = r.ctrlClient.Create(ctx, spireAgentConfigMap); err != nil {
+			r.log.Error(err, "failed to create spire-agent config map")
+			statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
+		}
+		r.log.Info("Created spire agent ConfigMap")
+	} else if err == nil && (existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
+		!reflect.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels)) {
+		if createOnlyMode {
+			r.log.Info("Skipping ConfigMap update due to create-only mode")
+		} else {
+			spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
+				r.log.Error(err, "failed to update spire-agent config map")
+				statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+			}
+			r.log.Info("Updated ConfigMap with new config")
+		}
+	} else if err != nil {
+		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return "", err
+	}
+
+	statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapResourceCreated",
+		"Spire Agent ConfigMap resources applied",
+		metav1.ConditionTrue)
+
+	return spireAgentConfigHash, nil
+}
+
+// reconcileDaemonSet reconciles the Spire Agent DaemonSet
+func (r *SpireAgentReconciler) reconcileDaemonSet(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool, configHash string) error {
+	spireAgentDaemonset := generateSpireAgentDaemonSet(agent.Spec, configHash)
+	if err := controllerutil.SetControllerReference(agent, spireAgentDaemonset, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference")
+		statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	var existingSpireAgentDaemonSet appsv1.DaemonSet
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentDaemonset.Name, Namespace: spireAgentDaemonset.Namespace}, &existingSpireAgentDaemonSet)
+	if err != nil && kerrors.IsNotFound(err) {
+		if err = r.ctrlClient.Create(ctx, spireAgentDaemonset); err != nil {
+			r.log.Error(err, "failed to create spire-agent daemonset")
+			statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetCreationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return fmt.Errorf("failed to create DaemonSet: %w", err)
+		}
+		r.log.Info("Created spire agent DaemonSet")
+	} else if err == nil && needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
+		if createOnlyMode {
+			r.log.Info("Skipping DaemonSet update due to create-only mode")
+		} else {
+			spireAgentDaemonset.ResourceVersion = existingSpireAgentDaemonSet.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireAgentDaemonset); err != nil {
+				r.log.Error(err, "failed to update spire agent DaemonSet")
+				statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetUpdateFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return fmt.Errorf("failed to update DaemonSet: %w", err)
+			}
+			r.log.Info("Updated spire agent DaemonSet")
+		}
+	} else if err != nil {
+		r.log.Error(err, "failed to get spire-agent daemonset")
+		statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetGetFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Check DaemonSet health/readiness
+	statusMgr.CheckDaemonSetHealth(ctx, spireAgentDaemonset.Name, spireAgentDaemonset.Namespace, DaemonSetAvailable)
+
 	return nil
 }
 
