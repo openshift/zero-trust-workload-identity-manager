@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-agent-allow-egress-to-api-server
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 6443

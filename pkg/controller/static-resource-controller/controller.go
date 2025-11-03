@@ -5,6 +5,7 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
@@ -33,6 +34,7 @@ import (
 )
 
 const (
+	NetworkPolicyResourcesGeneration                  = "NetworkPolicyResourcesGeneration"
 	RBACResourcesGeneration                           = "RBACResourcesGeneration"
 	ServiceResourcesGeneration                        = "ServiceResourcesGeneration"
 	ServiceAccountResourcesGeneration                 = "ServiceAccountResourcesGeneration"
@@ -100,6 +102,7 @@ type reconcilerStatus struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events;secrets,verbs=get;list;watch
@@ -207,6 +210,24 @@ func (r *StaticResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				Message: "Create-only mode is disabled",
 			}
 		}
+	}
+
+	err = r.CreateOrApplyNetworkPolicyResources(ctx, createOnlyMode)
+	if err != nil {
+		r.log.Error(err, "failed to create or apply network-policy resources")
+		r.eventRecorder.Event(&config, corev1.EventTypeWarning, "failed to create network-policy resources",
+			err.Error())
+		reconcileStatus[NetworkPolicyResourcesGeneration] = reconcilerStatus{
+			Status:  metav1.ConditionFalse,
+			Reason:  "NetworkPolicyResourceCreationFailed",
+			Message: err.Error(),
+		}
+		return ctrl.Result{}, err
+	}
+	reconcileStatus[NetworkPolicyResourcesGeneration] = reconcilerStatus{
+		Status:  metav1.ConditionTrue,
+		Reason:  "NetworkPolicyResourceCreated",
+		Message: "All NetworkPolicy resources for operands created",
 	}
 
 	err = r.CreateOrApplyRbacResources(ctx, createOnlyMode)
@@ -318,6 +339,7 @@ func (r *StaticResourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.Role{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&networkingv1.NetworkPolicy{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.ClusterRole{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.ClusterRoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).

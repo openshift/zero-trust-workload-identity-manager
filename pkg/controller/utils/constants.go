@@ -44,6 +44,19 @@ const (
 	// Validating Webhook Configurations
 	SpireControllerManagerValidatingWebhookConfigurationAssetName = "spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml"
 
+	// Network Policy
+	DefaultDenyNetworkPolicyAssetName                                  = "network-policy/default-deny-networkpolicy.yaml"
+	SpireAgentAllowEgressToApiServerNetworkPolicyAssetName             = "network-policy/spire-agent/spire-agent-allow-egress-to-api-server-networkpolicy.yaml"
+	SpireAgentAllowEgressToSpireServerNetworkPolicyAssetName           = "network-policy/spire-agent/spire-agent-allow-egress-to-spire-server-networkpolicy.yaml"
+	SpireAgentAllowIngressToMetricsNetworkPolicyAssetName              = "network-policy/spire-agent/spire-agent-allow-ingress-to-metrics-networkpolicy.yaml"
+	SpireOIDCDiscoveryProviderAllowIngressTo8443NetworkPolicyAssetName = "network-policy/spire-oidc-discovery-provider/spire-oidc-allow-ingress-to-8443-networkpolicy.yaml"
+	SpireServerAllowEgressIngressToFederationNetworkPolicyAssetName    = "network-policy/spire-server/spire-server-allow-egress-ingress-to-federation-networkpolicy.yaml"
+	SpireServerAllowEgressToApiServerNetworkPolicyAssetName            = "network-policy/spire-server/spire-server-allow-egress-to-api-server-networkpolicy.yaml"
+	SpireServerAllowEgressToDNSNetworkPolicyAssetName                  = "network-policy/spire-server/spire-server-allow-egress-to-dns-networkpolicy.yaml"
+	SpireServerAllowIngressTo8081NetworkPolicyAssetName                = "network-policy/spire-server/spire-server-allow-ingress-to-8081-networkpolicy.yaml"
+	SpireServerAllowIngressToMetricsNetworkPolicyAssetName             = "network-policy/spire-server/spire-server-allow-ingress-to-metrics-networkpolicy.yaml"
+	SpireServerAllowIngressToWebhookNetworkPolicyAssetName             = "network-policy/spire-server/spire-server-allow-ingress-to-webhook-networkpolicy.yaml"
+
 	// Image Reference
 	SpireServerImageEnv                = "RELATED_IMAGE_SPIRE_SERVER"
 	SpireAgentImageEnv                 = "RELATED_IMAGE_SPIRE_AGENT"

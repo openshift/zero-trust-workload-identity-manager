@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-ingress-to-8081
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow SPIRE agents to connect
+    - ports:
+        - protocol: TCP
+          port: 8081

@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-oidc-allow-ingress-to-8443
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spiffe-oidc-discovery-provider
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow HTTPS traffic from clients
+    - ports:
+        - protocol: TCP
+          port: 8443

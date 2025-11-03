@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spire-server-allow-ingress-to-metrics
+  namespace: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: openshift-monitoring
+      ports:
+        - protocol: TCP
+          port: 9402  # SPIRE server metrics
+        - protocol: TCP
+          port: 8082  # SPIRE controller manager metrics
