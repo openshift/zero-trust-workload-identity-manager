@@ -29,7 +29,7 @@ func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
 		Spec: routev1.RouteSpec{
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
-				Name: federationServiceName,
+				Name: "spire-server",
 			},
 			Port: &routev1.RoutePort{
 				TargetPort: intstr.FromString("federation"),

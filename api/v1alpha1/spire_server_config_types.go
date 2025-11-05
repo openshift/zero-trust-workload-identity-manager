@@ -241,17 +241,8 @@ type FederationConfig struct {
 }
 
 // BundleEndpointConfig configures how this cluster exposes its federation bundle
+// The federation endpoint is exposed on 0.0.0.0:8443
 type BundleEndpointConfig struct {
-	// Port for the federation bundle endpoint
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=65535
-	// +kubebuilder:default=8443
-	Port int32 `json:"port"`
-
-	// Address to bind the bundle endpoint to
-	// +kubebuilder:default="0.0.0.0"
-	Address string `json:"address"`
-
 	// Profile is the bundle endpoint authentication profile
 	// +kubebuilder:validation:Enum=https_spiffe;https_web
 	// +kubebuilder:default=https_spiffe

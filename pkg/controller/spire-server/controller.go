@@ -34,6 +34,7 @@ import (
 )
 
 const (
+<<<<<<< HEAD
 	// Kubernetes-compliant condition names
 	StatefulSetAvailable             = "StatefulSetAvailable"
 	ServerConfigMapAvailable         = "ServerConfigMapAvailable"
@@ -49,6 +50,16 @@ const (
 	FederationConfigurationValid = "FederationConfigurationValid"
 	FederationServiceReady       = "FederationServiceReady"
 	FederationRouteReady         = "FederationRouteReady"
+=======
+	SpireServerStatefulSetGeneration          = "SpireServerStatefulSetGeneration"
+	SpireServerConfigMapGeneration            = "SpireServerConfigMapGeneration"
+	SpireControllerManagerConfigMapGeneration = "SpireControllerManagerConfigMapGeneration"
+	SpireBundleConfigMapGeneration            = "SpireBundleConfigMapGeneration"
+	SpireServerTTLValidation                  = "SpireServerTTLValidation"
+	ConfigurationValidation                   = "ConfigurationValidation"
+	FederationConfigurationValid              = "FederationConfigurationValid"
+	FederationRouteReady                      = "FederationRouteReady"
+>>>>>>> 03323e74 (directly expose port 8443 in spire service)
 )
 
 // SpireServerReconciler reconciles a SpireServer object
@@ -63,6 +74,7 @@ type SpireServerReconciler struct {
 
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+<<<<<<< HEAD
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
@@ -70,6 +82,8 @@ type SpireServerReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
+=======
+>>>>>>> 03323e74 (directly expose port 8443 in spire service)
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 
 // New returns a new Reconciler instance.
@@ -170,11 +184,6 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Reconcile StatefulSet
 	if err := r.reconcileStatefulSet(ctx, &server, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Manage federation Service
-	if err := r.ensureFederationService(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 

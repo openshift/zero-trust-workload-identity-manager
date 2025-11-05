@@ -67,11 +67,6 @@ func validateBundleEndpoint(bundleEndpoint *v1alpha1.BundleEndpointConfig) error
 		}
 	}
 
-	// Validate port range
-	if bundleEndpoint.Port < 1 || bundleEndpoint.Port > 65535 {
-		return fmt.Errorf("port must be between 1 and 65535, got %d", bundleEndpoint.Port)
-	}
-
 	// Validate refresh hint
 	if bundleEndpoint.RefreshHint > 0 && (bundleEndpoint.RefreshHint < 60 || bundleEndpoint.RefreshHint > 3600) {
 		return fmt.Errorf("refreshHint must be between 60 and 3600 seconds, got %d", bundleEndpoint.RefreshHint)

@@ -131,6 +131,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
 								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
@@ -217,29 +218,18 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	return sts
 }
 
-// addFederationToStatefulSet adds federation port and volume mounts to the StatefulSet
+// addFederationToStatefulSet adds federation volume mounts to the StatefulSet when using ServingCert
 func addFederationToStatefulSet(sts *appsv1.StatefulSet, federation *v1alpha1.FederationConfig) {
-	// Find the spire-server container (should be first container)
-	spireServerContainerIndex := 0
-	for i, container := range sts.Spec.Template.Spec.Containers {
-		if container.Name == "spire-server" {
-			spireServerContainerIndex = i
-			break
-		}
-	}
-
-	// Add federation port to spire-server container
-	sts.Spec.Template.Spec.Containers[spireServerContainerIndex].Ports = append(
-		sts.Spec.Template.Spec.Containers[spireServerContainerIndex].Ports,
-		corev1.ContainerPort{
-			Name:          "federation",
-			ContainerPort: federation.BundleEndpoint.Port,
-			Protocol:      corev1.ProtocolTCP,
-		},
-	)
-
 	// If using ServingCert, mount the Secret as volume
 	if federation.BundleEndpoint.HttpsWeb != nil && federation.BundleEndpoint.HttpsWeb.ServingCert != nil {
+		// Find the spire-server container (should be first container)
+		spireServerContainerIndex := 0
+		for i, container := range sts.Spec.Template.Spec.Containers {
+			if container.Name == "spire-server" {
+				spireServerContainerIndex = i
+				break
+			}
+		}
 		// Add volume mount to spire-server container
 		sts.Spec.Template.Spec.Containers[spireServerContainerIndex].VolumeMounts = append(
 			sts.Spec.Template.Spec.Containers[spireServerContainerIndex].VolumeMounts,
