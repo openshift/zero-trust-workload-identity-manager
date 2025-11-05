@@ -1160,7 +1160,9 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               operands:
-                description: operands holds the status of each managed operand CR
+                description: |-
+                  operands holds the status of each managed operand CR
+                  Keyed by operand kind since all operands are named "cluster"
                 items:
                   description: OperandStatus represents the status of a managed operand
                     CR
@@ -1224,9 +1226,6 @@ spec:
                         - type
                         type: object
                       type: array
-                      x-kubernetes-list-map-keys:
-                      - type
-                      x-kubernetes-list-type: map
                     kind:
                       description: kind is the kind of the operand CR (e.g., "SpireServer",
                         "SpireAgent")
@@ -1236,8 +1235,7 @@ spec:
                         operand status
                       type: string
                     name:
-                      description: name is the name of the operand (e.g., "spire-server",
-                        "spire-agent")
+                      description: name is the name of the operand (e.g., "cluster")
                       type: string
                     ready:
                       description: ready indicates if the operand is ready
@@ -1248,9 +1246,6 @@ spec:
                   - ready
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - name
-                x-kubernetes-list-type: map
             type: object
         type: object
         x-kubernetes-validations:

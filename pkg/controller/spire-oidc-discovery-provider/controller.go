@@ -76,7 +76,7 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 }
 
 func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("Reconciling SpireOIDCDiscoveryProvider controller")
+	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName)
 
 	var oidcDiscoveryProviderConfig v1alpha1.SpireOIDCDiscoveryProvider
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &oidcDiscoveryProviderConfig); err != nil {
@@ -86,6 +86,11 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 		return ctrl.Result{}, err
 	}
+
+	// Set Ready to false at the start of reconciliation
+	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &oidcDiscoveryProviderConfig, func() *v1alpha1.ConditionalStatus {
+		return &oidcDiscoveryProviderConfig.Status.ConditionalStatus
+	}, "SpireOIDCDiscoveryProvider")
 
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {

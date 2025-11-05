@@ -72,6 +72,7 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 }
 
 func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName)
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &spiffeCSIDriver); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -80,6 +81,11 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		return ctrl.Result{}, err
 	}
+
+	// Set Ready to false at the start of reconciliation
+	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &spiffeCSIDriver, func() *v1alpha1.ConditionalStatus {
+		return &spiffeCSIDriver.Status.ConditionalStatus
+	}, "SpiffeCSIDriver")
 
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {

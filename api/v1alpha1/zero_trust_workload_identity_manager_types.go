@@ -51,11 +51,8 @@ type ZeroTrustWorkloadIdentityManagerStatus struct {
 	ConditionalStatus `json:",inline,omitempty"`
 
 	// operands holds the status of each managed operand CR
+	// Keyed by operand kind since all operands are named "cluster"
 	// +optional
-	// +patchMergeKey=kind
-	// +patchStrategy=merge
-	// +listType=map
-	// +listMapKey=kind
 	Operands []OperandStatus `json:"operands,omitempty"`
 }
 
@@ -74,16 +71,8 @@ type OperandStatus struct {
 	// +optional
 	Message string `json:"message,omitempty"`
 
-	// lastTransitionTime is the last time the ready status changed
-	// +optional
-	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
-
 	// conditions from the operand CR (key conditions only)
 	// +optional
-	// +patchMergeKey=type
-	// +patchStrategy=merge
-	// +listType=map
-	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

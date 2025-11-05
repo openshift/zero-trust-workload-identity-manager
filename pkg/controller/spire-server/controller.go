@@ -35,16 +35,17 @@ import (
 )
 
 const (
-	StatefulSetAvailable             = "SpireServerStatefulSetReady"
-	ConfigMapAvailable               = "SpireServerConfigMapGeneration"
-	ControllerManagerConfigAvailable = "SpireControllerManagerConfigMapGeneration"
-	BundleConfigAvailable            = "SpireBundleConfigMapGeneration"
-	TTLConfigurationValid            = "SpireServerTTLValidation"
-	ConfigurationValid               = "ConfigurationValidation"
-	ServiceAccountAvailable          = "ServiceAccountResourcesReady"
-	ServiceAvailable                 = "ServiceResourcesReady"
-	RBACAvailable                    = "RBACResourcesReady"
-	ValidatingWebhookAvailable       = "ValidatingWebhookConfigurationResourcesReady"
+	// Kubernetes-compliant condition names
+	StatefulSetAvailable             = "StatefulSetAvailable"
+	ServerConfigMapAvailable         = "ServerConfigMapAvailable"
+	ControllerManagerConfigAvailable = "ControllerManagerConfigAvailable"
+	BundleConfigAvailable            = "BundleConfigAvailable"
+	TTLConfigurationValid            = "TTLConfigurationValid"
+	ConfigurationValid               = "ConfigurationValid"
+	ServiceAccountAvailable          = "ServiceAccountAvailable"
+	ServiceAvailable                 = "ServiceAvailable"
+	RBACAvailable                    = "RBACAvailable"
+	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
@@ -84,6 +85,7 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 }
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName)
 	var server v1alpha1.SpireServer
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &server); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -92,6 +94,11 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		return ctrl.Result{}, err
 	}
+
+	// Set Ready to false at the start of reconciliation
+	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &server, func() *v1alpha1.ConditionalStatus {
+		return &server.Status.ConditionalStatus
+	}, "SpireServer")
 
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
@@ -115,36 +122,25 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	// Reconcile static resources (RBAC, ServiceAccount, Service)
+	// Reconcile ServiceAccount
 	if err := r.reconcileServiceAccount(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
+	// Reconcile Services (spire-server and controller-manager)
 	if err := r.reconcileService(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
+	// Reconcile RBAC (spire-server, bundle, and controller-manager)
 	if err := r.reconcileRBAC(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileSpireBundleRBAC(ctx, &server, statusMgr, createOnlyMode); err != nil {
+	// Reconcile Webhook
+	if err := r.reconcileWebhook(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	if err := r.reconcileSpireControllerManagerStaticResources(ctx, &server, statusMgr, createOnlyMode); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Set success status after all RBAC resources are created
-	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
-		"All RBAC resources available",
-		metav1.ConditionTrue)
-
-	// Set success status after all Services are created
-	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
-		"All Service resources available",
-		metav1.ConditionTrue)
 
 	// Reconcile ConfigMaps
 	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, createOnlyMode)
@@ -250,7 +246,7 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)
 	if err != nil {
 		r.log.Error(err, "failed to generate spire server config map")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
+		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
 			err.Error(),
 			metav1.ConditionFalse)
 		return "", err
@@ -258,7 +254,7 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 
 	if err = controllerutil.SetControllerReference(server, spireServerConfigMap, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
+		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
 			err.Error(),
 			metav1.ConditionFalse)
 		return "", err
@@ -268,7 +264,7 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireServerConfigMap.Name, Namespace: spireServerConfigMap.Namespace}, &existingSpireServerCM)
 	if err != nil && kerrors.IsNotFound(err) {
 		if err = r.ctrlClient.Create(ctx, spireServerConfigMap); err != nil {
-			statusMgr.AddCondition(ConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
+			statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
 				err.Error(),
 				metav1.ConditionFalse)
 			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
@@ -281,7 +277,7 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 		} else {
 			spireServerConfigMap.ResourceVersion = existingSpireServerCM.ResourceVersion
 			if err = r.ctrlClient.Update(ctx, spireServerConfigMap); err != nil {
-				statusMgr.AddCondition(ConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
+				statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
 					err.Error(),
 					metav1.ConditionFalse)
 				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
@@ -289,13 +285,13 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 			r.log.Info("Updated ConfigMap with new config")
 		}
 	} else if err != nil {
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
+		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
 			err.Error(),
 			metav1.ConditionFalse)
 		return "", err
 	}
 
-	statusMgr.AddCondition(ConfigMapAvailable, "SpireConfigMapResourceCreated",
+	statusMgr.AddCondition(ServerConfigMapAvailable, "SpireConfigMapResourceCreated",
 		"SpireServer config map resources applied",
 		metav1.ConditionTrue)
 

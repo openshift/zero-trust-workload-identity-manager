@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -16,81 +18,567 @@ import (
 
 // Constants for status conditions are defined in controller.go
 
-// reconcileRBAC reconciles all Spire Server RBAC resources
+// reconcileRBAC reconciles all RBAC resources (spire-server, bundle, and controller-manager)
 func (r *SpireServerReconciler) reconcileRBAC(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	// ClusterRole
-	cr := getSpireServerClusterRole()
-	if err := controllerutil.SetControllerReference(server, cr, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on cluster role")
-		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to set owner reference on ClusterRole: %v", err),
-			metav1.ConditionFalse)
-		return err
-	}
-	if err := r.createOrUpdateResource(ctx, cr, createOnlyMode); err != nil {
-		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to create ClusterRole: %v", err),
-			metav1.ConditionFalse)
+	// Spire Server RBAC
+	if err := r.reconcileClusterRole(ctx, server, statusMgr, createOnlyMode); err != nil {
 		return err
 	}
 
-	// ClusterRoleBinding
-	crb := getSpireServerClusterRoleBinding()
-	if err := controllerutil.SetControllerReference(server, crb, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on cluster role binding")
-		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to set owner reference on ClusterRoleBinding: %v", err),
-			metav1.ConditionFalse)
+	if err := r.reconcileClusterRoleBinding(ctx, server, statusMgr, createOnlyMode); err != nil {
 		return err
 	}
-	if err := r.createOrUpdateResource(ctx, crb, createOnlyMode); err != nil {
-		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to create ClusterRoleBinding: %v", err),
-			metav1.ConditionFalse)
+
+	// Spire Bundle RBAC
+	if err := r.reconcileSpireBundleRole(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
+	if err := r.reconcileSpireBundleRoleBinding(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
+	// Controller Manager RBAC
+	if err := r.reconcileControllerManagerClusterRole(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
+	if err := r.reconcileControllerManagerClusterRoleBinding(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
+	if err := r.reconcileLeaderElectionRole(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
+	if err := r.reconcileLeaderElectionRoleBinding(ctx, server, statusMgr, createOnlyMode); err != nil {
 		return err
 	}
 
 	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
 		"All RBAC resources available",
 		metav1.ConditionTrue)
+
 	return nil
 }
 
-// reconcileSpireBundleRBAC reconciles Spire Bundle RBAC resources
-func (r *SpireServerReconciler) reconcileSpireBundleRBAC(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	// Role
-	role := getSpireBundleRole()
-	if err := controllerutil.SetControllerReference(server, role, r.scheme); err != nil {
+// reconcileClusterRole reconciles the Spire Server ClusterRole
+func (r *SpireServerReconciler) reconcileClusterRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireServerClusterRole()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on cluster role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on ClusterRole: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.ClusterRole{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get cluster role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get ClusterRole: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create cluster role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create ClusterRole: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created ClusterRole", "name", desired.Name)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("ClusterRole exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("ClusterRole is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update cluster role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update ClusterRole: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated ClusterRole", "name", desired.Name)
+	return nil
+}
+
+// reconcileClusterRoleBinding reconciles the Spire Server ClusterRoleBinding
+func (r *SpireServerReconciler) reconcileClusterRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireServerClusterRoleBinding()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on cluster role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on ClusterRoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.ClusterRoleBinding{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get cluster role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get ClusterRoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create cluster role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create ClusterRoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created ClusterRoleBinding", "name", desired.Name)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("ClusterRoleBinding exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("ClusterRoleBinding is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update cluster role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update ClusterRoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated ClusterRoleBinding", "name", desired.Name)
+	return nil
+}
+
+// reconcileSpireBundleRole reconciles the Spire Bundle Role
+func (r *SpireServerReconciler) reconcileSpireBundleRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireBundleRole()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on spire-bundle role")
 		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to set owner reference on Bundle Role: %v", err),
 			metav1.ConditionFalse)
 		return err
 	}
-	if err := r.createOrUpdateResource(ctx, role, createOnlyMode); err != nil {
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.Role{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get spire-bundle role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Bundle Role: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create spire-bundle role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Bundle Role: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created Role", "name", desired.Name, "namespace", desired.Namespace)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("Role exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("Role is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update spire-bundle role")
 		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to create Bundle Role: %v", err),
+			fmt.Sprintf("Failed to update Bundle Role: %v", err),
 			metav1.ConditionFalse)
 		return err
 	}
 
-	// RoleBinding
-	roleBinding := getSpireBundleRoleBinding()
-	if err := controllerutil.SetControllerReference(server, roleBinding, r.scheme); err != nil {
+	r.log.Info("Updated Role", "name", desired.Name, "namespace", desired.Namespace)
+	return nil
+}
+
+// reconcileSpireBundleRoleBinding reconciles the Spire Bundle RoleBinding
+func (r *SpireServerReconciler) reconcileSpireBundleRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireBundleRoleBinding()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on spire-bundle role binding")
 		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to set owner reference on Bundle RoleBinding: %v", err),
 			metav1.ConditionFalse)
 		return err
 	}
-	if err := r.createOrUpdateResource(ctx, roleBinding, createOnlyMode); err != nil {
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.RoleBinding{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get spire-bundle role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Bundle RoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create spire-bundle role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Bundle RoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("RoleBinding exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("RoleBinding is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update spire-bundle role binding")
 		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to create Bundle RoleBinding: %v", err),
+			fmt.Sprintf("Failed to update Bundle RoleBinding: %v", err),
 			metav1.ConditionFalse)
 		return err
 	}
 
-	// Success is set after all RBAC resources (including bundle) are created
+	r.log.Info("Updated RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
+	return nil
+}
+
+// reconcileControllerManagerClusterRole reconciles the Controller Manager ClusterRole
+func (r *SpireServerReconciler) reconcileControllerManagerClusterRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireControllerManagerClusterRole()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on controller manager cluster role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on Controller Manager ClusterRole: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.ClusterRole{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get controller manager cluster role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Controller Manager ClusterRole: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create controller manager cluster role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Controller Manager ClusterRole: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created ClusterRole", "name", desired.Name)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("ClusterRole exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("ClusterRole is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update controller manager cluster role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update Controller Manager ClusterRole: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated ClusterRole", "name", desired.Name)
+	return nil
+}
+
+// reconcileControllerManagerClusterRoleBinding reconciles the Controller Manager ClusterRoleBinding
+func (r *SpireServerReconciler) reconcileControllerManagerClusterRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireControllerManagerClusterRoleBinding()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on controller manager cluster role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on Controller Manager ClusterRoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.ClusterRoleBinding{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get controller manager cluster role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Controller Manager ClusterRoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create controller manager cluster role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Controller Manager ClusterRoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created ClusterRoleBinding", "name", desired.Name)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("ClusterRoleBinding exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("ClusterRoleBinding is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update controller manager cluster role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update Controller Manager ClusterRoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated ClusterRoleBinding", "name", desired.Name)
+	return nil
+}
+
+// reconcileLeaderElectionRole reconciles the Leader Election Role
+func (r *SpireServerReconciler) reconcileLeaderElectionRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireControllerManagerLeaderElectionRole()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on leader election role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on Leader Election Role: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.Role{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get leader election role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Leader Election Role: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create leader election role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Leader Election Role: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created Role", "name", desired.Name, "namespace", desired.Namespace)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("Role exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("Role is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update leader election role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update Leader Election Role: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated Role", "name", desired.Name, "namespace", desired.Namespace)
+	return nil
+}
+
+// reconcileLeaderElectionRoleBinding reconciles the Leader Election RoleBinding
+func (r *SpireServerReconciler) reconcileLeaderElectionRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireControllerManagerLeaderElectionRoleBinding()
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on leader election role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on Leader Election RoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.RoleBinding{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get leader election role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Leader Election RoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create leader election role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Leader Election RoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("RoleBinding exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("RoleBinding is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update leader election role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update Leader Election RoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
 	return nil
 }
 
@@ -117,5 +605,29 @@ func getSpireBundleRole() *rbacv1.Role {
 func getSpireBundleRoleBinding() *rbacv1.RoleBinding {
 	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireBundleRoleBindingAssetName))
 	rb.Labels = utils.SpireServerLabels(rb.Labels)
+	return rb
+}
+
+func getSpireControllerManagerClusterRole() *rbacv1.ClusterRole {
+	cr := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleAssetName))
+	cr.Labels = utils.SpireControllerManagerLabels(cr.Labels)
+	return cr
+}
+
+func getSpireControllerManagerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleBindingAssetName))
+	crb.Labels = utils.SpireControllerManagerLabels(crb.Labels)
+	return crb
+}
+
+func getSpireControllerManagerLeaderElectionRole() *rbacv1.Role {
+	role := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleAssetName))
+	role.Labels = utils.SpireControllerManagerLabels(role.Labels)
+	return role
+}
+
+func getSpireControllerManagerLeaderElectionRoleBinding() *rbacv1.RoleBinding {
+	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleBindingAssetName))
+	rb.Labels = utils.SpireControllerManagerLabels(rb.Labels)
 	return rb
 }

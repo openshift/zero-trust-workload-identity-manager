@@ -78,6 +78,7 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 }
 
 func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName)
 	var agent v1alpha1.SpireAgent
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &agent); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -86,6 +87,11 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		return ctrl.Result{}, err
 	}
+
+	// Set Ready to false at the start of reconciliation
+	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &agent, func() *v1alpha1.ConditionalStatus {
+		return &agent.Status.ConditionalStatus
+	}, "SpireAgent")
 
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {

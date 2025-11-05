@@ -31,9 +31,6 @@ import (
 const (
 	// Condition types for ZTWIM
 	OperandsAvailable = "OperandsAvailable"
-
-	// Degradation threshold - how long to wait before marking as Degraded
-	DegradationThreshold = 1 * 20 // 5 minutes in seconds
 )
 
 // ZeroTrustWorkloadIdentityManagerReconciler manages the ZeroTrustWorkloadIdentityManager singleton instance
@@ -115,6 +112,7 @@ func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) 
 // Reconcile ensures the ZeroTrustWorkloadIdentityManager 'cluster' instance exists
 // and aggregates status from all managed operand CRs
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerControllerName)
 	var config v1alpha1.ZeroTrustWorkloadIdentityManager
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)
 	if err != nil {
@@ -127,6 +125,11 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 		return ctrl.Result{}, err
 	}
+
+	// Set Ready to false at the start of reconciliation
+	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &config, func() *v1alpha1.ConditionalStatus {
+		return &config.Status.ConditionalStatus
+	}, "ZeroTrustWorkloadIdentityManager")
 
 	statusMgr := status.NewManager(r.ctrlClient)
 
@@ -142,39 +145,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 	}()
 
-	// Aggregate status from all operand CRs with previous status for timing
-	oldOperands := config.Status.Operands
-	operandStatuses, allReady, notCreatedCount, failedCount := r.aggregateOperandStatus(ctx, oldOperands)
+	// Aggregate status from all operand CRs
+	operandStatuses, allReady, notCreatedCount, failedCount := r.aggregateOperandStatus(ctx)
 	config.Status.Operands = operandStatuses
-
-	// Check for degradation (operands unhealthy > 5 minutes)
-	var degradedOperands []string
-	for _, operand := range operandStatuses {
-		if !operand.Ready && operand.Message != "CR not found" && operand.Message != "Waiting for initial reconciliation" && operand.Message != "Reconciling" {
-			// Check if operand has been unhealthy for > 5 minutes
-			if operand.LastTransitionTime != nil {
-				unhealthyDuration := metav1.Now().Time.Sub(operand.LastTransitionTime.Time).Seconds()
-				if unhealthyDuration > DegradationThreshold {
-					degradedOperands = append(degradedOperands, fmt.Sprintf("%s(%s)", operand.Kind, operand.Message))
-				}
-			}
-		}
-	}
-
-	// Set Degraded condition if any operand has been unhealthy > 5 minutes
-	if len(degradedOperands) > 0 {
-		statusMgr.AddCondition(v1alpha1.Degraded, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Operands unhealthy for >5 minutes: %v", degradedOperands),
-			metav1.ConditionTrue)
-	} else {
-		// Clear Degraded condition if it was previously set
-		existingDegraded := apimeta.FindStatusCondition(config.Status.Conditions, v1alpha1.Degraded)
-		if existingDegraded != nil && existingDegraded.Status == metav1.ConditionTrue {
-			statusMgr.AddCondition(v1alpha1.Degraded, v1alpha1.ReasonReady,
-				"All operands recovered",
-				metav1.ConditionFalse)
-		}
-	}
 
 	// Set operands availability condition and manually control Ready condition
 	if allReady {
@@ -230,19 +203,14 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 	}
 
-	r.log.Info("Aggregated operand status", "allReady", allReady, "notCreated", notCreatedCount, "failed", failedCount, "degraded", len(degradedOperands))
+	r.log.Info("Aggregated operand status", "allReady", allReady, "notCreated", notCreatedCount, "failed", failedCount)
 
 	return ctrl.Result{}, nil
 }
 
 // aggregateOperandStatus collects status from all managed operand CRs
 // Returns: operandStatuses, allReady, notCreatedCount, failedCount
-func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx context.Context, previousOperands []v1alpha1.OperandStatus) ([]v1alpha1.OperandStatus, bool, int, int) {
-	// Create a map of previous operands for timing tracking
-	previousMap := make(map[string]v1alpha1.OperandStatus)
-	for _, prev := range previousOperands {
-		previousMap[prev.Kind] = prev
-	}
+func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx context.Context) ([]v1alpha1.OperandStatus, bool, int, int) {
 	operandStatuses := []v1alpha1.OperandStatus{}
 	allReady := true
 	notCreatedCount := 0
@@ -250,21 +218,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpireServer
 	spireServerStatus := r.getSpireServerStatus(ctx)
-	// Track when ready status changed for degradation detection
-	if prev, exists := previousMap["SpireServer"]; exists {
-		if prev.Ready != spireServerStatus.Ready {
-			// Ready status changed, update timestamp
-			now := metav1.Now()
-			spireServerStatus.LastTransitionTime = &now
-		} else {
-			// Ready status same, keep previous timestamp
-			spireServerStatus.LastTransitionTime = prev.LastTransitionTime
-		}
-	} else if !spireServerStatus.Ready {
-		// New operand, set initial timestamp
-		now := metav1.Now()
-		spireServerStatus.LastTransitionTime = &now
-	}
 
 	operandStatuses = append(operandStatuses, spireServerStatus)
 	if !spireServerStatus.Ready {
@@ -280,17 +233,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpireAgent
 	spireAgentStatus := r.getSpireAgentStatus(ctx)
-	if prev, exists := previousMap["SpireAgent"]; exists {
-		if prev.Ready != spireAgentStatus.Ready {
-			now := metav1.Now()
-			spireAgentStatus.LastTransitionTime = &now
-		} else {
-			spireAgentStatus.LastTransitionTime = prev.LastTransitionTime
-		}
-	} else if !spireAgentStatus.Ready {
-		now := metav1.Now()
-		spireAgentStatus.LastTransitionTime = &now
-	}
 
 	operandStatuses = append(operandStatuses, spireAgentStatus)
 	if !spireAgentStatus.Ready {
@@ -306,17 +248,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpiffeCSIDriver
 	spiffeCSIStatus := r.getSpiffeCSIDriverStatus(ctx)
-	if prev, exists := previousMap["SpiffeCSIDriver"]; exists {
-		if prev.Ready != spiffeCSIStatus.Ready {
-			now := metav1.Now()
-			spiffeCSIStatus.LastTransitionTime = &now
-		} else {
-			spiffeCSIStatus.LastTransitionTime = prev.LastTransitionTime
-		}
-	} else if !spiffeCSIStatus.Ready {
-		now := metav1.Now()
-		spiffeCSIStatus.LastTransitionTime = &now
-	}
 
 	operandStatuses = append(operandStatuses, spiffeCSIStatus)
 	if !spiffeCSIStatus.Ready {
@@ -332,17 +263,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpireOIDCDiscoveryProvider
 	oidcStatus := r.getSpireOIDCDiscoveryProviderStatus(ctx)
-	if prev, exists := previousMap["SpireOIDCDiscoveryProvider"]; exists {
-		if prev.Ready != oidcStatus.Ready {
-			now := metav1.Now()
-			oidcStatus.LastTransitionTime = &now
-		} else {
-			oidcStatus.LastTransitionTime = prev.LastTransitionTime
-		}
-	} else if !oidcStatus.Ready {
-		now := metav1.Now()
-		oidcStatus.LastTransitionTime = &now
-	}
 
 	operandStatuses = append(operandStatuses, oidcStatus)
 	if !oidcStatus.Ready {
@@ -591,6 +511,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) recreateClusterInstance(ctx
 }
 
 // operandStatusChangedPredicate only triggers reconciliation when operand status changes
+// This prevents unnecessary reconciliations when only spec changes
 var operandStatusChangedPredicate = predicate.Funcs{
 	CreateFunc: func(e event.CreateEvent) bool {
 		// Always reconcile on create
@@ -634,9 +555,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.M
 	}
 
 	// Watch ZTWIM CR and all operand CRs to aggregate their status
-	// Only reconcile when operand status actually changes (not on every spec update)
+	// Reconcile on operand creation and status changes
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.ZeroTrustWorkloadIdentityManager{}).
+		For(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerControllerName).
 		Watches(&v1alpha1.SpireServer{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
 		Watches(&v1alpha1.SpireAgent{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).

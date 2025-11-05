@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -18,9 +20,9 @@ import (
 
 // reconcileService reconciles the Spire OIDC Discovery Provider Service
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileService(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
-	svc := getSpireOIDCDiscoveryProviderService()
+	desired := getSpireOIDCDiscoveryProviderService()
 
-	if err := controllerutil.SetControllerReference(oidc, svc, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(oidc, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service")
 		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to set owner reference on Service: %v", err),
@@ -28,13 +30,68 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileService(ctx context.Cont
 		return err
 	}
 
-	if err := r.createOrUpdateResource(ctx, svc, createOnlyMode); err != nil {
+	// Get existing resource (from cache)
+	existing := &corev1.Service{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get service")
+			statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get Service: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create service")
+			statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create Service: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created Service", "name", desired.Name, "namespace", desired.Namespace)
+		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
+			"All Service resources available",
+			metav1.ConditionTrue)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("Service exists, skipping update due to create-only mode", "name", desired.Name)
+		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
+			"All Service resources available",
+			metav1.ConditionTrue)
+		return nil
+	}
+
+	// Preserve immutable and Kubernetes-managed fields BEFORE comparison
+	utils.PreserveServiceImmutableFields(existing, desired)
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("Service is up to date", "name", desired.Name)
+		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
+			"All Service resources available",
+			metav1.ConditionTrue)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update service")
 		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to create Service: %v", err),
+			fmt.Sprintf("Failed to update Service: %v", err),
 			metav1.ConditionFalse)
 		return err
 	}
 
+	r.log.Info("Updated Service", "name", desired.Name, "namespace", desired.Namespace)
 	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
 		"All Service resources available",
 		metav1.ConditionTrue)

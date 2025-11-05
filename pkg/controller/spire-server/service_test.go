@@ -48,3 +48,20 @@ func TestGetSpireServerService(t *testing.T) {
 		t.Errorf("Expected selector app.kubernetes.io/instance=%s", utils.StandardInstance)
 	}
 }
+
+func TestGetSpireControllerManagerWebhookService(t *testing.T) {
+	svc := getSpireControllerManagerWebhookService()
+
+	if svc == nil {
+		t.Fatal("Expected Service, got nil")
+	}
+
+	if svc.Name != "spire-controller-manager-webhook" {
+		t.Errorf("Expected Service name 'spire-controller-manager-webhook', got '%s'", svc.Name)
+	}
+
+	// Check selectors
+	if val, ok := svc.Spec.Selector["app.kubernetes.io/name"]; !ok || val != "spire-controller-manager" {
+		t.Error("Expected selector app.kubernetes.io/name=spire-controller-manager")
+	}
+}

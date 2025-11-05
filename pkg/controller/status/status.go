@@ -36,6 +36,20 @@ func NewManager(customClient customClient.CustomCtrlClient) *Manager {
 	}
 }
 
+// SetInitialReconciliationStatus sets the Ready condition to false at the start of reconciliation.
+// This ensures that during operator upgrades, the status correctly reflects that reconciliation
+// is in progress. The status is applied immediately before any reconciliation logic runs.
+func SetInitialReconciliationStatus(ctx context.Context, customClient customClient.CustomCtrlClient, obj client.Object, getStatus func() *v1alpha1.ConditionalStatus, resourceName string) {
+	initialStatusMgr := NewManager(customClient)
+	initialStatusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonInProgress,
+		fmt.Sprintf("Reconciling %s", resourceName),
+		metav1.ConditionFalse)
+	if err := initialStatusMgr.ApplyStatus(ctx, obj, getStatus); err != nil {
+		// Log error but don't fail reconciliation - status update is best-effort
+		// The reconciliation loop will continue and update status at the end
+	}
+}
+
 // AddCondition adds or updates a condition
 func (m *Manager) AddCondition(conditionType, reason, message string, status metav1.ConditionStatus) {
 	m.conditions[conditionType] = Condition{
