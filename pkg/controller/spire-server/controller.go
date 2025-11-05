@@ -45,6 +45,10 @@ const (
 	ServiceAvailable                 = "ServiceAvailable"
 	RBACAvailable                    = "RBACAvailable"
 	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
+	// Federation-specific condition names
+	FederationConfigurationValid = "FederationConfigurationValid"
+	FederationServiceReady       = "FederationServiceReady"
+	FederationRouteReady         = "FederationRouteReady"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
@@ -66,6 +70,7 @@ type SpireServerReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
@@ -121,6 +126,11 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
+	// Validate federation configuration if present
+	if err := r.validateFederationConfiguration(&server, statusMgr); err != nil {
+		return ctrl.Result{}, nil
+	}
+
 	// Reconcile ServiceAccount
 	if err := r.reconcileServiceAccount(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
@@ -160,6 +170,16 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Reconcile StatefulSet
 	if err := r.reconcileStatefulSet(ctx, &server, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Manage federation Service
+	if err := r.ensureFederationService(ctx, &server, statusMgr, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Manage federation Route
+	if err := r.managedFederationRoute(ctx, statusMgr, &server); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -236,6 +256,27 @@ func (r *SpireServerReconciler) validateConfiguration(server *v1alpha1.SpireServ
 		statusMgr.AddCondition(ConfigurationValid, v1alpha1.ReasonReady,
 			"Configuration validation passed",
 			metav1.ConditionTrue)
+	}
+	return nil
+}
+
+// validateFederationConfiguration validates the federation configuration if present
+func (r *SpireServerReconciler) validateFederationConfiguration(server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+	if server.Spec.Federation != nil {
+		if err := validateFederationConfig(server.Spec.Federation, server.Spec.TrustDomain); err != nil {
+			r.log.Error(err, "Invalid federation configuration", "trustDomain", server.Spec.TrustDomain)
+			statusMgr.AddCondition(FederationConfigurationValid, "InvalidFederationConfiguration",
+				fmt.Sprintf("Federation configuration validation failed: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+		// Only set to true if the condition previously existed as false
+		existingFedCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, FederationConfigurationValid)
+		if existingFedCondition == nil || existingFedCondition.Status == metav1.ConditionFalse {
+			statusMgr.AddCondition(FederationConfigurationValid, "ValidFederationConfiguration",
+				"Federation configuration validation passed",
+				metav1.ConditionTrue)
+		}
 	}
 	return nil
 }

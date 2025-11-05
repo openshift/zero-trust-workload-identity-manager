@@ -109,6 +109,10 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Optional
 	Datastore *DataStore `json:"datastore,omitempty"`
 
+	// Federation configures SPIRE federation endpoints and relationships
+	// +kubebuilder:validation:Optional
+	Federation *FederationConfig `json:"federation,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 
@@ -214,6 +218,138 @@ type CASubject struct {
 	// commonName specifies the common name for the CA.
 	// +kubebuilder:validation:Optional
 	CommonName string `json:"commonName,omitempty"`
+}
+
+// FederationConfig defines federation bundle endpoint and federated trust domains
+type FederationConfig struct {
+	// BundleEndpoint configures this cluster's federation bundle endpoint
+	// +kubebuilder:validation:Required
+	BundleEndpoint BundleEndpointConfig `json:"bundleEndpoint"`
+
+	// FederatesWith lists trust domains this cluster federates with
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=50
+	FederatesWith []FederatesWithConfig `json:"federatesWith,omitempty"`
+
+	// ManagedRoute enables or disables automatic Route creation for federation endpoint
+	// "true": Allows automatic exposure through a managed OpenShift Route
+	// "false": Allows administrators to manually configure Routes
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedRoute string `json:"managedRoute,omitempty"`
+}
+
+// BundleEndpointConfig configures how this cluster exposes its federation bundle
+type BundleEndpointConfig struct {
+	// Port for the federation bundle endpoint
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +kubebuilder:default=8443
+	Port int32 `json:"port"`
+
+	// Address to bind the bundle endpoint to
+	// +kubebuilder:default="0.0.0.0"
+	Address string `json:"address"`
+
+	// Profile is the bundle endpoint authentication profile
+	// +kubebuilder:validation:Enum=https_spiffe;https_web
+	// +kubebuilder:default=https_spiffe
+	Profile BundleEndpointProfile `json:"profile"`
+
+	// RefreshHint is the hint for bundle refresh interval in seconds
+	// +kubebuilder:validation:Minimum=60
+	// +kubebuilder:validation:Maximum=3600
+	// +kubebuilder:default=300
+	RefreshHint int32 `json:"refreshHint,omitempty"`
+
+	// HttpsWeb configures the https_web profile (required if profile is https_web)
+	// +kubebuilder:validation:Optional
+	HttpsWeb *HttpsWebConfig `json:"httpsWeb,omitempty"`
+}
+
+// BundleEndpointProfile represents the authentication profile for bundle endpoint
+// +kubebuilder:validation:Enum=https_spiffe;https_web
+type BundleEndpointProfile string
+
+const (
+	// HttpsSpiffeProfile uses SPIFFE authentication (default, recommended)
+	HttpsSpiffeProfile BundleEndpointProfile = "https_spiffe"
+
+	// HttpsWebProfile uses Web PKI (X.509 certificates from public CA)
+	HttpsWebProfile BundleEndpointProfile = "https_web"
+)
+
+// HttpsWebConfig configures https_web profile authentication
+type HttpsWebConfig struct {
+	// Acme configures automatic certificate management using ACME protocol
+	// Mutually exclusive with ServingCert
+	// +kubebuilder:validation:Optional
+	Acme *AcmeConfig `json:"acme,omitempty"`
+
+	// ServingCert configures certificate from a Kubernetes Secret
+	// Mutually exclusive with Acme
+	// +kubebuilder:validation:Optional
+	ServingCert *ServingCertConfig `json:"servingCert,omitempty"`
+}
+
+// AcmeConfig configures ACME certificate provisioning
+type AcmeConfig struct {
+	// DirectoryUrl is the ACME directory URL (e.g., Let's Encrypt)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^https://.*`
+	DirectoryUrl string `json:"directoryUrl"`
+
+	// DomainName is the domain name for the certificate
+	// +kubebuilder:validation:Required
+	DomainName string `json:"domainName"`
+
+	// Email for ACME account registration
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	Email string `json:"email"`
+
+	// TosAccepted indicates acceptance of Terms of Service
+	// +kubebuilder:default:="false"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	TosAccepted string `json:"tosAccepted,omitempty"`
+}
+
+// ServingCertConfig references a Secret containing TLS certificate
+type ServingCertConfig struct {
+	// SecretName is the name of the Secret containing tls.crt and tls.key
+	// +kubebuilder:validation:Required
+	SecretName string `json:"secretName"`
+
+	// FileSyncInterval is how often to check for certificate updates (seconds)
+	// +kubebuilder:validation:Minimum=30
+	// +kubebuilder:validation:Maximum=3600
+	// +kubebuilder:default=300
+	FileSyncInterval int32 `json:"fileSyncInterval,omitempty"`
+}
+
+// FederatesWithConfig represents a remote trust domain to federate with
+type FederatesWithConfig struct {
+	// TrustDomain is the federated trust domain name
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-z0-9._-]{1,255}$`
+	TrustDomain string `json:"trustDomain"`
+
+	// BundleEndpointUrl is the URL of the remote federation endpoint
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^https://.*`
+	BundleEndpointUrl string `json:"bundleEndpointUrl"`
+
+	// BundleEndpointProfile is the authentication profile of remote endpoint
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=https_spiffe;https_web
+	BundleEndpointProfile BundleEndpointProfile `json:"bundleEndpointProfile"`
+
+	// EndpointSpiffeId is required for https_spiffe profile
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^spiffe://.*`
+	EndpointSpiffeId string `json:"endpointSpiffeId,omitempty"`
 }
 
 // SpireServerStatus defines the observed state of spire-server related reconciliation made by operator

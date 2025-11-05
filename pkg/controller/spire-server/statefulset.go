@@ -91,7 +91,8 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	if config.Persistence != nil && config.Persistence.Size != "" {
 		volumeResourceRequest = config.Persistence.Size
 	}
-	return &appsv1.StatefulSet{
+
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
 			Namespace: utils.OperatorNamespace,
@@ -206,5 +207,60 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				},
 			},
 		},
+	}
+
+	// Add federation configuration if present
+	if config.Federation != nil {
+		addFederationToStatefulSet(sts, config.Federation)
+	}
+
+	return sts
+}
+
+// addFederationToStatefulSet adds federation port and volume mounts to the StatefulSet
+func addFederationToStatefulSet(sts *appsv1.StatefulSet, federation *v1alpha1.FederationConfig) {
+	// Find the spire-server container (should be first container)
+	spireServerContainerIndex := 0
+	for i, container := range sts.Spec.Template.Spec.Containers {
+		if container.Name == "spire-server" {
+			spireServerContainerIndex = i
+			break
+		}
+	}
+
+	// Add federation port to spire-server container
+	sts.Spec.Template.Spec.Containers[spireServerContainerIndex].Ports = append(
+		sts.Spec.Template.Spec.Containers[spireServerContainerIndex].Ports,
+		corev1.ContainerPort{
+			Name:          "federation",
+			ContainerPort: federation.BundleEndpoint.Port,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	)
+
+	// If using ServingCert, mount the Secret as volume
+	if federation.BundleEndpoint.HttpsWeb != nil && federation.BundleEndpoint.HttpsWeb.ServingCert != nil {
+		// Add volume mount to spire-server container
+		sts.Spec.Template.Spec.Containers[spireServerContainerIndex].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[spireServerContainerIndex].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "federation-certs",
+				MountPath: "/run/spire/federation-certs",
+				ReadOnly:  true,
+			},
+		)
+
+		// Add volume to pod spec
+		sts.Spec.Template.Spec.Volumes = append(
+			sts.Spec.Template.Spec.Volumes,
+			corev1.Volume{
+				Name: "federation-certs",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: federation.BundleEndpoint.HttpsWeb.ServingCert.SecretName,
+					},
+				},
+			},
+		)
 	}
 }
