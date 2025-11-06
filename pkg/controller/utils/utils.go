@@ -317,7 +317,7 @@ func containerSpecModified(desired, fetched *corev1.Container) bool {
 	for _, fetchedPort := range fetched.Ports {
 		matched := false
 		for _, desiredPort := range desired.Ports {
-			if fetchedPort.ContainerPort == desiredPort.ContainerPort {
+			if reflect.DeepEqual(fetchedPort, desiredPort) {
 				matched = true
 				break
 			}
@@ -347,8 +347,13 @@ func containerSpecModified(desired, fetched *corev1.Container) bool {
 		return true
 	}
 	if desired.LivenessProbe != nil && fetched.LivenessProbe != nil {
-		if !reflect.DeepEqual(desired.LivenessProbe, fetched.LivenessProbe) {
+		if (desired.LivenessProbe.HTTPGet == nil) != (fetched.LivenessProbe.HTTPGet == nil) {
 			return true
+		}
+		if desired.LivenessProbe.HTTPGet != nil && fetched.LivenessProbe.HTTPGet != nil {
+			if desired.LivenessProbe.HTTPGet.Path != fetched.LivenessProbe.HTTPGet.Path {
+				return true
+			}
 		}
 	}
 
