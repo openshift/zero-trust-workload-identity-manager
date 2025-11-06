@@ -1229,6 +1229,106 @@ func TestStatefulSetSpecModified(t *testing.T) {
 		}
 	})
 
+	t.Run("Container SecurityContext nil vs non-nil", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+			RunAsUser: ptr.To(int64(1000)),
+		}
+		fetched.Spec.Template.Spec.Containers[0].SecurityContext = nil
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when desired has SecurityContext but fetched is nil")
+		}
+	})
+
+	t.Run("Container Ports with same port different protocol", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolTCP,
+		}}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolUDP,
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when container port protocols differ")
+		}
+	})
+
+	t.Run("Container Ports with multiple protocols", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+			{ContainerPort: 8080, Protocol: corev1.ProtocolUDP},
+		}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+			{ContainerPort: 8080, Protocol: corev1.ProtocolUDP},
+		}
+		if StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected false when ports with different protocols match")
+		}
+	})
+
+	t.Run("Volumes modified - Projected", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "projected-vol",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						Secret: &corev1.SecretProjection{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "my-secret"},
+						},
+					}},
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "projected-vol",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						Secret: &corev1.SecretProjection{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "different-secret"},
+						},
+					}},
+				},
+			},
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when Projected volume differs")
+		}
+	})
+
+	t.Run("Volumes modified - CSI", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "csi-vol",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver: "csi.spiffe.io",
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "csi-vol",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver: "different.csi.driver",
+				},
+			},
+		}}
+		if !StatefulSetSpecModified(desired, fetched) {
+			t.Error("Expected true when CSI volume differs")
+		}
+	})
+
 }
 
 func TestDeploymentSpecModified(t *testing.T) {
@@ -1555,6 +1655,97 @@ func TestDeploymentSpecModified(t *testing.T) {
 			t.Error("Expected true when SecurityContext differs")
 		}
 	})
+
+	t.Run("Container Ports with different protocol", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolTCP,
+		}}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolUDP,
+		}}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when port protocol differs")
+		}
+	})
+
+	t.Run("Container Ports matching with protocol", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 8080, Protocol: corev1.ProtocolTCP, Name: "http"},
+			{ContainerPort: 8080, Protocol: corev1.ProtocolUDP, Name: "udp"},
+		}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 8080, Protocol: corev1.ProtocolUDP, Name: "udp"},
+			{ContainerPort: 8080, Protocol: corev1.ProtocolTCP, Name: "http"},
+		}
+		if DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected false when ports match including protocol (order independent)")
+		}
+	})
+
+	t.Run("Volumes modified - Projected volume", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "projected",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "config1"},
+						},
+					}},
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "projected",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "config2"},
+						},
+					}},
+				},
+			},
+		}}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when projected volume differs")
+		}
+	})
+
+	t.Run("Volumes modified - CSI volume", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "csi",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver:   "csi.spiffe.io",
+					ReadOnly: ptr.To(true),
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "csi",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver:   "csi.spiffe.io",
+					ReadOnly: ptr.To(false),
+				},
+			},
+		}}
+		if !DeploymentSpecModified(desired, fetched) {
+			t.Error("Expected true when CSI volume ReadOnly differs")
+		}
+	})
+
 }
 
 func TestDaemonSetSpecModified(t *testing.T) {
@@ -1901,6 +2092,79 @@ func TestDaemonSetSpecModified(t *testing.T) {
 			t.Error("Expected true when ReadinessProbe is added")
 		}
 	})
+
+	t.Run("Container SecurityContext nil check", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Containers[0].SecurityContext = nil
+		fetched.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+			RunAsNonRoot: ptr.To(true),
+		}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when desired SecurityContext is nil but fetched is not")
+		}
+	})
+
+	t.Run("Container Ports protocol matching", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 9090, Protocol: corev1.ProtocolTCP},
+			{ContainerPort: 9091, Protocol: corev1.ProtocolUDP},
+		}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 9090, Protocol: corev1.ProtocolTCP},
+			{ContainerPort: 9091, Protocol: corev1.ProtocolUDP},
+		}
+		if DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected false when ports with protocols match exactly")
+		}
+	})
+
+	t.Run("Container Ports protocol mismatch", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 9090, Protocol: corev1.ProtocolTCP},
+		}
+		fetched.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{ContainerPort: 9090, Protocol: corev1.ProtocolUDP},
+		}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when port protocols differ")
+		}
+	})
+
+	t.Run("Volumes modified - CSI with VolumeAttributes", func(t *testing.T) {
+		desired := createDaemonSet()
+		fetched := createDaemonSet()
+		desired.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "csi-with-attrs",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver: "csi.spiffe.io",
+					VolumeAttributes: map[string]string{
+						"key1": "value1",
+					},
+				},
+			},
+		}}
+		fetched.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "csi-with-attrs",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver: "csi.spiffe.io",
+					VolumeAttributes: map[string]string{
+						"key1": "value2",
+					},
+				},
+			},
+		}}
+		if !DaemonSetSpecModified(desired, fetched) {
+			t.Error("Expected true when CSI VolumeAttributes differ")
+		}
+	})
+
 }
 
 // Edge case tests

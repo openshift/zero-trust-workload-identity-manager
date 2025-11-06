@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -314,15 +315,15 @@ func containerSpecModified(desired, fetched *corev1.Container) bool {
 	if len(desired.Ports) != len(fetched.Ports) {
 		return true
 	}
-	for _, fetchedPort := range fetched.Ports {
-		matched := false
-		for _, desiredPort := range desired.Ports {
-			if reflect.DeepEqual(fetchedPort, desiredPort) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+	fetchedByKey := make(map[string]corev1.ContainerPort, len(fetched.Ports))
+	for _, port := range fetched.Ports {
+		key := fmt.Sprintf("%d/%s", port.ContainerPort, port.Protocol)
+		fetchedByKey[key] = port
+	}
+	for _, desiredPort := range desired.Ports {
+		key := fmt.Sprintf("%d/%s", desiredPort.ContainerPort, desiredPort.Protocol)
+		fetchedPort, ok := fetchedByKey[key]
+		if !ok || !reflect.DeepEqual(desiredPort, fetchedPort) {
 			return true
 		}
 	}
@@ -331,33 +332,24 @@ func containerSpecModified(desired, fetched *corev1.Container) bool {
 	if (desired.ReadinessProbe == nil) != (fetched.ReadinessProbe == nil) {
 		return true
 	}
-	if desired.ReadinessProbe != nil && fetched.ReadinessProbe != nil {
-		if (desired.ReadinessProbe.HTTPGet == nil) != (fetched.ReadinessProbe.HTTPGet == nil) {
-			return true
-		}
-		if desired.ReadinessProbe.HTTPGet != nil && fetched.ReadinessProbe.HTTPGet != nil {
-			if desired.ReadinessProbe.HTTPGet.Path != fetched.ReadinessProbe.HTTPGet.Path {
-				return true
-			}
-		}
+	if desired.ReadinessProbe != nil && fetched.ReadinessProbe != nil &&
+		!reflect.DeepEqual(desired.ReadinessProbe.HTTPGet, fetched.ReadinessProbe.HTTPGet) {
+		return true
 	}
 
 	// LivenessProbe nil checks
 	if (desired.LivenessProbe == nil) != (fetched.LivenessProbe == nil) {
 		return true
 	}
-	if desired.LivenessProbe != nil && fetched.LivenessProbe != nil {
-		if (desired.LivenessProbe.HTTPGet == nil) != (fetched.LivenessProbe.HTTPGet == nil) {
-			return true
-		}
-		if desired.LivenessProbe.HTTPGet != nil && fetched.LivenessProbe.HTTPGet != nil {
-			if desired.LivenessProbe.HTTPGet.Path != fetched.LivenessProbe.HTTPGet.Path {
-				return true
-			}
-		}
+	if desired.LivenessProbe != nil && fetched.LivenessProbe != nil &&
+		!reflect.DeepEqual(desired.LivenessProbe.HTTPGet, fetched.LivenessProbe.HTTPGet) {
+		return true
 	}
 
-	// SecurityContext nil check
+	// SecurityContext checks
+	if (desired.SecurityContext == nil) != (fetched.SecurityContext == nil) {
+		return true
+	}
 	if desired.SecurityContext != nil && !reflect.DeepEqual(desired.SecurityContext, fetched.SecurityContext) {
 		return true
 	}
