@@ -33,6 +33,98 @@ const (
 	OperandsAvailable = "OperandsAvailable"
 )
 
+// Operand state constants for structured state tracking
+const (
+	OperandStateNotFound         = "NotFound"
+	OperandStateInitialReconcile = "InitialReconcile"
+	OperandStateReconciling      = "Reconciling"
+	OperandStateUnhealthy        = "Unhealthy"
+)
+
+// operandStateClassification represents whether an operand is progressing or failed
+type operandStateClassification string
+
+const (
+	operandProgressing operandStateClassification = "progressing"
+	operandFailed      operandStateClassification = "failed"
+	operandReady       operandStateClassification = "ready"
+)
+
+// classifyOperandState determines whether an operand is progressing, failed, or ready
+// based on structured state (Condition.Reason) with fallback to message substring matching
+func classifyOperandState(operand v1alpha1.OperandStatus, readyCondition *metav1.Condition) operandStateClassification {
+	if operand.Ready {
+		return operandReady
+	}
+
+	// 1. Prefer reading from Condition.Reason if available
+	if readyCondition != nil && readyCondition.Reason != "" {
+		switch readyCondition.Reason {
+		// Progressing states - map known reasons to progressing
+		case v1alpha1.ReasonInProgress,
+			OperandStateNotFound,
+			OperandStateInitialReconcile,
+			OperandStateReconciling:
+			return operandProgressing
+		// Failed states - map known failure reasons to failed
+		case v1alpha1.ReasonFailed,
+			OperandStateUnhealthy:
+			return operandFailed
+		// Ready state (should be caught above, but included for completeness)
+		case v1alpha1.ReasonReady:
+			return operandReady
+		}
+	}
+
+	// 2. Check for known structured states in the Message field
+	// These are set by the get*Status functions when CR is not found or reconciling
+	switch operand.Message {
+	// Progressing cases
+	case "CR not found", "Waiting for initial reconciliation", "Reconciling":
+		return operandProgressing
+	}
+
+	// 3. Compatibility fallback: substring matching for unstructured messages
+	// If message contains progressing indicators, treat as progressing
+	msg := operand.Message
+	if contains(msg, "not found") || contains(msg, "initial") || contains(msg, "reconciling") || contains(msg, "progressing") {
+		return operandProgressing
+	}
+
+	// 4. Default to failed for any other non-ready state
+	return operandFailed
+}
+
+// contains performs case-insensitive substring match
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(s == substr || len(s) > 0 && len(substr) > 0 &&
+			findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			if toLower(s[i+j]) != toLower(substr[j]) {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
+func toLower(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
 // ZeroTrustWorkloadIdentityManagerReconciler manages the ZeroTrustWorkloadIdentityManager singleton instance
 // and aggregates status from all operand CRs
 type ZeroTrustWorkloadIdentityManagerReconciler struct {
@@ -165,10 +257,17 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		// Operands not created or still reconciling - use Progressing for both conditions
 		var pendingOperands []string
 		for _, operand := range operandStatuses {
-			if operand.Message == "CR not found" {
-				pendingOperands = append(pendingOperands, fmt.Sprintf("%s(not created)", operand.Kind))
-			} else if operand.Message == "Waiting for initial reconciliation" || operand.Message == "Reconciling" {
-				pendingOperands = append(pendingOperands, fmt.Sprintf("%s(reconciling)", operand.Kind))
+			// Use structured state classification instead of exact string matching
+			readyCondition := apimeta.FindStatusCondition(operand.Conditions, v1alpha1.Ready)
+			classification := classifyOperandState(operand, readyCondition)
+
+			if classification == operandProgressing {
+				// Differentiate between not created vs reconciling based on message
+				if operand.Message == "CR not found" {
+					pendingOperands = append(pendingOperands, fmt.Sprintf("%s(not created)", operand.Kind))
+				} else {
+					pendingOperands = append(pendingOperands, fmt.Sprintf("%s(reconciling)", operand.Kind))
+				}
 			}
 		}
 		message := fmt.Sprintf("Waiting for operands: %v", pendingOperands)
@@ -185,7 +284,11 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		// Some operands are actually unhealthy - use Failed
 		var unhealthyOperands []string
 		for _, operand := range operandStatuses {
-			if !operand.Ready && operand.Message != "CR not found" && operand.Message != "Waiting for initial reconciliation" && operand.Message != "Reconciling" {
+			// Use structured state classification instead of exact string matching
+			readyCondition := apimeta.FindStatusCondition(operand.Conditions, v1alpha1.Ready)
+			classification := classifyOperandState(operand, readyCondition)
+
+			if classification == operandFailed {
 				unhealthyOperands = append(unhealthyOperands, fmt.Sprintf("%s/%s", operand.Kind, operand.Name))
 			}
 		}
@@ -217,13 +320,13 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpireServer
 	spireServerStatus := r.getSpireServerStatus(ctx)
-
 	operandStatuses = append(operandStatuses, spireServerStatus)
 	if !spireServerStatus.Ready {
 		allReady = false
-		if spireServerStatus.Message == "CR not found" {
-			notCreatedCount++
-		} else if spireServerStatus.Message == "Waiting for initial reconciliation" || spireServerStatus.Message == "Reconciling" {
+		// Use structured state classification instead of exact string matching
+		readyCondition := apimeta.FindStatusCondition(spireServerStatus.Conditions, v1alpha1.Ready)
+		classification := classifyOperandState(spireServerStatus, readyCondition)
+		if classification == operandProgressing {
 			notCreatedCount++
 		} else {
 			failedCount++
@@ -232,13 +335,13 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpireAgent
 	spireAgentStatus := r.getSpireAgentStatus(ctx)
-
 	operandStatuses = append(operandStatuses, spireAgentStatus)
 	if !spireAgentStatus.Ready {
 		allReady = false
-		if spireAgentStatus.Message == "CR not found" {
-			notCreatedCount++
-		} else if spireAgentStatus.Message == "Waiting for initial reconciliation" || spireAgentStatus.Message == "Reconciling" {
+		// Use structured state classification instead of exact string matching
+		readyCondition := apimeta.FindStatusCondition(spireAgentStatus.Conditions, v1alpha1.Ready)
+		classification := classifyOperandState(spireAgentStatus, readyCondition)
+		if classification == operandProgressing {
 			notCreatedCount++
 		} else {
 			failedCount++
@@ -247,13 +350,13 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpiffeCSIDriver
 	spiffeCSIStatus := r.getSpiffeCSIDriverStatus(ctx)
-
 	operandStatuses = append(operandStatuses, spiffeCSIStatus)
 	if !spiffeCSIStatus.Ready {
 		allReady = false
-		if spiffeCSIStatus.Message == "CR not found" {
-			notCreatedCount++
-		} else if spiffeCSIStatus.Message == "Waiting for initial reconciliation" || spiffeCSIStatus.Message == "Reconciling" {
+		// Use structured state classification instead of exact string matching
+		readyCondition := apimeta.FindStatusCondition(spiffeCSIStatus.Conditions, v1alpha1.Ready)
+		classification := classifyOperandState(spiffeCSIStatus, readyCondition)
+		if classification == operandProgressing {
 			notCreatedCount++
 		} else {
 			failedCount++
@@ -262,13 +365,13 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 
 	// Check SpireOIDCDiscoveryProvider
 	oidcStatus := r.getSpireOIDCDiscoveryProviderStatus(ctx)
-
 	operandStatuses = append(operandStatuses, oidcStatus)
 	if !oidcStatus.Ready {
 		allReady = false
-		if oidcStatus.Message == "CR not found" {
-			notCreatedCount++
-		} else if oidcStatus.Message == "Waiting for initial reconciliation" || oidcStatus.Message == "Reconciling" {
+		// Use structured state classification instead of exact string matching
+		readyCondition := apimeta.FindStatusCondition(oidcStatus.Conditions, v1alpha1.Ready)
+		classification := classifyOperandState(oidcStatus, readyCondition)
+		if classification == operandProgressing {
 			notCreatedCount++
 		} else {
 			failedCount++
@@ -467,9 +570,10 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireOIDCDiscoveryProvid
 	return operandStatus
 }
 
-// extractKeyConditions extracts only failed conditions from operand status
-// When operand is healthy, no need to show conditions (reduces clutter)
-// When operand is unhealthy, show what's wrong
+// extractKeyConditions extracts key conditions from operand status
+// When operand is ready/healthy, returns empty (no conditions needed - reduces clutter)
+// When operand is unhealthy, returns the Ready condition plus any other failed conditions
+// The Ready condition is included when unhealthy to support structured state classification
 func extractKeyConditions(conditions []metav1.Condition, isReady bool) []metav1.Condition {
 	keyConditions := []metav1.Condition{}
 
@@ -478,9 +582,15 @@ func extractKeyConditions(conditions []metav1.Condition, isReady bool) []metav1.
 		return keyConditions
 	}
 
-	// If operand is not ready, show only failed conditions
+	// If operand is not ready, include the Ready condition for structured state classification
+	readyCondition := apimeta.FindStatusCondition(conditions, v1alpha1.Ready)
+	if readyCondition != nil {
+		keyConditions = append(keyConditions, *readyCondition)
+	}
+
+	// Also include other failed conditions to show what's wrong
 	for _, cond := range conditions {
-		// Skip the overall Ready condition (message already shows it)
+		// Skip the Ready condition (already added above)
 		if cond.Type == v1alpha1.Ready {
 			continue
 		}

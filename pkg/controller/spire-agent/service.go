@@ -18,8 +18,20 @@ import (
 
 // Constants for status conditions are defined in controller.go
 
-// reconcileService reconciles the Spire Agent Service
+// reconcileService reconciles the Service resource required for agents
 func (r *SpireAgentReconciler) reconcileService(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
+	err := r.reconcileAgentService(ctx, agent, statusMgr, createOnlyMode)
+	if err != nil {
+		return err
+	}
+	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
+		"All Service resources available",
+		metav1.ConditionTrue)
+	return nil
+}
+
+// reconcileAgentService reconciles the Spire Agent Service
+func (r *SpireAgentReconciler) reconcileAgentService(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
 	desired := getSpireAgentService(agent.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(agent, desired, r.scheme); err != nil {
@@ -63,9 +75,6 @@ func (r *SpireAgentReconciler) reconcileService(ctx context.Context, agent *v1al
 		return nil
 	}
 
-	// Preserve immutable and Kubernetes-managed fields BEFORE comparison
-	utils.PreserveServiceImmutableFields(existing, desired)
-
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("Service is up to date", "name", desired.Name)
@@ -83,9 +92,6 @@ func (r *SpireAgentReconciler) reconcileService(ctx context.Context, agent *v1al
 	}
 
 	r.log.Info("Updated Service", "name", desired.Name, "namespace", desired.Namespace)
-	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
-		"All Service resources available",
-		metav1.ConditionTrue)
 	return nil
 }
 

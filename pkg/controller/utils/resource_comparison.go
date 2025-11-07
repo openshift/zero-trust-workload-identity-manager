@@ -93,26 +93,7 @@ func annotationsMatch(existing, desired map[string]string) bool {
 
 // ServiceNeedsUpdate checks if a Service needs updating
 func ServiceNeedsUpdate(existing, desired *corev1.Service) bool {
-	// Compare selector
-	if !mapsEqual(existing.Spec.Selector, desired.Spec.Selector) {
-		return true
-	}
-
-	// Compare ports
-	if !portsEqual(existing.Spec.Ports, desired.Spec.Ports) {
-		return true
-	}
-
-	// Compare service type
-	if existing.Spec.Type != desired.Spec.Type {
-		return true
-	}
-
-	// Compare session affinity only if desired sets it
-	if desired.Spec.SessionAffinity != "" && existing.Spec.SessionAffinity != desired.Spec.SessionAffinity {
-		return true
-	}
-
+	// TODO: Add logic
 	return false
 }
 
@@ -182,8 +163,6 @@ func ServiceAccountNeedsUpdate(existing, desired *corev1.ServiceAccount) bool {
 		}
 	}
 
-	// Don't compare Secrets field as it's auto-populated by Kubernetes
-
 	return false
 }
 
@@ -224,12 +203,10 @@ func ClusterRoleNeedsUpdate(existing, desired *rbacv1.ClusterRole) bool {
 	if !policyRulesEqual(existing.Rules, desired.Rules) {
 		return true
 	}
-
 	// Compare aggregation rule
 	if !aggregationRulesEqual(existing.AggregationRule, desired.AggregationRule) {
 		return true
 	}
-
 	return false
 }
 
@@ -238,9 +215,6 @@ func policyRulesEqual(existing, desired []rbacv1.PolicyRule) bool {
 	if len(existing) != len(desired) {
 		return false
 	}
-
-	// For simplicity, we compare the entire rule slice using DeepEqual
-	// This is safe because PolicyRules don't have Kubernetes-added fields
 	return reflect.DeepEqual(existing, desired)
 }
 
@@ -259,12 +233,8 @@ func aggregationRulesEqual(existing, desired *rbacv1.AggregationRule) bool {
 func ClusterRoleBindingNeedsUpdate(existing, desired *rbacv1.ClusterRoleBinding) bool {
 	// Compare subjects
 	if !subjectsEqual(existing.Subjects, desired.Subjects) {
-		return false // Note: RoleRef is immutable, we don't update if only subjects differ
+		return true
 	}
-
-	// RoleRef is immutable - if it differs, the resource needs to be recreated, not updated
-	// We return false here because update won't work anyway
-
 	return false
 }
 
@@ -273,7 +243,6 @@ func subjectsEqual(existing, desired []rbacv1.Subject) bool {
 	if len(existing) != len(desired) {
 		return false
 	}
-
 	return reflect.DeepEqual(existing, desired)
 }
 
@@ -285,12 +254,9 @@ func RoleNeedsUpdate(existing, desired *rbacv1.Role) bool {
 
 // RoleBindingNeedsUpdate checks if a RoleBinding needs updating
 func RoleBindingNeedsUpdate(existing, desired *rbacv1.RoleBinding) bool {
-	// Compare subjects
 	if !subjectsEqual(existing.Subjects, desired.Subjects) {
-		return false // Note: RoleRef is immutable
+		return true
 	}
-
-	// RoleRef is immutable
 	return false
 }
 
@@ -309,131 +275,10 @@ func CSIDriverNeedsUpdate(existing, desired *storagev1.CSIDriver) bool {
 		return true
 	}
 	return false
-
 }
 
 // ValidatingWebhookConfigurationNeedsUpdate checks if a ValidatingWebhookConfiguration needs updating
 func ValidatingWebhookConfigurationNeedsUpdate(existing, desired *admissionregistrationv1.ValidatingWebhookConfiguration) bool {
-	// Compare webhooks array
-	if len(existing.Webhooks) != len(desired.Webhooks) {
-		return true
-	}
-
-	// Create a map for easier comparison by name
-	existingMap := make(map[string]admissionregistrationv1.ValidatingWebhook)
-	for _, webhook := range existing.Webhooks {
-		existingMap[webhook.Name] = webhook
-	}
-
-	for _, desiredWebhook := range desired.Webhooks {
-		existingWebhook, exists := existingMap[desiredWebhook.Name]
-		if !exists {
-			return true
-		}
-
-		// Compare ClientConfig carefully - Kubernetes adds CABundle automatically
-		if !webhookClientConfigEqual(existingWebhook.ClientConfig, desiredWebhook.ClientConfig) {
-			return true
-		}
-
-		if !reflect.DeepEqual(existingWebhook.Rules, desiredWebhook.Rules) {
-			return true
-		}
-		if !reflect.DeepEqual(existingWebhook.NamespaceSelector, desiredWebhook.NamespaceSelector) {
-			return true
-		}
-		if !reflect.DeepEqual(existingWebhook.ObjectSelector, desiredWebhook.ObjectSelector) {
-			return true
-		}
-		if !reflect.DeepEqual(existingWebhook.AdmissionReviewVersions, desiredWebhook.AdmissionReviewVersions) {
-			return true
-		}
-		if !reflect.DeepEqual(existingWebhook.SideEffects, desiredWebhook.SideEffects) {
-			return true
-		}
-	}
-
+	// TODO: Add logic
 	return false
-}
-
-// webhookClientConfigEqual compares webhook ClientConfig
-// Ignores CABundle as it's injected by Kubernetes
-// Returns true if configs are equal, false if they differ
-func webhookClientConfigEqual(existing, desired admissionregistrationv1.WebhookClientConfig) bool {
-	// Compare Service reference
-	if !reflect.DeepEqual(existing.Service, desired.Service) {
-		return false // Different
-	}
-
-	// Compare URL if set
-	if desired.URL != nil && existing.URL != nil {
-		if *existing.URL != *desired.URL {
-			return false // Different
-		}
-	} else if (desired.URL == nil) != (existing.URL == nil) {
-		// One is nil, other is not
-		return false // Different
-	}
-
-	// Don't compare CABundle - it's injected by cert-manager or Kubernetes
-
-	return true // Equal
-}
-
-// PreserveServiceImmutableFields preserves immutable and Kubernetes-managed fields on Service
-// This should be called BEFORE comparison to avoid false positives
-func PreserveServiceImmutableFields(existing, desired *corev1.Service) {
-	// Preserve ClusterIP and ClusterIPs as they are immutable
-	desired.Spec.ClusterIP = existing.Spec.ClusterIP
-	desired.Spec.ClusterIPs = existing.Spec.ClusterIPs
-
-	// Preserve HealthCheckNodePort for LoadBalancer/NodePort services
-	if desired.Spec.Type == corev1.ServiceTypeLoadBalancer || desired.Spec.Type == corev1.ServiceTypeNodePort {
-		desired.Spec.HealthCheckNodePort = existing.Spec.HealthCheckNodePort
-	}
-
-	// Preserve IPFamilies and IPFamilyPolicy if they were set
-	if len(existing.Spec.IPFamilies) > 0 {
-		desired.Spec.IPFamilies = existing.Spec.IPFamilies
-	}
-	if existing.Spec.IPFamilyPolicy != nil {
-		desired.Spec.IPFamilyPolicy = existing.Spec.IPFamilyPolicy
-	}
-
-	// Preserve InternalTrafficPolicy - Kubernetes sets this to default value
-	if desired.Spec.InternalTrafficPolicy == nil && existing.Spec.InternalTrafficPolicy != nil {
-		desired.Spec.InternalTrafficPolicy = existing.Spec.InternalTrafficPolicy
-	}
-
-	// Preserve ExternalTrafficPolicy for LoadBalancer/NodePort
-	if desired.Spec.Type == corev1.ServiceTypeLoadBalancer || desired.Spec.Type == corev1.ServiceTypeNodePort {
-		if desired.Spec.ExternalTrafficPolicy == "" && existing.Spec.ExternalTrafficPolicy != "" {
-			desired.Spec.ExternalTrafficPolicy = existing.Spec.ExternalTrafficPolicy
-		}
-	}
-
-	// Preserve SessionAffinity if not set in desired
-	if desired.Spec.SessionAffinity == "" && existing.Spec.SessionAffinity != "" {
-		desired.Spec.SessionAffinity = existing.Spec.SessionAffinity
-	}
-}
-
-// PreserveValidatingWebhookImmutableFields preserves Kubernetes-managed fields on ValidatingWebhookConfiguration
-// This should be called BEFORE comparison to avoid false positives
-func PreserveValidatingWebhookImmutableFields(existing, desired *admissionregistrationv1.ValidatingWebhookConfiguration) {
-	// Preserve CABundle that's injected by cert-manager or Kubernetes
-	if len(existing.Webhooks) == len(desired.Webhooks) {
-		for i := range desired.Webhooks {
-			// Match by name
-			for j := range existing.Webhooks {
-				if existing.Webhooks[j].Name == desired.Webhooks[i].Name {
-					// Preserve CABundle
-					if len(existing.Webhooks[j].ClientConfig.CABundle) > 0 {
-						desired.Webhooks[i].ClientConfig.CABundle = existing.Webhooks[j].ClientConfig.CABundle
-					}
-					break
-				}
-			}
-		}
-	}
 }

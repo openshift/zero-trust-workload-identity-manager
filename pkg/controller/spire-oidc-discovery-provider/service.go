@@ -69,9 +69,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileService(ctx context.Cont
 		return nil
 	}
 
-	// Preserve immutable and Kubernetes-managed fields BEFORE comparison
-	utils.PreserveServiceImmutableFields(existing, desired)
-
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("Service is up to date", "name", desired.Name)

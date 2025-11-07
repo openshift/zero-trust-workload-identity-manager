@@ -84,9 +84,6 @@ func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context,
 		return nil
 	}
 
-	// Preserve immutable and Kubernetes-managed fields BEFORE comparison
-	utils.PreserveServiceImmutableFields(existing, desired)
-
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("Service is up to date", "name", desired.Name)
@@ -151,9 +148,6 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 		r.log.V(1).Info("Service exists, skipping update due to create-only mode", "name", desired.Name)
 		return nil
 	}
-
-	// Preserve immutable and Kubernetes-managed fields BEFORE comparison
-	utils.PreserveServiceImmutableFields(existing, desired)
 
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {

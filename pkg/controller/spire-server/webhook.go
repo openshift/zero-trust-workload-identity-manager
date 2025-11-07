@@ -69,9 +69,6 @@ func (r *SpireServerReconciler) reconcileWebhook(ctx context.Context, server *v1
 		return nil
 	}
 
-	// Preserve Kubernetes-managed fields BEFORE comparison
-	utils.PreserveValidatingWebhookImmutableFields(existing, desired)
-
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("ValidatingWebhookConfiguration is up to date", "name", desired.Name)
