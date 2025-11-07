@@ -10,11 +10,11 @@ import (
 )
 
 // generateSpiffeCSIDriverSCC returns a pointer to the desired SCC object
-func generateSpiffeCSIDriverSCC() *securityv1.SecurityContextConstraints {
+func generateSpiffeCSIDriverSCC(customLabels map[string]string) *securityv1.SecurityContextConstraints {
 	return &securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "spire-spiffe-csi-driver",
-			Labels: utils.SpiffeCSIDriverLabels(nil),
+			Labels: utils.SpiffeCSIDriverLabels(customLabels),
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{

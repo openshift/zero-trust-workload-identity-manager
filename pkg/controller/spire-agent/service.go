@@ -20,7 +20,7 @@ import (
 
 // reconcileService reconciles the Spire Agent Service
 func (r *SpireAgentReconciler) reconcileService(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireAgentService()
+	desired := getSpireAgentService(agent.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(agent, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service")
@@ -83,13 +83,16 @@ func (r *SpireAgentReconciler) reconcileService(ctx context.Context, agent *v1al
 	}
 
 	r.log.Info("Updated Service", "name", desired.Name, "namespace", desired.Namespace)
+	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
+		"All Service resources available",
+		metav1.ConditionTrue)
 	return nil
 }
 
 // getSpireAgentService returns the Spire Agent Service with proper labels and selectors
-func getSpireAgentService() *corev1.Service {
+func getSpireAgentService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireAgentServiceAssetName))
-	svc.Labels = utils.SpireAgentLabels(svc.Labels)
+	svc.Labels = utils.SpireAgentLabels(customLabels)
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-agent",
 		"app.kubernetes.io/instance": utils.StandardInstance,

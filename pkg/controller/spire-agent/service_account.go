@@ -20,7 +20,7 @@ import (
 
 // reconcileServiceAccount reconciles the Spire Agent ServiceAccount
 func (r *SpireAgentReconciler) reconcileServiceAccount(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireAgentServiceAccount()
+	desired := getSpireAgentServiceAccount(agent.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(agent, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service account")
@@ -96,8 +96,8 @@ func (r *SpireAgentReconciler) reconcileServiceAccount(ctx context.Context, agen
 }
 
 // getSpireAgentServiceAccount returns the Spire Agent ServiceAccount with proper labels
-func getSpireAgentServiceAccount() *corev1.ServiceAccount {
+func getSpireAgentServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireAgentServiceAccountAssetName))
-	sa.Labels = utils.SpireAgentLabels(sa.Labels)
+	sa.Labels = utils.SpireAgentLabels(customLabels)
 	return sa
 }

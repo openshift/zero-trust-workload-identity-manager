@@ -64,7 +64,7 @@ func (r *SpireServerReconciler) reconcileRBAC(ctx context.Context, server *v1alp
 
 // reconcileClusterRole reconciles the Spire Server ClusterRole
 func (r *SpireServerReconciler) reconcileClusterRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireServerClusterRole()
+	desired := getSpireServerClusterRole(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on cluster role")
@@ -129,7 +129,7 @@ func (r *SpireServerReconciler) reconcileClusterRole(ctx context.Context, server
 
 // reconcileClusterRoleBinding reconciles the Spire Server ClusterRoleBinding
 func (r *SpireServerReconciler) reconcileClusterRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireServerClusterRoleBinding()
+	desired := getSpireServerClusterRoleBinding(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on cluster role binding")
@@ -194,7 +194,7 @@ func (r *SpireServerReconciler) reconcileClusterRoleBinding(ctx context.Context,
 
 // reconcileSpireBundleRole reconciles the Spire Bundle Role
 func (r *SpireServerReconciler) reconcileSpireBundleRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireBundleRole()
+	desired := getSpireBundleRole(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on spire-bundle role")
@@ -259,7 +259,7 @@ func (r *SpireServerReconciler) reconcileSpireBundleRole(ctx context.Context, se
 
 // reconcileSpireBundleRoleBinding reconciles the Spire Bundle RoleBinding
 func (r *SpireServerReconciler) reconcileSpireBundleRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireBundleRoleBinding()
+	desired := getSpireBundleRoleBinding(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on spire-bundle role binding")
@@ -324,7 +324,7 @@ func (r *SpireServerReconciler) reconcileSpireBundleRoleBinding(ctx context.Cont
 
 // reconcileControllerManagerClusterRole reconciles the Controller Manager ClusterRole
 func (r *SpireServerReconciler) reconcileControllerManagerClusterRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireControllerManagerClusterRole()
+	desired := getSpireControllerManagerClusterRole(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on controller manager cluster role")
@@ -389,7 +389,7 @@ func (r *SpireServerReconciler) reconcileControllerManagerClusterRole(ctx contex
 
 // reconcileControllerManagerClusterRoleBinding reconciles the Controller Manager ClusterRoleBinding
 func (r *SpireServerReconciler) reconcileControllerManagerClusterRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireControllerManagerClusterRoleBinding()
+	desired := getSpireControllerManagerClusterRoleBinding(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on controller manager cluster role binding")
@@ -454,7 +454,7 @@ func (r *SpireServerReconciler) reconcileControllerManagerClusterRoleBinding(ctx
 
 // reconcileLeaderElectionRole reconciles the Leader Election Role
 func (r *SpireServerReconciler) reconcileLeaderElectionRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireControllerManagerLeaderElectionRole()
+	desired := getSpireControllerManagerLeaderElectionRole(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on leader election role")
@@ -519,7 +519,7 @@ func (r *SpireServerReconciler) reconcileLeaderElectionRole(ctx context.Context,
 
 // reconcileLeaderElectionRoleBinding reconciles the Leader Election RoleBinding
 func (r *SpireServerReconciler) reconcileLeaderElectionRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireControllerManagerLeaderElectionRoleBinding()
+	desired := getSpireControllerManagerLeaderElectionRoleBinding(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on leader election role binding")
@@ -584,50 +584,50 @@ func (r *SpireServerReconciler) reconcileLeaderElectionRoleBinding(ctx context.C
 
 // Resource getter functions
 
-func getSpireServerClusterRole() *rbacv1.ClusterRole {
+func getSpireServerClusterRole(customLabels map[string]string) *rbacv1.ClusterRole {
 	cr := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireServerClusterRoleAssetName))
-	cr.Labels = utils.SpireServerLabels(cr.Labels)
+	cr.Labels = utils.SpireServerLabels(customLabels)
 	return cr
 }
 
-func getSpireServerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+func getSpireServerClusterRoleBinding(customLabels map[string]string) *rbacv1.ClusterRoleBinding {
 	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireServerClusterRoleBindingAssetName))
-	crb.Labels = utils.SpireServerLabels(crb.Labels)
+	crb.Labels = utils.SpireServerLabels(customLabels)
 	return crb
 }
 
-func getSpireBundleRole() *rbacv1.Role {
+func getSpireBundleRole(customLabels map[string]string) *rbacv1.Role {
 	role := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireBundleRoleAssetName))
-	role.Labels = utils.SpireServerLabels(role.Labels)
+	role.Labels = utils.SpireServerLabels(customLabels)
 	return role
 }
 
-func getSpireBundleRoleBinding() *rbacv1.RoleBinding {
+func getSpireBundleRoleBinding(customLabels map[string]string) *rbacv1.RoleBinding {
 	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireBundleRoleBindingAssetName))
-	rb.Labels = utils.SpireServerLabels(rb.Labels)
+	rb.Labels = utils.SpireServerLabels(customLabels)
 	return rb
 }
 
-func getSpireControllerManagerClusterRole() *rbacv1.ClusterRole {
+func getSpireControllerManagerClusterRole(customLabels map[string]string) *rbacv1.ClusterRole {
 	cr := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleAssetName))
-	cr.Labels = utils.SpireControllerManagerLabels(cr.Labels)
+	cr.Labels = utils.SpireControllerManagerLabels(customLabels)
 	return cr
 }
 
-func getSpireControllerManagerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+func getSpireControllerManagerClusterRoleBinding(customLabels map[string]string) *rbacv1.ClusterRoleBinding {
 	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleBindingAssetName))
-	crb.Labels = utils.SpireControllerManagerLabels(crb.Labels)
+	crb.Labels = utils.SpireControllerManagerLabels(customLabels)
 	return crb
 }
 
-func getSpireControllerManagerLeaderElectionRole() *rbacv1.Role {
+func getSpireControllerManagerLeaderElectionRole(customLabels map[string]string) *rbacv1.Role {
 	role := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleAssetName))
-	role.Labels = utils.SpireControllerManagerLabels(role.Labels)
+	role.Labels = utils.SpireControllerManagerLabels(customLabels)
 	return role
 }
 
-func getSpireControllerManagerLeaderElectionRoleBinding() *rbacv1.RoleBinding {
+func getSpireControllerManagerLeaderElectionRoleBinding(customLabels map[string]string) *rbacv1.RoleBinding {
 	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleBindingAssetName))
-	rb.Labels = utils.SpireControllerManagerLabels(rb.Labels)
+	rb.Labels = utils.SpireControllerManagerLabels(customLabels)
 	return rb
 }

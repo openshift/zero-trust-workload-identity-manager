@@ -24,15 +24,15 @@ type Condition struct {
 
 // Manager handles status updates for operand resources
 type Manager struct {
-	client     client.Client
-	conditions map[string]Condition
+	customClient customClient.CustomCtrlClient
+	conditions   map[string]Condition
 }
 
 // NewManager creates a new status manager
 func NewManager(customClient customClient.CustomCtrlClient) *Manager {
 	return &Manager{
-		client:     customClient.GetClient(),
-		conditions: make(map[string]Condition),
+		customClient: customClient,
+		conditions:   make(map[string]Condition),
 	}
 }
 
@@ -96,8 +96,13 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 		status.Conditions = []metav1.Condition{}
 	}
 
-	// Set the Ready condition based on all other conditions
-	m.SetReadyCondition()
+	// Only auto-set Ready condition if it hasn't been manually set
+	// Check if Ready condition was explicitly added by the controller
+	_, readyExplicitlySet := m.conditions[v1alpha1.Ready]
+	if !readyExplicitlySet {
+		// Set the Ready condition based on all other conditions
+		m.SetReadyCondition()
+	}
 
 	// Apply all conditions
 	for _, cond := range m.conditions {
@@ -113,7 +118,7 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 
 	// Only update if status has changed
 	if !equality.Semantic.DeepEqual(originalStatus, status) {
-		if err := m.client.Status().Update(ctx, obj); err != nil {
+		if err := m.customClient.StatusUpdateWithRetry(ctx, obj); err != nil {
 			return fmt.Errorf("failed to update status: %w", err)
 		}
 	}
@@ -124,7 +129,7 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 // CheckStatefulSetHealth checks the health of a StatefulSet and adds conditions
 func (m *Manager) CheckStatefulSetHealth(ctx context.Context, name, namespace, conditionType string) {
 	var sts appsv1.StatefulSet
-	err := m.client.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &sts)
+	err := m.customClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &sts)
 	if err != nil {
 		m.AddCondition(conditionType, "StatefulSetNotFound",
 			fmt.Sprintf("Failed to get StatefulSet %s/%s: %v", namespace, name, err),
@@ -148,7 +153,7 @@ func (m *Manager) CheckStatefulSetHealth(ctx context.Context, name, namespace, c
 // CheckDaemonSetHealth checks the health of a DaemonSet and adds conditions
 func (m *Manager) CheckDaemonSetHealth(ctx context.Context, name, namespace, conditionType string) {
 	var ds appsv1.DaemonSet
-	err := m.client.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &ds)
+	err := m.customClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &ds)
 	if err != nil {
 		m.AddCondition(conditionType, "DaemonSetNotFound",
 			fmt.Sprintf("Failed to get DaemonSet %s/%s: %v", namespace, name, err),
@@ -172,7 +177,7 @@ func (m *Manager) CheckDaemonSetHealth(ctx context.Context, name, namespace, con
 // CheckDeploymentHealth checks the health of a Deployment and adds conditions
 func (m *Manager) CheckDeploymentHealth(ctx context.Context, name, namespace, conditionType string) {
 	var deploy appsv1.Deployment
-	err := m.client.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &deploy)
+	err := m.customClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &deploy)
 	if err != nil {
 		m.AddCondition(conditionType, "DeploymentNotFound",
 			fmt.Sprintf("Failed to get Deployment %s/%s: %v", namespace, name, err),

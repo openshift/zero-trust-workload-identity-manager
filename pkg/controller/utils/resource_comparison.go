@@ -296,8 +296,20 @@ func RoleBindingNeedsUpdate(existing, desired *rbacv1.RoleBinding) bool {
 
 // CSIDriverNeedsUpdate checks if a CSIDriver needs updating
 func CSIDriverNeedsUpdate(existing, desired *storagev1.CSIDriver) bool {
-	// Compare spec - CSIDriverSpec doesn't have many Kubernetes-added fields
-	return !reflect.DeepEqual(existing.Spec, desired.Spec)
+	if existing.Spec.AttachRequired != desired.Spec.AttachRequired {
+		return true
+	}
+	if existing.Spec.PodInfoOnMount != desired.Spec.PodInfoOnMount {
+		return true
+	}
+	if existing.Spec.FSGroupPolicy != desired.Spec.FSGroupPolicy {
+		return true
+	}
+	if !reflect.DeepEqual(existing.Spec.VolumeLifecycleModes, desired.Spec.VolumeLifecycleModes) {
+		return true
+	}
+	return false
+
 }
 
 // ValidatingWebhookConfigurationNeedsUpdate checks if a ValidatingWebhookConfiguration needs updating

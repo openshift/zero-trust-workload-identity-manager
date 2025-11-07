@@ -214,7 +214,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alp
 
 // reconcileClusterSpiffeIDs reconciles the ClusterSpiffeID resources
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
-	spireOIDCClusterSpiffeID := generateSpireIODCDiscoveryProviderSpiffeID()
+	spireOIDCClusterSpiffeID := generateSpireIODCDiscoveryProviderSpiffeID(oidc.Spec.Labels)
 	if err := controllerutil.SetControllerReference(oidc, spireOIDCClusterSpiffeID, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference")
 		statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDGenerationFailed",
@@ -232,7 +232,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx con
 		return err
 	}
 
-	defaultSpiffeID := generateDefaultFallbackClusterSPIFFEID()
+	defaultSpiffeID := generateDefaultFallbackClusterSPIFFEID(oidc.Spec.Labels)
 	if err = controllerutil.SetControllerReference(oidc, defaultSpiffeID, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference")
 		statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDCreationFailed",

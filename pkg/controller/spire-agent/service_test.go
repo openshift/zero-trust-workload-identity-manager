@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireAgentService(t *testing.T) {
-	svc := getSpireAgentService()
+	svc := getSpireAgentService(nil)
 
 	if svc == nil {
 		t.Fatal("Expected Service, got nil")

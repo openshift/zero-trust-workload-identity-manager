@@ -189,17 +189,16 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 				unhealthyOperands = append(unhealthyOperands, fmt.Sprintf("%s/%s", operand.Kind, operand.Name))
 			}
 		}
-		if len(unhealthyOperands) > 0 {
-			message := fmt.Sprintf("Some operands not ready: %v", unhealthyOperands)
-			statusMgr.AddCondition(OperandsAvailable, v1alpha1.ReasonFailed,
+		// Always set conditions when we have unhealthy operands
+		message := fmt.Sprintf("Some operands not ready: %v", unhealthyOperands)
+		statusMgr.AddCondition(OperandsAvailable, v1alpha1.ReasonFailed,
+			message,
+			metav1.ConditionFalse)
+		// Manually set Ready with Failed (actual failure)
+		if manualReadyControl {
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
 				message,
 				metav1.ConditionFalse)
-			// Manually set Ready with Failed (actual failure)
-			if manualReadyControl {
-				statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-					message,
-					metav1.ConditionFalse)
-			}
 		}
 	}
 

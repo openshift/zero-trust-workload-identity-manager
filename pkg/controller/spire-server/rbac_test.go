@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireServerClusterRole(t *testing.T) {
-	cr := getSpireServerClusterRole()
+	cr := getSpireServerClusterRole(nil)
 
 	if cr == nil {
 		t.Fatal("Expected ClusterRole, got nil")
@@ -28,7 +28,7 @@ func TestGetSpireServerClusterRole(t *testing.T) {
 }
 
 func TestGetSpireServerClusterRoleBinding(t *testing.T) {
-	crb := getSpireServerClusterRoleBinding()
+	crb := getSpireServerClusterRoleBinding(nil)
 
 	if crb == nil {
 		t.Fatal("Expected ClusterRoleBinding, got nil")
@@ -45,7 +45,7 @@ func TestGetSpireServerClusterRoleBinding(t *testing.T) {
 }
 
 func TestGetSpireBundleRole(t *testing.T) {
-	role := getSpireBundleRole()
+	role := getSpireBundleRole(nil)
 
 	if role == nil {
 		t.Fatal("Expected Role, got nil")
@@ -66,7 +66,7 @@ func TestGetSpireBundleRole(t *testing.T) {
 }
 
 func TestGetSpireBundleRoleBinding(t *testing.T) {
-	rb := getSpireBundleRoleBinding()
+	rb := getSpireBundleRoleBinding(nil)
 
 	if rb == nil {
 		t.Fatal("Expected RoleBinding, got nil")
@@ -82,7 +82,7 @@ func TestGetSpireBundleRoleBinding(t *testing.T) {
 }
 
 func TestGetSpireControllerManagerClusterRole(t *testing.T) {
-	cr := getSpireControllerManagerClusterRole()
+	cr := getSpireControllerManagerClusterRole(nil)
 
 	if cr == nil {
 		t.Fatal("Expected ClusterRole, got nil")
@@ -103,7 +103,7 @@ func TestGetSpireControllerManagerClusterRole(t *testing.T) {
 }
 
 func TestGetSpireControllerManagerClusterRoleBinding(t *testing.T) {
-	crb := getSpireControllerManagerClusterRoleBinding()
+	crb := getSpireControllerManagerClusterRoleBinding(nil)
 
 	if crb == nil {
 		t.Fatal("Expected ClusterRoleBinding, got nil")
@@ -115,7 +115,7 @@ func TestGetSpireControllerManagerClusterRoleBinding(t *testing.T) {
 }
 
 func TestGetSpireControllerManagerLeaderElectionRole(t *testing.T) {
-	role := getSpireControllerManagerLeaderElectionRole()
+	role := getSpireControllerManagerLeaderElectionRole(nil)
 
 	if role == nil {
 		t.Fatal("Expected Role, got nil")
@@ -131,7 +131,7 @@ func TestGetSpireControllerManagerLeaderElectionRole(t *testing.T) {
 }
 
 func TestGetSpireControllerManagerLeaderElectionRoleBinding(t *testing.T) {
-	rb := getSpireControllerManagerLeaderElectionRoleBinding()
+	rb := getSpireControllerManagerLeaderElectionRoleBinding(nil)
 
 	if rb == nil {
 		t.Fatal("Expected RoleBinding, got nil")

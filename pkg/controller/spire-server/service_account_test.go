@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireServerServiceAccount(t *testing.T) {
-	sa := getSpireServerServiceAccount()
+	sa := getSpireServerServiceAccount(nil)
 
 	if sa == nil {
 		t.Fatal("Expected ServiceAccount, got nil")

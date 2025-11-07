@@ -20,7 +20,7 @@ import (
 
 // reconcileCSIDriver reconciles the Spiffe CSI Driver resource
 func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpiffeCSIDriver()
+	desired := getSpiffeCSIDriver(driver.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(driver, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on CSI driver")
@@ -96,8 +96,8 @@ func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1
 }
 
 // getSpiffeCSIDriver returns the Spiffe CSI Driver with proper labels
-func getSpiffeCSIDriver() *storagev1.CSIDriver {
+func getSpiffeCSIDriver(customLabels map[string]string) *storagev1.CSIDriver {
 	csiDriver := utils.DecodeCsiDriverObjBytes(assets.MustAsset(utils.SpiffeCsiDriverAssetName))
-	csiDriver.Labels = utils.SpiffeCSIDriverLabels(csiDriver.Labels)
+	csiDriver.Labels = utils.SpiffeCSIDriverLabels(customLabels)
 	return csiDriver
 }

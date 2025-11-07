@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireControllerManagerValidatingWebhookConfiguration(t *testing.T) {
-	webhook := getSpireControllerManagerValidatingWebhookConfiguration()
+	webhook := getSpireControllerManagerValidatingWebhookConfiguration(nil)
 
 	if webhook == nil {
 		t.Fatal("Expected ValidatingWebhookConfiguration, got nil")

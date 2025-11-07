@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpiffeCSIDriver(t *testing.T) {
-	csiDriver := getSpiffeCSIDriver()
+	csiDriver := getSpiffeCSIDriver(nil)
 
 	if csiDriver == nil {
 		t.Fatal("Expected CSIDriver, got nil")

@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireServerService(t *testing.T) {
-	svc := getSpireServerService()
+	svc := getSpireServerService(nil)
 
 	if svc == nil {
 		t.Fatal("Expected Service, got nil")
@@ -50,7 +50,7 @@ func TestGetSpireServerService(t *testing.T) {
 }
 
 func TestGetSpireControllerManagerWebhookService(t *testing.T) {
-	svc := getSpireControllerManagerWebhookService()
+	svc := getSpireControllerManagerWebhookService(nil)
 
 	if svc == nil {
 		t.Fatal("Expected Service, got nil")

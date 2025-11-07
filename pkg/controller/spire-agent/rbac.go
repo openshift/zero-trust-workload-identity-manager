@@ -31,12 +31,16 @@ func (r *SpireAgentReconciler) reconcileRBAC(ctx context.Context, agent *v1alpha
 	}
 
 	// Success status is set after ALL RBAC resources are created
+	// Set consolidated success status after all static resources are created
+	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
+		"All RBAC resources available",
+		metav1.ConditionTrue)
 	return nil
 }
 
 // reconcileClusterRole reconciles the Spire Agent ClusterRole
 func (r *SpireAgentReconciler) reconcileClusterRole(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireAgentClusterRole()
+	desired := getSpireAgentClusterRole(agent.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(agent, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on cluster role")
@@ -101,7 +105,7 @@ func (r *SpireAgentReconciler) reconcileClusterRole(ctx context.Context, agent *
 
 // reconcileClusterRoleBinding reconciles the Spire Agent ClusterRoleBinding
 func (r *SpireAgentReconciler) reconcileClusterRoleBinding(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireAgentClusterRoleBinding()
+	desired := getSpireAgentClusterRoleBinding(agent.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(agent, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on cluster role binding")
@@ -166,14 +170,14 @@ func (r *SpireAgentReconciler) reconcileClusterRoleBinding(ctx context.Context, 
 
 // Resource getter functions
 
-func getSpireAgentClusterRole() *rbacv1.ClusterRole {
+func getSpireAgentClusterRole(customLabels map[string]string) *rbacv1.ClusterRole {
 	cr := utils.DecodeClusterRoleObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleAssetName))
-	cr.Labels = utils.SpireAgentLabels(cr.Labels)
+	cr.Labels = utils.SpireAgentLabels(customLabels)
 	return cr
 }
 
-func getSpireAgentClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+func getSpireAgentClusterRoleBinding(customLabels map[string]string) *rbacv1.ClusterRoleBinding {
 	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleBindingAssetName))
-	crb.Labels = utils.SpireAgentLabels(crb.Labels)
+	crb.Labels = utils.SpireAgentLabels(customLabels)
 	return crb
 }

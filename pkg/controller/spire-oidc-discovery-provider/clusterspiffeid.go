@@ -6,11 +6,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func generateSpireIODCDiscoveryProviderSpiffeID() *spiffev1alpha1.ClusterSPIFFEID {
+func generateSpireIODCDiscoveryProviderSpiffeID(customLabels map[string]string) *spiffev1alpha1.ClusterSPIFFEID {
 	clusterSpiffeID := &spiffev1alpha1.ClusterSPIFFEID{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "zero-trust-workload-identity-manager-spire-oidc-discovery-provider",
-			Labels: utils.SpireOIDCDiscoveryProviderLabels(nil),
+			Labels: utils.SpireOIDCDiscoveryProviderLabels(customLabels),
 		},
 		Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
 			ClassName:        "zero-trust-workload-identity-manager-spire",
@@ -43,11 +43,11 @@ func generateSpireIODCDiscoveryProviderSpiffeID() *spiffev1alpha1.ClusterSPIFFEI
 	return clusterSpiffeID
 }
 
-func generateDefaultFallbackClusterSPIFFEID() *spiffev1alpha1.ClusterSPIFFEID {
+func generateDefaultFallbackClusterSPIFFEID(customLabels map[string]string) *spiffev1alpha1.ClusterSPIFFEID {
 	clusterSpiffeID := &spiffev1alpha1.ClusterSPIFFEID{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "zero-trust-workload-identity-manager-spire-default",
-			Labels: utils.SpireOIDCDiscoveryProviderLabels(nil),
+			Labels: utils.SpireOIDCDiscoveryProviderLabels(customLabels),
 		},
 		Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
 			ClassName:        "zero-trust-workload-identity-manager-spire",

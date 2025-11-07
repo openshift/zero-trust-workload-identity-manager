@@ -20,7 +20,7 @@ import (
 
 // reconcileService reconciles the Spire OIDC Discovery Provider Service
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileService(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireOIDCDiscoveryProviderService()
+	desired := getSpireOIDCDiscoveryProviderService(oidc.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(oidc, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service")
@@ -99,9 +99,9 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileService(ctx context.Cont
 }
 
 // getSpireOIDCDiscoveryProviderService returns the Spire OIDC Discovery Provider Service with proper labels and selectors
-func getSpireOIDCDiscoveryProviderService() *corev1.Service {
+func getSpireOIDCDiscoveryProviderService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireOIDCDiscoveryProviderServiceAssetName))
-	svc.Labels = utils.SpireOIDCDiscoveryProviderLabels(svc.Labels)
+	svc.Labels = utils.SpireOIDCDiscoveryProviderLabels(customLabels)
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
 		"app.kubernetes.io/instance": utils.StandardInstance,

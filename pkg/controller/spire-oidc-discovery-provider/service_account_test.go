@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireOIDCDiscoveryProviderServiceAccount(t *testing.T) {
-	sa := getSpireOIDCDiscoveryProviderServiceAccount()
+	sa := getSpireOIDCDiscoveryProviderServiceAccount(nil)
 
 	if sa == nil {
 		t.Fatal("Expected ServiceAccount, got nil")

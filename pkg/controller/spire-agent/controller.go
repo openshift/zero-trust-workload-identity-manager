@@ -134,14 +134,6 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// Set consolidated success status after all static resources are created
-	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
-		"All RBAC resources available",
-		metav1.ConditionTrue)
-	statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonReady,
-		"All Service resources available",
-		metav1.ConditionTrue)
-
 	return ctrl.Result{}, nil
 }
 

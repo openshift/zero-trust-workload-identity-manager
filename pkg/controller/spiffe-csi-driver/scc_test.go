@@ -12,7 +12,7 @@ import (
 )
 
 func TestGenerateSpiffeCSIDriverSCC(t *testing.T) {
-	scc := generateSpiffeCSIDriverSCC()
+	scc := generateSpiffeCSIDriverSCC(nil)
 
 	// Test that function returns non-nil SCC
 	if scc == nil {
@@ -237,7 +237,7 @@ func testCapabilities(t *testing.T, scc *securityv1.SecurityContextConstraints) 
 
 // Test table-driven approach for different SCC field validations
 func TestSCCFieldValidation(t *testing.T) {
-	scc := generateSpiffeCSIDriverSCC()
+	scc := generateSpiffeCSIDriverSCC(nil)
 
 	tests := []struct {
 		name     string
@@ -300,7 +300,7 @@ func TestSCCFieldValidation(t *testing.T) {
 
 // Test for AllowPrivilegeEscalation pointer validation
 func TestAllowPrivilegeEscalationPointer(t *testing.T) {
-	scc := generateSpiffeCSIDriverSCC()
+	scc := generateSpiffeCSIDriverSCC(nil)
 
 	if scc.AllowPrivilegeEscalation == nil {
 		t.Fatal("Expected AllowPrivilegeEscalation to be non-nil")
@@ -321,7 +321,7 @@ func TestAllowPrivilegeEscalationPointer(t *testing.T) {
 
 // Test strategy types enumeration
 func TestStrategyTypes(t *testing.T) {
-	scc := generateSpiffeCSIDriverSCC()
+	scc := generateSpiffeCSIDriverSCC(nil)
 
 	strategyTests := []struct {
 		name     string
@@ -362,14 +362,14 @@ func TestStrategyTypes(t *testing.T) {
 // Benchmark test for performance validation
 func BenchmarkGenerateSpiffeCSIDriverSCC(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		generateSpiffeCSIDriverSCC()
+		generateSpiffeCSIDriverSCC(nil)
 	}
 }
 
 // Test for immutability - ensure function returns new instance each time
 func TestSCCImmutability(t *testing.T) {
-	scc1 := generateSpiffeCSIDriverSCC()
-	scc2 := generateSpiffeCSIDriverSCC()
+	scc1 := generateSpiffeCSIDriverSCC(nil)
+	scc2 := generateSpiffeCSIDriverSCC(nil)
 
 	// They should be equal in content
 	if !reflect.DeepEqual(scc1, scc2) {

@@ -12,7 +12,7 @@ import (
 func TestGenerateSpireIODCDiscoveryProviderSpiffeID(t *testing.T) {
 	t.Run("should return valid ClusterSPIFFEID for OIDC discovery provider", func(t *testing.T) {
 		// Act
-		result := generateSpireIODCDiscoveryProviderSpiffeID()
+		result := generateSpireIODCDiscoveryProviderSpiffeID(nil)
 
 		// Assert
 		require.NotNil(t, result)
@@ -55,8 +55,8 @@ func TestGenerateSpireIODCDiscoveryProviderSpiffeID(t *testing.T) {
 
 	t.Run("should return consistent results across multiple calls", func(t *testing.T) {
 		// Act
-		result1 := generateSpireIODCDiscoveryProviderSpiffeID()
-		result2 := generateSpireIODCDiscoveryProviderSpiffeID()
+		result1 := generateSpireIODCDiscoveryProviderSpiffeID(nil)
+		result2 := generateSpireIODCDiscoveryProviderSpiffeID(nil)
 
 		// Assert
 		assert.Equal(t, result1.ObjectMeta.Name, result2.ObjectMeta.Name)
@@ -70,7 +70,7 @@ func TestGenerateSpireIODCDiscoveryProviderSpiffeID(t *testing.T) {
 func TestGenerateDefaultFallbackClusterSPIFFEID(t *testing.T) {
 	t.Run("should return valid ClusterSPIFFEID for default fallback", func(t *testing.T) {
 		// Act
-		result := generateDefaultFallbackClusterSPIFFEID()
+		result := generateDefaultFallbackClusterSPIFFEID(nil)
 
 		// Assert
 		require.NotNil(t, result)
@@ -106,8 +106,8 @@ func TestGenerateDefaultFallbackClusterSPIFFEID(t *testing.T) {
 
 	t.Run("should return consistent results across multiple calls", func(t *testing.T) {
 		// Act
-		result1 := generateDefaultFallbackClusterSPIFFEID()
-		result2 := generateDefaultFallbackClusterSPIFFEID()
+		result1 := generateDefaultFallbackClusterSPIFFEID(nil)
+		result2 := generateDefaultFallbackClusterSPIFFEID(nil)
 
 		// Assert
 		assert.Equal(t, result1.ObjectMeta.Name, result2.ObjectMeta.Name)
@@ -121,8 +121,8 @@ func TestGenerateDefaultFallbackClusterSPIFFEID(t *testing.T) {
 func TestBothFunctions_DifferentBehaviors(t *testing.T) {
 	t.Run("should have different configurations between OIDC and default fallback", func(t *testing.T) {
 		// Act
-		oidcResult := generateSpireIODCDiscoveryProviderSpiffeID()
-		defaultResult := generateDefaultFallbackClusterSPIFFEID()
+		oidcResult := generateSpireIODCDiscoveryProviderSpiffeID(nil)
+		defaultResult := generateDefaultFallbackClusterSPIFFEID(nil)
 
 		// Assert - Names should be different
 		assert.NotEqual(t, oidcResult.ObjectMeta.Name, defaultResult.ObjectMeta.Name)
@@ -162,13 +162,13 @@ func TestBothFunctions_DifferentBehaviors(t *testing.T) {
 // Benchmark tests (optional)
 func BenchmarkGenerateSpireIODCDiscoveryProviderSpiffeID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		generateSpireIODCDiscoveryProviderSpiffeID()
+		generateSpireIODCDiscoveryProviderSpiffeID(nil)
 	}
 }
 
 func BenchmarkGenerateDefaultFallbackClusterSPIFFEID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		generateDefaultFallbackClusterSPIFFEID()
+		generateDefaultFallbackClusterSPIFFEID(nil)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestNamespaceValues(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		function func() *spiffev1alpha1.ClusterSPIFFEID
+		function func(map[string]string) *spiffev1alpha1.ClusterSPIFFEID
 	}{
 		{
 			name:     "OIDC Discovery Provider",
@@ -194,7 +194,7 @@ func TestNamespaceValues(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := tc.function()
+			result := tc.function(nil)
 
 			require.NotNil(t, result.Spec.NamespaceSelector)
 			require.Len(t, result.Spec.NamespaceSelector.MatchExpressions, 1)

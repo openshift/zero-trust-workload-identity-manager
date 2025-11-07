@@ -20,7 +20,7 @@ import (
 
 // reconcileServiceAccount reconciles the Spire OIDC Discovery Provider ServiceAccount
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileServiceAccount(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireOIDCDiscoveryProviderServiceAccount()
+	desired := getSpireOIDCDiscoveryProviderServiceAccount(oidc.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(oidc, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service account")
@@ -96,8 +96,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileServiceAccount(ctx conte
 }
 
 // getSpireOIDCDiscoveryProviderServiceAccount returns the Spire OIDC Discovery Provider ServiceAccount with proper labels
-func getSpireOIDCDiscoveryProviderServiceAccount() *corev1.ServiceAccount {
+func getSpireOIDCDiscoveryProviderServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireOIDCDiscoveryProviderServiceAccountAssetName))
-	sa.Labels = utils.SpireOIDCDiscoveryProviderLabels(sa.Labels)
+	sa.Labels = utils.SpireOIDCDiscoveryProviderLabels(customLabels)
 	return sa
 }

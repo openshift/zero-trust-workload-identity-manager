@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpireAgentClusterRole(t *testing.T) {
-	cr := getSpireAgentClusterRole()
+	cr := getSpireAgentClusterRole(nil)
 
 	if cr == nil {
 		t.Fatal("Expected ClusterRole, got nil")
@@ -28,7 +28,7 @@ func TestGetSpireAgentClusterRole(t *testing.T) {
 }
 
 func TestGetSpireAgentClusterRoleBinding(t *testing.T) {
-	crb := getSpireAgentClusterRoleBinding()
+	crb := getSpireAgentClusterRoleBinding(nil)
 
 	if crb == nil {
 		t.Fatal("Expected ClusterRoleBinding, got nil")

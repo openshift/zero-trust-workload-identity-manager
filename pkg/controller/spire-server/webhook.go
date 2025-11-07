@@ -20,7 +20,7 @@ import (
 
 // reconcileWebhook reconciles the ValidatingWebhookConfiguration for Controller Manager
 func (r *SpireServerReconciler) reconcileWebhook(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireControllerManagerValidatingWebhookConfiguration()
+	desired := getSpireControllerManagerValidatingWebhookConfiguration(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on validating webhook")
@@ -99,8 +99,8 @@ func (r *SpireServerReconciler) reconcileWebhook(ctx context.Context, server *v1
 }
 
 // getSpireControllerManagerValidatingWebhookConfiguration returns the ValidatingWebhookConfiguration with proper labels
-func getSpireControllerManagerValidatingWebhookConfiguration() *admissionregistrationv1.ValidatingWebhookConfiguration {
+func getSpireControllerManagerValidatingWebhookConfiguration(customLabels map[string]string) *admissionregistrationv1.ValidatingWebhookConfiguration {
 	webhook := utils.DecodeValidatingWebhookConfigurationByBytes(assets.MustAsset(utils.SpireControllerManagerValidatingWebhookConfigurationAssetName))
-	webhook.Labels = utils.SpireControllerManagerLabels(webhook.Labels)
+	webhook.Labels = utils.SpireControllerManagerLabels(customLabels)
 	return webhook
 }

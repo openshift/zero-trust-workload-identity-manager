@@ -20,7 +20,7 @@ import (
 
 // reconcileServiceAccount reconciles the Spire Server ServiceAccount
 func (r *SpireServerReconciler) reconcileServiceAccount(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireServerServiceAccount()
+	desired := getSpireServerServiceAccount(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service account")
@@ -96,8 +96,8 @@ func (r *SpireServerReconciler) reconcileServiceAccount(ctx context.Context, ser
 }
 
 // getSpireServerServiceAccount returns the Spire Server ServiceAccount with proper labels
-func getSpireServerServiceAccount() *corev1.ServiceAccount {
+func getSpireServerServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireServerServiceAccountAssetName))
-	sa.Labels = utils.SpireServerLabels(sa.Labels)
+	sa.Labels = utils.SpireServerLabels(customLabels)
 	return sa
 }

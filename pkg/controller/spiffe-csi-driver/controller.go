@@ -171,7 +171,7 @@ func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDri
 
 // reconcileSCC reconciles the Spiffe CSI Driver Security Context Constraints
 func (r *SpiffeCsiReconciler) reconcileSCC(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager) error {
-	SpiffeCsiSCC := generateSpiffeCSIDriverSCC()
+	SpiffeCsiSCC := generateSpiffeCSIDriverSCC(driver.Spec.Labels)
 	if err := controllerutil.SetControllerReference(driver, SpiffeCsiSCC, r.scheme); err != nil {
 		r.log.Error(err, "failed to set the owner reference for the SCC resource")
 		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpiffeCSISCCGenerationFailed",

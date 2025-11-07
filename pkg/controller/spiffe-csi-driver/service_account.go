@@ -20,7 +20,7 @@ import (
 
 // reconcileServiceAccount reconciles the Spiffe CSI Driver ServiceAccount
 func (r *SpiffeCsiReconciler) reconcileServiceAccount(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpiffeCSIDriverServiceAccount()
+	desired := getSpiffeCSIDriverServiceAccount(driver.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(driver, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service account")
@@ -96,8 +96,8 @@ func (r *SpiffeCsiReconciler) reconcileServiceAccount(ctx context.Context, drive
 }
 
 // getSpiffeCSIDriverServiceAccount returns the Spiffe CSI Driver ServiceAccount with proper labels
-func getSpiffeCSIDriverServiceAccount() *corev1.ServiceAccount {
+func getSpiffeCSIDriverServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpiffeCsiDriverServiceAccountAssetName))
-	sa.Labels = utils.SpiffeCSIDriverLabels(sa.Labels)
+	sa.Labels = utils.SpiffeCSIDriverLabels(customLabels)
 	return sa
 }

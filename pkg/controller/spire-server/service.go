@@ -41,7 +41,7 @@ func (r *SpireServerReconciler) reconcileService(ctx context.Context, server *v1
 
 // reconcileSpireServerService reconciles the Spire Server Service
 func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireServerService()
+	desired := getSpireServerService(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service")
@@ -109,7 +109,7 @@ func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context,
 
 // reconcileSpireControllerManagerService reconciles the Controller Manager webhook Service
 func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireControllerManagerWebhookService()
+	desired := getSpireControllerManagerWebhookService(server.Spec.Labels)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on controller manager service")
@@ -176,9 +176,9 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 }
 
 // getSpireServerService returns the Spire Server Service with proper labels and selectors
-func getSpireServerService() *corev1.Service {
+func getSpireServerService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireServerServiceAssetName))
-	svc.Labels = utils.SpireServerLabels(svc.Labels)
+	svc.Labels = utils.SpireServerLabels(customLabels)
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-server",
 		"app.kubernetes.io/instance": utils.StandardInstance,
@@ -187,9 +187,9 @@ func getSpireServerService() *corev1.Service {
 }
 
 // getSpireControllerManagerWebhookService returns the Controller Manager Service with proper labels and selectors
-func getSpireControllerManagerWebhookService() *corev1.Service {
+func getSpireControllerManagerWebhookService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireControllerMangerWebhookServiceAssetName))
-	svc.Labels = utils.SpireControllerManagerLabels(svc.Labels)
+	svc.Labels = utils.SpireControllerManagerLabels(customLabels)
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-controller-manager",
 		"app.kubernetes.io/instance": utils.StandardInstance,

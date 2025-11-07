@@ -12,8 +12,8 @@ import (
 
 func TestAddCondition(t *testing.T) {
 	mgr := &Manager{
-		client:     nil,
-		conditions: make(map[string]Condition),
+		customClient: nil,
+		conditions:   make(map[string]Condition),
 	}
 
 	tests := []struct {
@@ -121,8 +121,8 @@ func TestSetReadyCondition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mgr := &Manager{
-				client:     nil,
-				conditions: tt.existingConditions,
+				customClient: nil,
+				conditions:   tt.existingConditions,
 			}
 
 			mgr.SetReadyCondition()

@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSpiffeCSIDriverServiceAccount(t *testing.T) {
-	sa := getSpiffeCSIDriverServiceAccount()
+	sa := getSpiffeCSIDriverServiceAccount(nil)
 
 	if sa == nil {
 		t.Fatal("Expected ServiceAccount, got nil")
