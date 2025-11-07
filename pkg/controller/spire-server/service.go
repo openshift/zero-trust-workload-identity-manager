@@ -16,10 +16,6 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
 )
 
-const (
-	SpireServerServiceReady = "SpireServerServiceReady"
-)
-
 // reconcileService reconciles all Services (spire-server and controller-manager)
 func (r *SpireServerReconciler) reconcileService(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
 	// Spire Server Service
