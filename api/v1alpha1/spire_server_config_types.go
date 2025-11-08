@@ -318,6 +318,13 @@ type ServingCertConfig struct {
 	// +kubebuilder:validation:Maximum=3600
 	// +kubebuilder:default=300
 	FileSyncInterval int32 `json:"fileSyncInterval,omitempty"`
+
+	// ExternalCertificate is the name of the Secret containing the external certificate for the router.
+	// The secret must exist in the zero-trust-workload-identity-manager namespace and contain
+	// tls.crt and tls.key fields. The OpenShift Ingress Operator will read this secret to
+	// configure the route's TLS certificate.
+	// +kubebuilder:validation:Optional
+	ExternalCertificate string `json:"externalCertificate,omitempty"`
 }
 
 // FederatesWithConfig represents a remote trust domain to federate with

@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: spire-server
   namespace: zero-trust-workload-identity-manager
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: spire-server-serving-cert
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire

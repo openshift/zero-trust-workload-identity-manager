@@ -20,27 +20,55 @@ import (
 func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
 	labels := utils.SpireServerLabels(server.Spec.Labels)
 
-	return &routev1.Route{
+	// Construct federation host using trust domain
+	federationHost := "federation." + server.Spec.TrustDomain
+
+	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server-federation",
 			Namespace: utils.OperatorNamespace,
 			Labels:    labels,
 		},
 		Spec: routev1.RouteSpec{
+			Host: federationHost,
 			To: routev1.RouteTargetReference{
-				Kind: "Service",
-				Name: "spire-server",
+				Kind:   "Service",
+				Name:   "spire-server",
+				Weight: &[]int32{100}[0], // Pointer to 100
 			},
 			Port: &routev1.RoutePort{
 				TargetPort: intstr.FromString("federation"),
 			},
-			TLS: &routev1.TLSConfig{
-				Termination:                   routev1.TLSTerminationPassthrough,
-				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
-			},
 			WildcardPolicy: routev1.WildcardPolicyNone,
 		},
 	}
+
+	// Configure TLS based on profile
+	switch server.Spec.Federation.BundleEndpoint.Profile {
+	case v1alpha1.HttpsSpiffeProfile:
+		// https_spiffe profile uses passthrough TLS
+		route.Spec.TLS = &routev1.TLSConfig{
+			Termination:                   routev1.TLSTerminationPassthrough,
+			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+		}
+	case v1alpha1.HttpsWebProfile:
+		// https_web profile uses re-encrypt TLS
+		route.Spec.TLS = &routev1.TLSConfig{
+			Termination:                   routev1.TLSTerminationReencrypt,
+			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+		}
+
+		// Set external certificate if provided
+		if server.Spec.Federation.BundleEndpoint.HttpsWeb != nil &&
+			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert != nil &&
+			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalCertificate != "" {
+			route.Spec.TLS.ExternalCertificate = &routev1.LocalObjectReference{
+				Name: server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalCertificate,
+			}
+		}
+	}
+
+	return route
 }
 
 // checkFederationRouteConflict returns true if desired & current routes have conflicts

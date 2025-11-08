@@ -784,6 +784,8 @@ kind: Service
 metadata:
   name: spire-server
   namespace: zero-trust-workload-identity-manager
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: spire-server-serving-cert
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
@@ -799,6 +801,10 @@ spec:
     - name: metrics
       port: 9402
       targetPort: 9402
+    - name: federation
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
   selector:
     app.kubernetes.io/name: server
     app.kubernetes.io/instance: spire
