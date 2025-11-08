@@ -3,7 +3,10 @@ package zero_trust_workload_identity_manager
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,43 +100,17 @@ func classifyOperandState(operand v1alpha1.OperandStatus, readyCondition *metav1
 
 // contains performs case-insensitive substring match
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr || len(s) > 0 && len(substr) > 0 &&
-			findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			if toLower(s[i+j]) != toLower(substr[j]) {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
-}
-
-func toLower(b byte) byte {
-	if b >= 'A' && b <= 'Z' {
-		return b + ('a' - 'A')
-	}
-	return b
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 // ZeroTrustWorkloadIdentityManagerReconciler manages the ZeroTrustWorkloadIdentityManager singleton instance
 // and aggregates status from all operand CRs
 type ZeroTrustWorkloadIdentityManagerReconciler struct {
-	ctrlClient     customClient.CustomCtrlClient
-	ctx            context.Context
-	eventRecorder  record.EventRecorder
-	log            logr.Logger
-	scheme         *runtime.Scheme
-	createOnlyMode bool
+	ctrlClient    customClient.CustomCtrlClient
+	ctx           context.Context
+	eventRecorder record.EventRecorder
+	log           logr.Logger
+	scheme        *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers,verbs=get;list;watch;create;update;patch;delete
@@ -192,12 +169,11 @@ func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) 
 		return nil, err
 	}
 	return &ZeroTrustWorkloadIdentityManagerReconciler{
-		ctrlClient:     c,
-		ctx:            context.Background(),
-		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerControllerName),
-		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerControllerName),
-		scheme:         mgr.GetScheme(),
-		createOnlyMode: false,
+		ctrlClient:    c,
+		ctx:           context.Background(),
+		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerControllerName),
+		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerControllerName),
+		scheme:        mgr.GetScheme(),
 	}, nil
 }
 
@@ -218,16 +194,18 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		return ctrl.Result{}, err
 	}
 
+	// Ensure namespace has required Pod Security labels for CSI driver support
+	if err := r.ensureNamespacePodSecurityLabels(ctx); err != nil {
+		r.log.Error(err, "failed to ensure namespace Pod Security labels")
+		return ctrl.Result{}, err
+	}
+
 	// Set Ready to false at the start of reconciliation
 	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &config, func() *v1alpha1.ConditionalStatus {
 		return &config.Status.ConditionalStatus
 	}, "ZeroTrustWorkloadIdentityManager")
 
 	statusMgr := status.NewManager(r.ctrlClient)
-
-	// For ZTWIM, we manually control the Ready condition instead of auto-aggregation
-	// This allows us to use "Progressing" when waiting for user to create CRs
-	manualReadyControl := true
 
 	defer func() {
 		if err := statusMgr.ApplyStatus(ctx, &config, func() *v1alpha1.ConditionalStatus {
@@ -248,11 +226,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 			"All operand CRs are ready",
 			metav1.ConditionTrue)
 		// Manually set Ready (don't let status manager auto-aggregate)
-		if manualReadyControl {
-			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonReady,
-				"All components are ready",
-				metav1.ConditionTrue)
-		}
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonReady,
+			"All components are ready",
+			metav1.ConditionTrue)
 	} else if notCreatedCount > 0 && failedCount == 0 {
 		// Operands not created or still reconciling - use Progressing for both conditions
 		var pendingOperands []string
@@ -275,11 +251,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 			message,
 			metav1.ConditionFalse)
 		// Manually set Ready with Progressing (waiting for user/reconciliation)
-		if manualReadyControl {
-			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonInProgress,
-				message,
-				metav1.ConditionFalse)
-		}
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonInProgress,
+			message,
+			metav1.ConditionFalse)
 	} else {
 		// Some operands are actually unhealthy - use Failed
 		var unhealthyOperands []string
@@ -298,11 +272,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 			message,
 			metav1.ConditionFalse)
 		// Manually set Ready with Failed (actual failure)
-		if manualReadyControl {
-			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-				message,
-				metav1.ConditionFalse)
-		}
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			message,
+			metav1.ConditionFalse)
 	}
 
 	r.log.Info("Aggregated operand status", "allReady", allReady, "notCreated", notCreatedCount, "failed", failedCount)
@@ -381,14 +353,22 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 	return operandStatuses, allReady, notCreatedCount, failedCount
 }
 
-// getSpireServerStatus retrieves and summarizes SpireServer status
-func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireServerStatus(ctx context.Context) v1alpha1.OperandStatus {
-	var server v1alpha1.SpireServer
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &server)
+// operandStatusGetter defines the interface for types that have conditional status
+type operandStatusGetter interface {
+	client.Object
+	GetConditionalStatus() v1alpha1.ConditionalStatus
+}
+
+// getOperandStatus is a generic helper that retrieves and summarizes operand status for any CR type
+func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWorkloadIdentityManagerReconciler, kind string) v1alpha1.OperandStatus {
+	var obj T
+	// Since T is a pointer type, create a new instance of the underlying type
+	objValue := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(T)
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, objValue)
 
 	operandStatus := v1alpha1.OperandStatus{
 		Name: "cluster",
-		Kind: "SpireServer",
+		Kind: kind,
 	}
 
 	if err != nil {
@@ -402,15 +382,19 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireServerStatus(ctx co
 		return operandStatus
 	}
 
+	// Get the conditions from the status
+	conditionalStatus := objValue.GetConditionalStatus()
+	conditions := conditionalStatus.Conditions
+
 	// Check if operand has been reconciled (has at least one condition)
-	if len(server.Status.Conditions) == 0 {
+	if len(conditions) == 0 {
 		operandStatus.Ready = false
 		operandStatus.Message = "Waiting for initial reconciliation"
 		return operandStatus
 	}
 
 	// Check if Ready condition exists and is True
-	readyCondition := apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.Ready)
+	readyCondition := apimeta.FindStatusCondition(conditions, v1alpha1.Ready)
 	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
 		operandStatus.Ready = true
 		operandStatus.Message = "Ready"
@@ -424,150 +408,29 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireServerStatus(ctx co
 	}
 
 	// Include only failed conditions (reduces clutter)
-	operandStatus.Conditions = extractKeyConditions(server.Status.Conditions, operandStatus.Ready)
+	operandStatus.Conditions = extractKeyConditions(conditions, operandStatus.Ready)
 
 	return operandStatus
+}
+
+// getSpireServerStatus retrieves and summarizes SpireServer status
+func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireServerStatus(ctx context.Context) v1alpha1.OperandStatus {
+	return getOperandStatus[*v1alpha1.SpireServer](ctx, r, "SpireServer")
 }
 
 // getSpireAgentStatus retrieves and summarizes SpireAgent status
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireAgentStatus(ctx context.Context) v1alpha1.OperandStatus {
-	var agent v1alpha1.SpireAgent
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &agent)
-
-	operandStatus := v1alpha1.OperandStatus{
-		Name: "cluster",
-		Kind: "SpireAgent",
-	}
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			operandStatus.Ready = false
-			operandStatus.Message = "CR not found"
-			return operandStatus
-		}
-		operandStatus.Ready = false
-		operandStatus.Message = fmt.Sprintf("Failed to get CR: %v", err)
-		return operandStatus
-	}
-
-	// Check if operand has been reconciled
-	if len(agent.Status.Conditions) == 0 {
-		operandStatus.Ready = false
-		operandStatus.Message = "Waiting for initial reconciliation"
-		return operandStatus
-	}
-
-	// Check Ready condition
-	readyCondition := apimeta.FindStatusCondition(agent.Status.Conditions, v1alpha1.Ready)
-	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-		operandStatus.Ready = true
-		operandStatus.Message = "Ready"
-	} else {
-		operandStatus.Ready = false
-		if readyCondition != nil {
-			operandStatus.Message = readyCondition.Message
-		} else {
-			operandStatus.Message = "Reconciling"
-		}
-	}
-
-	operandStatus.Conditions = extractKeyConditions(agent.Status.Conditions, operandStatus.Ready)
-
-	return operandStatus
+	return getOperandStatus[*v1alpha1.SpireAgent](ctx, r, "SpireAgent")
 }
 
 // getSpiffeCSIDriverStatus retrieves and summarizes SpiffeCSIDriver status
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpiffeCSIDriverStatus(ctx context.Context) v1alpha1.OperandStatus {
-	var driver v1alpha1.SpiffeCSIDriver
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &driver)
-
-	operandStatus := v1alpha1.OperandStatus{
-		Name: "cluster",
-		Kind: "SpiffeCSIDriver",
-	}
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			operandStatus.Ready = false
-			operandStatus.Message = "CR not found"
-			return operandStatus
-		}
-		operandStatus.Ready = false
-		operandStatus.Message = fmt.Sprintf("Failed to get CR: %v", err)
-		return operandStatus
-	}
-
-	// Check if operand has been reconciled
-	if len(driver.Status.Conditions) == 0 {
-		operandStatus.Ready = false
-		operandStatus.Message = "Waiting for initial reconciliation"
-		return operandStatus
-	}
-
-	// Check Ready condition
-	readyCondition := apimeta.FindStatusCondition(driver.Status.Conditions, v1alpha1.Ready)
-	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-		operandStatus.Ready = true
-		operandStatus.Message = "Ready"
-	} else {
-		operandStatus.Ready = false
-		if readyCondition != nil {
-			operandStatus.Message = readyCondition.Message
-		} else {
-			operandStatus.Message = "Reconciling"
-		}
-	}
-
-	operandStatus.Conditions = extractKeyConditions(driver.Status.Conditions, operandStatus.Ready)
-
-	return operandStatus
+	return getOperandStatus[*v1alpha1.SpiffeCSIDriver](ctx, r, "SpiffeCSIDriver")
 }
 
 // getSpireOIDCDiscoveryProviderStatus retrieves and summarizes SpireOIDCDiscoveryProvider status
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireOIDCDiscoveryProviderStatus(ctx context.Context) v1alpha1.OperandStatus {
-	var oidc v1alpha1.SpireOIDCDiscoveryProvider
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &oidc)
-
-	operandStatus := v1alpha1.OperandStatus{
-		Name: "cluster",
-		Kind: "SpireOIDCDiscoveryProvider",
-	}
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			operandStatus.Ready = false
-			operandStatus.Message = "CR not found"
-			return operandStatus
-		}
-		operandStatus.Ready = false
-		operandStatus.Message = fmt.Sprintf("Failed to get CR: %v", err)
-		return operandStatus
-	}
-
-	// Check if operand has been reconciled
-	if len(oidc.Status.Conditions) == 0 {
-		operandStatus.Ready = false
-		operandStatus.Message = "Waiting for initial reconciliation"
-		return operandStatus
-	}
-
-	// Check Ready condition
-	readyCondition := apimeta.FindStatusCondition(oidc.Status.Conditions, v1alpha1.Ready)
-	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-		operandStatus.Ready = true
-		operandStatus.Message = "Ready"
-	} else {
-		operandStatus.Ready = false
-		if readyCondition != nil {
-			operandStatus.Message = readyCondition.Message
-		} else {
-			operandStatus.Message = "Reconciling"
-		}
-	}
-
-	operandStatus.Conditions = extractKeyConditions(oidc.Status.Conditions, operandStatus.Ready)
-
-	return operandStatus
+	return getOperandStatus[*v1alpha1.SpireOIDCDiscoveryProvider](ctx, r, "SpireOIDCDiscoveryProvider")
 }
 
 // extractKeyConditions extracts key conditions from operand status
@@ -617,6 +480,48 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) recreateClusterInstance(ctx
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{Requeue: true}, nil
+}
+
+// ensureNamespacePodSecurityLabels ensures the operator namespace has the required Pod Security labels
+// for CSI driver support. CSI inline volumes require privileged pod security enforcement.
+func (r *ZeroTrustWorkloadIdentityManagerReconciler) ensureNamespacePodSecurityLabels(ctx context.Context) error {
+	namespace := &corev1.Namespace{}
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: utils.OperatorNamespace}, namespace); err != nil {
+		return fmt.Errorf("failed to get namespace %s: %w", utils.OperatorNamespace, err)
+	}
+
+	// Required Pod Security labels for CSI driver support
+	requiredLabels := map[string]string{
+		"pod-security.kubernetes.io/enforce": "privileged",
+		"pod-security.kubernetes.io/audit":   "privileged",
+		"pod-security.kubernetes.io/warn":    "privileged",
+	}
+
+	// Check if labels need to be added
+	needsUpdate := false
+	if namespace.Labels == nil {
+		namespace.Labels = make(map[string]string)
+		needsUpdate = true
+	}
+
+	for key, value := range requiredLabels {
+		if namespace.Labels[key] != value {
+			namespace.Labels[key] = value
+			needsUpdate = true
+		}
+	}
+
+	if needsUpdate {
+		r.log.Info("Updating namespace with Pod Security labels", "namespace", utils.OperatorNamespace)
+		if err := r.ctrlClient.Update(ctx, namespace); err != nil {
+			return fmt.Errorf("failed to update namespace %s with Pod Security labels: %w", utils.OperatorNamespace, err)
+		}
+		r.log.Info("Successfully updated namespace with Pod Security labels", "namespace", utils.OperatorNamespace)
+	} else {
+		r.log.V(1).Info("Namespace already has required Pod Security labels", "namespace", utils.OperatorNamespace)
+	}
+
+	return nil
 }
 
 // operandStatusChangedPredicate only triggers reconciliation when operand status changes

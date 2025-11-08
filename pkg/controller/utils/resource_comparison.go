@@ -93,44 +93,12 @@ func annotationsMatch(existing, desired map[string]string) bool {
 
 // ServiceNeedsUpdate checks if a Service needs updating
 func ServiceNeedsUpdate(existing, desired *corev1.Service) bool {
-	// TODO: Add logic
+	if existing.Spec.Type != desired.Spec.Type ||
+		!reflect.DeepEqual(existing.Spec.Ports, desired.Spec.Ports) ||
+		!reflect.DeepEqual(existing.Spec.Selector, desired.Spec.Selector) {
+		return true
+	}
 	return false
-}
-
-// portsEqual compares two slices of ServicePort
-func portsEqual(existing, desired []corev1.ServicePort) bool {
-	if len(existing) != len(desired) {
-		return false
-	}
-
-	// Create maps for easier comparison
-	existingMap := make(map[string]corev1.ServicePort)
-	for _, port := range existing {
-		existingMap[port.Name] = port
-	}
-
-	for _, desiredPort := range desired {
-		existingPort, exists := existingMap[desiredPort.Name]
-		if !exists {
-			return false
-		}
-
-		// Compare key fields (ignore NodePort as it's assigned by Kubernetes)
-		if existingPort.Protocol != desiredPort.Protocol ||
-			existingPort.Port != desiredPort.Port ||
-			existingPort.TargetPort != desiredPort.TargetPort {
-			return false
-		}
-
-		// Only compare AppProtocol if desired has it set
-		if desiredPort.AppProtocol != nil && existingPort.AppProtocol != nil {
-			if *existingPort.AppProtocol != *desiredPort.AppProtocol {
-				return false
-			}
-		}
-	}
-
-	return true
 }
 
 // mapsEqual compares two string maps
@@ -262,18 +230,19 @@ func RoleBindingNeedsUpdate(existing, desired *rbacv1.RoleBinding) bool {
 
 // CSIDriverNeedsUpdate checks if a CSIDriver needs updating
 func CSIDriverNeedsUpdate(existing, desired *storagev1.CSIDriver) bool {
-	if existing.Spec.AttachRequired != desired.Spec.AttachRequired {
-		return true
-	}
-	if existing.Spec.PodInfoOnMount != desired.Spec.PodInfoOnMount {
-		return true
-	}
-	if existing.Spec.FSGroupPolicy != desired.Spec.FSGroupPolicy {
-		return true
-	}
-	if !reflect.DeepEqual(existing.Spec.VolumeLifecycleModes, desired.Spec.VolumeLifecycleModes) {
-		return true
-	}
+	//if existing.Spec.AttachRequired != desired.Spec.AttachRequired {
+	//	return true
+	//}
+	//if existing.Spec.PodInfoOnMount != desired.Spec.PodInfoOnMount {
+	//	return true
+	//}
+	//if existing.Spec.FSGroupPolicy != desired.Spec.FSGroupPolicy {
+	//	return true
+	//}
+	//if !reflect.DeepEqual(existing.Spec.VolumeLifecycleModes, desired.Spec.VolumeLifecycleModes) {
+	//	return true
+	//}
+	//return false
 	return false
 }
 
