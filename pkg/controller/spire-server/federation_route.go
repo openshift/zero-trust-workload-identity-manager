@@ -19,7 +19,7 @@ import (
 func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
 	labels := utils.SpireServerLabels(server.Spec.Labels)
 
-	return &routev1.Route{
+	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server-federation",
 			Namespace: utils.OperatorNamespace,
@@ -27,19 +27,42 @@ func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
 		},
 		Spec: routev1.RouteSpec{
 			To: routev1.RouteTargetReference{
-				Kind: "Service",
-				Name: "spire-server",
+				Kind:   "Service",
+				Name:   "spire-server",
+				Weight: &[]int32{100}[0], // Pointer to 100
 			},
 			Port: &routev1.RoutePort{
 				TargetPort: intstr.FromString("federation"),
 			},
-			TLS: &routev1.TLSConfig{
-				Termination:                   routev1.TLSTerminationPassthrough,
-				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
-			},
 			WildcardPolicy: routev1.WildcardPolicyNone,
 		},
 	}
+
+	// Configure TLS based on profile
+	switch server.Spec.Federation.BundleEndpoint.Profile {
+	case v1alpha1.HttpsSpiffeProfile:
+		// https_spiffe profile uses passthrough TLS
+		route.Spec.TLS = &routev1.TLSConfig{
+			Termination:                   routev1.TLSTerminationPassthrough,
+			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+		}
+	case v1alpha1.HttpsWebProfile:
+		// https_web profile uses re-encrypt TLS
+		route.Spec.TLS = &routev1.TLSConfig{
+			Termination:                   routev1.TLSTerminationReencrypt,
+			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+		}
+
+		// If using ServingCert, set external certificate reference
+		if server.Spec.Federation.BundleEndpoint.HttpsWeb != nil &&
+			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert != nil {
+			route.Spec.TLS.ExternalCertificate = &routev1.LocalObjectReference{
+				Name: server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.SecretName,
+			}
+		}
+	}
+
+	return route
 }
 
 // checkFederationRouteConflict returns true if desired & current routes have conflicts

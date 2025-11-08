@@ -226,26 +226,35 @@ func generateBundleEndpointConfig(bundleEndpoint *v1alpha1.BundleEndpointConfig)
 	}
 
 	// Configure profile-specific settings
-	if bundleEndpoint.Profile == v1alpha1.HttpsSpiffeProfile {
+	switch bundleEndpoint.Profile {
+	case v1alpha1.HttpsSpiffeProfile:
 		// For https_spiffe, set acme to null (SPIFFE authentication)
 		endpointConf["acme"] = nil
-	} else if bundleEndpoint.Profile == v1alpha1.HttpsWebProfile && bundleEndpoint.HttpsWeb != nil {
+	case v1alpha1.HttpsWebProfile:
 		// Configure https_web profile
-		if bundleEndpoint.HttpsWeb.Acme != nil {
-			endpointConf["acme"] = map[string]interface{}{
-				"directory_url": bundleEndpoint.HttpsWeb.Acme.DirectoryUrl,
-				"domain_name":   bundleEndpoint.HttpsWeb.Acme.DomainName,
-				"email":         bundleEndpoint.HttpsWeb.Acme.Email,
-				"tos_accepted":  utils.StringToBool(bundleEndpoint.HttpsWeb.Acme.TosAccepted),
+		if bundleEndpoint.HttpsWeb != nil {
+			if bundleEndpoint.HttpsWeb.Acme != nil {
+				endpointConf["acme"] = map[string]interface{}{
+					"directory_url": bundleEndpoint.HttpsWeb.Acme.DirectoryUrl,
+					"domain_name":   bundleEndpoint.HttpsWeb.Acme.DomainName,
+					"email":         bundleEndpoint.HttpsWeb.Acme.Email,
+					"tos_accepted":  utils.StringToBool(bundleEndpoint.HttpsWeb.Acme.TosAccepted),
+				}
+			} else if bundleEndpoint.HttpsWeb.ServingCert != nil {
+				// Mount certificate from Secret to /run/spire/federation-certs/
+				endpointConf["serving_cert_file"] = map[string]interface{}{
+					"cert_file_path": "/run/spire/federation-certs/tls.crt",
+					"key_file_path":  "/run/spire/federation-certs/tls.key",
+				}
+				if bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval > 0 {
+					endpointConf["serving_cert_file"].(map[string]interface{})["file_sync_interval"] = fmt.Sprintf("%ds", bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval)
+				}
 			}
-		} else if bundleEndpoint.HttpsWeb.ServingCert != nil {
-			// Mount certificate from Secret to /run/spire/federation-certs/
+		} else {
+			// Use service CA certificate (for re-encrypt routes)
 			endpointConf["serving_cert_file"] = map[string]interface{}{
-				"cert_file_path": "/run/spire/federation-certs/tls.crt",
-				"key_file_path":  "/run/spire/federation-certs/tls.key",
-			}
-			if bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval > 0 {
-				endpointConf["serving_cert_file"].(map[string]interface{})["file_sync_interval"] = fmt.Sprintf("%ds", bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval)
+				"cert_file_path": "/run/spire/server-tls/tls.crt",
+				"key_file_path":  "/run/spire/server-tls/tls.key",
 			}
 		}
 	}
