@@ -64,7 +64,7 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 
 // generateServerConfMap builds the server.conf structure as a Go map
 func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interface{} {
-	return map[string]interface{}{
+	confMap := map[string]interface{}{
 		"health_checks": map[string]interface{}{
 			"bind_address":     "0.0.0.0",
 			"bind_port":        "8080",
@@ -154,6 +154,13 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 			},
 		},
 	}
+
+	// Add federation configuration if present
+	if config.Federation != nil {
+		confMap["federation"] = generateFederationConfig(config.Federation, config.TrustDomain)
+	}
+
+	return confMap
 }
 
 // marshalToJSON marshals a map to JSON with indentation
@@ -163,6 +170,96 @@ func marshalToJSON(data map[string]interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal server.conf: %w", err)
 	}
 	return jsonBytes, nil
+}
+
+// generateFederationConfig generates the federation configuration for SPIRE server
+func generateFederationConfig(federation *v1alpha1.FederationConfig, trustDomain string) map[string]interface{} {
+	federationConf := map[string]interface{}{
+		"bundle_endpoint": generateBundleEndpointConfig(&federation.BundleEndpoint),
+	}
+
+	// Add federates_with configuration if present
+	if len(federation.FederatesWith) > 0 {
+		federatesWith := make(map[string]interface{})
+		for _, fedTrust := range federation.FederatesWith {
+			// Skip if this is the same as our trust domain (should be caught by validation)
+			if fedTrust.TrustDomain == trustDomain {
+				continue
+			}
+
+			trustConfig := map[string]interface{}{
+				"bundle_endpoint_url": fedTrust.BundleEndpointUrl,
+			}
+
+			// Add bundle endpoint profile configuration
+			switch fedTrust.BundleEndpointProfile {
+			case v1alpha1.HttpsSpiffeProfile:
+				trustConfig["bundle_endpoint_profile"] = map[string]interface{}{
+					"https_spiffe": map[string]interface{}{
+						"endpoint_spiffe_id": fedTrust.EndpointSpiffeId,
+					},
+				}
+			case v1alpha1.HttpsWebProfile:
+				trustConfig["bundle_endpoint_profile"] = map[string]interface{}{
+					"https_web": map[string]interface{}{},
+				}
+			}
+
+			federatesWith[fedTrust.TrustDomain] = trustConfig
+		}
+		federationConf["federates_with"] = federatesWith
+	}
+
+	return federationConf
+}
+
+// generateBundleEndpointConfig generates the bundle endpoint configuration
+func generateBundleEndpointConfig(bundleEndpoint *v1alpha1.BundleEndpointConfig) map[string]interface{} {
+	endpointConf := map[string]interface{}{
+		"address": "0.0.0.0",
+		"port":    8443,
+	}
+
+	// Add refresh hint if specified
+	if bundleEndpoint.RefreshHint > 0 {
+		endpointConf["refresh_hint"] = fmt.Sprintf("%ds", bundleEndpoint.RefreshHint)
+	}
+
+	// Configure profile-specific settings
+	switch bundleEndpoint.Profile {
+	case v1alpha1.HttpsSpiffeProfile:
+		// For https_spiffe, set acme to null (SPIFFE authentication)
+		endpointConf["acme"] = nil
+	case v1alpha1.HttpsWebProfile:
+		// Configure https_web profile
+		if bundleEndpoint.HttpsWeb != nil {
+			if bundleEndpoint.HttpsWeb.Acme != nil {
+				endpointConf["acme"] = map[string]interface{}{
+					"directory_url": bundleEndpoint.HttpsWeb.Acme.DirectoryUrl,
+					"domain_name":   bundleEndpoint.HttpsWeb.Acme.DomainName,
+					"email":         bundleEndpoint.HttpsWeb.Acme.Email,
+					"tos_accepted":  utils.StringToBool(bundleEndpoint.HttpsWeb.Acme.TosAccepted),
+				}
+			} else if bundleEndpoint.HttpsWeb.ServingCert != nil {
+				// Mount certificate from Secret to /run/spire/federation-certs/
+				endpointConf["serving_cert_file"] = map[string]interface{}{
+					"cert_file_path": "/run/spire/federation-certs/tls.crt",
+					"key_file_path":  "/run/spire/federation-certs/tls.key",
+				}
+				if bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval > 0 {
+					endpointConf["serving_cert_file"].(map[string]interface{})["file_sync_interval"] = fmt.Sprintf("%ds", bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval)
+				}
+			}
+		} else {
+			// Use service CA certificate (for re-encrypt routes)
+			endpointConf["serving_cert_file"] = map[string]interface{}{
+				"cert_file_path": "/run/spire/server-tls/tls.crt",
+				"key_file_path":  "/run/spire/server-tls/tls.key",
+			}
+		}
+	}
+
+	return endpointConf
 }
 
 // generateConfigHash returns a SHA256 hex string of the trimmed input string

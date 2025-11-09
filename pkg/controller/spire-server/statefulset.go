@@ -34,7 +34,8 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	if config.Persistence != nil && config.Persistence.Size != "" {
 		volumeResourceRequest = config.Persistence.Size
 	}
-	return &appsv1.StatefulSet{
+
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
 			Namespace: utils.OperatorNamespace,
@@ -70,6 +71,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
 								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
@@ -89,6 +91,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 								{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
 								{Name: "spire-data", MountPath: "/run/spire/data"},
 								{Name: "server-tmp", MountPath: "/tmp"},
+								{Name: "spire-server-tls", MountPath: "/run/spire/server-tls", ReadOnly: true},
 							},
 						},
 						{
@@ -123,6 +126,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 						{Name: "spire-server-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 						{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 						{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
+						{Name: "spire-server-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "spire-server-serving-cert"}}},
 					},
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
@@ -143,5 +147,49 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				},
 			},
 		},
+	}
+
+	// Add federation configuration if present
+	if config.Federation != nil {
+		addFederationToStatefulSet(sts, config.Federation)
+	}
+
+	return sts
+}
+
+// addFederationToStatefulSet adds federation volume mounts to the StatefulSet when using ServingCert
+func addFederationToStatefulSet(sts *appsv1.StatefulSet, federation *v1alpha1.FederationConfig) {
+	// If using ServingCert, mount the Secret as volume
+	if federation.BundleEndpoint.HttpsWeb != nil && federation.BundleEndpoint.HttpsWeb.ServingCert != nil {
+		// Find the spire-server container (should be first container)
+		spireServerContainerIndex := 0
+		for i, container := range sts.Spec.Template.Spec.Containers {
+			if container.Name == "spire-server" {
+				spireServerContainerIndex = i
+				break
+			}
+		}
+		// Add volume mount to spire-server container
+		sts.Spec.Template.Spec.Containers[spireServerContainerIndex].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[spireServerContainerIndex].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "federation-certs",
+				MountPath: "/run/spire/federation-certs",
+				ReadOnly:  true,
+			},
+		)
+
+		// Add volume to pod spec
+		sts.Spec.Template.Spec.Volumes = append(
+			sts.Spec.Template.Spec.Volumes,
+			corev1.Volume{
+				Name: "federation-certs",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: federation.BundleEndpoint.HttpsWeb.ServingCert.SecretName,
+					},
+				},
+			},
+		)
 	}
 }
