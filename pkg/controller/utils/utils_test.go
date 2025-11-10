@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -623,7 +623,7 @@ func TestStatefulSetSpecModified(t *testing.T) {
 	createStatefulSet := func() *appsv1.StatefulSet {
 		return &appsv1.StatefulSet{
 			Spec: appsv1.StatefulSetSpec{
-				Replicas:    pointer.Int32(3),
+				Replicas:    ptr.To(int32(3)),
 				ServiceName: "test-service",
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"app": "test"},
@@ -639,7 +639,7 @@ func TestStatefulSetSpecModified(t *testing.T) {
 					},
 					Spec: corev1.PodSpec{
 						ServiceAccountName:    "test-sa",
-						ShareProcessNamespace: pointer.Bool(false),
+						ShareProcessNamespace: ptr.To(false),
 						NodeSelector:          map[string]string{"zone": "east"},
 						Affinity: &corev1.Affinity{
 							NodeAffinity: &corev1.NodeAffinity{
@@ -722,7 +722,7 @@ func TestStatefulSetSpecModified(t *testing.T) {
 	t.Run("Replicas modified", func(t *testing.T) {
 		desired := createStatefulSet()
 		fetched := createStatefulSet()
-		fetched.Spec.Replicas = pointer.Int32(5)
+		fetched.Spec.Replicas = ptr.To(int32(5))
 		if !StatefulSetSpecModified(desired, fetched) {
 			t.Error("Expected true when replicas differ")
 		}
@@ -776,7 +776,7 @@ func TestStatefulSetSpecModified(t *testing.T) {
 	t.Run("ShareProcessNamespace modified", func(t *testing.T) {
 		desired := createStatefulSet()
 		fetched := createStatefulSet()
-		fetched.Spec.Template.Spec.ShareProcessNamespace = pointer.Bool(true)
+		fetched.Spec.Template.Spec.ShareProcessNamespace = ptr.To(true)
 		if !StatefulSetSpecModified(desired, fetched) {
 			t.Error("Expected true when ShareProcessNamespace differs")
 		}
@@ -865,7 +865,7 @@ func TestDeploymentSpecModified(t *testing.T) {
 	createDeployment := func() *appsv1.Deployment {
 		return &appsv1.Deployment{
 			Spec: appsv1.DeploymentSpec{
-				Replicas: pointer.Int32(3),
+				Replicas: ptr.To(int32(3)),
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"app": "test"},
 				},
@@ -875,7 +875,7 @@ func TestDeploymentSpecModified(t *testing.T) {
 					},
 					Spec: corev1.PodSpec{
 						ServiceAccountName:    "test-sa",
-						ShareProcessNamespace: pointer.Bool(false),
+						ShareProcessNamespace: ptr.To(false),
 						NodeSelector:          map[string]string{"zone": "east"},
 						Affinity: &corev1.Affinity{
 							NodeAffinity: &corev1.NodeAffinity{
@@ -945,7 +945,7 @@ func TestDeploymentSpecModified(t *testing.T) {
 	t.Run("Replicas modified", func(t *testing.T) {
 		desired := createDeployment()
 		fetched := createDeployment()
-		fetched.Spec.Replicas = pointer.Int32(5)
+		fetched.Spec.Replicas = ptr.To(int32(5))
 		if !DeploymentSpecModified(desired, fetched) {
 			t.Error("Expected true when replicas differ")
 		}
@@ -1021,7 +1021,7 @@ func TestDaemonSetSpecModified(t *testing.T) {
 					},
 					Spec: corev1.PodSpec{
 						ServiceAccountName:    "test-sa",
-						ShareProcessNamespace: pointer.Bool(false),
+						ShareProcessNamespace: ptr.To(false),
 						NodeSelector:          map[string]string{"zone": "east"},
 						Affinity: &corev1.Affinity{
 							NodeAffinity: &corev1.NodeAffinity{
@@ -1168,7 +1168,7 @@ func TestEdgeCases(t *testing.T) {
 		}
 		fetched := &appsv1.StatefulSet{
 			Spec: appsv1.StatefulSetSpec{
-				Replicas: pointer.Int32(3),
+				Replicas: ptr.To(int32(3)),
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},

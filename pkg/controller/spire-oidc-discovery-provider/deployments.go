@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 )
 
 func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfigMapHash string) *appsv1.Deployment {
@@ -52,7 +53,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 							VolumeSource: corev1.VolumeSource{
 								CSI: &corev1.CSIVolumeSource{
 									Driver:   "csi.spiffe.io",
-									ReadOnly: boolPtr(true),
+									ReadOnly: ptr.To(true),
 								},
 							},
 						},
@@ -81,6 +82,9 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 					},
 					Containers: []corev1.Container{
 						{
+							SecurityContext: &corev1.SecurityContext{
+								ReadOnlyRootFilesystem: ptr.To(true),
+							},
 							Name:            "spiffe-oidc-discovery-provider",
 							Image:           utils.GetSpireOIDCDiscoveryProviderImage(),
 							ImagePullPolicy: corev1.PullIfNotPresent,
@@ -125,8 +129,4 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 			},
 		},
 	}
-}
-
-func boolPtr(b bool) *bool {
-	return &b
 }
