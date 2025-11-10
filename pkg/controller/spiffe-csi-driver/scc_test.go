@@ -12,50 +12,103 @@ import (
 )
 
 func TestGenerateSpiffeCSIDriverSCC(t *testing.T) {
-	scc := generateSpiffeCSIDriverSCC(nil)
+	t.Run("without custom labels", func(t *testing.T) {
+		scc := generateSpiffeCSIDriverSCC(nil)
 
-	// Test that function returns non-nil SCC
-	if scc == nil {
-		t.Fatal("Expected non-nil SecurityContextConstraints, got nil")
-	}
+		// Test that function returns non-nil SCC
+		if scc == nil {
+			t.Fatal("Expected non-nil SecurityContextConstraints, got nil")
+		}
 
-	// Test ObjectMeta
-	testObjectMeta(t, scc.ObjectMeta)
+		// Test ObjectMeta
+		testObjectMeta(t, scc.ObjectMeta, nil)
 
-	// Test ReadOnlyRootFilesystem
-	if !scc.ReadOnlyRootFilesystem {
-		t.Error("Expected ReadOnlyRootFilesystem to be true")
-	}
+		// Test ReadOnlyRootFilesystem
+		if !scc.ReadOnlyRootFilesystem {
+			t.Error("Expected ReadOnlyRootFilesystem to be true")
+		}
 
-	// Test RunAsUser strategy
-	testRunAsUserStrategy(t, scc.RunAsUser)
+		// Test RunAsUser strategy
+		testRunAsUserStrategy(t, scc.RunAsUser)
 
-	// Test SELinuxContext strategy
-	testSELinuxContextStrategy(t, scc.SELinuxContext)
+		// Test SELinuxContext strategy
+		testSELinuxContextStrategy(t, scc.SELinuxContext)
 
-	// Test SupplementalGroups strategy
-	testSupplementalGroupsStrategy(t, scc.SupplementalGroups)
+		// Test SupplementalGroups strategy
+		testSupplementalGroupsStrategy(t, scc.SupplementalGroups)
 
-	// Test FSGroup strategy
-	testFSGroupStrategy(t, scc.FSGroup)
+		// Test FSGroup strategy
+		testFSGroupStrategy(t, scc.FSGroup)
 
-	// Test Users
-	testUsers(t, scc.Users)
+		// Test Users
+		testUsers(t, scc.Users)
 
-	// Test Volumes
-	testSCCVolumes(t, scc.Volumes)
+		// Test Volumes
+		testSCCVolumes(t, scc.Volumes)
 
-	// Test host-related permissions
-	testHostPermissions(t, scc)
+		// Test host-related permissions
+		testHostPermissions(t, scc)
 
-	// Test privilege settings
-	testPrivilegeSettings(t, scc)
+		// Test privilege settings
+		testPrivilegeSettings(t, scc)
 
-	// Test capabilities
-	testCapabilities(t, scc)
+		// Test capabilities
+		testCapabilities(t, scc)
+	})
+
+	t.Run("with custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"custom-label-1": "value-1",
+			"environment":    "production",
+		}
+		scc := generateSpiffeCSIDriverSCC(customLabels)
+
+		if scc == nil {
+			t.Fatal("Expected non-nil SecurityContextConstraints, got nil")
+		}
+
+		// Test ObjectMeta with custom labels
+		testObjectMeta(t, scc.ObjectMeta, customLabels)
+
+		// Verify custom labels are present
+		if val, ok := scc.Labels["custom-label-1"]; !ok || val != "value-1" {
+			t.Errorf("Expected custom label 'custom-label-1=value-1', got '%s'", val)
+		}
+
+		if val, ok := scc.Labels["environment"]; !ok || val != "production" {
+			t.Errorf("Expected custom label 'environment=production', got '%s'", val)
+		}
+	})
+
+	t.Run("preserves all labels", func(t *testing.T) {
+		// Get labels without custom labels
+		sccWithoutCustom := generateSpiffeCSIDriverSCC(nil)
+		baseLabels := make(map[string]string)
+		for k, v := range sccWithoutCustom.Labels {
+			baseLabels[k] = v
+		}
+
+		// Get labels with custom labels
+		customLabels := map[string]string{
+			"test-label": "test-value",
+		}
+		sccWithCustom := generateSpiffeCSIDriverSCC(customLabels)
+
+		// All base labels should still be present
+		for k, v := range baseLabels {
+			if sccWithCustom.Labels[k] != v {
+				t.Errorf("Base label '%s=%s' was not preserved when custom labels were added, got '%s'", k, v, sccWithCustom.Labels[k])
+			}
+		}
+
+		// Custom label should also be present
+		if val, ok := sccWithCustom.Labels["test-label"]; !ok || val != "test-value" {
+			t.Errorf("Custom label was not added")
+		}
+	})
 }
 
-func testObjectMeta(t *testing.T, meta metav1.ObjectMeta) {
+func testObjectMeta(t *testing.T, meta metav1.ObjectMeta, customLabels map[string]string) {
 	expectedName := "spire-spiffe-csi-driver"
 	if meta.Name != expectedName {
 		t.Errorf("Expected name '%s', got '%s'", expectedName, meta.Name)
@@ -66,9 +119,27 @@ func testObjectMeta(t *testing.T, meta metav1.ObjectMeta) {
 		t.Errorf("Expected empty namespace, got '%s'", meta.Namespace)
 	}
 
-	expectedLabels := utils.SpiffeCSIDriverLabels(nil)
+	expectedLabels := utils.SpiffeCSIDriverLabels(customLabels)
 	if !reflect.DeepEqual(meta.Labels, expectedLabels) {
 		t.Errorf("Expected labels %v, got %v", expectedLabels, meta.Labels)
+	}
+
+	// Verify standard labels are always present
+	if val, ok := meta.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+		t.Errorf("Expected standard label %s=%s", utils.AppManagedByLabelKey, utils.AppManagedByLabelValue)
+	}
+
+	if val, ok := meta.Labels["app.kubernetes.io/component"]; !ok || val != utils.ComponentCSI {
+		t.Errorf("Expected standard label app.kubernetes.io/component=%s", utils.ComponentCSI)
+	}
+
+	// If custom labels were provided, verify they are present
+	if customLabels != nil {
+		for k, v := range customLabels {
+			if meta.Labels[k] != v {
+				t.Errorf("Expected custom label '%s=%s', got '%s'", k, v, meta.Labels[k])
+			}
+		}
 	}
 
 	if len(meta.Annotations) > 0 {
@@ -233,6 +304,38 @@ func testCapabilities(t *testing.T, scc *securityv1.SecurityContextConstraints) 
 	} else if !reflect.DeepEqual(scc.RequiredDropCapabilities, expectedDropCapabilities) {
 		t.Errorf("Expected RequiredDropCapabilities to be %v, got %v", expectedDropCapabilities, scc.RequiredDropCapabilities)
 	}
+}
+
+// Test for custom labels preservation
+func TestSCCCustomLabels(t *testing.T) {
+	t.Run("empty custom labels", func(t *testing.T) {
+		scc := generateSpiffeCSIDriverSCC(map[string]string{})
+
+		// Standard labels should still be present
+		if val, ok := scc.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+			t.Errorf("Expected standard label even with empty custom labels map")
+		}
+	})
+
+	t.Run("multiple custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"label1": "value1",
+			"label2": "value2",
+			"label3": "value3",
+		}
+		scc := generateSpiffeCSIDriverSCC(customLabels)
+
+		for k, v := range customLabels {
+			if scc.Labels[k] != v {
+				t.Errorf("Custom label '%s=%s' not found or has wrong value: '%s'", k, v, scc.Labels[k])
+			}
+		}
+
+		// Standard labels should also be present
+		if val, ok := scc.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+			t.Errorf("Expected standard label with custom labels")
+		}
+	})
 }
 
 // Test table-driven approach for different SCC field validations

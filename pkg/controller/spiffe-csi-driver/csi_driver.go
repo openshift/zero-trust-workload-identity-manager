@@ -98,6 +98,9 @@ func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1
 // getSpiffeCSIDriver returns the Spiffe CSI Driver with proper labels
 func getSpiffeCSIDriver(customLabels map[string]string) *storagev1.CSIDriver {
 	csiDriver := utils.DecodeCsiDriverObjBytes(assets.MustAsset(utils.SpiffeCsiDriverAssetName))
-	csiDriver.Labels = utils.SpiffeCSIDriverLabels(customLabels)
+	for k, v := range customLabels {
+		csiDriver.Labels[k] = v
+	}
+	csiDriver.Labels = utils.SpiffeCSIDriverLabels(csiDriver.Labels)
 	return csiDriver
 }

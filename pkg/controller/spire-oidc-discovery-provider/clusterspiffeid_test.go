@@ -204,3 +204,138 @@ func TestNamespaceValues(t *testing.T) {
 		})
 	}
 }
+
+// Label preservation tests for ClusterSPIFFEID resources
+
+func TestGenerateSpireIODCDiscoveryProviderSpiffeID_LabelPreservation(t *testing.T) {
+	t.Run("with custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"identity-type": "oidc-discovery",
+			"security-zone": "dmz",
+		}
+
+		result := generateSpireIODCDiscoveryProviderSpiffeID(customLabels)
+
+		require.NotNil(t, result)
+
+		// Check that custom labels are present
+		if val, ok := result.Labels["identity-type"]; !ok || val != "oidc-discovery" {
+			t.Errorf("Expected custom label 'identity-type=oidc-discovery', got '%s'", val)
+		}
+
+		if val, ok := result.Labels["security-zone"]; !ok || val != "dmz" {
+			t.Errorf("Expected custom label 'security-zone=dmz', got '%s'", val)
+		}
+
+		// Check that standard labels are still present (if any are set by the function)
+		if len(result.Labels) == 0 {
+			t.Error("Expected ClusterSPIFFEID to have labels, got none")
+		}
+	})
+
+	t.Run("without custom labels returns valid resource", func(t *testing.T) {
+		result := generateSpireIODCDiscoveryProviderSpiffeID(nil)
+
+		require.NotNil(t, result)
+		assert.Equal(t, "zero-trust-workload-identity-manager-spire-oidc-discovery-provider", result.ObjectMeta.Name)
+	})
+
+	t.Run("custom labels do not affect spec fields", func(t *testing.T) {
+		customLabels := map[string]string{
+			"test": "value",
+		}
+
+		withCustom := generateSpireIODCDiscoveryProviderSpiffeID(customLabels)
+		withoutCustom := generateSpireIODCDiscoveryProviderSpiffeID(nil)
+
+		// Spec fields should be identical
+		assert.Equal(t, withoutCustom.Spec.Hint, withCustom.Spec.Hint)
+		assert.Equal(t, withoutCustom.Spec.SPIFFEIDTemplate, withCustom.Spec.SPIFFEIDTemplate)
+		assert.Equal(t, withoutCustom.Spec.AutoPopulateDNSNames, withCustom.Spec.AutoPopulateDNSNames)
+		assert.Equal(t, withoutCustom.Spec.Fallback, withCustom.Spec.Fallback)
+
+		// Custom label should be present in the one with custom labels
+		if val, ok := withCustom.Labels["test"]; !ok || val != "value" {
+			t.Errorf("Custom label was not added")
+		}
+	})
+}
+
+func TestGenerateDefaultFallbackClusterSPIFFEID_LabelPreservation(t *testing.T) {
+	t.Run("with custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"fallback-type": "default",
+			"priority":      "low",
+		}
+
+		result := generateDefaultFallbackClusterSPIFFEID(customLabels)
+
+		require.NotNil(t, result)
+
+		// Check that custom labels are present
+		if val, ok := result.Labels["fallback-type"]; !ok || val != "default" {
+			t.Errorf("Expected custom label 'fallback-type=default', got '%s'", val)
+		}
+
+		if val, ok := result.Labels["priority"]; !ok || val != "low" {
+			t.Errorf("Expected custom label 'priority=low', got '%s'", val)
+		}
+	})
+
+	t.Run("without custom labels returns valid resource", func(t *testing.T) {
+		result := generateDefaultFallbackClusterSPIFFEID(nil)
+
+		require.NotNil(t, result)
+		assert.Equal(t, "zero-trust-workload-identity-manager-spire-default", result.ObjectMeta.Name)
+	})
+
+	t.Run("custom labels do not affect spec fields", func(t *testing.T) {
+		customLabels := map[string]string{
+			"env": "production",
+		}
+
+		withCustom := generateDefaultFallbackClusterSPIFFEID(customLabels)
+		withoutCustom := generateDefaultFallbackClusterSPIFFEID(nil)
+
+		// Spec fields should be identical
+		assert.Equal(t, withoutCustom.Spec.Hint, withCustom.Spec.Hint)
+		assert.Equal(t, withoutCustom.Spec.SPIFFEIDTemplate, withCustom.Spec.SPIFFEIDTemplate)
+		assert.Equal(t, withoutCustom.Spec.AutoPopulateDNSNames, withCustom.Spec.AutoPopulateDNSNames)
+		assert.Equal(t, withoutCustom.Spec.Fallback, withCustom.Spec.Fallback)
+
+		// Custom label should be present in the one with custom labels
+		if val, ok := withCustom.Labels["env"]; !ok || val != "production" {
+			t.Errorf("Custom label was not added")
+		}
+	})
+}
+
+// Test that multiple custom labels all get applied correctly
+func TestClusterSPIFFEID_MultipleCustomLabels(t *testing.T) {
+	customLabels := map[string]string{
+		"label1": "value1",
+		"label2": "value2",
+		"label3": "value3",
+		"label4": "value4",
+	}
+
+	t.Run("OIDC Discovery Provider with multiple labels", func(t *testing.T) {
+		result := generateSpireIODCDiscoveryProviderSpiffeID(customLabels)
+
+		for k, v := range customLabels {
+			if result.Labels[k] != v {
+				t.Errorf("Expected label '%s=%s', got '%s'", k, v, result.Labels[k])
+			}
+		}
+	})
+
+	t.Run("Default Fallback with multiple labels", func(t *testing.T) {
+		result := generateDefaultFallbackClusterSPIFFEID(customLabels)
+
+		for k, v := range customLabels {
+			if result.Labels[k] != v {
+				t.Errorf("Expected label '%s=%s', got '%s'", k, v, result.Labels[k])
+			}
+		}
+	})
+}

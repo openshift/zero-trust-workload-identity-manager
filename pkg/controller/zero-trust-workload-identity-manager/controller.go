@@ -193,13 +193,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 		return ctrl.Result{}, err
 	}
-
-	// Ensure namespace has required Pod Security labels for CSI driver support
-	if err := r.ensureNamespacePodSecurityLabels(ctx); err != nil {
-		r.log.Error(err, "failed to ensure namespace Pod Security labels")
-		return ctrl.Result{}, err
-	}
-
 	// Set Ready to false at the start of reconciliation
 	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &config, func() *v1alpha1.ConditionalStatus {
 		return &config.Status.ConditionalStatus

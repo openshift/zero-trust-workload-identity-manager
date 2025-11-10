@@ -141,3 +141,110 @@ func TestGetSpireControllerManagerLeaderElectionRoleBinding(t *testing.T) {
 		t.Errorf("Expected RoleBinding name 'spire-controller-manager-leader-election', got '%s'", rb.Name)
 	}
 }
+
+// Comprehensive label preservation tests
+
+func TestGetSpireServerClusterRole_LabelPreservation(t *testing.T) {
+	t.Run("with custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"team":   "platform",
+			"region": "us-west",
+		}
+		cr := getSpireServerClusterRole(customLabels)
+
+		// Check custom labels
+		if val, ok := cr.Labels["team"]; !ok || val != "platform" {
+			t.Errorf("Expected custom label 'team=platform'")
+		}
+
+		// Check standard labels still present
+		if val, ok := cr.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+			t.Errorf("Expected standard label to be preserved")
+		}
+	})
+
+	t.Run("preserves all asset labels", func(t *testing.T) {
+		crWithoutCustom := getSpireServerClusterRole(nil)
+		assetLabels := make(map[string]string)
+		for k, v := range crWithoutCustom.Labels {
+			assetLabels[k] = v
+		}
+
+		customLabels := map[string]string{"test": "value"}
+		crWithCustom := getSpireServerClusterRole(customLabels)
+
+		for k, v := range assetLabels {
+			if crWithCustom.Labels[k] != v {
+				t.Errorf("Asset label '%s=%s' was not preserved", k, v)
+			}
+		}
+	})
+}
+
+func TestGetSpireBundleRole_LabelPreservation(t *testing.T) {
+	t.Run("with custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"bundle-type": "ca-certificates",
+		}
+		role := getSpireBundleRole(customLabels)
+
+		if val, ok := role.Labels["bundle-type"]; !ok || val != "ca-certificates" {
+			t.Errorf("Expected custom label 'bundle-type=ca-certificates'")
+		}
+
+		if val, ok := role.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+			t.Errorf("Expected standard label to be preserved")
+		}
+	})
+
+	t.Run("preserves all asset labels", func(t *testing.T) {
+		roleWithoutCustom := getSpireBundleRole(nil)
+		assetLabels := make(map[string]string)
+		for k, v := range roleWithoutCustom.Labels {
+			assetLabels[k] = v
+		}
+
+		customLabels := map[string]string{"test": "value"}
+		roleWithCustom := getSpireBundleRole(customLabels)
+
+		for k, v := range assetLabels {
+			if roleWithCustom.Labels[k] != v {
+				t.Errorf("Asset label '%s=%s' was not preserved", k, v)
+			}
+		}
+	})
+}
+
+func TestGetSpireControllerManagerClusterRole_LabelPreservation(t *testing.T) {
+	t.Run("with custom labels", func(t *testing.T) {
+		customLabels := map[string]string{
+			"controller": "spire-manager",
+		}
+		cr := getSpireControllerManagerClusterRole(customLabels)
+
+		if val, ok := cr.Labels["controller"]; !ok || val != "spire-manager" {
+			t.Errorf("Expected custom label 'controller=spire-manager'")
+		}
+
+		if val, ok := cr.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+			t.Errorf("Expected standard label to be preserved")
+		}
+	})
+
+	t.Run("preserves all asset labels", func(t *testing.T) {
+		crWithoutCustom := getSpireControllerManagerClusterRole(nil)
+		assetLabels := make(map[string]string)
+		for k, v := range crWithoutCustom.Labels {
+			assetLabels[k] = v
+		}
+
+		customLabels := map[string]string{"test": "value"}
+		crWithCustom := getSpireControllerManagerClusterRole(customLabels)
+
+		for k, v := range assetLabels {
+			if crWithCustom.Labels[k] != v {
+				t.Errorf("Asset label '%s=%s' was not preserved", k, v)
+			}
+		}
+	})
+}

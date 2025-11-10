@@ -101,20 +101,6 @@ func ServiceNeedsUpdate(existing, desired *corev1.Service) bool {
 	return false
 }
 
-// mapsEqual compares two string maps
-// Only checks that all desired keys exist in existing with same values
-// Allows Kubernetes to add extra keys
-func mapsEqual(existing, desired map[string]string) bool {
-	for key, desiredValue := range desired {
-		existingValue, exists := existing[key]
-		if !exists || existingValue != desiredValue {
-			return false
-		}
-	}
-
-	return true
-}
-
 // ServiceAccountNeedsUpdate checks if a ServiceAccount needs updating
 func ServiceAccountNeedsUpdate(existing, desired *corev1.ServiceAccount) bool {
 	// Compare automount service account token setting only if desired has it set
@@ -203,6 +189,9 @@ func ClusterRoleBindingNeedsUpdate(existing, desired *rbacv1.ClusterRoleBinding)
 	if !subjectsEqual(existing.Subjects, desired.Subjects) {
 		return true
 	}
+	if !reflect.DeepEqual(existing.RoleRef, desired.RoleRef) {
+		return true
+	}
 	return false
 }
 
@@ -225,24 +214,26 @@ func RoleBindingNeedsUpdate(existing, desired *rbacv1.RoleBinding) bool {
 	if !subjectsEqual(existing.Subjects, desired.Subjects) {
 		return true
 	}
+	if !reflect.DeepEqual(existing.RoleRef, desired.RoleRef) {
+		return true
+	}
 	return false
 }
 
 // CSIDriverNeedsUpdate checks if a CSIDriver needs updating
 func CSIDriverNeedsUpdate(existing, desired *storagev1.CSIDriver) bool {
-	//if existing.Spec.AttachRequired != desired.Spec.AttachRequired {
-	//	return true
-	//}
-	//if existing.Spec.PodInfoOnMount != desired.Spec.PodInfoOnMount {
-	//	return true
-	//}
-	//if existing.Spec.FSGroupPolicy != desired.Spec.FSGroupPolicy {
-	//	return true
-	//}
-	//if !reflect.DeepEqual(existing.Spec.VolumeLifecycleModes, desired.Spec.VolumeLifecycleModes) {
-	//	return true
-	//}
-	//return false
+	if existing.Spec.AttachRequired != desired.Spec.AttachRequired {
+		return true
+	}
+	if existing.Spec.PodInfoOnMount != desired.Spec.PodInfoOnMount {
+		return true
+	}
+	if existing.Spec.FSGroupPolicy != desired.Spec.FSGroupPolicy {
+		return true
+	}
+	if !reflect.DeepEqual(existing.Spec.VolumeLifecycleModes, desired.Spec.VolumeLifecycleModes) {
+		return true
+	}
 	return false
 }
 
