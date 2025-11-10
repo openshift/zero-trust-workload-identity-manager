@@ -2,17 +2,13 @@ package spiffe_csi_driver
 
 import (
 	"context"
-	"fmt"
-	"reflect"
-
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -167,90 +163,4 @@ func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDri
 		}
 	}
 	return createOnlyMode
-}
-
-// reconcileSCC reconciles the Spiffe CSI Driver Security Context Constraints
-func (r *SpiffeCsiReconciler) reconcileSCC(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager) error {
-	SpiffeCsiSCC := generateSpiffeCSIDriverSCC(driver.Spec.Labels)
-	if err := controllerutil.SetControllerReference(driver, SpiffeCsiSCC, r.scheme); err != nil {
-		r.log.Error(err, "failed to set the owner reference for the SCC resource")
-		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpiffeCSISCCGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	err := r.ctrlClient.Create(ctx, SpiffeCsiSCC)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "Failed to create SpiffeCsiSCC")
-		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpiffeCSISCCGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpiffeCSISCCResourceCreated",
-		"SpiffeCSISCC resource created",
-		metav1.ConditionTrue)
-	return nil
-}
-
-// reconcileDaemonSet reconciles the Spiffe CSI Driver DaemonSet
-func (r *SpiffeCsiReconciler) reconcileDaemonSet(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager, createOnlyMode bool) error {
-	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet(driver.Spec)
-	if err := controllerutil.SetControllerReference(driver, spiffeCsiDaemonset, r.scheme); err != nil {
-		r.log.Error(err, "failed to set owner reference for the DaemonSet resource")
-		statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	var existingSpiffeCsiDaemonSet appsv1.DaemonSet
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: spiffeCsiDaemonset.Name, Namespace: spiffeCsiDaemonset.Namespace}, &existingSpiffeCsiDaemonSet)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spiffeCsiDaemonset); err != nil {
-			r.log.Error(err, "Failed to create SpiffeCsiDaemon set")
-			statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetCreationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return fmt.Errorf("failed to create DaemonSet: %w", err)
-		}
-		r.log.Info("Created spiffe csi DaemonSet")
-	} else if err == nil && needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
-		if createOnlyMode {
-			r.log.Info("Skipping DaemonSet update due to create-only mode")
-		} else {
-			spiffeCsiDaemonset.ResourceVersion = existingSpiffeCsiDaemonSet.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spiffeCsiDaemonset); err != nil {
-				r.log.Error(err, "failed to update spiffe csi daemon set")
-				statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return fmt.Errorf("failed to update DaemonSet: %w", err)
-			}
-			r.log.Info("Updated spiffe csi DaemonSet")
-		}
-	} else if err != nil {
-		r.log.Error(err, "Failed to get SpiffeCsiDaemon set")
-		statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetGetFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	// Check DaemonSet health/readiness
-	statusMgr.CheckDaemonSetHealth(ctx, spiffeCsiDaemonset.Name, spiffeCsiDaemonset.Namespace, DaemonSetAvailable)
-
-	return nil
-}
-
-// needsUpdate returns true if DaemonSet needs to be updated.
-func needsUpdate(current, desired appsv1.DaemonSet) bool {
-	if utils.DaemonSetSpecModified(&desired, &current) {
-		return true
-	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
-		return true
-	}
-	return false
 }

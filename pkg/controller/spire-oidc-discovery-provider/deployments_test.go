@@ -208,7 +208,7 @@ func TestBuildDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			deployment := buildDeployment(tt.config, tt.hash)
+			deployment := generateDeployment(tt.config, tt.hash)
 
 			// Common assertions for all tests
 			require.NotNil(t, deployment)

@@ -44,35 +44,59 @@ type ZeroTrustWorkloadIdentityManager struct {
 	Status            ZeroTrustWorkloadIdentityManagerStatus `json:"status,omitempty"`
 }
 
-// ZeroTrustWorkloadIdentityManagerStatus defines the observed state of ZeroTrustWorkloadIdentityManager
+// ZeroTrustWorkloadIdentityManagerStatus defines the observed state of ZeroTrustWorkloadIdentityManager.
+// It aggregates the status from all managed operand CRs and provides an overall health view.
 type ZeroTrustWorkloadIdentityManagerStatus struct {
-	// conditions holds information of the current state of the zero-trust-workload-identity-manager deployment.
+	// conditions represent the latest available observations of the zero-trust-workload-identity-manager's state.
 	// This includes the aggregated status from all managed operand CRs.
 	ConditionalStatus `json:",inline,omitempty"`
 
-	// operands holds the status of each managed operand CR
-	// Keyed by operand kind since all operands are named "cluster"
+	// operands holds the status of each managed operand CR.
+	// Operands are indexed by their kind since all operands are named "cluster".
+	// This provides a quick overview of the health of each SPIRE component.
 	// +optional
+	// +listType=map
+	// +listMapKey=kind
 	Operands []OperandStatus `json:"operands,omitempty"`
 }
 
-// OperandStatus represents the status of a managed operand CR
+// OperandStatus represents the status of a single managed operand CR.
+// Each operand corresponds to a SPIRE component (e.g., SpireServer, SpireAgent).
 type OperandStatus struct {
-	// name is the name of the operand (e.g., "cluster")
+	// name is the name of the operand resource.
+	// For singleton resources, this is typically "cluster".
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +required
 	Name string `json:"name"`
 
-	// kind is the kind of the operand CR (e.g., "SpireServer", "SpireAgent")
+	// kind is the Kind of the operand CR.
+	// Must be one of: SpireServer, SpireAgent, SpiffeCSIDriver, SpireOIDCDiscoveryProvider.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=SpireServer;SpireAgent;SpiffeCSIDriver;SpireOIDCDiscoveryProvider
+	// +required
 	Kind string `json:"kind"`
 
-	// ready indicates if the operand is ready
-	Ready bool `json:"ready"`
+	// ready indicates whether the operand is in a ready state.
+	// An operand is considered ready when all its resources are available and functioning correctly.
+	// Valid values are "true" and "false".
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(true|false)$`
+	// +required
+	Ready string `json:"ready"`
 
-	// message provides additional information about the operand status
+	// message provides human-readable details about the operand's current state.
+	// This may include information about why an operand is not ready or other relevant status details.
 	// +optional
+	// +kubebuilder:validation:MaxLength=32768
 	Message string `json:"message,omitempty"`
 
-	// conditions from the operand CR (key conditions only)
+	// conditions represent the latest available observations of the operand's state.
+	// This includes key conditions from the operand CR that are relevant for overall health monitoring.
 	// +optional
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

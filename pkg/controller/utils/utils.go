@@ -3,12 +3,12 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"reflect"
 	"sort"
 	"strings"
 
 	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"k8s.io/utils/ptr"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -17,6 +17,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
@@ -34,6 +35,7 @@ func init() {
 	_ = admissionregistrationv1.AddToScheme(scheme)
 	_ = securityv1.AddToScheme(scheme)
 	_ = routev1.AddToScheme(scheme)
+	_ = spiffev1alpha1.AddToScheme(scheme)
 
 	// Create a codec factory for this scheme
 	codecs = serializer.NewCodecFactory(scheme)
@@ -210,11 +212,11 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 		return true
 	}
 
-	if !reflect.DeepEqual(ds.Selector, fs.Selector) {
+	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
 		return true
 	}
 
-	if !reflect.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
 		return true
 	}
 
@@ -235,13 +237,13 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+	if desired.Spec.Template.Spec.Affinity != nil && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
 		return true
 	}
 	if len(dPod.Containers) != len(fPod.Containers) {
@@ -267,16 +269,16 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+		if !equality.Semantic.DeepEqual(dCont.Args, fCont.Args) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
+		if !equality.Semantic.DeepEqual(dCont.Env, fCont.Env) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
+		if !equality.Semantic.DeepEqual(dCont.Resources, fCont.Resources) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+		if !equality.Semantic.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
 			return true
 		}
 	}
@@ -289,10 +291,10 @@ func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
 		if dvc.Name != fvc.Name {
 			return true
 		}
-		if !reflect.DeepEqual(dvc.Spec.AccessModes, fvc.Spec.AccessModes) {
+		if !equality.Semantic.DeepEqual(dvc.Spec.AccessModes, fvc.Spec.AccessModes) {
 			return true
 		}
-		if !reflect.DeepEqual(dvc.Spec.Resources.Requests, fvc.Spec.Resources.Requests) {
+		if !equality.Semantic.DeepEqual(dvc.Spec.Resources.Requests, fvc.Spec.Resources.Requests) {
 			return true
 		}
 	}
@@ -308,10 +310,10 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
 		return true
 	}
-	if !reflect.DeepEqual(ds.Selector, fs.Selector) {
+	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
 		return true
 	}
-	if !reflect.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
 		return true
 	}
 	dPod := ds.Template.Spec
@@ -322,13 +324,13 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+	if desired.Spec.Template.Spec.Affinity != nil && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
 		return true
 	}
 	if len(dPod.Containers) != len(fPod.Containers) {
@@ -353,16 +355,16 @@ func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
 		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+		if !equality.Semantic.DeepEqual(dCont.Args, fCont.Args) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Env, fCont.Env) {
+		if !equality.Semantic.DeepEqual(dCont.Env, fCont.Env) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
+		if !equality.Semantic.DeepEqual(dCont.Resources, fCont.Resources) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+		if !equality.Semantic.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
 			return true
 		}
 	}
@@ -375,10 +377,10 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 	}
 	ds := desired.Spec
 	fs := fetched.Spec
-	if !reflect.DeepEqual(ds.Selector, fs.Selector) {
+	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
 		return true
 	}
-	if !reflect.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
 		return true
 	}
 	dPod := ds.Template.Spec
@@ -389,13 +391,13 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
 		return true
 	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
+	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Affinity != nil && !reflect.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
+	if desired.Spec.Template.Spec.Affinity != nil && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
 		return true
 	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !reflect.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
+	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
 		return true
 	}
 	if len(dPod.Containers) != len(fPod.Containers) {
@@ -420,13 +422,13 @@ func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
 		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Args, fCont.Args) {
+		if !equality.Semantic.DeepEqual(dCont.Args, fCont.Args) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.Resources, fCont.Resources) {
+		if !equality.Semantic.DeepEqual(dCont.Resources, fCont.Resources) {
 			return true
 		}
-		if !reflect.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
+		if !equality.Semantic.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
 			return true
 		}
 	}

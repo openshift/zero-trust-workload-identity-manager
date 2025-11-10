@@ -56,7 +56,7 @@ const (
 // classifyOperandState determines whether an operand is progressing, failed, or ready
 // based on structured state (Condition.Reason) with fallback to message substring matching
 func classifyOperandState(operand v1alpha1.OperandStatus, readyCondition *metav1.Condition) operandStateClassification {
-	if operand.Ready {
+	if utils.StringToBool(operand.Ready) {
 		return operandReady
 	}
 
@@ -286,7 +286,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 	// Check SpireServer
 	spireServerStatus := r.getSpireServerStatus(ctx)
 	operandStatuses = append(operandStatuses, spireServerStatus)
-	if !spireServerStatus.Ready {
+	if !utils.StringToBool(spireServerStatus.Ready) {
 		allReady = false
 		// Use structured state classification instead of exact string matching
 		readyCondition := apimeta.FindStatusCondition(spireServerStatus.Conditions, v1alpha1.Ready)
@@ -301,7 +301,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 	// Check SpireAgent
 	spireAgentStatus := r.getSpireAgentStatus(ctx)
 	operandStatuses = append(operandStatuses, spireAgentStatus)
-	if !spireAgentStatus.Ready {
+	if !utils.StringToBool(spireAgentStatus.Ready) {
 		allReady = false
 		// Use structured state classification instead of exact string matching
 		readyCondition := apimeta.FindStatusCondition(spireAgentStatus.Conditions, v1alpha1.Ready)
@@ -316,7 +316,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 	// Check SpiffeCSIDriver
 	spiffeCSIStatus := r.getSpiffeCSIDriverStatus(ctx)
 	operandStatuses = append(operandStatuses, spiffeCSIStatus)
-	if !spiffeCSIStatus.Ready {
+	if !utils.StringToBool(spiffeCSIStatus.Ready) {
 		allReady = false
 		// Use structured state classification instead of exact string matching
 		readyCondition := apimeta.FindStatusCondition(spiffeCSIStatus.Conditions, v1alpha1.Ready)
@@ -331,7 +331,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 	// Check SpireOIDCDiscoveryProvider
 	oidcStatus := r.getSpireOIDCDiscoveryProviderStatus(ctx)
 	operandStatuses = append(operandStatuses, oidcStatus)
-	if !oidcStatus.Ready {
+	if !utils.StringToBool(oidcStatus.Ready) {
 		allReady = false
 		// Use structured state classification instead of exact string matching
 		readyCondition := apimeta.FindStatusCondition(oidcStatus.Conditions, v1alpha1.Ready)
@@ -366,11 +366,11 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			operandStatus.Ready = false
+			operandStatus.Ready = "false"
 			operandStatus.Message = "CR not found"
 			return operandStatus
 		}
-		operandStatus.Ready = false
+		operandStatus.Ready = "false"
 		operandStatus.Message = fmt.Sprintf("Failed to get CR: %v", err)
 		return operandStatus
 	}
@@ -381,7 +381,7 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 
 	// Check if operand has been reconciled (has at least one condition)
 	if len(conditions) == 0 {
-		operandStatus.Ready = false
+		operandStatus.Ready = "false"
 		operandStatus.Message = "Waiting for initial reconciliation"
 		return operandStatus
 	}
@@ -389,10 +389,10 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 	// Check if Ready condition exists and is True
 	readyCondition := apimeta.FindStatusCondition(conditions, v1alpha1.Ready)
 	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-		operandStatus.Ready = true
+		operandStatus.Ready = "true"
 		operandStatus.Message = "Ready"
 	} else {
-		operandStatus.Ready = false
+		operandStatus.Ready = "false"
 		if readyCondition != nil {
 			operandStatus.Message = readyCondition.Message
 		} else {
@@ -401,7 +401,7 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 	}
 
 	// Include only failed conditions (reduces clutter)
-	operandStatus.Conditions = extractKeyConditions(conditions, operandStatus.Ready)
+	operandStatus.Conditions = extractKeyConditions(conditions, utils.StringToBool(operandStatus.Ready))
 
 	return operandStatus
 }

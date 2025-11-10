@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 
@@ -46,6 +47,7 @@ var (
 		&appsv1.StatefulSet{},
 		&admissionregistrationv1.ValidatingWebhookConfiguration{},
 		&routev1.Route{},
+		&spiffev1alpha1.ClusterSPIFFEID{},
 	}
 
 	cacheResourceWithoutReqSelectors = []client.Object{
@@ -75,6 +77,7 @@ var (
 		&v1alpha1.SpireServer{},
 		&v1alpha1.SpireOIDCDiscoveryProvider{},
 		&routev1.Route{},
+		&spiffev1alpha1.ClusterSPIFFEID{},
 	}
 )
 

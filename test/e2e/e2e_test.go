@@ -310,7 +310,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			for _, kind := range requiredOperands {
 				operand, exists := operandMap[kind]
 				Expect(exists).To(BeTrue(), "%s operand should exist in status", kind)
-				Expect(operand.Ready).To(BeTrue(), "%s should be ready", kind)
+				Expect(operand.Ready).To(Equal("true"), "%s should be ready", kind)
 				Expect(operand.Message).To(Equal("Ready"), "%s message should be 'Ready'", kind)
 				fmt.Fprintf(GinkgoWriter, "Operand %s is ready\n", kind)
 			}

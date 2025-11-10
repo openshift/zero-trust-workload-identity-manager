@@ -69,6 +69,43 @@ func (r *SpireServerReconciler) reconcileWebhook(ctx context.Context, server *v1
 		return nil
 	}
 
+	// Preserve Kubernetes-managed fields from existing resource BEFORE comparison
+	desired.ResourceVersion = existing.ResourceVersion
+
+	// Preserve CABundle, matchPolicy, timeoutSeconds, scope, and selectors for each webhook
+	for i := range desired.Webhooks {
+		if i < len(existing.Webhooks) {
+			// Preserve caBundle - typically injected by cert-manager or service-ca-operator
+			if len(existing.Webhooks[i].ClientConfig.CABundle) > 0 {
+				desired.Webhooks[i].ClientConfig.CABundle = existing.Webhooks[i].ClientConfig.CABundle
+			}
+			// Preserve Kubernetes defaults
+			if existing.Webhooks[i].MatchPolicy != nil {
+				desired.Webhooks[i].MatchPolicy = existing.Webhooks[i].MatchPolicy
+			}
+			if existing.Webhooks[i].TimeoutSeconds != nil {
+				desired.Webhooks[i].TimeoutSeconds = existing.Webhooks[i].TimeoutSeconds
+			}
+			if existing.Webhooks[i].NamespaceSelector != nil {
+				desired.Webhooks[i].NamespaceSelector = existing.Webhooks[i].NamespaceSelector
+			}
+			if existing.Webhooks[i].ObjectSelector != nil {
+				desired.Webhooks[i].ObjectSelector = existing.Webhooks[i].ObjectSelector
+			}
+			// Preserve scope and port in rules and service
+			for j := range desired.Webhooks[i].Rules {
+				if j < len(existing.Webhooks[i].Rules) && existing.Webhooks[i].Rules[j].Scope != nil {
+					desired.Webhooks[i].Rules[j].Scope = existing.Webhooks[i].Rules[j].Scope
+				}
+			}
+			if existing.Webhooks[i].ClientConfig.Service != nil && desired.Webhooks[i].ClientConfig.Service != nil {
+				if existing.Webhooks[i].ClientConfig.Service.Port != nil {
+					desired.Webhooks[i].ClientConfig.Service.Port = existing.Webhooks[i].ClientConfig.Service.Port
+				}
+			}
+		}
+	}
+
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("ValidatingWebhookConfiguration is up to date", "name", desired.Name)
@@ -79,7 +116,6 @@ func (r *SpireServerReconciler) reconcileWebhook(ctx context.Context, server *v1
 	}
 
 	// Update the resource
-	desired.ResourceVersion = existing.ResourceVersion
 	if err := r.ctrlClient.Update(ctx, desired); err != nil {
 		r.log.Error(err, "failed to update validating webhook")
 		statusMgr.AddCondition(ValidatingWebhookAvailable, v1alpha1.ReasonFailed,

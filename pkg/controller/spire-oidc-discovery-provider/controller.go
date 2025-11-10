@@ -3,9 +3,9 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/go-logr/logr"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +22,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -165,6 +164,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&spiffev1alpha1.ClusterSPIFFEID{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err
@@ -212,255 +212,14 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alp
 	return nil
 }
 
-// reconcileClusterSpiffeIDs reconciles the ClusterSpiffeID resources
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
-	spireOIDCClusterSpiffeID := generateSpireIODCDiscoveryProviderSpiffeID(oidc.Spec.Labels)
-	if err := controllerutil.SetControllerReference(oidc, spireOIDCClusterSpiffeID, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	err := r.ctrlClient.Create(ctx, spireOIDCClusterSpiffeID)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "Failed to create oidc cluster spiffe id")
-		statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	defaultSpiffeID := generateDefaultFallbackClusterSPIFFEID(oidc.Spec.Labels)
-	if err = controllerutil.SetControllerReference(oidc, defaultSpiffeID, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	err = r.ctrlClient.Create(ctx, defaultSpiffeID)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "Failed to create DefaultFallbackClusterSPIFFEID")
-		statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDCreationSucceeded",
-		"Spire OIDC and default ClusterSpiffeID created successfully",
-		metav1.ConditionTrue)
-	return nil
-}
-
-// reconcileConfigMap reconciles the OIDC Discovery Provider ConfigMap
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	cm, err := GenerateOIDCConfigMapFromCR(oidc)
-	if err != nil {
-		r.log.Error(err, "failed to generate OIDC ConfigMap from CR")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	if err = controllerutil.SetControllerReference(oidc, cm, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	var existingOidcCm corev1.ConfigMap
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, &existingOidcCm)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, cm); err != nil {
-			r.log.Error(err, "Failed to create ConfigMap")
-			statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return "", err
-		}
-		r.log.Info("Created ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-	} else if err == nil && (utils.GenerateMapHash(existingOidcCm.Data) != utils.GenerateMapHash(cm.Data) ||
-		!reflect.DeepEqual(existingOidcCm.Labels, cm.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode", "Namespace", cm.Namespace, "Name", cm.Name)
-		} else {
-			cm.ResourceVersion = existingOidcCm.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, cm); err != nil {
-				r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-				statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", err
-			}
-			r.log.Info("Updated ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-		}
-	} else if err != nil {
-		r.log.Error(err, "Failed to get ConfigMap")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationSucceeded",
-		"Spire OIDC ConfigMap created",
-		metav1.ConditionTrue)
-
-	return utils.GenerateMapHash(cm.Data), nil
-}
-
-// reconcileDeployment reconciles the OIDC Discovery Provider Deployment
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileDeployment(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool, configHash string) error {
-	deployment := buildDeployment(oidc, configHash)
-	if err := controllerutil.SetControllerReference(oidc, deployment, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentCreationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	var existingSpireOidcDeployment appsv1.Deployment
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{
-		Name:      deployment.Name,
-		Namespace: deployment.Namespace,
-	}, &existingSpireOidcDeployment)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, deployment); err != nil {
-			r.log.Error(err, "Failed to create spire oidc discovery provider deployment")
-			statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentCreationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return err
-		}
-		r.log.Info("Created spire oidc discovery provider deployment")
-	} else if err == nil && needsUpdate(existingSpireOidcDeployment, *deployment) {
-		if createOnlyMode {
-			r.log.Info("Skipping Deployment update due to create-only mode")
-		} else {
-			deployment.ResourceVersion = existingSpireOidcDeployment.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, deployment); err != nil {
-				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
-				statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return err
-			}
-			r.log.Info("Updated spire oidc discovery provider deployment")
-		}
-	} else if err != nil {
-		r.log.Error(err, "Failed to get existing spire oidc discovery provider deployment")
-		statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentGetFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	// Check Deployment health/readiness
-	statusMgr.CheckDeploymentHealth(ctx, deployment.Name, deployment.Namespace, DeploymentAvailable)
-
-	return nil
-}
-
-// reconcileRoute reconciles the OIDC Discovery Provider Route
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileRoute(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
-	if utils.StringToBool(oidc.Spec.ManagedRoute) {
-		// Create Route for OIDC Discovery Provider
-		route, err := generateOIDCDiscoveryProviderRoute(oidc)
-		if err != nil {
-			r.log.Error(err, "Failed to generate OIDC discovery provider route")
-			statusMgr.AddCondition(RouteAvailable, "ManagedRouteCreationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return err
-		}
-
-		var existingRoute routev1.Route
-		err = r.ctrlClient.Get(ctx, types.NamespacedName{
-			Name:      route.Name,
-			Namespace: route.Namespace,
-		}, &existingRoute)
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				if err = r.ctrlClient.Create(ctx, route); err != nil {
-					r.log.Error(err, "Failed to create route")
-					statusMgr.AddCondition(RouteAvailable, "ManagedRouteCreationFailed",
-						err.Error(),
-						metav1.ConditionFalse)
-					return err
-				}
-
-				// Set status when route is actually created
-				statusMgr.AddCondition(RouteAvailable, "ManagedRouteCreated",
-					"Spire OIDC Managed Route created",
-					metav1.ConditionTrue)
-
-				r.log.Info("Created route", "Namespace", route.Namespace, "Name", route.Name)
-			} else {
-				r.log.Error(err, "Failed to get existing route")
-				statusMgr.AddCondition(RouteAvailable, "ManagedRouteRetrievalFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return err
-			}
-		} else if checkRouteConflict(&existingRoute, route) {
-			r.log.Info("Found conflict in routes, updating route")
-			route.ResourceVersion = existingRoute.ResourceVersion
-
-			err = r.ctrlClient.Update(ctx, route)
-			if err != nil {
-				statusMgr.AddCondition(RouteAvailable, "ManagedRouteUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return err
-			}
-
-			// Set status when route is actually updated
-			statusMgr.AddCondition(RouteAvailable, "ManagedRouteUpdated",
-				"Spire OIDC Managed Route updated",
-				metav1.ConditionTrue)
-
-			r.log.Info("Updated route", "Namespace", route.Namespace, "Name", route.Name)
-		} else {
-			// Route exists and is up to date - only update status if it's currently not ready
-			existingCondition := apimeta.FindStatusCondition(oidc.Status.ConditionalStatus.Conditions, RouteAvailable)
-			if existingCondition == nil || existingCondition.Status != metav1.ConditionTrue {
-				statusMgr.AddCondition(RouteAvailable, "ManagedRouteReady",
-					"Spire OIDC Managed Route is ready",
-					metav1.ConditionTrue)
-			}
-			// If route is already ready, don't update the status to avoid overwriting the reason
-		}
-	} else {
-		// Only update status if it's currently enabled
-		statusMgr.AddCondition(RouteAvailable, "ManagedRouteDisabled",
-			"Spire OIDC Managed Route disabled",
-			metav1.ConditionFalse)
-	}
-
-	return nil
-}
-
 // needsUpdate returns true if Deployment needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.Deployment) bool {
 	if current.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] {
 		return true
-	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
+	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true
 	} else if utils.DeploymentSpecModified(&desired, &current) {
 		return true
 	}
 	return false
-}
-
-// checkRouteConflict returns true if desired & current routes has conflicts else return false
-func checkRouteConflict(current, desired *routev1.Route) bool {
-	return !equality.Semantic.DeepEqual(current.Spec, desired.Spec) || !equality.Semantic.DeepEqual(current.Labels, desired.Labels)
 }

@@ -2,19 +2,16 @@ package spire_agent
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -188,148 +185,13 @@ func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, 
 	return createOnlyMode
 }
 
-// reconcileSCC reconciles the Spire Agent Security Context Constraints
-func (r *SpireAgentReconciler) reconcileSCC(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
-	spireAgentSCC := generateSpireAgentSCC(agent)
-	if err := controllerutil.SetControllerReference(agent, spireAgentSCC, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpireAgentSCCGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	err := r.ctrlClient.Create(ctx, spireAgentSCC)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "Failed to create SpireAgentSCC")
-		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpireAgentSCCGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpireAgentSCCResourceCreated",
-		"Spire Agent SCC resources applied",
-		metav1.ConditionTrue)
-	return nil
-}
-
-// reconcileConfigMap reconciles the Spire Agent ConfigMap
-func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	spireAgentConfigMap, spireAgentConfigHash, err := GenerateSpireAgentConfigMap(agent)
-	if err != nil {
-		r.log.Error(err, "failed to generate spire-agent config map")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	if err = controllerutil.SetControllerReference(agent, spireAgentConfigMap, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	var existingSpireAgentCM corev1.ConfigMap
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentConfigMap.Name, Namespace: spireAgentConfigMap.Namespace}, &existingSpireAgentCM)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spireAgentConfigMap); err != nil {
-			r.log.Error(err, "failed to create spire-agent config map")
-			statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
-		}
-		r.log.Info("Created spire agent ConfigMap")
-	} else if err == nil && (existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
-		!reflect.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode")
-		} else {
-			spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
-				r.log.Error(err, "failed to update spire-agent config map")
-				statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
-			}
-			r.log.Info("Updated ConfigMap with new config")
-		}
-	} else if err != nil {
-		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapResourceCreated",
-		"Spire Agent ConfigMap resources applied",
-		metav1.ConditionTrue)
-
-	return spireAgentConfigHash, nil
-}
-
-// reconcileDaemonSet reconciles the Spire Agent DaemonSet
-func (r *SpireAgentReconciler) reconcileDaemonSet(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool, configHash string) error {
-	spireAgentDaemonset := generateSpireAgentDaemonSet(agent.Spec, configHash)
-	if err := controllerutil.SetControllerReference(agent, spireAgentDaemonset, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	var existingSpireAgentDaemonSet appsv1.DaemonSet
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentDaemonset.Name, Namespace: spireAgentDaemonset.Namespace}, &existingSpireAgentDaemonSet)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spireAgentDaemonset); err != nil {
-			r.log.Error(err, "failed to create spire-agent daemonset")
-			statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetCreationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return fmt.Errorf("failed to create DaemonSet: %w", err)
-		}
-		r.log.Info("Created spire agent DaemonSet")
-	} else if err == nil && needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
-		if createOnlyMode {
-			r.log.Info("Skipping DaemonSet update due to create-only mode")
-		} else {
-			spireAgentDaemonset.ResourceVersion = existingSpireAgentDaemonSet.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireAgentDaemonset); err != nil {
-				r.log.Error(err, "failed to update spire agent DaemonSet")
-				statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return fmt.Errorf("failed to update DaemonSet: %w", err)
-			}
-			r.log.Info("Updated spire agent DaemonSet")
-		}
-	} else if err != nil {
-		r.log.Error(err, "failed to get spire-agent daemonset")
-		statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetGetFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	// Check DaemonSet health/readiness
-	statusMgr.CheckDaemonSetHealth(ctx, spireAgentDaemonset.Name, spireAgentDaemonset.Namespace, DaemonSetAvailable)
-
-	return nil
-}
-
 // needsUpdate returns true if DaemonSet needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
 	if current.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] {
 		return true
 	} else if utils.DaemonSetSpecModified(&desired, &current) {
 		return true
-	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
+	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true
 	}
 	return false

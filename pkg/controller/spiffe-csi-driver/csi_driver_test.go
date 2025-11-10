@@ -44,6 +44,7 @@ func TestGetSpiffeCSIDriver(t *testing.T) {
 		customLabels := map[string]string{
 			"custom-label-1": "custom-value-1",
 			"custom-label-2": "custom-value-2",
+			"security.openshift.io/csi-ephemeral-volume-profile": "privileged",
 		}
 
 		csiDriver := getSpiffeCSIDriver(customLabels)
@@ -70,26 +71,6 @@ func TestGetSpiffeCSIDriver(t *testing.T) {
 		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; !ok || val != "restricted" {
 			t.Errorf("Expected security label 'security.openshift.io/csi-ephemeral-volume-profile=restricted', got '%s=%s'", "security.openshift.io/csi-ephemeral-volume-profile", val)
 			t.Error("This label MUST be preserved from the asset file even when custom labels are provided")
-		}
-	})
-
-	t.Run("custom labels do not override asset labels", func(t *testing.T) {
-		// Try to override the security label with custom labels
-		customLabels := map[string]string{
-			"security.openshift.io/csi-ephemeral-volume-profile": "privileged", // Wrong value
-		}
-
-		csiDriver := getSpiffeCSIDriver(customLabels)
-
-		// The asset label should take precedence (asset labels should be applied last)
-		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; ok {
-			// If custom labels override, this is acceptable but document it
-			// Most importantly, the label must exist
-			if val != "restricted" && val != "privileged" {
-				t.Errorf("Expected security label to be either 'restricted' (from asset) or 'privileged' (from custom), got '%s'", val)
-			}
-		} else {
-			t.Error("Security label must be present")
 		}
 	})
 }

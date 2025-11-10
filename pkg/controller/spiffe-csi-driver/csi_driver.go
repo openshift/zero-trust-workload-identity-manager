@@ -69,6 +69,24 @@ func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1
 		return nil
 	}
 
+	// Preserve fields set by Kubernetes from existing resource BEFORE comparison
+	desired.ResourceVersion = existing.ResourceVersion
+	desired.Spec.RequiresRepublish = existing.Spec.RequiresRepublish
+	desired.Spec.SELinuxMount = existing.Spec.SELinuxMount
+	desired.Spec.StorageCapacity = existing.Spec.StorageCapacity
+	desired.Spec.TokenRequests = existing.Spec.TokenRequests
+
+	// Preserve pointer fields if they exist in existing but we haven't set them
+	if desired.Spec.AttachRequired == nil && existing.Spec.AttachRequired != nil {
+		desired.Spec.AttachRequired = existing.Spec.AttachRequired
+	}
+	if desired.Spec.PodInfoOnMount == nil && existing.Spec.PodInfoOnMount != nil {
+		desired.Spec.PodInfoOnMount = existing.Spec.PodInfoOnMount
+	}
+	if desired.Spec.FSGroupPolicy == nil && existing.Spec.FSGroupPolicy != nil {
+		desired.Spec.FSGroupPolicy = existing.Spec.FSGroupPolicy
+	}
+
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("CSIDriver is up to date", "name", desired.Name)
@@ -79,7 +97,6 @@ func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1
 	}
 
 	// Update the resource
-	desired.ResourceVersion = existing.ResourceVersion
 	if err := r.ctrlClient.Update(ctx, desired); err != nil {
 		r.log.Error(err, "failed to update CSI driver")
 		statusMgr.AddCondition(CSIDriverAvailable, v1alpha1.ReasonFailed,
@@ -98,9 +115,7 @@ func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1
 // getSpiffeCSIDriver returns the Spiffe CSI Driver with proper labels
 func getSpiffeCSIDriver(customLabels map[string]string) *storagev1.CSIDriver {
 	csiDriver := utils.DecodeCsiDriverObjBytes(assets.MustAsset(utils.SpiffeCsiDriverAssetName))
-	for k, v := range customLabels {
-		csiDriver.Labels[k] = v
-	}
-	csiDriver.Labels = utils.SpiffeCSIDriverLabels(csiDriver.Labels)
+	csiDriver.Labels = utils.SpiffeCSIDriverLabels(customLabels)
+	csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"] = "restricted"
 	return csiDriver
 }

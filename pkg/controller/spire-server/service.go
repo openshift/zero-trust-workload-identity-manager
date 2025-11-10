@@ -80,6 +80,25 @@ func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context,
 		return nil
 	}
 
+	// Preserve Kubernetes-managed fields from existing resource BEFORE comparison
+	desired.ResourceVersion = existing.ResourceVersion
+	desired.Spec.ClusterIP = existing.Spec.ClusterIP
+	desired.Spec.ClusterIPs = existing.Spec.ClusterIPs
+	desired.Spec.IPFamilies = existing.Spec.IPFamilies
+	desired.Spec.IPFamilyPolicy = existing.Spec.IPFamilyPolicy
+	desired.Spec.InternalTrafficPolicy = existing.Spec.InternalTrafficPolicy
+	desired.Spec.SessionAffinity = existing.Spec.SessionAffinity
+	if existing.Spec.HealthCheckNodePort != 0 {
+		desired.Spec.HealthCheckNodePort = existing.Spec.HealthCheckNodePort
+	}
+
+	// Normalize ports - set default protocol to TCP if not specified
+	for i := range desired.Spec.Ports {
+		if desired.Spec.Ports[i].Protocol == "" {
+			desired.Spec.Ports[i].Protocol = corev1.ProtocolTCP
+		}
+	}
+
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("Service is up to date", "name", desired.Name)
@@ -87,7 +106,6 @@ func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context,
 	}
 
 	// Update the resource
-	desired.ResourceVersion = existing.ResourceVersion
 	if err := r.ctrlClient.Update(ctx, desired); err != nil {
 		r.log.Error(err, "failed to update service")
 		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
@@ -145,6 +163,25 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 		return nil
 	}
 
+	// Preserve Kubernetes-managed fields from existing resource BEFORE comparison
+	desired.ResourceVersion = existing.ResourceVersion
+	desired.Spec.ClusterIP = existing.Spec.ClusterIP
+	desired.Spec.ClusterIPs = existing.Spec.ClusterIPs
+	desired.Spec.IPFamilies = existing.Spec.IPFamilies
+	desired.Spec.IPFamilyPolicy = existing.Spec.IPFamilyPolicy
+	desired.Spec.InternalTrafficPolicy = existing.Spec.InternalTrafficPolicy
+	desired.Spec.SessionAffinity = existing.Spec.SessionAffinity
+	if existing.Spec.HealthCheckNodePort != 0 {
+		desired.Spec.HealthCheckNodePort = existing.Spec.HealthCheckNodePort
+	}
+
+	// Normalize ports - set default protocol to TCP if not specified
+	for i := range desired.Spec.Ports {
+		if desired.Spec.Ports[i].Protocol == "" {
+			desired.Spec.Ports[i].Protocol = corev1.ProtocolTCP
+		}
+	}
+
 	// Check if update is needed
 	if !utils.ResourceNeedsUpdate(existing, desired) {
 		r.log.V(1).Info("Service is up to date", "name", desired.Name)
@@ -152,7 +189,6 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 	}
 
 	// Update the resource
-	desired.ResourceVersion = existing.ResourceVersion
 	if err := r.ctrlClient.Update(ctx, desired); err != nil {
 		r.log.Error(err, "failed to update controller manager service")
 		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,

@@ -3,7 +3,6 @@ package spire_server
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,13 +14,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -241,216 +240,13 @@ func (r *SpireServerReconciler) validateConfiguration(server *v1alpha1.SpireServ
 	return nil
 }
 
-// reconcileSpireServerConfigMap reconciles the Spire Server ConfigMap
-func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	spireServerConfigMap, err := GenerateSpireServerConfigMap(&server.Spec)
-	if err != nil {
-		r.log.Error(err, "failed to generate spire server config map")
-		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	if err = controllerutil.SetControllerReference(server, spireServerConfigMap, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference")
-		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	var existingSpireServerCM corev1.ConfigMap
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireServerConfigMap.Name, Namespace: spireServerConfigMap.Namespace}, &existingSpireServerCM)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spireServerConfigMap); err != nil {
-			statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
-		}
-		r.log.Info("Created spire server ConfigMap")
-	} else if err == nil && (existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] ||
-		!reflect.DeepEqual(existingSpireServerCM.Labels, spireServerConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode")
-		} else {
-			spireServerConfigMap.ResourceVersion = existingSpireServerCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireServerConfigMap); err != nil {
-				statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
-			}
-			r.log.Info("Updated ConfigMap with new config")
-		}
-	} else if err != nil {
-		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	statusMgr.AddCondition(ServerConfigMapAvailable, "SpireConfigMapResourceCreated",
-		"SpireServer config map resources applied",
-		metav1.ConditionTrue)
-
-	// Generate config hash
-	spireServerConfJSON, err := marshalToJSON(generateServerConfMap(&server.Spec))
-	if err != nil {
-		r.log.Error(err, "failed to marshal spire server config map to JSON")
-		return "", err
-	}
-
-	return generateConfigHash(spireServerConfJSON), nil
-}
-
-// reconcileSpireControllerManagerConfigMap reconciles the Spire Controller Manager ConfigMap
-func (r *SpireServerReconciler) reconcileSpireControllerManagerConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	spireControllerManagerConfig, err := generateSpireControllerManagerConfigYaml(&server.Spec)
-	if err != nil {
-		r.log.Error(err, "Failed to generate spire controller manager config")
-		statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	spireControllerManagerConfigMap := generateControllerManagerConfigMap(spireControllerManagerConfig)
-	if err = controllerutil.SetControllerReference(server, spireControllerManagerConfigMap, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on spire controller manager config")
-		statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return "", err
-	}
-
-	var existingSpireControllerManagerCM corev1.ConfigMap
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireControllerManagerConfigMap.Name, Namespace: spireControllerManagerConfigMap.Namespace}, &existingSpireControllerManagerCM)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spireControllerManagerConfigMap); err != nil {
-			r.log.Error(err, "failed to create spire controller manager config map")
-			statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
-		}
-		r.log.Info("Created spire controller manager ConfigMap")
-	} else if err == nil && (existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != spireControllerManagerConfigMap.Data["controller-manager-config.yaml"] ||
-		!reflect.DeepEqual(existingSpireControllerManagerCM.Labels, spireControllerManagerConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
-		} else {
-			spireControllerManagerConfigMap.ResourceVersion = existingSpireControllerManagerCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireControllerManagerConfigMap); err != nil {
-				statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
-			}
-		}
-		r.log.Info("Updated ConfigMap with new config")
-	} else if err != nil {
-		r.log.Error(err, "failed to update spire controller manager config map")
-		return "", err
-	}
-
-	statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapCreated",
-		"spire controller manager config map resources applied",
-		metav1.ConditionTrue)
-
-	return generateConfigHashFromString(spireControllerManagerConfig), nil
-}
-
-// reconcileSpireBundleConfigMap reconciles the Spire Bundle ConfigMap
-func (r *SpireServerReconciler) reconcileSpireBundleConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
-	spireBundleCM, err := generateSpireBundleConfigMap(&server.Spec)
-	if err != nil {
-		r.log.Error(err, "failed to generate spire bundle config map")
-		statusMgr.AddCondition(BundleConfigAvailable, "SpireBundleConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	if err := controllerutil.SetControllerReference(server, spireBundleCM, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on spire bundle config")
-		statusMgr.AddCondition(BundleConfigAvailable, "SpireBundleConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	err = r.ctrlClient.Create(ctx, spireBundleCM)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "failed to create spire bundle config map")
-		statusMgr.AddCondition(BundleConfigAvailable, "SpireBundleConfigMapGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return fmt.Errorf("failed to create spire-bundle ConfigMap: %w", err)
-	}
-
-	statusMgr.AddCondition(BundleConfigAvailable, "SpireBundleConfigMapCreated",
-		"spire bundle config map resources applied",
-		metav1.ConditionTrue)
-	return nil
-}
-
-// reconcileStatefulSet reconciles the Spire Server StatefulSet
-func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, spireServerConfigMapHash, spireControllerManagerConfigMapHash string) error {
-	sts := GenerateSpireServerStatefulSet(&server.Spec, spireServerConfigMapHash, spireControllerManagerConfigMapHash)
-	if err := controllerutil.SetControllerReference(server, sts, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on spire server stateful set resource")
-		statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetGenerationFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	var existingSTS appsv1.StatefulSet
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: sts.Name, Namespace: sts.Namespace}, &existingSTS)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, sts); err != nil {
-			statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetCreationFailed",
-				err.Error(),
-				metav1.ConditionFalse)
-			return fmt.Errorf("failed to create StatefulSet: %w", err)
-		}
-		r.log.Info("Created spire server StatefulSet")
-	} else if err == nil && needsUpdate(existingSTS, *sts) {
-		if createOnlyMode {
-			r.log.Info("Skipping StatefulSet update due to create-only mode")
-		} else {
-			sts.ResourceVersion = existingSTS.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, sts); err != nil {
-				statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return fmt.Errorf("failed to update StatefulSet: %w", err)
-			}
-			r.log.Info("Updated spire server StatefulSet")
-		}
-	} else if err != nil {
-		r.log.Error(err, "failed to get spire server stateful set resource")
-		statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetGetFailed",
-			err.Error(),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	// Check StatefulSet health/readiness
-	statusMgr.CheckStatefulSetHealth(ctx, sts.Name, sts.Namespace, StatefulSetAvailable)
-
-	return nil
-}
-
 // needsUpdate returns true if StatefulSet needs to be updated based on config checksum
 func needsUpdate(current, desired appsv1.StatefulSet) bool {
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
 		return true
-	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
+	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true
 	} else if utils.StatefulSetSpecModified(&desired, &current) {
 		return true
