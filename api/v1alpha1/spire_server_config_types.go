@@ -79,6 +79,20 @@ type SpireServerSpec struct {
 	// +kubebuilder:default="5m"
 	DefaultJWTValidity metav1.Duration `json:"defaultJWTValidity"`
 
+	// caKeyType specifies the key type used for the server CA (both X509 and JWT).
+	// Valid values are: rsa-2048, rsa-4096, ec-p256, ec-p384.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=rsa-2048;rsa-4096;ec-p256;ec-p384
+	// +kubebuilder:default="rsa-2048"
+	CAKeyType string `json:"caKeyType,omitempty"`
+
+	// jwtKeyType specifies the key type used for JWT signing.
+	// Valid values are: rsa-2048, rsa-4096, ec-p256, ec-p384.
+	// This field is optional and will only be set in the SPIRE server configuration if explicitly provided.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=rsa-2048;rsa-4096;ec-p256;ec-p384
+	JWTKeyType string `json:"jwtKeyType,omitempty"`
+
 	// keyManager has configs for the spire server key manager.
 	// +kubebuilder:validation:Optional
 	KeyManager *KeyManager `json:"keyManager,omitempty"`
