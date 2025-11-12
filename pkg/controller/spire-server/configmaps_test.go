@@ -678,3 +678,234 @@ func mustParseDuration(s string) time.Duration {
 	}
 	return d
 }
+
+func TestGetCAKeyType(t *testing.T) {
+	tests := []struct {
+		name     string
+		keyType  string
+		expected string
+	}{
+		{
+			name:     "Empty string returns default rsa-2048",
+			keyType:  "",
+			expected: "rsa-2048",
+		},
+		{
+			name:     "rsa-2048 key type",
+			keyType:  "rsa-2048",
+			expected: "rsa-2048",
+		},
+		{
+			name:     "rsa-4096 key type",
+			keyType:  "rsa-4096",
+			expected: "rsa-4096",
+		},
+		{
+			name:     "ec-p256 key type",
+			keyType:  "ec-p256",
+			expected: "ec-p256",
+		},
+		{
+			name:     "ec-p384 key type",
+			keyType:  "ec-p384",
+			expected: "ec-p384",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getCAKeyType(tt.keyType)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestGenerateServerConfMapWithKeyTypes(t *testing.T) {
+	tests := []struct {
+		name           string
+		caKeyType      string
+		jwtKeyType     string
+		expectedCAKey  string
+		expectJWTKey   bool
+		expectedJWTKey string
+	}{
+		{
+			name:          "Default CA key type, no JWT key type",
+			caKeyType:     "",
+			jwtKeyType:    "",
+			expectedCAKey: "rsa-2048",
+			expectJWTKey:  false,
+		},
+		{
+			name:           "RSA-2048 key types",
+			caKeyType:      "rsa-2048",
+			jwtKeyType:     "rsa-2048",
+			expectedCAKey:  "rsa-2048",
+			expectJWTKey:   true,
+			expectedJWTKey: "rsa-2048",
+		},
+		{
+			name:           "RSA-4096 key types",
+			caKeyType:      "rsa-4096",
+			jwtKeyType:     "rsa-4096",
+			expectedCAKey:  "rsa-4096",
+			expectJWTKey:   true,
+			expectedJWTKey: "rsa-4096",
+		},
+		{
+			name:           "EC-P256 key types",
+			caKeyType:      "ec-p256",
+			jwtKeyType:     "ec-p256",
+			expectedCAKey:  "ec-p256",
+			expectJWTKey:   true,
+			expectedJWTKey: "ec-p256",
+		},
+		{
+			name:           "EC-P384 key types",
+			caKeyType:      "ec-p384",
+			jwtKeyType:     "ec-p384",
+			expectedCAKey:  "ec-p384",
+			expectJWTKey:   true,
+			expectedJWTKey: "ec-p384",
+		},
+		{
+			name:           "Mixed key types - CA rsa-2048, JWT ec-p384",
+			caKeyType:      "rsa-2048",
+			jwtKeyType:     "ec-p384",
+			expectedCAKey:  "rsa-2048",
+			expectJWTKey:   true,
+			expectedJWTKey: "ec-p384",
+		},
+		{
+			name:          "Only CA key type set",
+			caKeyType:     "ec-p384",
+			jwtKeyType:    "",
+			expectedCAKey: "ec-p384",
+			expectJWTKey:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := createValidConfig()
+			config.CAKeyType = tt.caKeyType
+			config.JWTKeyType = tt.jwtKeyType
+
+			confMap := generateServerConfMap(config)
+
+			// Get server section
+			server, ok := confMap["server"].(map[string]interface{})
+			if !ok {
+				t.Fatal("Failed to get server section")
+			}
+
+			// Check CA key type
+			if caKeyType, ok := server["ca_key_type"].(string); !ok {
+				t.Errorf("Expected ca_key_type to be a string, got %T", server["ca_key_type"])
+			} else if caKeyType != tt.expectedCAKey {
+				t.Errorf("Expected ca_key_type %q, got %q", tt.expectedCAKey, caKeyType)
+			}
+
+			// Check JWT key type
+			if tt.expectJWTKey {
+				if jwtKeyType, ok := server["jwt_key_type"].(string); !ok {
+					t.Errorf("Expected jwt_key_type to be a string, got %T", server["jwt_key_type"])
+				} else if jwtKeyType != tt.expectedJWTKey {
+					t.Errorf("Expected jwt_key_type %q, got %q", tt.expectedJWTKey, jwtKeyType)
+				}
+			} else {
+				if _, exists := server["jwt_key_type"]; exists {
+					t.Errorf("Expected jwt_key_type to not be present, but it exists with value %v", server["jwt_key_type"])
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateSpireServerConfigMapWithKeyTypes(t *testing.T) {
+	tests := []struct {
+		name           string
+		caKeyType      string
+		jwtKeyType     string
+		expectedCAKey  string
+		expectJWTKey   bool
+		expectedJWTKey string
+	}{
+		{
+			name:           "Both key types specified",
+			caKeyType:      "rsa-4096",
+			jwtKeyType:     "ec-p384",
+			expectedCAKey:  "rsa-4096",
+			expectJWTKey:   true,
+			expectedJWTKey: "ec-p384",
+		},
+		{
+			name:          "Only CA key type, JWT not specified",
+			caKeyType:     "ec-p256",
+			jwtKeyType:    "",
+			expectedCAKey: "ec-p256",
+			expectJWTKey:  false,
+		},
+		{
+			name:           "Default CA key type, JWT specified",
+			caKeyType:      "",
+			jwtKeyType:     "rsa-2048",
+			expectedCAKey:  "rsa-2048",
+			expectJWTKey:   true,
+			expectedJWTKey: "rsa-2048",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := createValidConfig()
+			config.CAKeyType = tt.caKeyType
+			config.JWTKeyType = tt.jwtKeyType
+
+			cm, err := GenerateSpireServerConfigMap(config)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			// Verify config data exists
+			configData, exists := cm.Data["server.conf"]
+			if !exists {
+				t.Fatal("Expected server.conf data to exist in ConfigMap")
+			}
+
+			// Validate JSON
+			var configMap map[string]interface{}
+			if err := json.Unmarshal([]byte(configData), &configMap); err != nil {
+				t.Fatalf("Failed to unmarshal server.conf JSON: %v", err)
+			}
+
+			// Verify server section contains key type fields
+			serverConfig, ok := configMap["server"].(map[string]interface{})
+			if !ok {
+				t.Fatal("Failed to get server section from config")
+			}
+
+			// Check CA key type
+			if caKeyType, ok := serverConfig["ca_key_type"].(string); !ok {
+				t.Errorf("Expected ca_key_type to be a string, got %T", serverConfig["ca_key_type"])
+			} else if caKeyType != tt.expectedCAKey {
+				t.Errorf("Expected ca_key_type %q, got %q", tt.expectedCAKey, caKeyType)
+			}
+
+			// Check JWT key type
+			if tt.expectJWTKey {
+				if jwtKeyType, ok := serverConfig["jwt_key_type"].(string); !ok {
+					t.Errorf("Expected jwt_key_type to be a string, got %T", serverConfig["jwt_key_type"])
+				} else if jwtKeyType != tt.expectedJWTKey {
+					t.Errorf("Expected jwt_key_type %q, got %q", tt.expectedJWTKey, jwtKeyType)
+				}
+			} else {
+				if _, exists := serverConfig["jwt_key_type"]; exists {
+					t.Errorf("Expected jwt_key_type to not be present, but it exists with value %v", serverConfig["jwt_key_type"])
+				}
+			}
+		})
+	}
+}

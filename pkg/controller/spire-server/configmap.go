@@ -18,6 +18,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const defaultCaKeyType = "rsa-2048"
+
 type ControllerManagerConfigYAML struct {
 	Kind                                  string            `json:"kind"`
 	APIVersion                            string            `json:"apiVersion"`
@@ -64,6 +66,34 @@ func GenerateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 
 // generateServerConfMap builds the server.conf structure as a Go map
 func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interface{} {
+	// Build the server config
+	serverConfig := map[string]interface{}{
+		"audit_log_enabled": false,
+		"bind_address":      "0.0.0.0",
+		"bind_port":         "8081",
+		"ca_key_type":       getCAKeyType(config.CAKeyType),
+		"ca_subject": []map[string]interface{}{
+			{
+				"common_name":  config.CASubject.CommonName,
+				"country":      []string{config.CASubject.Country},
+				"organization": []string{config.CASubject.Organization},
+			},
+		},
+		"ca_ttl":                config.CAValidity,
+		"data_dir":              "/run/spire/data",
+		"default_jwt_svid_ttl":  config.DefaultJWTValidity,
+		"default_x509_svid_ttl": config.DefaultX509Validity,
+		"jwt_issuer":            config.JwtIssuer,
+		"log_level":             utils.GetLogLevelFromString(config.LogLevel),
+		"log_format":            utils.GetLogFormatFromString(config.LogFormat),
+		"trust_domain":          config.TrustDomain,
+	}
+
+	// Only add jwt_key_type if it's explicitly set
+	if config.JWTKeyType != "" {
+		serverConfig["jwt_key_type"] = config.JWTKeyType
+	}
+
 	return map[string]interface{}{
 		"health_checks": map[string]interface{}{
 			"bind_address":     "0.0.0.0",
@@ -126,27 +156,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 				},
 			},
 		},
-		"server": map[string]interface{}{
-			"audit_log_enabled": false,
-			"bind_address":      "0.0.0.0",
-			"bind_port":         "8081",
-			"ca_key_type":       "ec-p256",
-			"ca_subject": []map[string]interface{}{
-				{
-					"common_name":  config.CASubject.CommonName,
-					"country":      []string{config.CASubject.Country},
-					"organization": []string{config.CASubject.Organization},
-				},
-			},
-			"ca_ttl":                config.CAValidity,
-			"data_dir":              "/run/spire/data",
-			"default_jwt_svid_ttl":  config.DefaultJWTValidity,
-			"default_x509_svid_ttl": config.DefaultX509Validity,
-			"jwt_issuer":            config.JwtIssuer,
-			"log_level":             utils.GetLogLevelFromString(config.LogLevel),
-			"log_format":            utils.GetLogFormatFromString(config.LogFormat),
-			"trust_domain":          config.TrustDomain,
-		},
+		"server": serverConfig,
 		"telemetry": map[string]interface{}{
 			"Prometheus": map[string]interface{}{
 				"host": "0.0.0.0",
@@ -176,6 +186,14 @@ func generateConfigHash(data []byte) string {
 	normalized := strings.TrimSpace(string(data)) // Convert to string, trim, convert back to bytes
 	hash := sha256.Sum256([]byte(normalized))
 	return hex.EncodeToString(hash[:])
+}
+
+// getCAKeyType returns the CA key type from config, defaulting to "rsa-2048" if not set
+func getCAKeyType(keyType string) string {
+	if keyType == "" {
+		return defaultCaKeyType
+	}
+	return keyType
 }
 
 func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*ControllerManagerConfigYAML, error) {
