@@ -16,7 +16,7 @@ import (
 )
 
 // reconcileClusterSpiffeIDs reconciles the ClusterSpiffeID resources
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
+func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
 	// Reconcile OIDC Discovery Provider ClusterSPIFFEID
 	desiredOIDC := generateSpireIODCDiscoveryProviderSpiffeID(oidc.Spec.Labels)
 	if err := controllerutil.SetControllerReference(oidc, desiredOIDC, r.scheme); err != nil {
@@ -53,16 +53,21 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx con
 	} else {
 		// Resource exists, check if we need to update
 		if utils.ResourceNeedsUpdate(existingOIDC, desiredOIDC) {
-			// Update the resource
-			desiredOIDC.ResourceVersion = existingOIDC.ResourceVersion
-			if err := r.ctrlClient.Update(ctx, desiredOIDC); err != nil {
-				r.log.Error(err, "Failed to update OIDC ClusterSPIFFEID")
-				statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDUpdateFailed",
-					fmt.Sprintf("Failed to update OIDC ClusterSPIFFEID: %v", err),
-					metav1.ConditionFalse)
-				return err
+			if createOnlyMode {
+				// Skip update in create-only mode
+				r.log.Info("Skipping OIDC ClusterSPIFFEID update due to create-only mode", "name", desiredOIDC.Name)
+			} else {
+				// Update the resource
+				desiredOIDC.ResourceVersion = existingOIDC.ResourceVersion
+				if err := r.ctrlClient.Update(ctx, desiredOIDC); err != nil {
+					r.log.Error(err, "Failed to update OIDC ClusterSPIFFEID")
+					statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDUpdateFailed",
+						fmt.Sprintf("Failed to update OIDC ClusterSPIFFEID: %v", err),
+						metav1.ConditionFalse)
+					return err
+				}
+				r.log.Info("Updated OIDC ClusterSPIFFEID", "name", desiredOIDC.Name)
 			}
-			r.log.Info("Updated OIDC ClusterSPIFFEID", "name", desiredOIDC.Name)
 		} else {
 			r.log.V(1).Info("OIDC ClusterSPIFFEID is up to date", "name", desiredOIDC.Name)
 		}
@@ -104,16 +109,21 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx con
 	} else {
 		// Resource exists, check if we need to update
 		if utils.ResourceNeedsUpdate(existingDefault, desiredDefault) {
-			// Update the resource
-			desiredDefault.ResourceVersion = existingDefault.ResourceVersion
-			if err := r.ctrlClient.Update(ctx, desiredDefault); err != nil {
-				r.log.Error(err, "Failed to update Default ClusterSPIFFEID")
-				statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDUpdateFailed",
-					fmt.Sprintf("Failed to update Default ClusterSPIFFEID: %v", err),
-					metav1.ConditionFalse)
-				return err
+			if createOnlyMode {
+				// Skip update in create-only mode
+				r.log.Info("Skipping Default ClusterSPIFFEID update due to create-only mode", "name", desiredDefault.Name)
+			} else {
+				// Update the resource
+				desiredDefault.ResourceVersion = existingDefault.ResourceVersion
+				if err := r.ctrlClient.Update(ctx, desiredDefault); err != nil {
+					r.log.Error(err, "Failed to update Default ClusterSPIFFEID")
+					statusMgr.AddCondition(ClusterSPIFFEIDAvailable, "SpireClusterSpiffeIDUpdateFailed",
+						fmt.Sprintf("Failed to update Default ClusterSPIFFEID: %v", err),
+						metav1.ConditionFalse)
+					return err
+				}
+				r.log.Info("Updated Default ClusterSPIFFEID", "name", desiredDefault.Name)
 			}
-			r.log.Info("Updated Default ClusterSPIFFEID", "name", desiredDefault.Name)
 		} else {
 			r.log.V(1).Info("Default ClusterSPIFFEID is up to date", "name", desiredDefault.Name)
 		}

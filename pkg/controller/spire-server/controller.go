@@ -84,7 +84,7 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 }
 
 func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName)
+	r.log.Info(fmt.Sprintf("reconciling %s", utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName))
 	var server v1alpha1.SpireServer
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &server); err != nil {
 		if kerrors.IsNotFound(err) {

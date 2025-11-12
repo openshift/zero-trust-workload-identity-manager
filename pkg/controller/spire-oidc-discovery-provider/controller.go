@@ -75,7 +75,7 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 }
 
 func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName)
+	r.log.Info(fmt.Sprintf("reconciling %s", utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName))
 
 	var oidcDiscoveryProviderConfig v1alpha1.SpireOIDCDiscoveryProvider
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &oidcDiscoveryProviderConfig); err != nil {
@@ -118,7 +118,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	}
 
 	// Reconcile ClusterSpiffeIDs
-	if err := r.reconcileClusterSpiffeIDs(ctx, &oidcDiscoveryProviderConfig, statusMgr); err != nil {
+	if err := r.reconcileClusterSpiffeIDs(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 

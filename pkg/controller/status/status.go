@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -62,12 +63,14 @@ func (m *Manager) AddCondition(conditionType, reason, message string, status met
 
 // SetReadyCondition sets the Ready condition based on all other conditions
 func (m *Manager) SetReadyCondition() {
-	// Check if any condition (except Ready and Degraded) is False
+	// Check if any condition (except Ready, Degraded, and CreateOnlyMode) is False
+	// Note: CreateOnlyMode=False is normal (disabled state), not a failure
 	hasFailure := false
 	failureMessages := []string{}
 
 	for condType, cond := range m.conditions {
-		if condType == v1alpha1.Ready || condType == v1alpha1.Degraded {
+		// Skip conditions that don't indicate operational health
+		if condType == v1alpha1.Ready || condType == v1alpha1.Degraded || condType == utils.CreateOnlyModeStatusType {
 			continue
 		}
 		if cond.Status == metav1.ConditionFalse {

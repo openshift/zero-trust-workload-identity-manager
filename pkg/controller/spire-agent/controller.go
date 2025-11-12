@@ -2,6 +2,7 @@ package spire_agent
 
 import (
 	"context"
+	"fmt"
 
 	securityv1 "github.com/openshift/api/security/v1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
@@ -75,7 +76,7 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 }
 
 func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName)
+	r.log.Info(fmt.Sprintf("reconciling %s", utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName))
 	var agent v1alpha1.SpireAgent
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &agent); err != nil {
 		if kerrors.IsNotFound(err) {

@@ -2,6 +2,7 @@ package spiffe_csi_driver
 
 import (
 	"context"
+	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -68,7 +69,7 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 }
 
 func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName)
+	r.log.Info(fmt.Sprintf("reconciling %s", utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName))
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &spiffeCSIDriver); err != nil {
 		if kerrors.IsNotFound(err) {

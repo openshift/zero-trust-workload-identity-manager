@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +33,7 @@ import (
 const (
 	// Condition types for ZTWIM
 	OperandsAvailable = "OperandsAvailable"
+	CreateOnlyMode    = "CreateOnlyMode"
 )
 
 // Operand state constants for structured state tracking
@@ -177,10 +177,65 @@ func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) 
 	}, nil
 }
 
+// setCreateOnlyModeCondition sets the CreateOnlyMode condition on the main CR if any operand has it
+func setCreateOnlyModeCondition(statusMgr *status.Manager, anyOperandHasCreateOnlyCondition, anyCreateOnlyModeEnabled bool) {
+	if anyOperandHasCreateOnlyCondition {
+		if anyCreateOnlyModeEnabled {
+			statusMgr.AddCondition(CreateOnlyMode, utils.CreateOnlyModeEnabled,
+				"One or more operands have create-only mode enabled",
+				metav1.ConditionTrue)
+		} else {
+			statusMgr.AddCondition(CreateOnlyMode, utils.CreateOnlyModeDisabled,
+				"Create-only mode is disabled",
+				metav1.ConditionFalse)
+		}
+	}
+}
+
+// setUpgradeableCondition sets the Upgradeable condition based on operand readiness and CreateOnlyMode
+// Upgradeable is False only if:
+// - CreateOnlyMode is enabled, OR
+// - Operand CRs exist but are not ready (failing operands)
+// Upgradeable is True if:
+// - All operands are ready, OR
+// - Operands don't exist yet (will be created during upgrade)
+func setUpgradeableCondition(statusMgr *status.Manager, allReady bool, anyCreateOnlyModeEnabled bool, operandStatuses []v1alpha1.OperandStatus) {
+	if anyCreateOnlyModeEnabled {
+		// CreateOnlyMode prevents updates - not safe to upgrade
+		statusMgr.AddCondition(v1alpha1.Upgradeable, v1alpha1.ReasonOperandsNotReady,
+			"Not safe to upgrade - create-only mode is enabled on one or more operands",
+			metav1.ConditionFalse)
+		return
+	}
+
+	// Check if any operands exist but are not ready (failing operands)
+	var failingOperands []string
+	for _, operand := range operandStatuses {
+		// Only count operands that exist but are not ready
+		// Operands that don't exist (CR not found) are OK for upgrade
+		if !utils.StringToBool(operand.Ready) && operand.Message != "CR not found" {
+			failingOperands = append(failingOperands, fmt.Sprintf("%s/%s", operand.Kind, operand.Name))
+		}
+	}
+
+	if len(failingOperands) > 0 {
+		// Some operands exist but are failing - not safe to upgrade
+		message := fmt.Sprintf("Not safe to upgrade - operands exist but are not ready: %v", failingOperands)
+		statusMgr.AddCondition(v1alpha1.Upgradeable, v1alpha1.ReasonOperandsNotReady,
+			message,
+			metav1.ConditionFalse)
+	} else {
+		// All operands are either ready or don't exist yet - safe to upgrade
+		statusMgr.AddCondition(v1alpha1.Upgradeable, v1alpha1.ReasonReady,
+			"All operands are ready or not yet created",
+			metav1.ConditionTrue)
+	}
+}
+
 // Reconcile ensures the ZeroTrustWorkloadIdentityManager 'cluster' instance exists
 // and aggregates status from all managed operand CRs
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("reconciling ", utils.ZeroTrustWorkloadIdentityManagerControllerName)
+	r.log.Info(fmt.Sprintf("reconciling %s", utils.ZeroTrustWorkloadIdentityManagerControllerName))
 	var config v1alpha1.ZeroTrustWorkloadIdentityManager
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)
 	if err != nil {
@@ -209,11 +264,11 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	}()
 
 	// Aggregate status from all operand CRs
-	operandStatuses, allReady, notCreatedCount, failedCount := r.aggregateOperandStatus(ctx)
-	config.Status.Operands = operandStatuses
+	result := r.aggregateOperandStatus(ctx)
+	config.Status.Operands = result.operandStatuses
 
 	// Set operands availability condition and manually control Ready condition
-	if allReady {
+	if result.allReady {
 		// All operands ready
 		statusMgr.AddCondition(OperandsAvailable, v1alpha1.ReasonReady,
 			"All operand CRs are ready",
@@ -222,10 +277,10 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonReady,
 			"All components are ready",
 			metav1.ConditionTrue)
-	} else if notCreatedCount > 0 && failedCount == 0 {
+	} else if result.notCreatedCount > 0 && result.failedCount == 0 {
 		// Operands not created or still reconciling - use Progressing for both conditions
 		var pendingOperands []string
-		for _, operand := range operandStatuses {
+		for _, operand := range result.operandStatuses {
 			// Use structured state classification instead of exact string matching
 			readyCondition := apimeta.FindStatusCondition(operand.Conditions, v1alpha1.Ready)
 			classification := classifyOperandState(operand, readyCondition)
@@ -250,7 +305,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	} else {
 		// Some operands are actually unhealthy - use Failed
 		var unhealthyOperands []string
-		for _, operand := range operandStatuses {
+		for _, operand := range result.operandStatuses {
 			// Use structured state classification instead of exact string matching
 			readyCondition := apimeta.FindStatusCondition(operand.Conditions, v1alpha1.Ready)
 			classification := classifyOperandState(operand, readyCondition)
@@ -270,80 +325,97 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 			metav1.ConditionFalse)
 	}
 
-	r.log.Info("Aggregated operand status", "allReady", allReady, "notCreated", notCreatedCount, "failed", failedCount)
+	// Set CreateOnlyMode condition if any operand has it
+	setCreateOnlyModeCondition(statusMgr, result.anyOperandHasCreateOnlyCondition, result.anyCreateOnlyModeEnabled)
+
+	// Set Upgradeable condition based on operand health and CreateOnlyMode
+	setUpgradeableCondition(statusMgr, result.allReady, result.anyCreateOnlyModeEnabled, result.operandStatuses)
+
+	r.log.Info("Aggregated operand status", "allReady", result.allReady, "notCreated", result.notCreatedCount, "failed", result.failedCount, "anyCreateOnlyModeEnabled", result.anyCreateOnlyModeEnabled, "anyOperandHasCreateOnlyCondition", result.anyOperandHasCreateOnlyCondition, "anyOperandExists", result.anyOperandExists)
 
 	return ctrl.Result{}, nil
 }
 
+// operandAggregateState holds the aggregate state tracked across all operands
+type operandAggregateState struct {
+	allReady                         bool
+	notCreatedCount                  int
+	failedCount                      int
+	anyCreateOnlyModeEnabled         bool
+	anyOperandHasCreateOnlyCondition bool
+	anyOperandExists                 bool
+}
+
+// operandAggregateResult holds the result of aggregating operand statuses
+type operandAggregateResult struct {
+	operandStatuses                  []v1alpha1.OperandStatus
+	allReady                         bool
+	notCreatedCount                  int
+	failedCount                      int
+	anyCreateOnlyModeEnabled         bool
+	anyOperandHasCreateOnlyCondition bool
+	anyOperandExists                 bool
+}
+
+// processOperandStatus processes a single operand's status and updates aggregate state
+func processOperandStatus(operand v1alpha1.OperandStatus, state *operandAggregateState) {
+	// Check if operand exists
+	if operand.Message != "CR not found" {
+		state.anyOperandExists = true
+
+		// Check if this operand has CreateOnlyMode condition
+		createOnlyCondition := apimeta.FindStatusCondition(operand.Conditions, utils.CreateOnlyModeStatusType)
+		if createOnlyCondition != nil {
+			state.anyOperandHasCreateOnlyCondition = true
+			if createOnlyCondition.Status == metav1.ConditionTrue {
+				state.anyCreateOnlyModeEnabled = true
+			}
+		}
+	}
+
+	// Check if operand is ready
+	if !utils.StringToBool(operand.Ready) {
+		state.allReady = false
+		// Use structured state classification
+		readyCondition := apimeta.FindStatusCondition(operand.Conditions, v1alpha1.Ready)
+		classification := classifyOperandState(operand, readyCondition)
+		if classification == operandProgressing {
+			state.notCreatedCount++
+		} else {
+			state.failedCount++
+		}
+	}
+}
+
 // aggregateOperandStatus collects status from all managed operand CRs
-// Returns: operandStatuses, allReady, notCreatedCount, failedCount
-func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx context.Context) ([]v1alpha1.OperandStatus, bool, int, int) {
-	operandStatuses := []v1alpha1.OperandStatus{}
-	allReady := true
-	notCreatedCount := 0
-	failedCount := 0
-
-	// Check SpireServer
-	spireServerStatus := r.getSpireServerStatus(ctx)
-	operandStatuses = append(operandStatuses, spireServerStatus)
-	if !utils.StringToBool(spireServerStatus.Ready) {
-		allReady = false
-		// Use structured state classification instead of exact string matching
-		readyCondition := apimeta.FindStatusCondition(spireServerStatus.Conditions, v1alpha1.Ready)
-		classification := classifyOperandState(spireServerStatus, readyCondition)
-		if classification == operandProgressing {
-			notCreatedCount++
-		} else {
-			failedCount++
-		}
+func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx context.Context) operandAggregateResult {
+	// Initialize aggregate state
+	state := &operandAggregateState{
+		allReady: true,
 	}
 
-	// Check SpireAgent
-	spireAgentStatus := r.getSpireAgentStatus(ctx)
-	operandStatuses = append(operandStatuses, spireAgentStatus)
-	if !utils.StringToBool(spireAgentStatus.Ready) {
-		allReady = false
-		// Use structured state classification instead of exact string matching
-		readyCondition := apimeta.FindStatusCondition(spireAgentStatus.Conditions, v1alpha1.Ready)
-		classification := classifyOperandState(spireAgentStatus, readyCondition)
-		if classification == operandProgressing {
-			notCreatedCount++
-		} else {
-			failedCount++
-		}
+	// Collect status from all operands
+	operandStatuses := []v1alpha1.OperandStatus{
+		r.getSpireServerStatus(ctx),
+		r.getSpireAgentStatus(ctx),
+		r.getSpiffeCSIDriverStatus(ctx),
+		r.getSpireOIDCDiscoveryProviderStatus(ctx),
 	}
 
-	// Check SpiffeCSIDriver
-	spiffeCSIStatus := r.getSpiffeCSIDriverStatus(ctx)
-	operandStatuses = append(operandStatuses, spiffeCSIStatus)
-	if !utils.StringToBool(spiffeCSIStatus.Ready) {
-		allReady = false
-		// Use structured state classification instead of exact string matching
-		readyCondition := apimeta.FindStatusCondition(spiffeCSIStatus.Conditions, v1alpha1.Ready)
-		classification := classifyOperandState(spiffeCSIStatus, readyCondition)
-		if classification == operandProgressing {
-			notCreatedCount++
-		} else {
-			failedCount++
-		}
+	// Process each operand status
+	for _, operand := range operandStatuses {
+		processOperandStatus(operand, state)
 	}
 
-	// Check SpireOIDCDiscoveryProvider
-	oidcStatus := r.getSpireOIDCDiscoveryProviderStatus(ctx)
-	operandStatuses = append(operandStatuses, oidcStatus)
-	if !utils.StringToBool(oidcStatus.Ready) {
-		allReady = false
-		// Use structured state classification instead of exact string matching
-		readyCondition := apimeta.FindStatusCondition(oidcStatus.Conditions, v1alpha1.Ready)
-		classification := classifyOperandState(oidcStatus, readyCondition)
-		if classification == operandProgressing {
-			notCreatedCount++
-		} else {
-			failedCount++
-		}
+	return operandAggregateResult{
+		operandStatuses:                  operandStatuses,
+		allReady:                         state.allReady,
+		notCreatedCount:                  state.notCreatedCount,
+		failedCount:                      state.failedCount,
+		anyCreateOnlyModeEnabled:         state.anyCreateOnlyModeEnabled,
+		anyOperandHasCreateOnlyCondition: state.anyOperandHasCreateOnlyCondition,
+		anyOperandExists:                 state.anyOperandExists,
 	}
-
-	return operandStatuses, allReady, notCreatedCount, failedCount
 }
 
 // operandStatusGetter defines the interface for types that have conditional status
@@ -427,13 +499,19 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireOIDCDiscoveryProvid
 }
 
 // extractKeyConditions extracts key conditions from operand status
-// When operand is ready/healthy, returns empty (no conditions needed - reduces clutter)
-// When operand is unhealthy, returns the Ready condition plus any other failed conditions
-// The Ready condition is included when unhealthy to support structured state classification
+// Only includes CreateOnlyMode condition when it's enabled (True) - needed for ZTWIM aggregation
+// When operand is not ready, also includes Ready condition and other failed conditions
 func extractKeyConditions(conditions []metav1.Condition, isReady bool) []metav1.Condition {
 	keyConditions := []metav1.Condition{}
 
-	// If operand is ready, don't show any conditions (reduces clutter)
+	// Only include CreateOnlyMode condition if it's enabled (True)
+	// When disabled (False), it's just clutter and not needed
+	createOnlyCondition := apimeta.FindStatusCondition(conditions, utils.CreateOnlyModeStatusType)
+	if createOnlyCondition != nil && createOnlyCondition.Status == metav1.ConditionTrue {
+		keyConditions = append(keyConditions, *createOnlyCondition)
+	}
+
+	// If operand is ready and no CreateOnlyMode, return empty (reduces clutter)
 	if isReady {
 		return keyConditions
 	}
@@ -446,8 +524,8 @@ func extractKeyConditions(conditions []metav1.Condition, isReady bool) []metav1.
 
 	// Also include other failed conditions to show what's wrong
 	for _, cond := range conditions {
-		// Skip the Ready condition (already added above)
-		if cond.Type == v1alpha1.Ready {
+		// Skip conditions we've already checked
+		if cond.Type == v1alpha1.Ready || cond.Type == utils.CreateOnlyModeStatusType {
 			continue
 		}
 
@@ -473,48 +551,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) recreateClusterInstance(ctx
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{Requeue: true}, nil
-}
-
-// ensureNamespacePodSecurityLabels ensures the operator namespace has the required Pod Security labels
-// for CSI driver support. CSI inline volumes require privileged pod security enforcement.
-func (r *ZeroTrustWorkloadIdentityManagerReconciler) ensureNamespacePodSecurityLabels(ctx context.Context) error {
-	namespace := &corev1.Namespace{}
-	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: utils.OperatorNamespace}, namespace); err != nil {
-		return fmt.Errorf("failed to get namespace %s: %w", utils.OperatorNamespace, err)
-	}
-
-	// Required Pod Security labels for CSI driver support
-	requiredLabels := map[string]string{
-		"pod-security.kubernetes.io/enforce": "privileged",
-		"pod-security.kubernetes.io/audit":   "privileged",
-		"pod-security.kubernetes.io/warn":    "privileged",
-	}
-
-	// Check if labels need to be added
-	needsUpdate := false
-	if namespace.Labels == nil {
-		namespace.Labels = make(map[string]string)
-		needsUpdate = true
-	}
-
-	for key, value := range requiredLabels {
-		if namespace.Labels[key] != value {
-			namespace.Labels[key] = value
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
-		r.log.Info("Updating namespace with Pod Security labels", "namespace", utils.OperatorNamespace)
-		if err := r.ctrlClient.Update(ctx, namespace); err != nil {
-			return fmt.Errorf("failed to update namespace %s with Pod Security labels: %w", utils.OperatorNamespace, err)
-		}
-		r.log.Info("Successfully updated namespace with Pod Security labels", "namespace", utils.OperatorNamespace)
-	} else {
-		r.log.V(1).Info("Namespace already has required Pod Security labels", "namespace", utils.OperatorNamespace)
-	}
-
-	return nil
 }
 
 // operandStatusChangedPredicate only triggers reconciliation when operand status changes
