@@ -864,7 +864,7 @@ func TestGenerateSpireServerConfigMapWithKeyTypes(t *testing.T) {
 			config.CAKeyType = tt.caKeyType
 			config.JWTKeyType = tt.jwtKeyType
 
-			cm, err := GenerateSpireServerConfigMap(config)
+			cm, err := generateSpireServerConfigMap(config)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
