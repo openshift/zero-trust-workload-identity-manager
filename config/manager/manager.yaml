@@ -60,6 +60,15 @@ spec:
         args:
           - --health-probe-bind-address=:8081
           - --v=$(OPERATOR_LOG_LEVEL)
+          - --metrics-bind-address=$(METRICS_BIND_ADDRESS)
+          - --metrics-secure=$(METRICS_SECURE)
+        ports:
+          - containerPort: 8443
+            name: https
+            protocol: TCP
+          - containerPort: 8080
+            name: http
+            protocol: TCP
         env:
         - name: OPERATOR_NAME
           value: zero-trust-workload-identity-manager
@@ -79,6 +88,10 @@ spec:
           value: registry.access.redhat.com/ubi9:latest
         - name: OPERATOR_LOG_LEVEL
           value: "2"
+        - name: METRICS_BIND_ADDRESS
+          value: ":8443"
+        - name: METRICS_SECURE
+          value: "true"
         image: controller:latest
         name: manager
         securityContext:

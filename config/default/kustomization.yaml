@@ -18,6 +18,7 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
+- metrics_service.yaml
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
 #- ../webhook
@@ -30,6 +31,16 @@ resources:
 # Only CR(s) which requires webhooks and are applied on namespaces labeled with 'webhooks: enabled' will
 # be able to communicate with the Webhook Server.
 #- ../network-policy
+
+patches:
+# [METRICS] Patch to enable metrics endpoint with certificates
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: controller-manager
+    namespace: system
+  path: manager_metrics_patch.yaml
 
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml

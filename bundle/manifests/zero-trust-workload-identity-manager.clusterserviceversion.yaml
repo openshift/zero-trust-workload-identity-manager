@@ -280,6 +280,16 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        - nonResourceURLs:
+          - /metrics
+          verbs:
+          - get
         serviceAccountName: zero-trust-workload-identity-manager-controller-manager
       deployments:
       - label:
@@ -324,6 +334,9 @@ spec:
               - args:
                 - --health-probe-bind-address=:8081
                 - --v=$(OPERATOR_LOG_LEVEL)
+                - --metrics-bind-address=$(METRICS_BIND_ADDRESS)
+                - --metrics-secure=$(METRICS_SECURE)
+                - --metrics-cert-dir=/etc/metrics-certs
                 command:
                 - /usr/bin/zero-trust-workload-identity-manager
                 env:
@@ -345,6 +358,10 @@ spec:
                   value: registry.access.redhat.com/ubi9:latest
                 - name: OPERATOR_LOG_LEVEL
                   value: "2"
+                - name: METRICS_BIND_ADDRESS
+                  value: :8443
+                - name: METRICS_SECURE
+                  value: "true"
                 image: openshift.io/zero-trust-workload-identity-manager:latest
                 livenessProbe:
                   httpGet:
@@ -353,6 +370,13 @@ spec:
                   initialDelaySeconds: 15
                   periodSeconds: 20
                 name: manager
+                ports:
+                - containerPort: 8443
+                  name: https
+                  protocol: TCP
+                - containerPort: 8080
+                  name: http
+                  protocol: TCP
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -372,12 +396,20 @@ spec:
                     drop:
                     - ALL
                   readOnlyRootFilesystem: true
+                volumeMounts:
+                - mountPath: /etc/metrics-certs
+                  name: metrics-serving-cert
+                  readOnly: true
               securityContext:
                 runAsNonRoot: true
                 seccompProfile:
                   type: RuntimeDefault
               serviceAccountName: zero-trust-workload-identity-manager-controller-manager
               terminationGracePeriodSeconds: 10
+              volumes:
+              - name: metrics-serving-cert
+                secret:
+                  secretName: metrics-serving-cert
     strategy: deployment
   installModes:
   - supported: true
