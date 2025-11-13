@@ -36,20 +36,20 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 		t.Errorf("expected ReadOnlyRootFilesystem to be true")
 	}
 
-	if scc.RunAsUser.Type != securityv1.RunAsUserStrategyRunAsAny {
-		t.Errorf("expected RunAsUser.Type to be RunAsAny")
+	if scc.RunAsUser.Type != securityv1.RunAsUserStrategyMustRunAsRange {
+		t.Errorf("expected RunAsUser.Type to be MustRunAsRange")
 	}
 
-	if scc.SELinuxContext.Type != securityv1.SELinuxStrategyRunAsAny {
-		t.Errorf("expected SELinuxContext.Type to be RunAsAny")
+	if scc.SELinuxContext.Type != securityv1.SELinuxStrategyMustRunAs {
+		t.Errorf("expected SELinuxContext.Type to be MustRunAs")
 	}
 
-	if scc.SupplementalGroups.Type != securityv1.SupplementalGroupsStrategyRunAsAny {
-		t.Errorf("expected SupplementalGroups.Type to be RunAsAny")
+	if scc.SupplementalGroups.Type != securityv1.SupplementalGroupsStrategyMustRunAs {
+		t.Errorf("expected SupplementalGroups.Type to be MustRunAs")
 	}
 
-	if scc.FSGroup.Type != securityv1.FSGroupStrategyRunAsAny {
-		t.Errorf("expected FSGroup.Type to be RunAsAny")
+	if scc.FSGroup.Type != securityv1.FSGroupStrategyMustRunAs {
+		t.Errorf("expected FSGroup.Type to be MustRunAs")
 	}
 
 	expectedUser := "system:serviceaccount:zero-trust-workload-identity-manager:spire-agent"
@@ -71,8 +71,8 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	if !scc.AllowHostDirVolumePlugin {
 		t.Errorf("expected AllowHostDirVolumePlugin to be true")
 	}
-	if !scc.AllowHostIPC {
-		t.Errorf("expected AllowHostIPC to be true")
+	if scc.AllowHostIPC {
+		t.Errorf("expected AllowHostIPC to be false")
 	}
 	if !scc.AllowHostNetwork {
 		t.Errorf("expected AllowHostNetwork to be true")
@@ -96,8 +96,8 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	if len(scc.DefaultAddCapabilities) != 0 {
 		t.Errorf("expected DefaultAddCapabilities to be empty")
 	}
-	if len(scc.RequiredDropCapabilities) != 0 {
-		t.Errorf("expected RequiredDropCapabilities to be empty")
+	if len(scc.RequiredDropCapabilities) != 1 || scc.RequiredDropCapabilities[0] != "ALL" {
+		t.Errorf("expected RequiredDropCapabilities to contain 'ALL', got %v", scc.RequiredDropCapabilities)
 	}
 	if len(scc.Groups) != 0 {
 		t.Errorf("expected Groups to be empty")
