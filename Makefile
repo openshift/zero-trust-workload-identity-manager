@@ -150,7 +150,7 @@ build: manifests generate fmt vet build-operator
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/zero-trust-workload-identity-manager/main.go
+	go run ./cmd/zero-trust-workload-identity-manager/main.go --v=5 --metrics-secure=false
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
