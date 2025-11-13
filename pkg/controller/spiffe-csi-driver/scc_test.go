@@ -6,6 +6,7 @@ import (
 
 	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -76,58 +77,58 @@ func testObjectMeta(t *testing.T, meta metav1.ObjectMeta) {
 }
 
 func testRunAsUserStrategy(t *testing.T, strategy securityv1.RunAsUserStrategyOptions) {
-	expectedType := securityv1.RunAsUserStrategyRunAsAny
+	expectedType := securityv1.RunAsUserStrategyMustRunAsRange
 	if strategy.Type != expectedType {
 		t.Errorf("Expected RunAsUser strategy type '%s', got '%s'", expectedType, strategy.Type)
 	}
 
-	// Verify other fields are not set for RunAsAny strategy
+	// Verify other fields are not set for MustRunAsRange strategy
 	if strategy.UID != nil {
-		t.Errorf("Expected UID to be nil for RunAsAny strategy, got %v", strategy.UID)
+		t.Errorf("Expected UID to be nil for MustRunAsRange strategy, got %v", strategy.UID)
 	}
 
 	if strategy.UIDRangeMin != nil {
-		t.Errorf("Expected UIDRangeMin to be nil for RunAsAny strategy, got %v", strategy.UIDRangeMin)
+		t.Errorf("Expected UIDRangeMin to be nil for MustRunAsRange strategy, got %v", strategy.UIDRangeMin)
 	}
 
 	if strategy.UIDRangeMax != nil {
-		t.Errorf("Expected UIDRangeMax to be nil for RunAsAny strategy, got %v", strategy.UIDRangeMax)
+		t.Errorf("Expected UIDRangeMax to be nil for MustRunAsRange strategy, got %v", strategy.UIDRangeMax)
 	}
 }
 
 func testSELinuxContextStrategy(t *testing.T, strategy securityv1.SELinuxContextStrategyOptions) {
-	expectedType := securityv1.SELinuxStrategyRunAsAny
+	expectedType := securityv1.SELinuxStrategyMustRunAs
 	if strategy.Type != expectedType {
 		t.Errorf("Expected SELinuxContext strategy type '%s', got '%s'", expectedType, strategy.Type)
 	}
 
-	// Verify SELinuxOptions is not set for RunAsAny strategy
+	// Verify SELinuxOptions is not set for MustRunAs strategy
 	if strategy.SELinuxOptions != nil {
-		t.Errorf("Expected SELinuxOptions to be nil for RunAsAny strategy, got %v", strategy.SELinuxOptions)
+		t.Errorf("Expected SELinuxOptions to be nil for MustRunAs strategy, got %v", strategy.SELinuxOptions)
 	}
 }
 
 func testSupplementalGroupsStrategy(t *testing.T, strategy securityv1.SupplementalGroupsStrategyOptions) {
-	expectedType := securityv1.SupplementalGroupsStrategyRunAsAny
+	expectedType := securityv1.SupplementalGroupsStrategyMustRunAs
 	if strategy.Type != expectedType {
 		t.Errorf("Expected SupplementalGroups strategy type '%s', got '%s'", expectedType, strategy.Type)
 	}
 
-	// Verify ranges are not set for RunAsAny strategy
+	// Verify ranges are not set for MustRunAs strategy
 	if len(strategy.Ranges) > 0 {
-		t.Errorf("Expected no ranges for RunAsAny strategy, got %v", strategy.Ranges)
+		t.Errorf("Expected no ranges for MustRunAs strategy, got %v", strategy.Ranges)
 	}
 }
 
 func testFSGroupStrategy(t *testing.T, strategy securityv1.FSGroupStrategyOptions) {
-	expectedType := securityv1.FSGroupStrategyRunAsAny
+	expectedType := securityv1.FSGroupStrategyMustRunAs
 	if strategy.Type != expectedType {
 		t.Errorf("Expected FSGroup strategy type '%s', got '%s'", expectedType, strategy.Type)
 	}
 
-	// Verify ranges are not set for RunAsAny strategy
+	// Verify ranges are not set for MustRunAs strategy
 	if len(strategy.Ranges) > 0 {
-		t.Errorf("Expected no ranges for RunAsAny strategy, got %v", strategy.Ranges)
+		t.Errorf("Expected no ranges for MustRunAs strategy, got %v", strategy.Ranges)
 	}
 }
 
@@ -218,14 +219,19 @@ func testPrivilegeSettings(t *testing.T, scc *securityv1.SecurityContextConstrai
 }
 
 func testCapabilities(t *testing.T, scc *securityv1.SecurityContextConstraints) {
-	// Test DefaultAddCapabilities
-	if scc.DefaultAddCapabilities != nil {
-		t.Errorf("Expected DefaultAddCapabilities to be nil, got %v", scc.DefaultAddCapabilities)
+	// Test DefaultAddCapabilities - should be empty slice
+	if scc.DefaultAddCapabilities == nil {
+		t.Error("Expected DefaultAddCapabilities to be non-nil empty slice, got nil")
+	} else if len(scc.DefaultAddCapabilities) != 0 {
+		t.Errorf("Expected DefaultAddCapabilities to be empty, got %v", scc.DefaultAddCapabilities)
 	}
 
-	// Test RequiredDropCapabilities
-	if scc.RequiredDropCapabilities != nil {
-		t.Errorf("Expected RequiredDropCapabilities to be nil, got %v", scc.RequiredDropCapabilities)
+	// Test RequiredDropCapabilities - should contain "ALL"
+	expectedDropCapabilities := []corev1.Capability{"ALL"}
+	if scc.RequiredDropCapabilities == nil {
+		t.Error("Expected RequiredDropCapabilities to be non-nil, got nil")
+	} else if !reflect.DeepEqual(scc.RequiredDropCapabilities, expectedDropCapabilities) {
+		t.Errorf("Expected RequiredDropCapabilities to be %v, got %v", expectedDropCapabilities, scc.RequiredDropCapabilities)
 	}
 }
 
@@ -325,22 +331,22 @@ func TestStrategyTypes(t *testing.T) {
 		{
 			name:     "RunAsUser strategy",
 			actual:   scc.RunAsUser.Type,
-			expected: securityv1.RunAsUserStrategyRunAsAny,
+			expected: securityv1.RunAsUserStrategyMustRunAsRange,
 		},
 		{
 			name:     "SELinuxContext strategy",
 			actual:   scc.SELinuxContext.Type,
-			expected: securityv1.SELinuxStrategyRunAsAny,
+			expected: securityv1.SELinuxStrategyMustRunAs,
 		},
 		{
 			name:     "SupplementalGroups strategy",
 			actual:   scc.SupplementalGroups.Type,
-			expected: securityv1.SupplementalGroupsStrategyRunAsAny,
+			expected: securityv1.SupplementalGroupsStrategyMustRunAs,
 		},
 		{
 			name:     "FSGroup strategy",
 			actual:   scc.FSGroup.Type,
-			expected: securityv1.FSGroupStrategyRunAsAny,
+			expected: securityv1.FSGroupStrategyMustRunAs,
 		},
 	}
 
