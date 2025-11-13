@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +43,13 @@ const (
 	OperandStateInitialReconcile = "InitialReconcile"
 	OperandStateReconciling      = "Reconciling"
 	OperandStateUnhealthy        = "Unhealthy"
+)
+
+// Operand status message constants
+const (
+	OperandMessageCRNotFound          = "CR not found"
+	OperandMessageWaitingInitialRecon = "Waiting for initial reconciliation"
+	OperandMessageReconciling         = "Reconciling"
 )
 
 // operandStateClassification represents whether an operand is progressing or failed
@@ -83,7 +91,7 @@ func classifyOperandState(operand v1alpha1.OperandStatus, readyCondition *metav1
 	// These are set by the get*Status functions when CR is not found or reconciling
 	switch operand.Message {
 	// Progressing cases
-	case "CR not found", "Waiting for initial reconciliation", "Reconciling":
+	case OperandMessageCRNotFound, OperandMessageWaitingInitialRecon, OperandMessageReconciling:
 		return operandProgressing
 	}
 
@@ -213,7 +221,7 @@ func setUpgradeableCondition(statusMgr *status.Manager, allReady bool, anyCreate
 	for _, operand := range operandStatuses {
 		// Only count operands that exist but are not ready
 		// Operands that don't exist (CR not found) are OK for upgrade
-		if !utils.StringToBool(operand.Ready) && operand.Message != "CR not found" {
+		if !utils.StringToBool(operand.Ready) && operand.Message != OperandMessageCRNotFound {
 			failingOperands = append(failingOperands, fmt.Sprintf("%s/%s", operand.Kind, operand.Name))
 		}
 	}
@@ -287,7 +295,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 
 			if classification == operandProgressing {
 				// Differentiate between not created vs reconciling based on message
-				if operand.Message == "CR not found" {
+				if operand.Message == OperandMessageCRNotFound {
 					pendingOperands = append(pendingOperands, fmt.Sprintf("%s(not created)", operand.Kind))
 				} else {
 					pendingOperands = append(pendingOperands, fmt.Sprintf("%s(reconciling)", operand.Kind))
@@ -360,7 +368,7 @@ type operandAggregateResult struct {
 // processOperandStatus processes a single operand's status and updates aggregate state
 func processOperandStatus(operand v1alpha1.OperandStatus, state *operandAggregateState) {
 	// Check if operand exists
-	if operand.Message != "CR not found" {
+	if operand.Message != OperandMessageCRNotFound {
 		state.anyOperandExists = true
 
 		// Check if this operand has CreateOnlyMode condition
@@ -439,7 +447,7 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 	if err != nil {
 		if errors.IsNotFound(err) {
 			operandStatus.Ready = "false"
-			operandStatus.Message = "CR not found"
+			operandStatus.Message = OperandMessageCRNotFound
 			return operandStatus
 		}
 		operandStatus.Ready = "false"
@@ -454,7 +462,7 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 	// Check if operand has been reconciled (has at least one condition)
 	if len(conditions) == 0 {
 		operandStatus.Ready = "false"
-		operandStatus.Message = "Waiting for initial reconciliation"
+		operandStatus.Message = OperandMessageWaitingInitialRecon
 		return operandStatus
 	}
 
@@ -468,7 +476,7 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 		if readyCondition != nil {
 			operandStatus.Message = readyCondition.Message
 		} else {
-			operandStatus.Message = "Reconciling"
+			operandStatus.Message = OperandMessageReconciling
 		}
 	}
 
@@ -570,11 +578,7 @@ var operandStatusChangedPredicate = predicate.Funcs{
 			return true
 		}
 
-		// Check if status has changed
-		oldStatus := fmt.Sprintf("%+v", oldObj.GetStatus())
-		newStatus := fmt.Sprintf("%+v", newObj.GetStatus())
-
-		return oldStatus != newStatus
+		return !equality.Semantic.DeepEqual(oldObj.GetStatus(), newObj.GetStatus())
 	},
 	DeleteFunc: func(e event.DeleteEvent) bool {
 		// Always reconcile on delete

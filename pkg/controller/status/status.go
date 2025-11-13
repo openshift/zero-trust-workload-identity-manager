@@ -46,8 +46,7 @@ func SetInitialReconciliationStatus(ctx context.Context, customClient customClie
 		fmt.Sprintf("Reconciling %s", resourceName),
 		metav1.ConditionFalse)
 	if err := initialStatusMgr.ApplyStatus(ctx, obj, getStatus); err != nil {
-		// Log error but don't fail reconciliation - status update is best-effort
-		// The reconciliation loop will continue and update status at the end
+		fmt.Printf("cannot apply the initial status %v", err)
 	}
 }
 

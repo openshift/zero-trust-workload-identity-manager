@@ -323,12 +323,26 @@ func SecurityContextConstraintsNeedsUpdate(existing, desired *securityv1.Securit
 	return false
 }
 
-// stringSlicesEqual compares two string slices
+// stringSlicesEqual compares two string slices (order-independent)
 func stringSlicesEqual(existing, desired []string) bool {
 	if len(existing) != len(desired) {
 		return false
 	}
-	return equality.Semantic.DeepEqual(existing, desired)
+
+	// Create a set of existing strings for order-independent comparison
+	existingSet := make(map[string]bool)
+	for _, str := range existing {
+		existingSet[str] = true
+	}
+
+	// Check all desired strings exist in existing
+	for _, str := range desired {
+		if !existingSet[str] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // fsTypeSlicesEqual compares two FSType slices (order-independent)
