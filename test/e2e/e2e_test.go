@@ -75,17 +75,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				utils.WaitForCRDEstablished(testCtx, apiextClient, crd, utils.ShortTimeout)
 			}
 
-			By("Waiting for all resource generation conditions in ZeroTrustWorkloadIdentityManager object to be True")
-			conditionTypes := []string{
-				"RBACResourcesGeneration",
-				"ServiceResourcesGeneration",
-				"ServiceAccountResourcesGeneration",
-				"SpiffeCSIResourcesGeneration",
-				"ValidatingWebhookConfigurationResourcesGeneration",
-			}
-			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
-
 			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
 		})
@@ -177,16 +166,21 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			err := k8sClient.Create(testCtx, spireServer)
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpireServer object")
 
-			By("Waiting for all resource generation conditions in SpireServer object to be True")
-			conditionTypes := []string{
-				"SpireServerConfigMapGeneration",
-				"SpireControllerManagerConfigMapGeneration",
-				"SpireBundleConfigMapGeneration",
-				"SpireServerStatefulSetGeneration",
-				"SpireServerTTLValidation",
-			}
+			By("Waiting for SpireServer conditions to be True")
 			cr := &operatorv1alpha1.SpireServer{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+			conditionTypes := []string{
+				"ServiceAccountAvailable",
+				"ServiceAvailable",
+				"RBACAvailable",
+				"ValidatingWebhookAvailable",
+				"ServerConfigMapAvailable",
+				"ControllerManagerConfigAvailable",
+				"BundleConfigAvailable",
+				"StatefulSetAvailable",
+				"TTLConfigurationValid",
+				"Ready",
+			}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
 
 			By("Waiting for SPIRE Server StatefulSet to become Ready")
 			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -216,14 +210,18 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			err := k8sClient.Create(testCtx, spireAgent)
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpireAgent object")
 
-			By("Waiting for all resource generation conditions in SpireAgent object to be True")
-			conditionTypes := []string{
-				"SpireAgentSCCGeneration",
-				"SpireAgentConfigMapGeneration",
-				"SpireAgentDaemonSetGeneration",
-			}
+			By("Waiting for SpireAgent conditions to be True")
 			cr := &operatorv1alpha1.SpireAgent{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+			conditionTypes := []string{
+				"ServiceAccountAvailable",
+				"ServiceAvailable",
+				"RBACAvailable",
+				"ConfigMapAvailable",
+				"SecurityContextConstraintsAvailable",
+				"DaemonSetAvailable",
+				"Ready",
+			}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
 
 			By("Waiting for SPIRE Agent DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -240,13 +238,16 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			err := k8sClient.Create(testCtx, spiffeCSIDriver)
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpiffeCSIDriver object")
 
-			By("Waiting for all resource generation conditions in SpiffeCSIDriver object to be True")
-			conditionTypes := []string{
-				"SpiffeCSISCCGeneration",
-				"SpiffeCSIDaemonSetGeneration",
-			}
+			By("Waiting for SpiffeCSIDriver conditions to be True")
 			cr := &operatorv1alpha1.SpiffeCSIDriver{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+			conditionTypes := []string{
+				"ServiceAccountAvailable",
+				"CSIDriverAvailable",
+				"SecurityContextConstraintsAvailable",
+				"DaemonSetAvailable",
+				"Ready",
+			}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
 
 			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -266,18 +267,53 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			err := k8sClient.Create(testCtx, spireOIDCDiscoveryProvider)
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpireOIDCDiscoveryProvider object")
 
-			By("Waiting for all resource generation conditions in SpireOIDCDiscoveryProvider object to be True")
+			By("Waiting for SpireOIDCDiscoveryProvider conditions to be True")
 			conditionTypes := []string{
-				"SpireOIDCConfigMapGeneration",
-				"SpireOIDCDeploymentGeneration",
-				"SpireClusterSpiffeIDGeneration",
-				"ManagedRouteReady",
+				"ServiceAccountAvailable",
+				"ServiceAvailable",
+				"ClusterSPIFFEIDAvailable",
+				"ConfigMapAvailable",
+				"DeploymentAvailable",
+				"RouteAvailable",
+				"Ready",
 			}
 			cr := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.ShortTimeout)
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
 
 			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("ZeroTrustWorkloadIdentityManager should aggregate status from all operands", func() {
+			By("Waiting for ZeroTrustWorkloadIdentityManager to show all operands available")
+			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
+			conditionTypes := []string{
+				"OperandsAvailable",
+				"Ready",
+			}
+			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
+
+			By("Verifying ZeroTrustWorkloadIdentityManager operand status")
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
+			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
+
+			// Should have 4 operands
+			Expect(cr.Status.Operands).To(HaveLen(4), "should have 4 operands")
+
+			// Check each operand is ready
+			operandMap := make(map[string]operatorv1alpha1.OperandStatus)
+			for _, operand := range cr.Status.Operands {
+				operandMap[operand.Kind] = operand
+			}
+
+			requiredOperands := []string{"SpireServer", "SpireAgent", "SpiffeCSIDriver", "SpireOIDCDiscoveryProvider"}
+			for _, kind := range requiredOperands {
+				operand, exists := operandMap[kind]
+				Expect(exists).To(BeTrue(), "%s operand should exist in status", kind)
+				Expect(operand.Ready).To(Equal("true"), "%s should be ready", kind)
+				Expect(operand.Message).To(Equal("Ready"), "%s message should be 'Ready'", kind)
+				fmt.Fprintf(GinkgoWriter, "Operand %s is ready\n", kind)
+			}
 		})
 	})
 
@@ -305,8 +341,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireServer.Spec.Resources = expectedResources
-			err = k8sClient.Update(testCtx, spireServer)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.Resources = expectedResources
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer object with resources")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireServer resources modification")
@@ -353,9 +390,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireServer.Spec.NodeSelector = expectedNodeSelector
-			spireServer.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spireServer)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.NodeSelector = expectedNodeSelector
+				spireServer.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer object with nodeSelector and tolerations")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireServer nodeSelector and tolerations modification")
@@ -467,9 +505,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireServer.Spec.Affinity = expectedAffinity
-			spireServer.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spireServer)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.Affinity = expectedAffinity
+				spireServer.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer object with affinity")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireServer affinity modification")
@@ -518,8 +557,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireAgent.Spec.Resources = expectedResources
-			err = k8sClient.Update(testCtx, spireAgent)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.Resources = expectedResources
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent object with resources")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireAgent resources modification")
@@ -566,9 +606,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireAgent.Spec.NodeSelector = expectedNodeSelector
-			spireAgent.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spireAgent)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.NodeSelector = expectedNodeSelector
+				spireAgent.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent object with nodeSelector and tolerations")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireAgent nodeSelector and tolerations modification")
@@ -654,9 +695,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireAgent.Spec.Affinity = expectedAffinity
-			spireAgent.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spireAgent)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.Affinity = expectedAffinity
+				spireAgent.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent object with affinity")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireAgent affinity modification")
@@ -706,8 +748,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spiffeCSIDriver.Spec.Resources = expectedResources
-			err = k8sClient.Update(testCtx, spiffeCSIDriver)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spiffeCSIDriver, func() {
+				spiffeCSIDriver.Spec.Resources = expectedResources
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver object with resources")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpiffeCSIDriver resources modification")
@@ -754,9 +797,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spiffeCSIDriver.Spec.NodeSelector = expectedNodeSelector
-			spiffeCSIDriver.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spiffeCSIDriver)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spiffeCSIDriver, func() {
+				spiffeCSIDriver.Spec.NodeSelector = expectedNodeSelector
+				spiffeCSIDriver.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver object with nodeSelector and tolerations")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpiffeCSIDriver nodeSelector and tolerations modification")
@@ -835,8 +879,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spiffeCSIDriver.Spec.Affinity = expectedAffinity
-			err = k8sClient.Update(testCtx, spiffeCSIDriver)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spiffeCSIDriver, func() {
+				spiffeCSIDriver.Spec.Affinity = expectedAffinity
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver object with affinity")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpiffeCSIDriver affinity modification")
@@ -885,8 +930,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireOIDCDiscoveryProvider.Spec.Resources = expectedResources
-			err = k8sClient.Update(testCtx, spireOIDCDiscoveryProvider)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.Resources = expectedResources
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider object with resources")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireOIDCDiscoveryProvider resources modification")
@@ -953,9 +999,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireOIDCDiscoveryProvider.Spec.NodeSelector = expectedNodeSelector
-			spireOIDCDiscoveryProvider.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spireOIDCDiscoveryProvider)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.NodeSelector = expectedNodeSelector
+				spireOIDCDiscoveryProvider.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider object with nodeSelector and tolerations")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireOIDCDiscoveryProvider nodeSelector and tolerations modification")
@@ -1045,9 +1092,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 
-			spireOIDCDiscoveryProvider.Spec.Affinity = expectedAffinity
-			spireOIDCDiscoveryProvider.Spec.Tolerations = expectedToleration
-			err = k8sClient.Update(testCtx, spireOIDCDiscoveryProvider)
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.Affinity = expectedAffinity
+				spireOIDCDiscoveryProvider.Spec.Tolerations = expectedToleration
+			})
 			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider object with affinity")
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting SpireOIDCDiscoveryProvider affinity modification")

@@ -155,6 +155,16 @@ type FakeCustomCtrlClient struct {
 	updateWithRetryReturnsOnCall map[int]struct {
 		result1 error
 	}
+	GetClientStub        func() clienta.Client
+	getClientMutex       sync.RWMutex
+	getClientArgsForCall []struct {
+	}
+	getClientReturns struct {
+		result1 clienta.Client
+	}
+	getClientReturnsOnCall map[int]struct {
+		result1 clienta.Client
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
@@ -866,6 +876,8 @@ func (fake *FakeCustomCtrlClient) Invocations() map[string][][]interface{} {
 	defer fake.deleteMutex.RUnlock()
 	fake.existsMutex.RLock()
 	defer fake.existsMutex.RUnlock()
+	fake.getClientMutex.RLock()
+	defer fake.getClientMutex.RUnlock()
 	fake.getMutex.RLock()
 	defer fake.getMutex.RUnlock()
 	fake.listMutex.RLock()
@@ -885,6 +897,59 @@ func (fake *FakeCustomCtrlClient) Invocations() map[string][][]interface{} {
 		copiedInvocations[key] = value
 	}
 	return copiedInvocations
+}
+
+func (fake *FakeCustomCtrlClient) GetClient() clienta.Client {
+	fake.getClientMutex.Lock()
+	ret, specificReturn := fake.getClientReturnsOnCall[len(fake.getClientArgsForCall)]
+	fake.getClientArgsForCall = append(fake.getClientArgsForCall, struct {
+	}{})
+	stub := fake.GetClientStub
+	fakeReturns := fake.getClientReturns
+	fake.recordInvocation("GetClient", []interface{}{})
+	fake.getClientMutex.Unlock()
+	if stub != nil {
+		return stub()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeCustomCtrlClient) GetClientCallCount() int {
+	fake.getClientMutex.RLock()
+	defer fake.getClientMutex.RUnlock()
+	return len(fake.getClientArgsForCall)
+}
+
+func (fake *FakeCustomCtrlClient) GetClientCalls(stub func() clienta.Client) {
+	fake.getClientMutex.Lock()
+	defer fake.getClientMutex.Unlock()
+	fake.GetClientStub = stub
+}
+
+func (fake *FakeCustomCtrlClient) GetClientReturns(result1 clienta.Client) {
+	fake.getClientMutex.Lock()
+	defer fake.getClientMutex.Unlock()
+	fake.GetClientStub = nil
+	fake.getClientReturns = struct {
+		result1 clienta.Client
+	}{result1}
+}
+
+func (fake *FakeCustomCtrlClient) GetClientReturnsOnCall(i int, result1 clienta.Client) {
+	fake.getClientMutex.Lock()
+	defer fake.getClientMutex.Unlock()
+	fake.GetClientStub = nil
+	if fake.getClientReturnsOnCall == nil {
+		fake.getClientReturnsOnCall = make(map[int]struct {
+			result1 clienta.Client
+		})
+	}
+	fake.getClientReturnsOnCall[i] = struct {
+		result1 clienta.Client
+	}{result1}
 }
 
 func (fake *FakeCustomCtrlClient) recordInvocation(key string, args []interface{}) {

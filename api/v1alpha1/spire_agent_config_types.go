@@ -124,6 +124,11 @@ type SpireAgentStatus struct {
 	ConditionalStatus `json:",inline,omitempty"`
 }
 
+// GetConditionalStatus returns the conditional status of the SpireAgent
+func (s *SpireAgent) GetConditionalStatus() ConditionalStatus {
+	return s.Status.ConditionalStatus
+}
+
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

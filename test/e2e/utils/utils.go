@@ -433,3 +433,59 @@ func VerifyPodTolerations(ctx context.Context, clientset kubernetes.Interface, p
 		}
 	}
 }
+
+// UpdateCRWithRetry updates a CR with retry on conflict
+func UpdateCRWithRetry(ctx context.Context, k8sClient client.Client, obj client.Object, updateFunc func()) error {
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		// Get latest version
+		key := client.ObjectKeyFromObject(obj)
+		if err := k8sClient.Get(ctx, key, obj); err != nil {
+			return fmt.Errorf("failed to get latest version: %w", err)
+		}
+
+		// Apply updates
+		updateFunc()
+
+		// Try to update
+		err := k8sClient.Update(ctx, obj)
+		if err == nil {
+			return nil
+		}
+
+		// Check if it's a conflict error by checking the error message
+		errorMsg := err.Error()
+		isConflict := false
+		if len(errorMsg) > 0 {
+			// Check for common conflict error phrases
+			if containsAny(errorMsg, []string{"Operation cannot be fulfilled", "the object has been modified", "Conflict"}) {
+				isConflict = true
+			}
+		}
+
+		if isConflict {
+			fmt.Fprintf(GinkgoWriter, "Conflict on update (attempt %d/%d): %v, retrying...\n", i+1, maxRetries, err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		// Other error, return immediately
+		return err
+	}
+
+	return fmt.Errorf("failed to update after %d retries", maxRetries)
+}
+
+// containsAny checks if s contains any of the substrings
+func containsAny(s string, substrs []string) bool {
+	for _, substr := range substrs {
+		if len(s) >= len(substr) {
+			for i := 0; i <= len(s)-len(substr); i++ {
+				if s[i:i+len(substr)] == substr {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

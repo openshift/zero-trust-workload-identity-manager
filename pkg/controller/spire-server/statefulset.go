@@ -1,19 +1,77 @@
 package spire_server
 
 import (
+	"context"
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
 const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
 const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
+
+// reconcileStatefulSet reconciles the Spire Server StatefulSet
+func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, spireServerConfigMapHash, spireControllerManagerConfigMapHash string) error {
+	sts := GenerateSpireServerStatefulSet(&server.Spec, spireServerConfigMapHash, spireControllerManagerConfigMapHash)
+	if err := controllerutil.SetControllerReference(server, sts, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on spire server stateful set resource")
+		statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	var existingSTS appsv1.StatefulSet
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: sts.Name, Namespace: sts.Namespace}, &existingSTS)
+	if err != nil && kerrors.IsNotFound(err) {
+		if err = r.ctrlClient.Create(ctx, sts); err != nil {
+			statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetCreationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return fmt.Errorf("failed to create StatefulSet: %w", err)
+		}
+		r.log.Info("Created spire server StatefulSet")
+	} else if err == nil && needsUpdate(existingSTS, *sts) {
+		if createOnlyMode {
+			r.log.Info("Skipping StatefulSet update due to create-only mode")
+		} else {
+			sts.ResourceVersion = existingSTS.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, sts); err != nil {
+				statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetUpdateFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return fmt.Errorf("failed to update StatefulSet: %w", err)
+			}
+			r.log.Info("Updated spire server StatefulSet")
+		}
+	} else if err != nil {
+		r.log.Error(err, "failed to get spire server stateful set resource")
+		statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetGetFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Check StatefulSet health/readiness
+	statusMgr.CheckStatefulSetHealth(ctx, sts.Name, sts.Namespace, StatefulSetAvailable)
+
+	return nil
+}
 
 func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	spireServerConfigMapHash string,

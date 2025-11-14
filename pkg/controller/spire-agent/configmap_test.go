@@ -324,7 +324,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GenerateAgentConfig(tt.cfg)
+			result := generateAgentConfig(tt.cfg)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -389,7 +389,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, hash, err := GenerateSpireAgentConfigMap(tt.spireAgentConfig)
+			cm, hash, err := generateSpireAgentConfigMap(tt.spireAgentConfig)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -455,7 +455,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 				assert.Contains(t, pluginsSection, "KeyManager")
 
 				// Test that hash is deterministic
-				cm2, hash2, err2 := GenerateSpireAgentConfigMap(tt.spireAgentConfig)
+				cm2, hash2, err2 := generateSpireAgentConfigMap(tt.spireAgentConfig)
 				require.NoError(t, err2)
 				assert.Equal(t, hash, hash2)
 				assert.Equal(t, cm.Data["agent.conf"], cm2.Data["agent.conf"])
@@ -488,13 +488,13 @@ func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
 	}
 
 	// Generate the same config multiple times
-	cm1, hash1, err1 := GenerateSpireAgentConfigMap(spireAgentConfig)
+	cm1, hash1, err1 := generateSpireAgentConfigMap(spireAgentConfig)
 	require.NoError(t, err1)
 
-	cm2, hash2, err2 := GenerateSpireAgentConfigMap(spireAgentConfig)
+	cm2, hash2, err2 := generateSpireAgentConfigMap(spireAgentConfig)
 	require.NoError(t, err2)
 
-	cm3, hash3, err3 := GenerateSpireAgentConfigMap(spireAgentConfig)
+	cm3, hash3, err3 := generateSpireAgentConfigMap(spireAgentConfig)
 	require.NoError(t, err3)
 
 	// All results should be identical
@@ -542,7 +542,7 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Should not panic
-			result := GenerateAgentConfig(tt.cfg)
+			result := generateAgentConfig(tt.cfg)
 
 			// Basic validation
 			assert.Contains(t, result, "agent")
@@ -573,7 +573,7 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 		},
 	}
 
-	cm, hash, err := GenerateSpireAgentConfigMap(spireAgentConfig)
+	cm, hash, err := generateSpireAgentConfigMap(spireAgentConfig)
 	require.NoError(t, err)
 	require.NotNil(t, cm)
 	assert.NotEmpty(t, hash)

@@ -22,7 +22,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr)
 
 		// Assert
 		require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr)
 
 		// Assert
 		require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr)
 
 		// Assert
 		require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := GenerateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr)
 
 		// Assert
 		require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestOIDCConfigJSONFormatting(t *testing.T) {
 		},
 	}
 
-	result, err := GenerateOIDCConfigMapFromCR(cr)
+	result, err := generateOIDCConfigMapFromCR(cr)
 	require.NoError(t, err)
 
 	oidcJSON := result.Data["oidc-discovery-provider.conf"]

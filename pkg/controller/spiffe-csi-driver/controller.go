@@ -3,15 +3,13 @@ package spiffe_csi_driver
 import (
 	"context"
 	"fmt"
-	"reflect"
 
-	"k8s.io/apimachinery/pkg/api/equality"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	appsv1 "k8s.io/api/apps/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,18 +28,15 @@ import (
 	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-type reconcilerStatus struct {
-	Status  metav1.ConditionStatus
-	Message string
-	Reason  string
-}
-
 const (
-	SpiffeCSIDaemonSetGeneration = "SpiffeCSIDaemonSetGeneration"
-	SpiffeCSISCCGeneration       = "SpiffeCSISCCGeneration"
+	DaemonSetAvailable                  = "DaemonSetAvailable"
+	SecurityContextConstraintsAvailable = "SecurityContextConstraintsAvailable"
+	ServiceAccountAvailable             = "ServiceAccountAvailable"
+	CSIDriverAvailable                  = "CSIDriverAvailable"
 )
 
 // SpiffeCsiReconciler reconciles a SpiffeCsi object
@@ -53,6 +48,9 @@ type SpiffeCsiReconciler struct {
 	scheme         *runtime.Scheme
 	createOnlyMode bool
 }
+
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.k8s.io,resources=csidrivers,verbs=get;list;watch;create;update;patch;delete
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
@@ -71,6 +69,7 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 }
 
 func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log.Info(fmt.Sprintf("reconciling %s", utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName))
 	var spiffeCSIDriver v1alpha1.SpiffeCSIDriver
 	if err := r.ctrlClient.Get(ctx, req.NamespacedName, &spiffeCSIDriver); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -80,127 +79,42 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	reconcileStatus := map[string]reconcilerStatus{}
-	defer func(reconcileStatus map[string]reconcilerStatus) {
-		originalStatus := spiffeCSIDriver.Status.DeepCopy()
-		if spiffeCSIDriver.Status.ConditionalStatus.Conditions == nil {
-			spiffeCSIDriver.Status.ConditionalStatus = v1alpha1.ConditionalStatus{
-				Conditions: []metav1.Condition{},
-			}
-		}
-		for key, value := range reconcileStatus {
-			newCondition := metav1.Condition{
-				Type:               key,
-				Status:             value.Status,
-				Reason:             value.Reason,
-				Message:            value.Message,
-				LastTransitionTime: metav1.Now(),
-			}
-			apimeta.SetStatusCondition(&spiffeCSIDriver.Status.ConditionalStatus.Conditions, newCondition)
-		}
-		newConfig := spiffeCSIDriver.DeepCopy()
-		if !equality.Semantic.DeepEqual(originalStatus, &spiffeCSIDriver.Status) {
-			if err := r.ctrlClient.StatusUpdateWithRetry(ctx, newConfig); err != nil {
-				r.log.Error(err, "failed to update status")
-			}
-		}
-	}(reconcileStatus)
+	// Set Ready to false at the start of reconciliation
+	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &spiffeCSIDriver, func() *v1alpha1.ConditionalStatus {
+		return &spiffeCSIDriver.Status.ConditionalStatus
+	}, "SpiffeCSIDriver")
 
-	createOnlyMode := utils.IsInCreateOnlyMode(&spiffeCSIDriver, &r.createOnlyMode)
-	if createOnlyMode {
-		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
-		reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
-			Status:  metav1.ConditionTrue,
-			Reason:  utils.CreateOnlyModeEnabled,
-			Message: "Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+	statusMgr := status.NewManager(r.ctrlClient)
+	defer func() {
+		if err := statusMgr.ApplyStatus(ctx, &spiffeCSIDriver, func() *v1alpha1.ConditionalStatus {
+			return &spiffeCSIDriver.Status.ConditionalStatus
+		}); err != nil {
+			r.log.Error(err, "failed to update status")
 		}
-	} else {
-		existingCondition := apimeta.FindStatusCondition(spiffeCSIDriver.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
-		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
-			reconcileStatus[utils.CreateOnlyModeStatusType] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  utils.CreateOnlyModeDisabled,
-				Message: "Create-only mode is disabled",
-			}
-		}
-	}
+	}()
 
-	SpiffeCsiSCC := generateSpiffeCSIDriverSCC()
-	if err := controllerutil.SetControllerReference(&spiffeCSIDriver, SpiffeCsiSCC, r.scheme); err != nil {
-		r.log.Error(err, "failed to set the owner reference for the SCC resource")
-		reconcileStatus[SpiffeCSISCCGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpiffeCSISCCGenerationFailed",
-			Message: err.Error(),
-		}
-		return ctrl.Result{}, err
-	}
-	err := r.ctrlClient.Create(ctx, SpiffeCsiSCC)
-	if err != nil && !kerrors.IsAlreadyExists(err) {
-		r.log.Error(err, "Failed to create SpiffeCsiSCC")
-		reconcileStatus[SpiffeCSISCCGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpiffeCSISCCGenerationFailed",
-			Message: err.Error(),
-		}
-		return ctrl.Result{}, err
-	}
-	reconcileStatus[SpiffeCSISCCGeneration] = reconcilerStatus{
-		Status:  metav1.ConditionTrue,
-		Reason:  "SpiffeCSISCCResourceCreated",
-		Message: "SpiffeCSISCC resource created",
-	}
+	// Handle create-only mode
+	createOnlyMode := r.handleCreateOnlyMode(&spiffeCSIDriver, statusMgr)
 
-	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet(spiffeCSIDriver.Spec)
-	if err = controllerutil.SetControllerReference(&spiffeCSIDriver, spiffeCsiDaemonset, r.scheme); err != nil {
-		r.log.Error(err, "failed to set owner reference for the SCC resource")
-		reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpiffeCSIDaemonSetGenerationFailed",
-			Message: err.Error(),
-		}
+	// Reconcile static resources (ServiceAccount, CSI Driver)
+	if err := r.reconcileServiceAccount(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Create or Update DaemonSet
-	var existingSpiffeCsiDaemonSet appsv1.DaemonSet
-	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spiffeCsiDaemonset.Name, Namespace: spiffeCsiDaemonset.Namespace}, &existingSpiffeCsiDaemonSet)
-	if err != nil && kerrors.IsNotFound(err) {
-		if err = r.ctrlClient.Create(ctx, spiffeCsiDaemonset); err != nil {
-			r.log.Error(err, "Failed to create SpiffeCsiDaemon set")
-			reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
-				Status:  metav1.ConditionFalse,
-				Reason:  "SpiffeCSIDaemonSetGenerationFailed",
-				Message: err.Error(),
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to create DaemonSet: %w", err)
-		}
-		r.log.Info("Created spiffe csi DaemonSet")
-	} else if err == nil && needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
-		if createOnlyMode {
-			r.log.Info("Skipping DaemonSet update due to create-only mode")
-		} else {
-			spiffeCsiDaemonset.ResourceVersion = existingSpiffeCsiDaemonSet.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spiffeCsiDaemonset); err != nil {
-				r.log.Error(err, "failed to update spiffe csi daemon set")
-				return ctrl.Result{}, fmt.Errorf("failed to update DaemonSet: %w", err)
-			}
-			r.log.Info("Updated spiffe csi DaemonSet")
-		}
-	} else if err != nil {
-		r.log.Error(err, "Failed to get SpiffeCsiDaemon set")
-		reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
-			Status:  metav1.ConditionFalse,
-			Reason:  "SpiffeCSIDaemonSetGenerationFailed",
-			Message: err.Error(),
-		}
+	if err := r.reconcileCSIDriver(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
-	reconcileStatus[SpiffeCSIDaemonSetGeneration] = reconcilerStatus{
-		Status:  metav1.ConditionTrue,
-		Reason:  "SpiffeCSIDaemonSetCreated",
-		Message: "Spiffe CSI DaemonSet resource created",
+
+	// Reconcile SCC
+	if err := r.reconcileSCC(ctx, &spiffeCSIDriver, statusMgr); err != nil {
+		return ctrl.Result{}, err
 	}
+
+	// Reconcile DaemonSet
+	if err := r.reconcileDaemonSet(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -223,6 +137,8 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1alpha1.SpiffeCSIDriver{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName).
 		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&storagev1.CSIDriver{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
@@ -231,12 +147,21 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return nil
 }
 
-// needsUpdate returns true if DaemonSet needs to be updated.
-func needsUpdate(current, desired appsv1.DaemonSet) bool {
-	if utils.DaemonSetSpecModified(&desired, &current) {
-		return true
-	} else if !reflect.DeepEqual(current.Labels, desired.Labels) {
-		return true
+// handleCreateOnlyMode checks and updates the create-only mode status
+func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager) bool {
+	createOnlyMode := utils.IsInCreateOnlyMode(driver, &r.createOnlyMode)
+	if createOnlyMode {
+		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
+		statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeEnabled,
+			"Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+			metav1.ConditionTrue)
+	} else {
+		existingCondition := apimeta.FindStatusCondition(driver.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+			statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeDisabled,
+				"Create-only mode is disabled",
+				metav1.ConditionFalse)
+		}
 	}
-	return false
+	return createOnlyMode
 }

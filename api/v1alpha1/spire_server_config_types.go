@@ -222,6 +222,11 @@ type SpireServerStatus struct {
 	ConditionalStatus `json:",inline,omitempty"`
 }
 
+// GetConditionalStatus returns the conditional status of the SpireServer
+func (s *SpireServer) GetConditionalStatus() ConditionalStatus {
+	return s.Status.ConditionalStatus
+}
+
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

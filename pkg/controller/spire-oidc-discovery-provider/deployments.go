@@ -1,16 +1,76 @@
 package spire_oidc_discovery_provider
 
 import (
+	"context"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfigMapHash string) *appsv1.Deployment {
+// reconcileDeployment reconciles the OIDC Discovery Provider Deployment
+func (r *SpireOidcDiscoveryProviderReconciler) reconcileDeployment(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool, configHash string) error {
+	deployment := generateDeployment(oidc, configHash)
+	if err := controllerutil.SetControllerReference(oidc, deployment, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference")
+		statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentCreationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	var existingSpireOidcDeployment appsv1.Deployment
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{
+		Name:      deployment.Name,
+		Namespace: deployment.Namespace,
+	}, &existingSpireOidcDeployment)
+	if err != nil && kerrors.IsNotFound(err) {
+		if err = r.ctrlClient.Create(ctx, deployment); err != nil {
+			r.log.Error(err, "Failed to create spire oidc discovery provider deployment")
+			statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentCreationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return err
+		}
+		r.log.Info("Created spire oidc discovery provider deployment")
+	} else if err == nil && needsUpdate(existingSpireOidcDeployment, *deployment) {
+		if createOnlyMode {
+			r.log.Info("Skipping Deployment update due to create-only mode")
+		} else {
+			deployment.ResourceVersion = existingSpireOidcDeployment.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, deployment); err != nil {
+				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
+				statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentUpdateFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return err
+			}
+			r.log.Info("Updated spire oidc discovery provider deployment")
+		}
+	} else if err != nil {
+		r.log.Error(err, "Failed to get existing spire oidc discovery provider deployment")
+		statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentGetFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Check Deployment health/readiness
+	statusMgr.CheckDeploymentHealth(ctx, deployment.Name, deployment.Namespace, DeploymentAvailable)
+
+	return nil
+}
+
+// generateDeployment generates and return the deployment manifest based on configuration provided via SpireOIDCDiscoveryProvider spec.
+func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfigMapHash string) *appsv1.Deployment {
 
 	// Generate standardized labels once and reuse them
 	labels := utils.SpireOIDCDiscoveryProviderLabels(config.Spec.Labels)

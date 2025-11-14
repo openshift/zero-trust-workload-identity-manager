@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 
@@ -46,6 +47,7 @@ var (
 		&appsv1.StatefulSet{},
 		&admissionregistrationv1.ValidatingWebhookConfiguration{},
 		&routev1.Route{},
+		&spiffev1alpha1.ClusterSPIFFEID{},
 	}
 
 	cacheResourceWithoutReqSelectors = []client.Object{
@@ -75,6 +77,7 @@ var (
 		&v1alpha1.SpireServer{},
 		&v1alpha1.SpireOIDCDiscoveryProvider{},
 		&routev1.Route{},
+		&spiffev1alpha1.ClusterSPIFFEID{},
 	}
 )
 
@@ -97,6 +100,7 @@ type CustomCtrlClient interface {
 	Exists(context.Context, client.ObjectKey, client.Object) (bool, error)
 	CreateOrUpdateObject(ctx context.Context, obj client.Object) error
 	StatusUpdateWithRetry(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error
+	GetClient() client.Client
 }
 
 func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
@@ -210,6 +214,11 @@ func (c *customCtrlClientImpl) CreateOrUpdateObject(ctx context.Context, obj cli
 		return c.Update(ctx, obj)
 	}
 	return err
+}
+
+// GetClient returns the underlying client.Client
+func (c *customCtrlClientImpl) GetClient() client.Client {
+	return c.Client
 }
 
 // NewCacheBuilder returns a cache builder function that configures the manager's cache

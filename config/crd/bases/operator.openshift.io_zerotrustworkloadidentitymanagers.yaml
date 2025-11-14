@@ -1095,8 +1095,9 @@ spec:
                 x-kubernetes-list-type: atomic
             type: object
           status:
-            description: ZeroTrustWorkloadIdentityManagerStatus defines the observed
-              state of ZeroTrustWorkloadIdentityManager
+            description: |-
+              ZeroTrustWorkloadIdentityManagerStatus defines the observed state of ZeroTrustWorkloadIdentityManager.
+              It aggregates the status from all managed operand CRs and provides an overall health view.
             properties:
               conditions:
                 description: conditions holds information of the current state of
@@ -1158,6 +1159,118 @@ spec:
                 type: array
                 x-kubernetes-list-map-keys:
                 - type
+                x-kubernetes-list-type: map
+              operands:
+                description: |-
+                  operands holds the status of each managed operand CR.
+                  Operands are indexed by their kind since all operands are named "cluster".
+                  This provides a quick overview of the health of each SPIRE component.
+                items:
+                  description: |-
+                    OperandStatus represents the status of a single managed operand CR.
+                    Each operand corresponds to a SPIRE component (e.g., SpireServer, SpireAgent).
+                  properties:
+                    conditions:
+                      description: |-
+                        conditions represent the latest available observations of the operand's state.
+                        This includes key conditions from the operand CR that are relevant for overall health monitoring.
+                      items:
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
+                        properties:
+                          lastTransitionTime:
+                            description: |-
+                              lastTransitionTime is the last time the condition transitioned from one status to another.
+                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: |-
+                              message is a human readable message indicating details about the transition.
+                              This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: |-
+                              observedGeneration represents the .metadata.generation that the condition was set based upon.
+                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                              with respect to the current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: |-
+                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected values and meanings for this field,
+                              and whether the values are considered a guaranteed API.
+                              The value should be a CamelCase string.
+                              This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - type
+                      x-kubernetes-list-type: map
+                    kind:
+                      description: |-
+                        kind is the Kind of the operand CR.
+                        Must be one of: SpireServer, SpireAgent, SpiffeCSIDriver, SpireOIDCDiscoveryProvider.
+                      enum:
+                      - SpireServer
+                      - SpireAgent
+                      - SpiffeCSIDriver
+                      - SpireOIDCDiscoveryProvider
+                      type: string
+                    message:
+                      description: |-
+                        message provides human-readable details about the operand's current state.
+                        This may include information about why an operand is not ready or other relevant status details.
+                      maxLength: 32768
+                      type: string
+                    name:
+                      description: |-
+                        name is the name of the operand resource.
+                        For singleton resources, this is typically "cluster".
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    ready:
+                      description: |-
+                        ready indicates whether the operand is in a ready state.
+                        An operand is considered ready when all its resources are available and functioning correctly.
+                        Valid values are "true" and "false".
+                      pattern: ^(true|false)$
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  - ready
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - kind
                 x-kubernetes-list-type: map
             type: object
         type: object

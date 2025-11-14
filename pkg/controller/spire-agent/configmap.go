@@ -1,16 +1,83 @@
 package spire_agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-func GenerateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
+// reconcileConfigMap reconciles the Spire Agent ConfigMap
+func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
+	spireAgentConfigMap, spireAgentConfigHash, err := generateSpireAgentConfigMap(agent)
+	if err != nil {
+		r.log.Error(err, "failed to generate spire-agent config map")
+		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return "", err
+	}
+
+	if err = controllerutil.SetControllerReference(agent, spireAgentConfigMap, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference")
+		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return "", err
+	}
+
+	var existingSpireAgentCM corev1.ConfigMap
+	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireAgentConfigMap.Name, Namespace: spireAgentConfigMap.Namespace}, &existingSpireAgentCM)
+	if err != nil && kerrors.IsNotFound(err) {
+		if err = r.ctrlClient.Create(ctx, spireAgentConfigMap); err != nil {
+			r.log.Error(err, "failed to create spire-agent config map")
+			statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
+		}
+		r.log.Info("Created spire agent ConfigMap")
+	} else if err == nil && (existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
+		!equality.Semantic.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels)) {
+		if createOnlyMode {
+			r.log.Info("Skipping ConfigMap update due to create-only mode")
+		} else {
+			spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
+				r.log.Error(err, "failed to update spire-agent config map")
+				statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+			}
+			r.log.Info("Updated ConfigMap with new config")
+		}
+	} else if err != nil {
+		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return "", err
+	}
+
+	statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapResourceCreated",
+		"Spire Agent ConfigMap resources applied",
+		metav1.ConditionTrue)
+
+	return spireAgentConfigHash, nil
+}
+
+func generateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 	agentConf := map[string]interface{}{
 		"agent": map[string]interface{}{
 			"data_dir":          "/var/lib/spire",
@@ -72,8 +139,8 @@ func GenerateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 	return agentConf
 }
 
-func GenerateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent) (*corev1.ConfigMap, string, error) {
-	agentConfig := GenerateAgentConfig(spireAgentConfig)
+func generateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent) (*corev1.ConfigMap, string, error) {
+	agentConfig := generateAgentConfig(spireAgentConfig)
 	agentConfigJSON, err := json.MarshalIndent(agentConfig, "", "  ")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal agent config: %w", err)

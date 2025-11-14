@@ -71,7 +71,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, err := GenerateSpireServerConfigMap(tt.config)
+			cm, err := generateSpireServerConfigMap(tt.config)
 
 			// Check error expectations
 			if tt.expectError {
@@ -310,7 +310,7 @@ func TestGenerateSpireServerConfigMapWithTTLFields(t *testing.T) {
 	config.DefaultX509Validity = metav1.Duration{Duration: mustParseDuration("2h")}
 	config.DefaultJWTValidity = metav1.Duration{Duration: mustParseDuration("15m")}
 
-	cm, err := GenerateSpireServerConfigMap(config)
+	cm, err := generateSpireServerConfigMap(config)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -864,7 +864,7 @@ func TestGenerateSpireServerConfigMapWithKeyTypes(t *testing.T) {
 			config.CAKeyType = tt.caKeyType
 			config.JWTKeyType = tt.jwtKeyType
 
-			cm, err := GenerateSpireServerConfigMap(config)
+			cm, err := generateSpireServerConfigMap(config)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
