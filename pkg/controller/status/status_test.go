@@ -92,10 +92,52 @@ func TestSetReadyCondition(t *testing.T) {
 			expectedReason: v1alpha1.ReasonReady,
 		},
 		{
-			name: "One condition false - should not be Ready",
+			name: "One condition false with actual failure - should be Failed",
 			existingConditions: map[string]Condition{
 				"Component1": {Type: "Component1", Status: metav1.ConditionTrue, Reason: "OK", Message: "Good"},
 				"Component2": {Type: "Component2", Status: metav1.ConditionFalse, Reason: "Failed", Message: "Bad"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonFailed,
+		},
+		{
+			name: "StatefulSet starting up - should be Progressing",
+			existingConditions: map[string]Condition{
+				"StatefulSetAvailable": {Type: "StatefulSetAvailable", Status: metav1.ConditionFalse, Reason: "StatefulSetNotReady", Message: "StatefulSet has 0/1 replicas ready"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "DaemonSet starting up - should be Progressing",
+			existingConditions: map[string]Condition{
+				"DaemonSetAvailable": {Type: "DaemonSetAvailable", Status: metav1.ConditionFalse, Reason: "DaemonSetNotReady", Message: "DaemonSet has 0/3 pods ready"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "Deployment rolling out - should be Progressing",
+			existingConditions: map[string]Condition{
+				"DeploymentAvailable": {Type: "DeploymentAvailable", Status: metav1.ConditionFalse, Reason: "DeploymentNotReady", Message: "Deployment has 1/3 replicas ready"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "Mixed progressing and ready - should be Progressing",
+			existingConditions: map[string]Condition{
+				"Component1":           {Type: "Component1", Status: metav1.ConditionTrue, Reason: "OK", Message: "Good"},
+				"StatefulSetAvailable": {Type: "StatefulSetAvailable", Status: metav1.ConditionFalse, Reason: "StatefulSetNotReady", Message: "StatefulSet has 0/1 replicas ready"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "Failure takes precedence over progressing - should be Failed",
+			existingConditions: map[string]Condition{
+				"StatefulSetAvailable": {Type: "StatefulSetAvailable", Status: metav1.ConditionFalse, Reason: "StatefulSetNotReady", Message: "StatefulSet has 0/1 replicas ready"},
+				"ConfigValid":          {Type: "ConfigValid", Status: metav1.ConditionFalse, Reason: "InvalidConfig", Message: "Config is invalid"},
 			},
 			expectedStatus: metav1.ConditionFalse,
 			expectedReason: v1alpha1.ReasonFailed,

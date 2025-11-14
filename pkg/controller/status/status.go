@@ -61,11 +61,21 @@ func (m *Manager) AddCondition(conditionType, reason, message string, status met
 }
 
 // SetReadyCondition sets the Ready condition based on all other conditions
+// Distinguishes between "Progressing" (normal startup/rollout) and "Failed" (actual errors)
 func (m *Manager) SetReadyCondition() {
 	// Check if any condition (except Ready, Degraded, and CreateOnlyMode) is False
 	// Note: CreateOnlyMode=False is normal (disabled state), not a failure
+	hasProgressing := false
 	hasFailure := false
 	failureMessages := []string{}
+	progressingMessages := []string{}
+
+	// Reasons that indicate normal progress (not actual failures)
+	progressingReasons := map[string]bool{
+		"StatefulSetNotReady": true,
+		"DaemonSetNotReady":   true,
+		"DeploymentNotReady":  true,
+	}
 
 	for condType, cond := range m.conditions {
 		// Skip conditions that don't indicate operational health
@@ -73,17 +83,31 @@ func (m *Manager) SetReadyCondition() {
 			continue
 		}
 		if cond.Status == metav1.ConditionFalse {
-			hasFailure = true
-			failureMessages = append(failureMessages, fmt.Sprintf("%s: %s", condType, cond.Message))
+			// Check if this is a progressing reason or an actual failure
+			if progressingReasons[cond.Reason] {
+				hasProgressing = true
+				progressingMessages = append(progressingMessages, fmt.Sprintf("%s: %s", condType, cond.Message))
+			} else {
+				hasFailure = true
+				failureMessages = append(failureMessages, fmt.Sprintf("%s: %s", condType, cond.Message))
+			}
 		}
 	}
 
 	if hasFailure {
+		// Actual failure - use Failed reason
 		message := "One or more components are not ready"
 		if len(failureMessages) > 0 {
 			message = failureMessages[0] // Show the first failure
 		}
 		m.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed, message, metav1.ConditionFalse)
+	} else if hasProgressing {
+		// Normal startup/rollout - use Progressing reason
+		message := "Components are starting up or rolling out"
+		if len(progressingMessages) > 0 {
+			message = progressingMessages[0] // Show the first progressing component
+		}
+		m.AddCondition(v1alpha1.Ready, v1alpha1.ReasonInProgress, message, metav1.ConditionFalse)
 	} else {
 		m.AddCondition(v1alpha1.Ready, v1alpha1.ReasonReady, "All components are ready", metav1.ConditionTrue)
 	}
