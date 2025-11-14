@@ -68,6 +68,7 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 									LocalObjectReference: corev1.LocalObjectReference{
 										Name: "spire-spiffe-oidc-discovery-provider",
 									},
+									DefaultMode: ptr.To(int32(420)),
 								},
 							},
 						},
@@ -75,7 +76,8 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 							Name: "tls-certs",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: "oidc-serving-cert",
+									SecretName:  "oidc-serving-cert",
+									DefaultMode: ptr.To(int32(420)),
 								},
 							},
 						},
@@ -90,8 +92,8 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args:            []string{"-config", "/run/spire/oidc/config/oidc-discovery-provider.conf"},
 							Ports: []corev1.ContainerPort{
-								{Name: "healthz", ContainerPort: 8008},
-								{Name: "https", ContainerPort: 8443},
+								{Name: "healthz", ContainerPort: 8008, Protocol: corev1.ProtocolTCP},
+								{Name: "https", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},
@@ -102,8 +104,9 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/ready",
-										Port: intstr.FromString("healthz"),
+										Path:   "/ready",
+										Port:   intstr.FromString("healthz"),
+										Scheme: corev1.URISchemeHTTP,
 									},
 								},
 								InitialDelaySeconds: 5,
@@ -112,8 +115,9 @@ func buildDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcConfi
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/live",
-										Port: intstr.FromString("healthz"),
+										Path:   "/live",
+										Port:   intstr.FromString("healthz"),
+										Scheme: corev1.URISchemeHTTP,
 									},
 								},
 								InitialDelaySeconds: 5,
