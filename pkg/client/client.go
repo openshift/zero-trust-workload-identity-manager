@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
@@ -56,6 +57,7 @@ var (
 		&v1alpha1.SpiffeCSIDriver{},
 		&v1alpha1.SpireServer{},
 		&v1alpha1.SpireOIDCDiscoveryProvider{},
+		&operatorv1.OperatorCondition{},
 	}
 
 	informerResources = []client.Object{
@@ -78,6 +80,7 @@ var (
 		&v1alpha1.SpireOIDCDiscoveryProvider{},
 		&routev1.Route{},
 		&spiffev1alpha1.ClusterSPIFFEID{},
+		&operatorv1.OperatorCondition{},
 	}
 )
 

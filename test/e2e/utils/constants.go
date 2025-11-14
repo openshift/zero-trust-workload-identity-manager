@@ -22,6 +22,7 @@ const (
 	OperatorNamespace      = "zero-trust-workload-identity-manager"
 	OperatorDeploymentName = "zero-trust-workload-identity-manager-controller-manager"
 	OperatorLabelSelector  = "name=zero-trust-workload-identity-manager"
+	OperatorConditionName  = "zero-trust-workload-identity-manager.v0.2.0"
 
 	SpireServerStatefulSetName               = "spire-server"
 	SpireServerPodLabel                      = "app.kubernetes.io/name=spire-server"

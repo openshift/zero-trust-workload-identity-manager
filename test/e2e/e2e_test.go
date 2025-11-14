@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
+	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -314,6 +315,61 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Expect(operand.Message).To(Equal("Ready"), "%s message should be 'Ready'", kind)
 				fmt.Fprintf(GinkgoWriter, "Operand %s is ready\n", kind)
 			}
+		})
+
+		It("OperatorCondition should have Upgradeable condition synced from ZeroTrustWorkloadIdentityManager", func() {
+			By("Verifying OperatorCondition Upgradeable condition")
+			operatorCondition := &operatorv1.OperatorCondition{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{
+				Name:      utils.OperatorConditionName,
+				Namespace: utils.OperatorNamespace,
+			}, operatorCondition)
+			Expect(err).NotTo(HaveOccurred(), "failed to get OperatorCondition")
+
+			// Find Upgradeable condition in OperatorCondition
+			var operatorCondUpgradeable *metav1.Condition
+			for i := range operatorCondition.Status.Conditions {
+				if operatorCondition.Status.Conditions[i].Type == "Upgradeable" {
+					operatorCondUpgradeable = &operatorCondition.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(operatorCondUpgradeable).NotTo(BeNil(), "Upgradeable condition should exist in OperatorCondition")
+			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable: Status=%s, Reason=%s, Message=%s\n",
+				operatorCondUpgradeable.Status, operatorCondUpgradeable.Reason, operatorCondUpgradeable.Message)
+
+			By("Verifying ZeroTrustWorkloadIdentityManager Upgradeable condition")
+			ztwim := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, ztwim)
+			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
+
+			// Find Upgradeable condition in ZTWIM
+			var ztwimUpgradeable *metav1.Condition
+			for i := range ztwim.Status.Conditions {
+				if ztwim.Status.Conditions[i].Type == "Upgradeable" {
+					ztwimUpgradeable = &ztwim.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(ztwimUpgradeable).NotTo(BeNil(), "Upgradeable condition should exist in ZTWIM")
+			fmt.Fprintf(GinkgoWriter, "ZTWIM Upgradeable: Status=%s, Reason=%s, Message=%s\n",
+				ztwimUpgradeable.Status, ztwimUpgradeable.Reason, ztwimUpgradeable.Message)
+
+			By("Verifying OperatorCondition and ZTWIM Upgradeable conditions match")
+			Expect(operatorCondUpgradeable.Status).To(Equal(ztwimUpgradeable.Status),
+				"OperatorCondition and ZTWIM Upgradeable Status should match")
+			Expect(operatorCondUpgradeable.Reason).To(Equal(ztwimUpgradeable.Reason),
+				"OperatorCondition and ZTWIM Upgradeable Reason should match")
+			Expect(operatorCondUpgradeable.Message).To(Equal(ztwimUpgradeable.Message),
+				"OperatorCondition and ZTWIM Upgradeable Message should match")
+
+			// Verify expected values when all operands are ready
+			Expect(operatorCondUpgradeable.Status).To(Equal(metav1.ConditionTrue),
+				"Upgradeable should be True when all operands are ready")
+			Expect(operatorCondUpgradeable.Reason).To(Equal("Ready"),
+				"Upgradeable reason should be Ready")
+
+			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable correctly synced from ZTWIM\n")
 		})
 	})
 

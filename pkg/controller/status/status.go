@@ -60,6 +60,14 @@ func (m *Manager) AddCondition(conditionType, reason, message string, status met
 	}
 }
 
+// GetCondition retrieves a condition from the manager before it's applied
+func (m *Manager) GetCondition(conditionType string) *Condition {
+	if cond, exists := m.conditions[conditionType]; exists {
+		return &cond
+	}
+	return nil
+}
+
 // SetReadyCondition sets the Ready condition based on all other conditions
 // Distinguishes between "Progressing" (normal startup/rollout) and "Failed" (actual errors)
 func (m *Manager) SetReadyCondition() {
