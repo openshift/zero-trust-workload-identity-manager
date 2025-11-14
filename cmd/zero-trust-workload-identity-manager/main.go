@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	routev1 "github.com/openshift/api/route/v1"
+	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -203,6 +204,11 @@ func main() {
 
 	if err := routev1.AddToScheme(scheme); err != nil {
 		exitOnError(err, "unable to add routev1 scheme")
+	}
+
+	// Add OperatorCondition scheme for OLM integration
+	if err := operatorv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add operatorv1 scheme")
 	}
 
 	// Create unified cache builder to prevent race conditions between manager and reconciler caches
