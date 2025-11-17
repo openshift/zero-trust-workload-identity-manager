@@ -1,14 +1,85 @@
 package spiffe_csi_driver
 
 import (
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	"context"
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
 	"k8s.io/utils/ptr"
+
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
+
+// reconcileDaemonSet reconciles the Spiffe CSI Driver DaemonSet
+func (r *SpiffeCsiReconciler) reconcileDaemonSet(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager, createOnlyMode bool) error {
+	spiffeCsiDaemonset := generateSpiffeCsiDriverDaemonSet(driver.Spec)
+	if err := controllerutil.SetControllerReference(driver, spiffeCsiDaemonset, r.scheme); err != nil {
+		r.log.Error(err, "failed to set owner reference for the DaemonSet resource")
+		statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetGenerationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	var existingSpiffeCsiDaemonSet appsv1.DaemonSet
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: spiffeCsiDaemonset.Name, Namespace: spiffeCsiDaemonset.Namespace}, &existingSpiffeCsiDaemonSet)
+	if err != nil && kerrors.IsNotFound(err) {
+		if err = r.ctrlClient.Create(ctx, spiffeCsiDaemonset); err != nil {
+			r.log.Error(err, "Failed to create SpiffeCsiDaemon set")
+			statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetCreationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return fmt.Errorf("failed to create DaemonSet: %w", err)
+		}
+		r.log.Info("Created spiffe csi DaemonSet")
+	} else if err == nil && needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
+		if createOnlyMode {
+			r.log.Info("Skipping DaemonSet update due to create-only mode")
+		} else {
+			spiffeCsiDaemonset.ResourceVersion = existingSpiffeCsiDaemonSet.ResourceVersion
+			if err = r.ctrlClient.Update(ctx, spiffeCsiDaemonset); err != nil {
+				r.log.Error(err, "failed to update spiffe csi daemon set")
+				statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetUpdateFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return fmt.Errorf("failed to update DaemonSet: %w", err)
+			}
+			r.log.Info("Updated spiffe csi DaemonSet")
+		}
+	} else if err != nil {
+		r.log.Error(err, "Failed to get SpiffeCsiDaemon set")
+		statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetGetFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Check DaemonSet health/readiness
+	statusMgr.CheckDaemonSetHealth(ctx, spiffeCsiDaemonset.Name, spiffeCsiDaemonset.Namespace, DaemonSetAvailable)
+
+	return nil
+}
+
+// needsUpdate returns true if DaemonSet needs to be updated.
+func needsUpdate(current, desired appsv1.DaemonSet) bool {
+	if utils.DaemonSetSpecModified(&desired, &current) {
+		return true
+	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
+		return true
+	}
+	return false
+}
 
 func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *appsv1.DaemonSet {
 

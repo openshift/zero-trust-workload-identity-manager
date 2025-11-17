@@ -47,7 +47,7 @@ import (
 	spireAgentController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-agent"
 	spireOIDCDiscoveryProviderController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-oidc-discovery-provider"
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
-	staticResourceController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/static-resource-controller"
+	ztwimController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/zero-trust-workload-identity-manager"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 
 	securityv1 "github.com/openshift/api/security/v1"
@@ -228,10 +228,10 @@ func main() {
 		exitOnError(err, "Failed to bootstrap ZeroTrustWorkloadIdentityManager CR")
 	}
 
-	staticResourceControllerManager, err := staticResourceController.New(mgr)
-	exitOnError(err, "unable to set up static resource controller manager")
-	if err = staticResourceControllerManager.SetupWithManager(mgr); err != nil {
-		exitOnError(err, "unable to setup static resource controller manager")
+	ztwimControllerManager, err := ztwimController.New(mgr)
+	exitOnError(err, "unable to set up ztwim controller manager")
+	if err = ztwimControllerManager.SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to setup ztwim controller manager")
 	}
 
 	spireServerControllerManager, err := spireServerController.New(mgr)
