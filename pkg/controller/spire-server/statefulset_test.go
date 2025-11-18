@@ -35,8 +35,8 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			t.Errorf("Expected name 'spire-server', got %q", statefulSet.Name)
 		}
 
-		if statefulSet.Namespace != utils.OperatorNamespace {
-			t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, statefulSet.Namespace)
+		if statefulSet.Namespace != utils.GetOperatorNamespace() {
+			t.Errorf("Expected namespace %q, got %q", utils.GetOperatorNamespace(), statefulSet.Namespace)
 		}
 
 		// Check standard labels
@@ -301,7 +301,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    labels,
 		},
 		Spec: appsv1.StatefulSetSpec{

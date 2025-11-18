@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"sort"
 	"strings"
 
@@ -45,6 +46,16 @@ const (
 	LogLevelInfo  = "info"
 	LogFormatText = "text"
 )
+
+// GetOperatorNamespace returns the namespace where the operator resources should be installed.
+// It reads from the OPERATOR_NAMESPACE environment variable, falling back to the default value
+// defined in OperatorNamespace constant if the environment variable is not set.
+func GetOperatorNamespace() string {
+	if ns := os.Getenv("OPERATOR_NAMESPACE"); ns != "" {
+		return ns
+	}
+	return OperatorNamespace
+}
 
 func DecodeClusterRoleObjBytes(objBytes []byte) *rbacv1.ClusterRole {
 	obj, err := runtime.Decode(codecs.UniversalDecoder(rbacv1.SchemeGroupVersion), objBytes)

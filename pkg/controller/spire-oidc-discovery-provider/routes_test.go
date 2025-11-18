@@ -32,7 +32,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 
 		// Verify ObjectMeta
 		assert.Equal(t, "spire-oidc-discovery-provider", result.ObjectMeta.Name)
-		assert.Equal(t, utils.OperatorNamespace, result.ObjectMeta.Namespace)
+		assert.Equal(t, utils.GetOperatorNamespace(), result.ObjectMeta.Namespace)
 
 		// Verify default labels
 		expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(nil)

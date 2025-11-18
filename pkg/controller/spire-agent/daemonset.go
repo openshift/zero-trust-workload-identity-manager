@@ -84,7 +84,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    labels,
 		},
 		Spec: appsv1.DaemonSetSpec{

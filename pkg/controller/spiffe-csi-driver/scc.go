@@ -39,7 +39,7 @@ func generateSpiffeCSIDriverSCC(customLabels map[string]string) *securityv1.Secu
 			Type: securityv1.FSGroupStrategyMustRunAs,
 		},
 		Users: []string{
-			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-csi-driver",
+			fmt.Sprintf("system:serviceaccount:%s:spire-spiffe-csi-driver", utils.GetOperatorNamespace()),
 		},
 		Volumes: []securityv1.FSType{
 			securityv1.FSTypeConfigMap,

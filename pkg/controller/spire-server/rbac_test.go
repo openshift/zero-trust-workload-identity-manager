@@ -55,8 +55,8 @@ func TestGetSpireBundleRole(t *testing.T) {
 		t.Errorf("Expected Role name 'spire-bundle', got '%s'", role.Name)
 	}
 
-	if role.Namespace != utils.OperatorNamespace {
-		t.Errorf("Expected Role namespace '%s', got '%s'", utils.OperatorNamespace, role.Namespace)
+	if role.Namespace != utils.GetOperatorNamespace() {
+		t.Errorf("Expected Role namespace '%s', got '%s'", utils.GetOperatorNamespace(), role.Namespace)
 	}
 
 	// Check labels - bundle resources use spire-server labels
@@ -76,8 +76,8 @@ func TestGetSpireBundleRoleBinding(t *testing.T) {
 		t.Errorf("Expected RoleBinding name 'spire-bundle', got '%s'", rb.Name)
 	}
 
-	if rb.Namespace != utils.OperatorNamespace {
-		t.Errorf("Expected RoleBinding namespace '%s', got '%s'", utils.OperatorNamespace, rb.Namespace)
+	if rb.Namespace != utils.GetOperatorNamespace() {
+		t.Errorf("Expected RoleBinding namespace '%s', got '%s'", utils.GetOperatorNamespace(), rb.Namespace)
 	}
 }
 
@@ -125,8 +125,8 @@ func TestGetSpireControllerManagerLeaderElectionRole(t *testing.T) {
 		t.Errorf("Expected Role name 'spire-controller-manager-leader-election', got '%s'", role.Name)
 	}
 
-	if role.Namespace != utils.OperatorNamespace {
-		t.Errorf("Expected Role namespace '%s', got '%s'", utils.OperatorNamespace, role.Namespace)
+	if role.Namespace != utils.GetOperatorNamespace() {
+		t.Errorf("Expected Role namespace '%s', got '%s'", utils.GetOperatorNamespace(), role.Namespace)
 	}
 }
 

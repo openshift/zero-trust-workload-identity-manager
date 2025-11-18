@@ -117,6 +117,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileService(ctx context.Cont
 func getSpireOIDCDiscoveryProviderService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireOIDCDiscoveryProviderServiceAssetName))
 	svc.Labels = utils.SpireOIDCDiscoveryProviderLabels(customLabels)
+	svc.Namespace = utils.GetOperatorNamespace()
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spiffe-oidc-discovery-provider",
 		"app.kubernetes.io/instance": utils.StandardInstance,

@@ -18,8 +18,8 @@ func TestGetSpireOIDCDiscoveryProviderService(t *testing.T) {
 			t.Errorf("Expected Service name 'spire-spiffe-oidc-discovery-provider', got '%s'", svc.Name)
 		}
 
-		if svc.Namespace != utils.OperatorNamespace {
-			t.Errorf("Expected Service namespace '%s', got '%s'", utils.OperatorNamespace, svc.Namespace)
+		if svc.Namespace != utils.GetOperatorNamespace() {
+			t.Errorf("Expected Service namespace '%s', got '%s'", utils.GetOperatorNamespace(), svc.Namespace)
 		}
 
 		// Check labels

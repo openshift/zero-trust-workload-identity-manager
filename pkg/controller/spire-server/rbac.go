@@ -593,18 +593,28 @@ func getSpireServerClusterRole(customLabels map[string]string) *rbacv1.ClusterRo
 func getSpireServerClusterRoleBinding(customLabels map[string]string) *rbacv1.ClusterRoleBinding {
 	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireServerClusterRoleBindingAssetName))
 	crb.Labels = utils.SpireServerLabels(customLabels)
+	// Update the subject namespace
+	for i := range crb.Subjects {
+		crb.Subjects[i].Namespace = utils.GetOperatorNamespace()
+	}
 	return crb
 }
 
 func getSpireBundleRole(customLabels map[string]string) *rbacv1.Role {
 	role := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireBundleRoleAssetName))
 	role.Labels = utils.SpireServerLabels(customLabels)
+	role.Namespace = utils.GetOperatorNamespace()
 	return role
 }
 
 func getSpireBundleRoleBinding(customLabels map[string]string) *rbacv1.RoleBinding {
 	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireBundleRoleBindingAssetName))
 	rb.Labels = utils.SpireServerLabels(customLabels)
+	rb.Namespace = utils.GetOperatorNamespace()
+	// Update the subject namespace
+	for i := range rb.Subjects {
+		rb.Subjects[i].Namespace = utils.GetOperatorNamespace()
+	}
 	return rb
 }
 
@@ -617,17 +627,27 @@ func getSpireControllerManagerClusterRole(customLabels map[string]string) *rbacv
 func getSpireControllerManagerClusterRoleBinding(customLabels map[string]string) *rbacv1.ClusterRoleBinding {
 	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerClusterRoleBindingAssetName))
 	crb.Labels = utils.SpireControllerManagerLabels(customLabels)
+	// Update the subject namespace
+	for i := range crb.Subjects {
+		crb.Subjects[i].Namespace = utils.GetOperatorNamespace()
+	}
 	return crb
 }
 
 func getSpireControllerManagerLeaderElectionRole(customLabels map[string]string) *rbacv1.Role {
 	role := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleAssetName))
 	role.Labels = utils.SpireControllerManagerLabels(customLabels)
+	role.Namespace = utils.GetOperatorNamespace()
 	return role
 }
 
 func getSpireControllerManagerLeaderElectionRoleBinding(customLabels map[string]string) *rbacv1.RoleBinding {
 	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireControllerManagerLeaderElectionRoleBindingAssetName))
 	rb.Labels = utils.SpireControllerManagerLabels(customLabels)
+	rb.Namespace = utils.GetOperatorNamespace()
+	// Update the subject namespace
+	for i := range rb.Subjects {
+		rb.Subjects[i].Namespace = utils.GetOperatorNamespace()
+	}
 	return rb
 }

@@ -102,8 +102,8 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	oidcConfig := map[string]interface{}{
 		"domains": []string{
 			"spire-spiffe-oidc-discovery-provider",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager.svc.cluster.local",
+			fmt.Sprintf("spire-spiffe-oidc-discovery-provider.%s", utils.GetOperatorNamespace()),
+			fmt.Sprintf("spire-spiffe-oidc-discovery-provider.%s.svc.cluster.local", utils.GetOperatorNamespace()),
 			jwtIssuer,
 		},
 		"health_checks": map[string]string{
@@ -132,7 +132,7 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireOIDCDiscoveryProviderLabels(dp.Spec.Labels),
 		},
 		Data: map[string]string{

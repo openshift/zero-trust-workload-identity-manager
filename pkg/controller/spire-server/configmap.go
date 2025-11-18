@@ -214,7 +214,7 @@ func generateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 		Data: map[string]string{
@@ -297,7 +297,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 										"allowed_pod_label_keys":  []string{},
 										"audience":                []string{"spire-server"},
 										"service_account_allow_list": []string{
-											"zero-trust-workload-identity-manager:spire-agent",
+											fmt.Sprintf("%s:spire-agent", utils.GetOperatorNamespace()),
 										},
 									},
 								},
@@ -311,7 +311,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 					"k8sbundle": map[string]interface{}{
 						"plugin_data": map[string]interface{}{
 							"config_map": config.BundleConfigMap,
-							"namespace":  utils.OperatorNamespace,
+							"namespace":  utils.GetOperatorNamespace(),
 						},
 					},
 				},
@@ -369,7 +369,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 		APIVersion: "spire.spiffe.io/v1alpha1",
 		Metadata: metav1.ObjectMeta{
 			Name:      "spire-controller-manager",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireControllerManagerLabels(config.Labels),
 		},
 		ControllerManagerConfig: spiffev1alpha.ControllerManagerConfig{
@@ -420,7 +420,7 @@ func generateControllerManagerConfigMap(configYAML string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-controller-manager",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireControllerManagerLabels(nil),
 		},
 		Data: map[string]string{
@@ -436,7 +436,7 @@ func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.BundleConfigMap,
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 	}, nil

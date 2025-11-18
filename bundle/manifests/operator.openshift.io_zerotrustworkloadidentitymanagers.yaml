@@ -976,12 +976,6 @@ spec:
                 description: labels to apply to all resources managed by the API.
                 type: object
                 x-kubernetes-map-type: granular
-              namespace:
-                default: zero-trust-workload-identity-manager
-                description: |-
-                  namespace to install the deployments and other resources managed by
-                  zero-trust-workload-identity-manager.
-                type: string
               nodeSelector:
                 additionalProperties:
                   type: string

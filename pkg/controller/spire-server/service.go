@@ -205,6 +205,7 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 func getSpireServerService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireServerServiceAssetName))
 	svc.Labels = utils.SpireServerLabels(customLabels)
+	svc.Namespace = utils.GetOperatorNamespace()
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-server",
 		"app.kubernetes.io/instance": utils.StandardInstance,
@@ -216,6 +217,7 @@ func getSpireServerService(customLabels map[string]string) *corev1.Service {
 func getSpireControllerManagerWebhookService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireControllerMangerWebhookServiceAssetName))
 	svc.Labels = utils.SpireControllerManagerLabels(customLabels)
+	svc.Namespace = utils.GetOperatorNamespace()
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-controller-manager",
 		"app.kubernetes.io/instance": utils.StandardInstance,

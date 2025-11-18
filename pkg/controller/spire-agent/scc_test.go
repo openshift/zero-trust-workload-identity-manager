@@ -1,6 +1,7 @@
 package spire_agent
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 		t.Errorf("expected FSGroup.Type to be MustRunAs")
 	}
 
-	expectedUser := "system:serviceaccount:zero-trust-workload-identity-manager:spire-agent"
+	expectedUser := fmt.Sprintf("system:serviceaccount:%s:spire-agent", utils.GetOperatorNamespace())
 	if len(scc.Users) != 1 || scc.Users[0] != expectedUser {
 		t.Errorf("expected Users to contain %s, got %v", expectedUser, scc.Users)
 	}

@@ -18,8 +18,8 @@ func TestGetSpireServerServiceAccount(t *testing.T) {
 			t.Errorf("Expected ServiceAccount name 'spire-server', got '%s'", sa.Name)
 		}
 
-		if sa.Namespace != utils.OperatorNamespace {
-			t.Errorf("Expected ServiceAccount namespace '%s', got '%s'", utils.OperatorNamespace, sa.Namespace)
+		if sa.Namespace != utils.GetOperatorNamespace() {
+			t.Errorf("Expected ServiceAccount namespace '%s', got '%s'", utils.GetOperatorNamespace(), sa.Namespace)
 		}
 
 		// Check labels

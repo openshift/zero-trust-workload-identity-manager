@@ -92,8 +92,8 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 				t.Errorf("Expected name 'spire-server', got %q", cm.Name)
 			}
 
-			if cm.Namespace != utils.OperatorNamespace {
-				t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, cm.Namespace)
+			if cm.Namespace != utils.GetOperatorNamespace() {
+				t.Errorf("Expected namespace %q, got %q", utils.GetOperatorNamespace(), cm.Namespace)
 			}
 
 			// Check labels - now using standardized labeling
@@ -225,9 +225,9 @@ func TestGenerateServerConfMap(t *testing.T) {
 			bundleData["config_map"])
 	}
 
-	if bundleData["namespace"] != utils.OperatorNamespace {
+	if bundleData["namespace"] != utils.GetOperatorNamespace() {
 		t.Errorf("Expected namespace %q, got %v",
-			utils.OperatorNamespace,
+			utils.GetOperatorNamespace(),
 			bundleData["namespace"])
 	}
 }
@@ -550,8 +550,8 @@ func TestGenerateControllerManagerConfigMap(t *testing.T) {
 		t.Errorf("Expected name 'spire-controller-manager', got %q", cm.Name)
 	}
 
-	if cm.Namespace != utils.OperatorNamespace {
-		t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, cm.Namespace)
+	if cm.Namespace != utils.GetOperatorNamespace() {
+		t.Errorf("Expected namespace %q, got %q", utils.GetOperatorNamespace(), cm.Namespace)
 	}
 
 	// Check labels - now using standardized labeling
@@ -620,8 +620,8 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 				t.Errorf("Expected name %q, got %q", tt.config.BundleConfigMap, cm.Name)
 			}
 
-			if cm.Namespace != utils.OperatorNamespace {
-				t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, cm.Namespace)
+			if cm.Namespace != utils.GetOperatorNamespace() {
+				t.Errorf("Expected namespace %q, got %q", utils.GetOperatorNamespace(), cm.Namespace)
 			}
 
 			// Check labels
