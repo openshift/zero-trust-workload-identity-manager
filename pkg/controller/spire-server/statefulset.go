@@ -136,6 +136,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
 								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
@@ -218,5 +219,46 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	// Add proxy configuration if enabled
 	utils.AddProxyConfigToPod(&sts.Spec.Template.Spec)
 
+	// Add federation configuration if present
+	if config.Federation != nil {
+		addFederationConfigurationToStatefulSet(sts, config.Federation)
+	}
+
 	return sts
+}
+
+// addFederationConfigurationToStatefulSet adds federation volume and mount to the StatefulSet when using ServingCert
+func addFederationConfigurationToStatefulSet(sts *appsv1.StatefulSet, federation *v1alpha1.FederationConfig) {
+	// Only add spire-server-tls volume if ServingCert is configured
+	if federation.BundleEndpoint.HttpsWeb != nil && federation.BundleEndpoint.HttpsWeb.ServingCert != nil {
+		// Determine which secret to use
+		secretName := federation.BundleEndpoint.HttpsWeb.ServingCert.SecretName
+		if secretName == "" {
+			// Default to service CA certificate if no secret name provided
+			secretName = "spire-server-serving-cert"
+		}
+
+		// Add volume mount to spire-server container (first container)
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "spire-server-tls",
+				MountPath: "/run/spire/server-tls",
+				ReadOnly:  true,
+			},
+		)
+
+		// Add volume to pod spec with unified name
+		sts.Spec.Template.Spec.Volumes = append(
+			sts.Spec.Template.Spec.Volumes,
+			corev1.Volume{
+				Name: "spire-server-tls",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: secretName,
+					},
+				},
+			},
+		)
+	}
 }
