@@ -62,9 +62,9 @@ func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
 		// Set external certificate if provided
 		if server.Spec.Federation.BundleEndpoint.HttpsWeb != nil &&
 			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert != nil &&
-			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalCertificate != "" {
+			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef != "" {
 			route.Spec.TLS.ExternalCertificate = &routev1.LocalObjectReference{
-				Name: server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalCertificate,
+				Name: server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef,
 			}
 		}
 	}

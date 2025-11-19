@@ -156,7 +156,7 @@ type BundleEndpointConfig struct {
 type BundleEndpointProfile string
 
 const (
-	// HttpsSpiffeProfile uses SPIFFE authentication (default, recommended)
+	// HttpsSpiffeProfile uses SPIFFE authentication (default)
 	HttpsSpiffeProfile BundleEndpointProfile = "https_spiffe"
 
 	// HttpsWebProfile uses Web PKI (X.509 certificates from public CA)
@@ -190,7 +190,7 @@ type AcmeConfig struct {
 
 	// Email for ACME account registration
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9][a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$`
 	Email string `json:"email"`
 
 	// TosAccepted indicates acceptance of Terms of Service
@@ -210,17 +210,18 @@ type ServingCertConfig struct {
 	SecretName string `json:"secretName,omitempty"`
 
 	// FileSyncInterval is how often to check for certificate updates (seconds)
-	// +kubebuilder:validation:Minimum=30
-	// +kubebuilder:validation:Maximum=3600
-	// +kubebuilder:default=300
+	// +kubebuilder:validation:Minimum=300
+	// +kubebuilder:validation:Maximum=86400
+	// +kubebuilder:default=3600
 	FileSyncInterval int32 `json:"fileSyncInterval,omitempty"`
 
-	// ExternalCertificate is the name of the Secret containing the external certificate for the router.
-	// The secret must be in the same namespace where the operator and operands are deployed.
-	// The secret must contain tls.crt and tls.key fields. The OpenShift Ingress Operator will
-	// read this secret to configure the route's TLS certificate.
+	// ExternalSecretRef is a reference to an externally managed secret that contains
+	// the TLS certificate for the SPIRE server federation Route host. The secret must
+	// be in the same namespace where the operator and operands are deployed and must
+	// contain tls.crt and tls.key fields. The OpenShift Ingress Operator will read
+	// this secret to configure the route's TLS certificate.
 	// +kubebuilder:validation:Optional
-	ExternalCertificate string `json:"externalCertificate,omitempty"`
+	ExternalSecretRef string `json:"externalSecretRef,omitempty"`
 }
 
 // FederatesWithConfig represents a remote trust domain to federate with

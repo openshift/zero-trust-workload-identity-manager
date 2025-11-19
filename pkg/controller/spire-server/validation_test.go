@@ -237,3 +237,559 @@ func TestValidateTTLDurationsWithWarnings(t *testing.T) {
 func containsString(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+func TestValidateFederationConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		federation  *v1alpha1.FederationConfig
+		trustDomain string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "Nil federation config",
+			federation:  nil,
+			trustDomain: "example.org",
+			expectError: false,
+		},
+		{
+			name: "Valid https_spiffe federation",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 300,
+				},
+				FederatesWith: []v1alpha1.FederatesWithConfig{
+					{
+						TrustDomain:           "remote.org",
+						BundleEndpointUrl:     "https://remote.org:8443",
+						BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+						EndpointSpiffeId:      "spiffe://remote.org/spire/server",
+					},
+				},
+			},
+			trustDomain: "example.org",
+			expectError: false,
+		},
+		{
+			name: "Valid https_web federation with ACME",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsWebProfile,
+					RefreshHint: 300,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						Acme: &v1alpha1.AcmeConfig{
+							DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+							DomainName:   "federation.example.org",
+							Email:        "admin@example.org",
+							TosAccepted:  "true",
+						},
+					},
+				},
+				FederatesWith: []v1alpha1.FederatesWithConfig{
+					{
+						TrustDomain:           "remote.org",
+						BundleEndpointUrl:     "https://remote.org",
+						BundleEndpointProfile: v1alpha1.HttpsWebProfile,
+					},
+				},
+			},
+			trustDomain: "example.org",
+			expectError: false,
+		},
+		{
+			name: "Valid https_web federation with ServingCert",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsWebProfile,
+					RefreshHint: 300,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						ServingCert: &v1alpha1.ServingCertConfig{
+							SecretName:       "my-tls-cert",
+							FileSyncInterval: 300,
+						},
+					},
+				},
+			},
+			trustDomain: "example.org",
+			expectError: false,
+		},
+		{
+			name: "Self-federation error",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 300,
+				},
+				FederatesWith: []v1alpha1.FederatesWithConfig{
+					{
+						TrustDomain:           "example.org",
+						BundleEndpointUrl:     "https://example.org:8443",
+						BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+						EndpointSpiffeId:      "spiffe://example.org/spire/server",
+					},
+				},
+			},
+			trustDomain: "example.org",
+			expectError: true,
+			errorMsg:    "cannot federate with own trust domain",
+		},
+		{
+			name: "Duplicate trust domains",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 300,
+				},
+				FederatesWith: []v1alpha1.FederatesWithConfig{
+					{
+						TrustDomain:           "remote.org",
+						BundleEndpointUrl:     "https://remote1.org:8443",
+						BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+						EndpointSpiffeId:      "spiffe://remote.org/spire/server",
+					},
+					{
+						TrustDomain:           "remote.org",
+						BundleEndpointUrl:     "https://remote2.org:8443",
+						BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+						EndpointSpiffeId:      "spiffe://remote.org/spire/server",
+					},
+				},
+			},
+			trustDomain: "example.org",
+			expectError: true,
+			errorMsg:    "duplicate trust domain",
+		},
+		{
+			name: "Too many federatesWith entries",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsSpiffeProfile,
+				},
+				FederatesWith: make([]v1alpha1.FederatesWithConfig, 51),
+			},
+			trustDomain: "example.org",
+			expectError: true,
+			errorMsg:    "federatesWith array cannot exceed 50 entries",
+		},
+		{
+			name: "Invalid refresh hint - too low",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 30,
+				},
+			},
+			trustDomain: "example.org",
+			expectError: true,
+			errorMsg:    "refreshHint must be between 60 and 3600 seconds",
+		},
+		{
+			name: "Invalid refresh hint - too high",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 4000,
+				},
+			},
+			trustDomain: "example.org",
+			expectError: true,
+			errorMsg:    "refreshHint must be between 60 and 3600 seconds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFederationConfig(tt.federation, tt.trustDomain)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("validateFederationConfig() error = %v, expectError = %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError && err != nil && !containsString(err.Error(), tt.errorMsg) {
+				t.Errorf("validateFederationConfig() error = %q, expected to contain %q", err.Error(), tt.errorMsg)
+			}
+		})
+	}
+}
+
+func TestValidateBundleEndpoint(t *testing.T) {
+	tests := []struct {
+		name           string
+		bundleEndpoint *v1alpha1.BundleEndpointConfig
+		expectError    bool
+		errorMsg       string
+	}{
+		{
+			name: "Valid https_spiffe profile",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsSpiffeProfile,
+				RefreshHint: 300,
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid https_web with ACME",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+				HttpsWeb: &v1alpha1.HttpsWebConfig{
+					Acme: &v1alpha1.AcmeConfig{
+						DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+						DomainName:   "example.org",
+						Email:        "admin@example.org",
+						TosAccepted:  "true",
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid https_web with ServingCert",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+				HttpsWeb: &v1alpha1.HttpsWebConfig{
+					ServingCert: &v1alpha1.ServingCertConfig{
+						SecretName:       "my-cert",
+						FileSyncInterval: 300,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "https_web without HttpsWeb config",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+			},
+			expectError: true,
+			errorMsg:    "httpsWeb configuration is required when profile is https_web",
+		},
+		{
+			name: "https_web with both ACME and ServingCert",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+				HttpsWeb: &v1alpha1.HttpsWebConfig{
+					Acme: &v1alpha1.AcmeConfig{
+						DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+						DomainName:   "example.org",
+						Email:        "admin@example.org",
+						TosAccepted:  "true",
+					},
+					ServingCert: &v1alpha1.ServingCertConfig{
+						SecretName: "my-cert",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "acme and servingCert are mutually exclusive",
+		},
+		{
+			name: "https_web with neither ACME nor ServingCert",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+				HttpsWeb:    &v1alpha1.HttpsWebConfig{},
+			},
+			expectError: true,
+			errorMsg:    "either acme or servingCert must be set for https_web profile",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBundleEndpoint(tt.bundleEndpoint)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("validateBundleEndpoint() error = %v, expectError = %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError && err != nil && !containsString(err.Error(), tt.errorMsg) {
+				t.Errorf("validateBundleEndpoint() error = %q, expected to contain %q", err.Error(), tt.errorMsg)
+			}
+		})
+	}
+}
+
+func TestValidateAcmeConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		acme        *v1alpha1.AcmeConfig
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "Nil ACME config",
+			acme:        nil,
+			expectError: false,
+		},
+		{
+			name: "Valid ACME config",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+				DomainName:   "example.org",
+				Email:        "admin@example.org",
+				TosAccepted:  "true",
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid ACME config with complex email",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+				DomainName:   "example.org",
+				Email:        "user.name+tag@sub-domain.example.org",
+				TosAccepted:  "true",
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid ACME config with numbered email",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+				DomainName:   "example.org",
+				Email:        "admin123@example456.com",
+				TosAccepted:  "true",
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid directory URL - not https",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "http://acme.example.org/directory",
+				DomainName:   "example.org",
+				Email:        "admin@example.org",
+				TosAccepted:  "true",
+			},
+			expectError: true,
+			errorMsg:    "directoryUrl must use https://",
+		},
+		{
+			name: "Missing domain name",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+				DomainName:   "",
+				Email:        "admin@example.org",
+				TosAccepted:  "true",
+			},
+			expectError: true,
+			errorMsg:    "domainName is required",
+		},
+		{
+			name: "Missing email",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+				DomainName:   "example.org",
+				Email:        "",
+				TosAccepted:  "true",
+			},
+			expectError: true,
+			errorMsg:    "email is required",
+		},
+		{
+			name: "TOS not accepted",
+			acme: &v1alpha1.AcmeConfig{
+				DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+				DomainName:   "example.org",
+				Email:        "admin@example.org",
+				TosAccepted:  "false",
+			},
+			expectError: true,
+			errorMsg:    "tosAccepted must be true to use ACME",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAcmeConfig(tt.acme)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("validateAcmeConfig() error = %v, expectError = %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError && err != nil && !containsString(err.Error(), tt.errorMsg) {
+				t.Errorf("validateAcmeConfig() error = %q, expected to contain %q", err.Error(), tt.errorMsg)
+			}
+		})
+	}
+}
+
+func TestValidateServingCertConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		servingCert *v1alpha1.ServingCertConfig
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "Nil ServingCert config",
+			servingCert: nil,
+			expectError: false,
+		},
+		{
+			name: "Valid ServingCert config",
+			servingCert: &v1alpha1.ServingCertConfig{
+				SecretName:       "my-cert",
+				FileSyncInterval: 3600,
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid ServingCert without secret name (defaults to service CA)",
+			servingCert: &v1alpha1.ServingCertConfig{
+				FileSyncInterval: 3600,
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid FileSyncInterval at minimum",
+			servingCert: &v1alpha1.ServingCertConfig{
+				SecretName:       "my-cert",
+				FileSyncInterval: 300,
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid FileSyncInterval at maximum",
+			servingCert: &v1alpha1.ServingCertConfig{
+				SecretName:       "my-cert",
+				FileSyncInterval: 86400,
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid FileSyncInterval - too low",
+			servingCert: &v1alpha1.ServingCertConfig{
+				SecretName:       "my-cert",
+				FileSyncInterval: 200,
+			},
+			expectError: true,
+			errorMsg:    "fileSyncInterval must be between 300 and 86400 seconds",
+		},
+		{
+			name: "Invalid FileSyncInterval - too high",
+			servingCert: &v1alpha1.ServingCertConfig{
+				SecretName:       "my-cert",
+				FileSyncInterval: 90000,
+			},
+			expectError: true,
+			errorMsg:    "fileSyncInterval must be between 300 and 86400 seconds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateServingCertConfig(tt.servingCert)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("validateServingCertConfig() error = %v, expectError = %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError && err != nil && !containsString(err.Error(), tt.errorMsg) {
+				t.Errorf("validateServingCertConfig() error = %q, expected to contain %q", err.Error(), tt.errorMsg)
+			}
+		})
+	}
+}
+
+func TestValidateFederatedTrustDomain(t *testing.T) {
+	tests := []struct {
+		name        string
+		fedTrust    *v1alpha1.FederatesWithConfig
+		index       int
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "Valid https_spiffe trust domain",
+			fedTrust: &v1alpha1.FederatesWithConfig{
+				TrustDomain:           "remote.org",
+				BundleEndpointUrl:     "https://remote.org:8443",
+				BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      "spiffe://remote.org/spire/server",
+			},
+			index:       0,
+			expectError: false,
+		},
+		{
+			name: "Valid https_web trust domain",
+			fedTrust: &v1alpha1.FederatesWithConfig{
+				TrustDomain:           "remote.org",
+				BundleEndpointUrl:     "https://remote.org",
+				BundleEndpointProfile: v1alpha1.HttpsWebProfile,
+			},
+			index:       0,
+			expectError: false,
+		},
+		{
+			name: "Empty trust domain",
+			fedTrust: &v1alpha1.FederatesWithConfig{
+				TrustDomain:           "",
+				BundleEndpointUrl:     "https://remote.org:8443",
+				BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      "spiffe://remote.org/spire/server",
+			},
+			index:       0,
+			expectError: true,
+			errorMsg:    "trustDomain is required",
+		},
+		{
+			name: "Invalid URL - not https",
+			fedTrust: &v1alpha1.FederatesWithConfig{
+				TrustDomain:           "remote.org",
+				BundleEndpointUrl:     "http://remote.org:8443",
+				BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      "spiffe://remote.org/spire/server",
+			},
+			index:       0,
+			expectError: true,
+			errorMsg:    "bundleEndpointUrl must use https://",
+		},
+		{
+			name: "https_spiffe without endpointSpiffeId",
+			fedTrust: &v1alpha1.FederatesWithConfig{
+				TrustDomain:           "remote.org",
+				BundleEndpointUrl:     "https://remote.org:8443",
+				BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      "",
+			},
+			index:       0,
+			expectError: true,
+			errorMsg:    "endpointSpiffeId is required for https_spiffe profile",
+		},
+		{
+			name: "https_spiffe with invalid endpointSpiffeId",
+			fedTrust: &v1alpha1.FederatesWithConfig{
+				TrustDomain:           "remote.org",
+				BundleEndpointUrl:     "https://remote.org:8443",
+				BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      "invalid://remote.org/spire/server",
+			},
+			index:       0,
+			expectError: true,
+			errorMsg:    "endpointSpiffeId must start with spiffe://",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFederatedTrustDomain(tt.fedTrust, tt.index)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("validateFederatedTrustDomain() error = %v, expectError = %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError && err != nil && !containsString(err.Error(), tt.errorMsg) {
+				t.Errorf("validateFederatedTrustDomain() error = %q, expected to contain %q", err.Error(), tt.errorMsg)
+			}
+		})
+	}
+}

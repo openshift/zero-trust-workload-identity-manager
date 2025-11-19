@@ -1105,7 +1105,7 @@ spec:
                                 type: string
                               email:
                                 description: Email for ACME account registration
-                                pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+                                pattern: ^[a-zA-Z0-9][a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$
                                 type: string
                               tosAccepted:
                                 default: "false"
@@ -1125,20 +1125,21 @@ spec:
                               ServingCert configures certificate from a Kubernetes Secret
                               Mutually exclusive with Acme
                             properties:
-                              externalCertificate:
+                              externalSecretRef:
                                 description: |-
-                                  ExternalCertificate is the name of the Secret containing the external certificate for the router.
-                                  The secret must be in the same namespace where the operator and operands are deployed.
-                                  The secret must contain tls.crt and tls.key fields. The OpenShift Ingress Operator will
-                                  read this secret to configure the route's TLS certificate.
+                                  ExternalSecretRef is a reference to an externally managed secret that contains
+                                  the TLS certificate for the SPIRE server federation Route host. The secret must
+                                  be in the same namespace where the operator and operands are deployed and must
+                                  contain tls.crt and tls.key fields. The OpenShift Ingress Operator will read
+                                  this secret to configure the route's TLS certificate.
                                 type: string
                               fileSyncInterval:
-                                default: 300
+                                default: 3600
                                 description: FileSyncInterval is how often to check
                                   for certificate updates (seconds)
                                 format: int32
-                                maximum: 3600
-                                minimum: 30
+                                maximum: 86400
+                                minimum: 300
                                 type: integer
                               secretName:
                                 description: |-

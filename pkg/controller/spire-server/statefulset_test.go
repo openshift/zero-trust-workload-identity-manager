@@ -132,8 +132,8 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 		}
 
 		// Check ports
-		if len(spireServerContainer.Ports) != 2 {
-			t.Errorf("Expected 2 ports, got %d", len(spireServerContainer.Ports))
+		if len(spireServerContainer.Ports) != 3 {
+			t.Errorf("Expected 3 ports, got %d", len(spireServerContainer.Ports))
 		}
 
 		// Check environment variables
@@ -441,6 +441,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
 								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
@@ -510,5 +511,252 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 				},
 			},
 		},
+	}
+}
+
+func TestAddFederationConfigurationToStatefulSet(t *testing.T) {
+	tests := []struct {
+		name               string
+		federation         *v1alpha1.FederationConfig
+		expectVolume       bool
+		expectVolumeMount  bool
+		expectedSecretName string
+	}{
+		{
+			name: "Federation with ServingCert and custom secret",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsWebProfile,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						ServingCert: &v1alpha1.ServingCertConfig{
+							SecretName: "my-custom-cert",
+						},
+					},
+				},
+			},
+			expectVolume:       true,
+			expectVolumeMount:  true,
+			expectedSecretName: "my-custom-cert",
+		},
+		{
+			name: "Federation with ServingCert and default secret",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsWebProfile,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						ServingCert: &v1alpha1.ServingCertConfig{
+							// No SecretName specified, should use default
+						},
+					},
+				},
+			},
+			expectVolume:       true,
+			expectVolumeMount:  true,
+			expectedSecretName: "spire-server-serving-cert",
+		},
+		{
+			name: "Federation with ACME (no volume needed)",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsWebProfile,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						Acme: &v1alpha1.AcmeConfig{
+							DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+							DomainName:   "example.org",
+							Email:        "admin@example.org",
+							TosAccepted:  "true",
+						},
+					},
+				},
+			},
+			expectVolume:      false,
+			expectVolumeMount: false,
+		},
+		{
+			name: "Federation with https_spiffe (no volume needed)",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsSpiffeProfile,
+				},
+			},
+			expectVolume:      false,
+			expectVolumeMount: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a basic StatefulSet
+			sts := &appsv1.StatefulSet{
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:         "spire-server",
+									VolumeMounts: []corev1.VolumeMount{},
+								},
+							},
+							Volumes: []corev1.Volume{},
+						},
+					},
+				},
+			}
+
+			// Add federation configuration
+			addFederationConfigurationToStatefulSet(sts, tt.federation)
+
+			// Check volume
+			volumeFound := false
+			var foundVolume *corev1.Volume
+			for i := range sts.Spec.Template.Spec.Volumes {
+				if sts.Spec.Template.Spec.Volumes[i].Name == "spire-server-tls" {
+					volumeFound = true
+					foundVolume = &sts.Spec.Template.Spec.Volumes[i]
+					break
+				}
+			}
+
+			if tt.expectVolume != volumeFound {
+				t.Errorf("Expected volume presence: %v, got: %v", tt.expectVolume, volumeFound)
+			}
+
+			if tt.expectVolume && foundVolume != nil {
+				// Verify the secret name
+				if foundVolume.VolumeSource.Secret == nil {
+					t.Fatal("Expected volume to be from Secret, got nil")
+				}
+				if foundVolume.VolumeSource.Secret.SecretName != tt.expectedSecretName {
+					t.Errorf("Expected secret name %q, got %q", tt.expectedSecretName, foundVolume.VolumeSource.Secret.SecretName)
+				}
+			}
+
+			// Check volume mount
+			volumeMountFound := false
+			var foundVolumeMount *corev1.VolumeMount
+			for i := range sts.Spec.Template.Spec.Containers[0].VolumeMounts {
+				if sts.Spec.Template.Spec.Containers[0].VolumeMounts[i].Name == "spire-server-tls" {
+					volumeMountFound = true
+					foundVolumeMount = &sts.Spec.Template.Spec.Containers[0].VolumeMounts[i]
+					break
+				}
+			}
+
+			if tt.expectVolumeMount != volumeMountFound {
+				t.Errorf("Expected volume mount presence: %v, got: %v", tt.expectVolumeMount, volumeMountFound)
+			}
+
+			if tt.expectVolumeMount && foundVolumeMount != nil {
+				// Verify the mount path
+				expectedPath := "/run/spire/server-tls"
+				if foundVolumeMount.MountPath != expectedPath {
+					t.Errorf("Expected mount path %q, got %q", expectedPath, foundVolumeMount.MountPath)
+				}
+				if !foundVolumeMount.ReadOnly {
+					t.Error("Expected volume mount to be read-only")
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
+	tests := []struct {
+		name                string
+		federation          *v1alpha1.FederationConfig
+		expectedVolumeCount int
+		expectedPortCount   int
+		expectTLSVolume     bool
+	}{
+		{
+			name:                "Without federation",
+			federation:          nil,
+			expectedVolumeCount: 5,
+			expectedPortCount:   3, // grpc, healthz, federation (always present)
+			expectTLSVolume:     false,
+		},
+		{
+			name: "With https_spiffe federation",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsSpiffeProfile,
+				},
+			},
+			expectedVolumeCount: 5, // No additional volume needed for https_spiffe
+			expectedPortCount:   3, // grpc, healthz, federation
+			expectTLSVolume:     false,
+		},
+		{
+			name: "With https_web federation and ServingCert",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsWebProfile,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						ServingCert: &v1alpha1.ServingCertConfig{
+							SecretName: "my-cert",
+						},
+					},
+				},
+			},
+			expectedVolumeCount: 6, // One additional volume for TLS cert
+			expectedPortCount:   3,
+			expectTLSVolume:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &v1alpha1.SpireServerSpec{
+				Federation: tt.federation,
+			}
+
+			sts := GenerateSpireServerStatefulSet(config, "test-hash", "test-hash")
+
+			// Check volume count
+			if len(sts.Spec.Template.Spec.Volumes) != tt.expectedVolumeCount {
+				t.Errorf("Expected %d volumes, got %d", tt.expectedVolumeCount, len(sts.Spec.Template.Spec.Volumes))
+			}
+
+			// Check for TLS volume
+			tlsVolumeFound := false
+			for _, vol := range sts.Spec.Template.Spec.Volumes {
+				if vol.Name == "spire-server-tls" {
+					tlsVolumeFound = true
+					break
+				}
+			}
+			if tt.expectTLSVolume != tlsVolumeFound {
+				t.Errorf("Expected TLS volume presence: %v, got: %v", tt.expectTLSVolume, tlsVolumeFound)
+			}
+
+			// Check ports
+			spireServerContainer := findContainerByName(sts.Spec.Template.Spec.Containers, "spire-server")
+			if spireServerContainer == nil {
+				t.Fatal("spire-server container not found")
+			}
+
+			if len(spireServerContainer.Ports) != tt.expectedPortCount {
+				t.Errorf("Expected %d ports, got %d", tt.expectedPortCount, len(spireServerContainer.Ports))
+			}
+
+			// Check for federation port (always present)
+			federationPortFound := false
+			for _, port := range spireServerContainer.Ports {
+				if port.Name == "federation" {
+					federationPortFound = true
+					if port.ContainerPort != 8443 {
+						t.Errorf("Expected federation port to be 8443, got %d", port.ContainerPort)
+					}
+					if port.Protocol != corev1.ProtocolTCP {
+						t.Errorf("Expected federation port protocol to be TCP, got %s", port.Protocol)
+					}
+					break
+				}
+			}
+
+			if !federationPortFound {
+				t.Error("Expected federation port to always be present")
+			}
+		})
 	}
 }

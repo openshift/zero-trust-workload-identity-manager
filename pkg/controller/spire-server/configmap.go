@@ -323,14 +323,14 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 	// Add federation configuration if present (inside server section)
 	if config.Federation != nil {
 		serverSection := configMap["server"].(map[string]interface{})
-		serverSection["federation"] = generateFederationConfig(config.Federation, config.TrustDomain)
+		serverSection["federation"] = generateFederationConfig(config.Federation)
 	}
 
 	return configMap
 }
 
 // generateFederationConfig generates the federation configuration for SPIRE server
-func generateFederationConfig(federation *v1alpha1.FederationConfig, trustDomain string) map[string]interface{} {
+func generateFederationConfig(federation *v1alpha1.FederationConfig) map[string]interface{} {
 	federationConf := map[string]interface{}{
 		"bundle_endpoint": generateBundleEndpointConfig(&federation.BundleEndpoint),
 	}
