@@ -270,8 +270,8 @@ func validateServingCertConfig(servingCert *v1alpha1.ServingCertConfig) error {
 
 	// SecretName is optional - if empty, defaults to service CA certificate (spire-server-serving-cert)
 
-	if servingCert.FileSyncInterval > 0 && (servingCert.FileSyncInterval < 30 || servingCert.FileSyncInterval > 3600) {
-		return fmt.Errorf("fileSyncInterval must be between 30 and 3600 seconds, got %d", servingCert.FileSyncInterval)
+	if servingCert.FileSyncInterval > 0 && (servingCert.FileSyncInterval < 300 || servingCert.FileSyncInterval > 86400) {
+		return fmt.Errorf("fileSyncInterval must be between 300 and 86400 seconds, got %d", servingCert.FileSyncInterval)
 	}
 
 	return nil
