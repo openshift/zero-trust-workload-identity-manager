@@ -1304,9 +1304,9 @@ func TestGetOperatorNamespace(t *testing.T) {
 			expected: "custom-namespace",
 		},
 		{
-			name:     "returns default namespace when environment variable is empty",
+			name:     "returns empty string when environment variable is empty",
 			envValue: "",
-			expected: OperatorNamespace,
+			expected: "",
 		},
 		{
 			name:     "returns namespace with hyphens and special characters",
@@ -1328,11 +1328,11 @@ func TestGetOperatorNamespace(t *testing.T) {
 	}
 
 	// Test when environment variable is not set at all
-	t.Run("returns default namespace when environment variable is not set", func(t *testing.T) {
+	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
 		os.Unsetenv("OPERATOR_NAMESPACE")
 		result := GetOperatorNamespace()
-		if result != OperatorNamespace {
-			t.Errorf("GetOperatorNamespace() = %q, want %q", result, OperatorNamespace)
+		if result != "" {
+			t.Errorf("GetOperatorNamespace() = %q, want empty string", result)
 		}
 	})
 }

@@ -135,5 +135,11 @@ func (r *SpireServerReconciler) reconcileWebhook(ctx context.Context, server *v1
 func getSpireControllerManagerValidatingWebhookConfiguration(customLabels map[string]string) *admissionregistrationv1.ValidatingWebhookConfiguration {
 	webhook := utils.DecodeValidatingWebhookConfigurationByBytes(assets.MustAsset(utils.SpireControllerManagerValidatingWebhookConfigurationAssetName))
 	webhook.Labels = utils.SpireControllerManagerLabels(customLabels)
+	// Update webhook service namespaces dynamically
+	for i := range webhook.Webhooks {
+		if webhook.Webhooks[i].ClientConfig.Service != nil {
+			webhook.Webhooks[i].ClientConfig.Service.Namespace = utils.GetOperatorNamespace()
+		}
+	}
 	return webhook
 }

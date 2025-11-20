@@ -48,13 +48,10 @@ const (
 )
 
 // GetOperatorNamespace returns the namespace where the operator resources should be installed.
-// It reads from the OPERATOR_NAMESPACE environment variable, falling back to the default value
-// defined in OperatorNamespace constant if the environment variable is not set.
+// It reads from the OPERATOR_NAMESPACE environment variable.
+// Returns an empty string if the environment variable is not set.
 func GetOperatorNamespace() string {
-	if ns := os.Getenv("OPERATOR_NAMESPACE"); ns != "" {
-		return ns
-	}
-	return OperatorNamespace
+	return os.Getenv("OPERATOR_NAMESPACE")
 }
 
 func DecodeClusterRoleObjBytes(objBytes []byte) *rbacv1.ClusterRole {
