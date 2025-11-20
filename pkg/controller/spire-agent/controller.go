@@ -46,12 +46,11 @@ const spireAgentDaemonSetSpireAgentConfigHashAnnotationKey = "ztwim.openshift.io
 
 // SpireAgentReconciler reconciles a SpireAgent object
 type SpireAgentReconciler struct {
-	ctrlClient     customClient.CustomCtrlClient
-	ctx            context.Context
-	eventRecorder  record.EventRecorder
-	log            logr.Logger
-	scheme         *runtime.Scheme
-	createOnlyMode bool
+	ctrlClient    customClient.CustomCtrlClient
+	ctx           context.Context
+	eventRecorder record.EventRecorder
+	log           logr.Logger
+	scheme        *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
@@ -66,12 +65,11 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 		return nil, err
 	}
 	return &SpireAgentReconciler{
-		ctrlClient:     c,
-		ctx:            context.Background(),
-		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
-		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
-		scheme:         mgr.GetScheme(),
-		createOnlyMode: false,
+		ctrlClient:    c,
+		ctx:           context.Background(),
+		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
+		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
+		scheme:        mgr.GetScheme(),
 	}, nil
 }
 
@@ -169,11 +167,11 @@ func (r *SpireAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // handleCreateOnlyMode checks and updates the create-only mode status
 func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, statusMgr *status.Manager) bool {
-	createOnlyMode := utils.IsInCreateOnlyMode(agent, &r.createOnlyMode)
+	createOnlyMode := utils.IsInCreateOnlyMode()
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeEnabled,
-			"Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+			"Create-Only Mode is active: Manual updates are not reconciled",
 			metav1.ConditionTrue)
 	} else {
 		existingCondition := apimeta.FindStatusCondition(agent.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)

@@ -19,7 +19,7 @@ import (
 )
 
 // reconcileRoute reconciles the OIDC Discovery Provider Route
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileRoute(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
+func (r *SpireOidcDiscoveryProviderReconciler) reconcileRoute(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
 	if utils.StringToBool(oidc.Spec.ManagedRoute) {
 		// Create Route for OIDC Discovery Provider
 		route, err := generateOIDCDiscoveryProviderRoute(oidc)
@@ -63,20 +63,24 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileRoute(ctx context.Contex
 			r.log.Info("Found conflict in routes, updating route")
 			route.ResourceVersion = existingRoute.ResourceVersion
 
-			err = r.ctrlClient.Update(ctx, route)
-			if err != nil {
-				statusMgr.AddCondition(RouteAvailable, "ManagedRouteUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return err
+			if createOnlyMode {
+				r.log.Info("Skipping Route update due to create-only mode", "Namespace", route.Namespace, "Name", route.Name)
+			} else {
+				err = r.ctrlClient.Update(ctx, route)
+				if err != nil {
+					statusMgr.AddCondition(RouteAvailable, "ManagedRouteUpdateFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return err
+				}
+
+				// Set status when route is actually updated
+				statusMgr.AddCondition(RouteAvailable, "ManagedRouteUpdated",
+					"Spire OIDC Managed Route updated",
+					metav1.ConditionTrue)
+
+				r.log.Info("Updated route", "Namespace", route.Namespace, "Name", route.Name)
 			}
-
-			// Set status when route is actually updated
-			statusMgr.AddCondition(RouteAvailable, "ManagedRouteUpdated",
-				"Spire OIDC Managed Route updated",
-				metav1.ConditionTrue)
-
-			r.log.Info("Updated route", "Namespace", route.Namespace, "Name", route.Name)
 		} else {
 			// Route exists and is up to date - only update status if it's currently not ready
 			existingCondition := apimeta.FindStatusCondition(oidc.Status.ConditionalStatus.Conditions, RouteAvailable)

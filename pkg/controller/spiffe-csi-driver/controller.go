@@ -41,12 +41,11 @@ const (
 
 // SpiffeCsiReconciler reconciles a SpiffeCsi object
 type SpiffeCsiReconciler struct {
-	ctrlClient     customClient.CustomCtrlClient
-	ctx            context.Context
-	eventRecorder  record.EventRecorder
-	log            logr.Logger
-	scheme         *runtime.Scheme
-	createOnlyMode bool
+	ctrlClient    customClient.CustomCtrlClient
+	ctx           context.Context
+	eventRecorder record.EventRecorder
+	log           logr.Logger
+	scheme        *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
@@ -59,12 +58,11 @@ func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 		return nil, err
 	}
 	return &SpiffeCsiReconciler{
-		ctrlClient:     c,
-		ctx:            context.Background(),
-		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
-		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
-		scheme:         mgr.GetScheme(),
-		createOnlyMode: false,
+		ctrlClient:    c,
+		ctx:           context.Background(),
+		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
+		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName),
+		scheme:        mgr.GetScheme(),
 	}, nil
 }
 
@@ -149,11 +147,11 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // handleCreateOnlyMode checks and updates the create-only mode status
 func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager) bool {
-	createOnlyMode := utils.IsInCreateOnlyMode(driver, &r.createOnlyMode)
+	createOnlyMode := utils.IsInCreateOnlyMode()
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeEnabled,
-			"Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+			"Create-Only Mode is active: Manual updates are not reconciled",
 			metav1.ConditionTrue)
 	} else {
 		existingCondition := apimeta.FindStatusCondition(driver.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
