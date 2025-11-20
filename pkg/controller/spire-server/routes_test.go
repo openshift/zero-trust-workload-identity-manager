@@ -35,7 +35,30 @@ func TestGenerateFederationRoute(t *testing.T) {
 			expectExternalCert:     false,
 		},
 		{
-			name: "https_web profile with re-encrypt TLS",
+			name: "https_web profile with ACME uses passthrough TLS",
+			server: &v1alpha1.SpireServer{
+				Spec: v1alpha1.SpireServerSpec{
+					TrustDomain: "example.org",
+					Federation: &v1alpha1.FederationConfig{
+						BundleEndpoint: v1alpha1.BundleEndpointConfig{
+							Profile: v1alpha1.HttpsWebProfile,
+							HttpsWeb: &v1alpha1.HttpsWebConfig{
+								Acme: &v1alpha1.AcmeConfig{
+									DirectoryUrl: "https://acme.example.com/directory",
+									DomainName:   "federation.example.org",
+									Email:        "admin@example.org",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedHost:           "federation.example.org",
+			expectedTLSTermination: routev1.TLSTerminationPassthrough,
+			expectExternalCert:     false,
+		},
+		{
+			name: "https_web profile with ServingCert uses re-encrypt TLS",
 			server: &v1alpha1.SpireServer{
 				Spec: v1alpha1.SpireServerSpec{
 					TrustDomain: "example.org",

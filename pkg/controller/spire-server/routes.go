@@ -53,18 +53,29 @@ func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
 			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
 		}
 	case v1alpha1.HttpsWebProfile:
-		// https_web profile uses re-encrypt TLS
-		route.Spec.TLS = &routev1.TLSConfig{
-			Termination:                   routev1.TLSTerminationReencrypt,
-			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
-		}
-
-		// Set external certificate if provided
+		// https_web profile: termination depends on ACME vs ServingCert
 		if server.Spec.Federation.BundleEndpoint.HttpsWeb != nil &&
-			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert != nil &&
-			server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef != "" {
-			route.Spec.TLS.ExternalCertificate = &routev1.LocalObjectReference{
-				Name: server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef,
+			server.Spec.Federation.BundleEndpoint.HttpsWeb.Acme != nil {
+			// ACME: certificate is managed by SPIRE server, use passthrough
+			// so clients see the ACME-issued cert directly
+			route.Spec.TLS = &routev1.TLSConfig{
+				Termination:                   routev1.TLSTerminationPassthrough,
+				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+			}
+		} else {
+			// ServingCert: use re-encrypt TLS
+			route.Spec.TLS = &routev1.TLSConfig{
+				Termination:                   routev1.TLSTerminationReencrypt,
+				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+			}
+
+			// Set external certificate if provided
+			if server.Spec.Federation.BundleEndpoint.HttpsWeb != nil &&
+				server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert != nil &&
+				server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef != "" {
+				route.Spec.TLS.ExternalCertificate = &routev1.LocalObjectReference{
+					Name: server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef,
+				}
 			}
 		}
 	}
