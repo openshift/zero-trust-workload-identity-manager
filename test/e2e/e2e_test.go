@@ -158,7 +158,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
 					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
 					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
-					CASubject: &operatorv1alpha1.CASubject{
+					CASubject: operatorv1alpha1.CASubject{
 						CommonName:   appDomain,
 						Country:      "US",
 						Organization: "RH",
@@ -168,7 +168,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 						Size:       "1Gi",
 						AccessMode: "ReadWriteOncePod",
 					},
-					Datastore: &operatorv1alpha1.DataStore{
+					Datastore: operatorv1alpha1.DataStore{
 						DatabaseType:     "sqlite3",
 						ConnectionString: "/run/spire/data/datastore.sqlite3",
 						MaxOpenConns:     100,

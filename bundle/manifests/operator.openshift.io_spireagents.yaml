@@ -968,7 +968,10 @@ spec:
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources managed by the API.
+                description: |-
+                  labels to apply to all resources managed by the API.
+                  Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
+                maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
               logFormat:
@@ -1009,7 +1012,9 @@ spec:
                   type: string
                 description: |-
                   nodeSelector is for defining the scheduling criteria using node labels.
+                  Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+                maxProperties: 50
                 type: object
                 x-kubernetes-map-type: atomic
               resources:
@@ -1076,6 +1081,7 @@ spec:
               tolerations:
                 description: |-
                   tolerations are for setting the pod tolerations.
+                  Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
                   description: |-
@@ -1113,6 +1119,7 @@ spec:
                         If the operator is Exists, the value should be empty, otherwise just a regular string.
                       type: string
                   type: object
+                maxItems: 50
                 type: array
                 x-kubernetes-list-type: atomic
               workloadAttestors:
@@ -1153,16 +1160,29 @@ spec:
                     properties:
                       hostCertBasePath:
                         default: /var/lib/kubelet/pki
-                        description: hostCertBasePath specifies the base Path where
-                          kubelet places its certificates.
+                        description: |-
+                          hostCertBasePath specifies the base Path where kubelet places its certificates.
+                          Must be an absolute path without traversal attempts.
+                        maxLength: 256
+                        pattern: ^/([a-zA-Z0-9._-]+/?)*$
                         type: string
                       hostCertFileName:
-                        description: hostCertFileName specifies the file name for
-                          the host certificate.
+                        description: |-
+                          hostCertFileName specifies the file name for the host certificate.
+                          Must be a valid file name without special characters or path traversal.
+                        maxLength: 256
+                        pattern: ^[a-zA-Z0-9._-]+$
                         type: string
                       type:
-                        description: type specifies the type of verification to be
-                          used.
+                        default: auto
+                        description: |-
+                          type specifies the type of verification to be used.
+                          Valid values are: auto, hostCert, apiServerCA, skip.
+                        enum:
+                        - auto
+                        - hostCert
+                        - apiServerCA
+                        - skip
                         type: string
                     type: object
                 type: object

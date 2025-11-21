@@ -967,20 +967,34 @@ spec:
                 type: object
               agentSocketName:
                 default: spire-agent.sock
-                description: agentSocketName is the name of the agent socket.
+                description: |-
+                  agentSocketName is the name of the agent socket.
+                  Must be a relative file name (no path traversal or absolute paths).
+                maxLength: 256
+                pattern: ^[a-zA-Z0-9._-]+$
                 type: string
               externalSecretRef:
                 description: |-
                   externalSecretRef is a reference to an externally managed secret that
-                  contains the TLS certificate for the oidc-discovery-provider Route host
+                  contains the TLS certificate for the oidc-discovery-provider Route host.
+                  Must be a valid Kubernetes secret reference name.
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
                 type: string
               jwtIssuer:
-                description: jwtIssuer is the JWT issuer url.
+                description: |-
+                  jwtIssuer is the JWT issuer url.
+                  Must be a valid HTTPS or HTTP URL.
+                maxLength: 512
+                pattern: ^(?i)https?://[^\s?#]+$
                 type: string
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources managed by the API.
+                description: |-
+                  labels to apply to all resources managed by the API.
+                  Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
+                maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
               logFormat:
@@ -1019,12 +1033,18 @@ spec:
                   type: string
                 description: |-
                   nodeSelector is for defining the scheduling criteria using node labels.
+                  Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+                maxProperties: 50
                 type: object
                 x-kubernetes-map-type: atomic
               replicaCount:
                 default: 1
-                description: replicaCount is the number of replicas for the OIDC provider.
+                description: |-
+                  replicaCount is the number of replicas for the OIDC provider.
+                  Must be between 1 and 5.
+                maximum: 5
+                minimum: 1
                 type: integer
               resources:
                 description: |-
@@ -1090,6 +1110,7 @@ spec:
               tolerations:
                 description: |-
                   tolerations are for setting the pod tolerations.
+                  Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
                   description: |-
@@ -1127,6 +1148,7 @@ spec:
                         If the operator is Exists, the value should be empty, otherwise just a regular string.
                       type: string
                   type: object
+                maxItems: 50
                 type: array
                 x-kubernetes-list-type: atomic
             required:

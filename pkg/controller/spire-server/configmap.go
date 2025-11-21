@@ -199,12 +199,6 @@ func generateSpireServerConfigMap(config *v1alpha1.SpireServerSpec, ztwim *v1alp
 	if ztwim.Spec.BundleConfigMap == "" {
 		return nil, fmt.Errorf("bundle configmap is empty")
 	}
-	if config.Datastore == nil {
-		return nil, fmt.Errorf("datastore configuration is required")
-	}
-	if config.CASubject == nil {
-		return nil, fmt.Errorf("CASubject is empty")
-	}
 	confMap := generateServerConfMap(config, ztwim)
 	confJSON, err := marshalToJSON(confMap)
 	if err != nil {
