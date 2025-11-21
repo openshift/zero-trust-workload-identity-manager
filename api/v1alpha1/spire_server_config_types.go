@@ -39,20 +39,31 @@ type SpireServerSpec struct {
 	LogFormat string `json:"logFormat,omitempty"`
 
 	// trustDomain to be used for the SPIFFE identifiers
+	// Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$`
 	TrustDomain string `json:"trustDomain,omitempty"`
 
 	// clusterName will have the cluster name required to configure spire server.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	ClusterName string `json:"clusterName,omitempty"`
 
 	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
+	// Must be a valid Kubernetes name.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
 	// +kubebuilder:default:=spire-bundle
 	BundleConfigMap string `json:"bundleConfigMap"`
 
 	// jwtIssuer is the JWT issuer url.
+	// Must be a valid HTTPS or HTTP URL.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^https?://`
 	JwtIssuer string `json:"jwtIssuer"`
 
 	// caValidity is the validity period (TTL) for the SPIRE Server's own CA certificate.
@@ -148,28 +159,39 @@ type DataStore struct {
 	DatabaseType string `json:"databaseType"`
 
 	// connectionString contain connection credentials required for spire server Datastore.
+	// Must not be empty and should contain valid connection parameters for the specified database type.
+	// +kubebuilder:validation:MaxLength=1024
 	// +kubebuilder:default:=/run/spire/data/datastore.sqlite3
 	ConnectionString string `json:"connectionString"`
 
 	// options specifies extra DB options.
+	// Maximum 32 options allowed.
 	// +kubebuilder:validation:optional
+	// +kubebuilder:validation:MaxItems=32
 	// +kubebuilder:default:={}
 	Options []string `json:"options,omitempty"`
 
 	// MySQL TLS options.
+	// Paths must be absolute and not contain directory traversal attempts.
+	// +kubebuilder:validation:MaxLength=256
 	// +kubebuilder:default:=""
-	RootCAPath     string `json:"rootCAPath,omitempty"`
+	RootCAPath string `json:"rootCAPath,omitempty"`
+	// +kubebuilder:validation:MaxLength=256
 	ClientCertPath string `json:"clientCertPath,omitempty"`
-	ClientKeyPath  string `json:"clientKeyPath,omitempty"`
+	// +kubebuilder:validation:MaxLength=256
+	ClientKeyPath string `json:"clientKeyPath,omitempty"`
 
 	// DB pool config
 	// maxOpenConns will specify the maximum connections for the DB pool.
-	// +kubebuilder:validation:Minimum=0
+	// Must be between 1 and 10000.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=100
 	MaxOpenConns int `json:"maxOpenConns"`
 
 	// maxIdleConns specifies the maximum idle connection to be configured.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=2
 	MaxIdleConns int `json:"maxIdleConns"`
 
@@ -204,15 +226,19 @@ type KeyManager struct {
 // CASubject defines the subject information for the Spire CA.
 type CASubject struct {
 	// country specifies the country for the CA.
+	// ISO 3166-1 alpha-2 country code (2 characters).
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=2
 	Country string `json:"country,omitempty"`
 
 	// organization specifies the organization for the CA.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=64
 	Organization string `json:"organization,omitempty"`
 
 	// commonName specifies the common name for the CA.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=255
 	CommonName string `json:"commonName,omitempty"`
 }
 

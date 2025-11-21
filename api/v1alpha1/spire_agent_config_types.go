@@ -40,15 +40,23 @@ type SpireAgentSpec struct {
 	LogFormat string `json:"logFormat,omitempty"`
 
 	// trustDomain to be used for the SPIFFE identifiers
+	// Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$`
 	TrustDomain string `json:"trustDomain,omitempty"`
 
 	// clusterName will have the cluster name required to configure spire agent.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	ClusterName string `json:"clusterName,omitempty"`
 
 	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
+	// Must be a valid Kubernetes name.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
 	// +kubebuilder:default:=spire-bundle
 	BundleConfigMap string `json:"bundleConfigMap"`
 
@@ -105,16 +113,24 @@ type WorkloadAttestors struct {
 
 type WorkloadAttestorsVerification struct {
 	// type specifies the type of verification to be used.
-	// +kubebuilder: default:="skip"
+	// Valid values are: auto, hostCert, apiServerCA, skip.
+	// +kubebuilder:validation:Enum=auto;hostCert;apiServerCA;skip
+	// +kubebuilder:default:="skip"
 	Type string `json:"type,omitempty"`
 
 	// hostCertBasePath specifies the base Path where kubelet places its certificates.
+	// Must be an absolute path without traversal attempts.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^/`
 	// +kubebuilder:default:="/var/lib/kubelet/pki"
 	HostCertBasePath string `json:"hostCertBasePath,omitempty"`
 
 	// hostCertFileName specifies the file name for the host certificate.
+	// Must be a valid file name without special characters or path traversal.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._-]+$`
 	HostCertFileName string `json:"hostCertFileName,omitempty"`
 }
 
