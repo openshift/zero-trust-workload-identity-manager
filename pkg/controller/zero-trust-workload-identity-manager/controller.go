@@ -271,11 +271,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 	}()
 
-	// Validate common configuration
-	if err := r.validateCommonConfig(&config, statusMgr); err != nil {
-		return ctrl.Result{}, nil
-	}
-
 	// Aggregate status from all operand CRs
 	result := r.aggregateOperandStatus(ctx)
 	config.Status.Operands = result.operandStatuses
@@ -619,55 +614,5 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.M
 	if err != nil {
 		return err
 	}
-	return nil
-}
-
-// validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
-func (r *ZeroTrustWorkloadIdentityManagerReconciler) validateCommonConfig(config *v1alpha1.ZeroTrustWorkloadIdentityManager, statusMgr *status.Manager) error {
-	// Validate affinity
-	if err := utils.ValidateCommonConfigAffinity(config.Spec.Affinity); err != nil {
-		r.log.Error(err, "Affinity validation failed", "name", config.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidAffinity",
-			fmt.Sprintf("Affinity validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("ZeroTrustWorkloadIdentityManager/%s affinity validation failed: %w", config.Name, err)
-	}
-
-	// Validate tolerations
-	if err := utils.ValidateCommonConfigTolerations(config.Spec.Tolerations); err != nil {
-		r.log.Error(err, "Tolerations validation failed", "name", config.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidTolerations",
-			fmt.Sprintf("Tolerations validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("ZeroTrustWorkloadIdentityManager/%s tolerations validation failed: %w", config.Name, err)
-	}
-
-	// Validate node selector
-	if err := utils.ValidateCommonConfigNodeSelector(config.Spec.NodeSelector); err != nil {
-		r.log.Error(err, "NodeSelector validation failed", "name", config.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidNodeSelector",
-			fmt.Sprintf("NodeSelector validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("ZeroTrustWorkloadIdentityManager/%s node selector validation failed: %w", config.Name, err)
-	}
-
-	// Validate resources
-	if err := utils.ValidateCommonConfigResources(config.Spec.Resources); err != nil {
-		r.log.Error(err, "Resources validation failed", "name", config.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidResources",
-			fmt.Sprintf("Resources validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("ZeroTrustWorkloadIdentityManager/%s resources validation failed: %w", config.Name, err)
-	}
-
-	// Validate labels
-	if err := utils.ValidateCommonConfigLabels(config.Spec.Labels); err != nil {
-		r.log.Error(err, "Labels validation failed", "name", config.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidLabels",
-			fmt.Sprintf("Labels validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("ZeroTrustWorkloadIdentityManager/%s labels validation failed: %w", config.Name, err)
-	}
-
 	return nil
 }

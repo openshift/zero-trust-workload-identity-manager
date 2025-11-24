@@ -192,60 +192,18 @@ func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, 
 }
 
 // validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
-// using individual validation functions from the utils package. This approach provides:
-//   - Early validation before any resources are created
-//   - Specific error messages for each field (e.g., "InvalidAffinity" vs generic "InvalidCommonConfig")
-//   - Better user experience by identifying exactly which field has validation errors
-//   - Kubernetes-compliant validation (e.g., affinity weights must be 1-100, resource limits >= requests)
-//
-// Returns an error if any validation fails, which stops reconciliation and sets the appropriate status condition.
 func (r *SpireAgentReconciler) validateCommonConfig(agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
-	// Validate affinity
-	if err := utils.ValidateCommonConfigAffinity(agent.Spec.Affinity); err != nil {
-		r.log.Error(err, "Affinity validation failed", "name", agent.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidAffinity",
-			fmt.Sprintf("Affinity validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireAgent/%s affinity validation failed: %w", agent.Name, err)
-	}
-
-	// Validate tolerations
-	if err := utils.ValidateCommonConfigTolerations(agent.Spec.Tolerations); err != nil {
-		r.log.Error(err, "Tolerations validation failed", "name", agent.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidTolerations",
-			fmt.Sprintf("Tolerations validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireAgent/%s tolerations validation failed: %w", agent.Name, err)
-	}
-
-	// Validate node selector
-	if err := utils.ValidateCommonConfigNodeSelector(agent.Spec.NodeSelector); err != nil {
-		r.log.Error(err, "NodeSelector validation failed", "name", agent.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidNodeSelector",
-			fmt.Sprintf("NodeSelector validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireAgent/%s node selector validation failed: %w", agent.Name, err)
-	}
-
-	// Validate resources
-	if err := utils.ValidateCommonConfigResources(agent.Spec.Resources); err != nil {
-		r.log.Error(err, "Resources validation failed", "name", agent.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidResources",
-			fmt.Sprintf("Resources validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireAgent/%s resources validation failed: %w", agent.Name, err)
-	}
-
-	// Validate labels
-	if err := utils.ValidateCommonConfigLabels(agent.Spec.Labels); err != nil {
-		r.log.Error(err, "Labels validation failed", "name", agent.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidLabels",
-			fmt.Sprintf("Labels validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireAgent/%s labels validation failed: %w", agent.Name, err)
-	}
-
-	return nil
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpireAgent,
+		agent.Name,
+		agent.Spec.Affinity,
+		agent.Spec.Tolerations,
+		agent.Spec.NodeSelector,
+		agent.Spec.Resources,
+		agent.Spec.Labels,
+	)
 }
 
 // needsUpdate returns true if DaemonSet needs to be updated based on config checksum

@@ -173,50 +173,15 @@ func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDri
 
 // validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
 func (r *SpiffeCsiReconciler) validateCommonConfig(driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager) error {
-	// Validate affinity
-	if err := utils.ValidateCommonConfigAffinity(driver.Spec.Affinity); err != nil {
-		r.log.Error(err, "Affinity validation failed", "name", driver.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidAffinity",
-			fmt.Sprintf("Affinity validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpiffeCSIDriver/%s affinity validation failed: %w", driver.Name, err)
-	}
-
-	// Validate tolerations
-	if err := utils.ValidateCommonConfigTolerations(driver.Spec.Tolerations); err != nil {
-		r.log.Error(err, "Tolerations validation failed", "name", driver.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidTolerations",
-			fmt.Sprintf("Tolerations validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpiffeCSIDriver/%s tolerations validation failed: %w", driver.Name, err)
-	}
-
-	// Validate node selector
-	if err := utils.ValidateCommonConfigNodeSelector(driver.Spec.NodeSelector); err != nil {
-		r.log.Error(err, "NodeSelector validation failed", "name", driver.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidNodeSelector",
-			fmt.Sprintf("NodeSelector validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpiffeCSIDriver/%s node selector validation failed: %w", driver.Name, err)
-	}
-
-	// Validate resources
-	if err := utils.ValidateCommonConfigResources(driver.Spec.Resources); err != nil {
-		r.log.Error(err, "Resources validation failed", "name", driver.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidResources",
-			fmt.Sprintf("Resources validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpiffeCSIDriver/%s resources validation failed: %w", driver.Name, err)
-	}
-
-	// Validate labels
-	if err := utils.ValidateCommonConfigLabels(driver.Spec.Labels); err != nil {
-		r.log.Error(err, "Labels validation failed", "name", driver.Name)
-		statusMgr.AddCondition("ConfigurationValid", "InvalidLabels",
-			fmt.Sprintf("Labels validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpiffeCSIDriver/%s labels validation failed: %w", driver.Name, err)
-	}
-
-	return nil
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpiffeCSIDriver,
+		driver.Name,
+		driver.Spec.Affinity,
+		driver.Spec.Tolerations,
+		driver.Spec.NodeSelector,
+		driver.Spec.Resources,
+		driver.Spec.Labels,
+	)
 }

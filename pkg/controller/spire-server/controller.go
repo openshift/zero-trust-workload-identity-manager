@@ -247,52 +247,17 @@ func (r *SpireServerReconciler) validateConfiguration(server *v1alpha1.SpireServ
 
 // validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
 func (r *SpireServerReconciler) validateCommonConfig(server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
-	// Validate affinity
-	if err := utils.ValidateCommonConfigAffinity(server.Spec.Affinity); err != nil {
-		r.log.Error(err, "Affinity validation failed", "name", server.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidAffinity",
-			fmt.Sprintf("Affinity validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireServer/%s affinity validation failed: %w", server.Name, err)
-	}
-
-	// Validate tolerations
-	if err := utils.ValidateCommonConfigTolerations(server.Spec.Tolerations); err != nil {
-		r.log.Error(err, "Tolerations validation failed", "name", server.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidTolerations",
-			fmt.Sprintf("Tolerations validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireServer/%s tolerations validation failed: %w", server.Name, err)
-	}
-
-	// Validate node selector
-	if err := utils.ValidateCommonConfigNodeSelector(server.Spec.NodeSelector); err != nil {
-		r.log.Error(err, "NodeSelector validation failed", "name", server.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidNodeSelector",
-			fmt.Sprintf("NodeSelector validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireServer/%s node selector validation failed: %w", server.Name, err)
-	}
-
-	// Validate resources
-	if err := utils.ValidateCommonConfigResources(server.Spec.Resources); err != nil {
-		r.log.Error(err, "Resources validation failed", "name", server.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidResources",
-			fmt.Sprintf("Resources validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireServer/%s resources validation failed: %w", server.Name, err)
-	}
-
-	// Validate labels
-	if err := utils.ValidateCommonConfigLabels(server.Spec.Labels); err != nil {
-		r.log.Error(err, "Labels validation failed", "name", server.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidLabels",
-			fmt.Sprintf("Labels validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireServer/%s labels validation failed: %w", server.Name, err)
-	}
-
-	return nil
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpireServer,
+		server.Name,
+		server.Spec.Affinity,
+		server.Spec.Tolerations,
+		server.Spec.NodeSelector,
+		server.Spec.Resources,
+		server.Spec.Labels,
+	)
 }
 
 // needsUpdate returns true if StatefulSet needs to be updated based on config checksum

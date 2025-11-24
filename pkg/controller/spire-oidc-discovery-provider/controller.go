@@ -219,52 +219,17 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alp
 
 // validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
 func (r *SpireOidcDiscoveryProviderReconciler) validateCommonConfig(oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
-	// Validate affinity
-	if err := utils.ValidateCommonConfigAffinity(oidc.Spec.Affinity); err != nil {
-		r.log.Error(err, "Affinity validation failed", "name", oidc.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidAffinity",
-			fmt.Sprintf("Affinity validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireOIDCDiscoveryProvider/%s affinity validation failed: %w", oidc.Name, err)
-	}
-
-	// Validate tolerations
-	if err := utils.ValidateCommonConfigTolerations(oidc.Spec.Tolerations); err != nil {
-		r.log.Error(err, "Tolerations validation failed", "name", oidc.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidTolerations",
-			fmt.Sprintf("Tolerations validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireOIDCDiscoveryProvider/%s tolerations validation failed: %w", oidc.Name, err)
-	}
-
-	// Validate node selector
-	if err := utils.ValidateCommonConfigNodeSelector(oidc.Spec.NodeSelector); err != nil {
-		r.log.Error(err, "NodeSelector validation failed", "name", oidc.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidNodeSelector",
-			fmt.Sprintf("NodeSelector validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireOIDCDiscoveryProvider/%s node selector validation failed: %w", oidc.Name, err)
-	}
-
-	// Validate resources
-	if err := utils.ValidateCommonConfigResources(oidc.Spec.Resources); err != nil {
-		r.log.Error(err, "Resources validation failed", "name", oidc.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidResources",
-			fmt.Sprintf("Resources validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireOIDCDiscoveryProvider/%s resources validation failed: %w", oidc.Name, err)
-	}
-
-	// Validate labels
-	if err := utils.ValidateCommonConfigLabels(oidc.Spec.Labels); err != nil {
-		r.log.Error(err, "Labels validation failed", "name", oidc.Name)
-		statusMgr.AddCondition(ConfigurationValid, "InvalidLabels",
-			fmt.Sprintf("Labels validation failed: %v", err),
-			metav1.ConditionFalse)
-		return fmt.Errorf("SpireOIDCDiscoveryProvider/%s labels validation failed: %w", oidc.Name, err)
-	}
-
-	return nil
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpireOIDCDiscoveryProvider,
+		oidc.Name,
+		oidc.Spec.Affinity,
+		oidc.Spec.Tolerations,
+		oidc.Spec.NodeSelector,
+		oidc.Spec.Resources,
+		oidc.Spec.Labels,
+	)
 }
 
 // needsUpdate returns true if Deployment needs to be updated based on config checksum

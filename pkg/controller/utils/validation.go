@@ -20,9 +20,112 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// StatusManager is an interface that defines methods needed for status management
+type StatusManager interface {
+	AddCondition(conditionType, reason, message string, status metav1.ConditionStatus)
+}
+
+// ValidationResult represents the result of a validation operation
+type ValidationResult struct {
+	FieldName      string
+	ConditionType  string
+	ConditionValue string
+	ErrorMessage   string
+	Error          error
+}
+
+// ValidateAndUpdateStatus validates common configuration and updates status manager
+func ValidateAndUpdateStatus(
+	logger logr.Logger,
+	statusMgr StatusManager,
+	resourceKind string,
+	resourceName string,
+	affinity *corev1.Affinity,
+	tolerations []*corev1.Toleration,
+	nodeSelector map[string]string,
+	resources *corev1.ResourceRequirements,
+	labels map[string]string,
+) error {
+	validationResults := ValidateCommonConfigWithDetails(affinity, tolerations, nodeSelector, resources, labels)
+
+	if len(validationResults) > 0 {
+		// Log and add status conditions for each validation failure
+		for _, result := range validationResults {
+			logger.Error(result.Error, fmt.Sprintf("%s validation failed", result.FieldName), "name", resourceName)
+			statusMgr.AddCondition(result.ConditionType, result.ConditionValue, result.ErrorMessage, metav1.ConditionFalse)
+		}
+		return fmt.Errorf("%s/%s validation failed: %w", resourceKind, resourceName, validationResults[0].Error)
+	}
+
+	return nil
+}
+
+// ValidateCommonConfigWithDetails validates common configuration fields and returns detailed error information
+func ValidateCommonConfigWithDetails(affinity *corev1.Affinity, tolerations []*corev1.Toleration, nodeSelector map[string]string, resources *corev1.ResourceRequirements, labels map[string]string) []ValidationResult {
+	var results []ValidationResult
+
+	// Validate affinity
+	if err := ValidateCommonConfigAffinity(affinity); err != nil {
+		results = append(results, ValidationResult{
+			FieldName:      "affinity",
+			ConditionType:  ConditionTypeConfigurationValid,
+			ConditionValue: ConditionReasonInvalidAffinity,
+			ErrorMessage:   fmt.Sprintf("Affinity validation failed: %v", err),
+			Error:          err,
+		})
+	}
+
+	// Validate tolerations
+	if err := ValidateCommonConfigTolerations(tolerations); err != nil {
+		results = append(results, ValidationResult{
+			FieldName:      "tolerations",
+			ConditionType:  ConditionTypeConfigurationValid,
+			ConditionValue: ConditionReasonInvalidTolerations,
+			ErrorMessage:   fmt.Sprintf("Tolerations validation failed: %v", err),
+			Error:          err,
+		})
+	}
+
+	// Validate node selector
+	if err := ValidateCommonConfigNodeSelector(nodeSelector); err != nil {
+		results = append(results, ValidationResult{
+			FieldName:      "nodeSelector",
+			ConditionType:  ConditionTypeConfigurationValid,
+			ConditionValue: ConditionReasonInvalidNodeSelector,
+			ErrorMessage:   fmt.Sprintf("NodeSelector validation failed: %v", err),
+			Error:          err,
+		})
+	}
+
+	// Validate resources
+	if err := ValidateCommonConfigResources(resources); err != nil {
+		results = append(results, ValidationResult{
+			FieldName:      "resources",
+			ConditionType:  ConditionTypeConfigurationValid,
+			ConditionValue: ConditionReasonInvalidResources,
+			ErrorMessage:   fmt.Sprintf("Resources validation failed: %v", err),
+			Error:          err,
+		})
+	}
+
+	// Validate labels
+	if err := ValidateCommonConfigLabels(labels); err != nil {
+		results = append(results, ValidationResult{
+			FieldName:      "labels",
+			ConditionType:  ConditionTypeConfigurationValid,
+			ConditionValue: ConditionReasonInvalidLabels,
+			ErrorMessage:   fmt.Sprintf("Labels validation failed: %v", err),
+			Error:          err,
+		})
+	}
+
+	return results
+}
 
 // ValidateCommonConfigAffinity validates the affinity configuration
 // This includes node affinity, pod affinity, and pod anti-affinity
@@ -470,4 +573,3 @@ func ValidateCommonConfig(affinity *corev1.Affinity, tolerations []*corev1.Toler
 
 	return nil
 }
-
