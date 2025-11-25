@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-11-18T05:52:41Z"
+    createdAt: "2025-11-25T13:41:44Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -209,6 +209,22 @@ spec:
           - patch
           - update
         - apiGroups:
+          - operators.coreos.com
+          resources:
+          - operatorconditions
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - operators.coreos.com
+          resources:
+          - operatorconditions/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
           - rbac.authorization.k8s.io
           resources:
           - clusterrolebindings
@@ -340,6 +356,10 @@ spec:
                 command:
                 - /usr/bin/zero-trust-workload-identity-manager
                 env:
+                - name: OPERATOR_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.operatorNamespace']
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
                 - name: RELATED_IMAGE_SPIRE_SERVER
@@ -362,6 +382,8 @@ spec:
                   value: :8443
                 - name: METRICS_SECURE
                   value: "true"
+                - name: OPERATOR_VERSION
+                  value: 0.2.0
                 image: openshift.io/zero-trust-workload-identity-manager:latest
                 livenessProbe:
                   httpGet:

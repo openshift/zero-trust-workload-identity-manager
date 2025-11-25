@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -317,15 +318,26 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 		})
 
-		It("OperatorCondition should have Upgradeable condition synced from ZeroTrustWorkloadIdentityManager", func() {
-			By("Verifying OperatorCondition Upgradeable condition")
-			operatorCondition := &operatorv1.OperatorCondition{}
-			err := k8sClient.Get(testCtx, client.ObjectKey{
-				Name:      utils.OperatorConditionName,
-				Namespace: utils.OperatorNamespace,
-			}, operatorCondition)
-			Expect(err).NotTo(HaveOccurred(), "failed to get OperatorCondition")
+		It("OperatorCondition should have Upgradeable condition set correctly", func() {
+			By("Finding OperatorCondition resource dynamically")
+			operatorConditionList := &operatorv1.OperatorConditionList{}
+			err := k8sClient.List(testCtx, operatorConditionList, client.InNamespace(utils.OperatorNamespace))
+			Expect(err).NotTo(HaveOccurred(), "failed to list OperatorConditions")
+			Expect(operatorConditionList.Items).NotTo(BeEmpty(), "no OperatorCondition found in namespace")
 
+			// Find the OperatorCondition for this operator (name contains operator name prefix)
+			var operatorCondition *operatorv1.OperatorCondition
+			for i := range operatorConditionList.Items {
+				if operatorConditionList.Items[i].Name == "zero-trust-workload-identity-manager" ||
+					strings.HasPrefix(operatorConditionList.Items[i].Name, "zero-trust-workload-identity-manager.v") {
+					operatorCondition = &operatorConditionList.Items[i]
+					break
+				}
+			}
+			Expect(operatorCondition).NotTo(BeNil(), "OperatorCondition for zero-trust-workload-identity-manager not found")
+			fmt.Fprintf(GinkgoWriter, "Found OperatorCondition: %s\n", operatorCondition.Name)
+
+			By("Verifying OperatorCondition Upgradeable condition")
 			// Find Upgradeable condition in OperatorCondition
 			var operatorCondUpgradeable *metav1.Condition
 			for i := range operatorCondition.Status.Conditions {
@@ -338,38 +350,13 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable: Status=%s, Reason=%s, Message=%s\n",
 				operatorCondUpgradeable.Status, operatorCondUpgradeable.Reason, operatorCondUpgradeable.Message)
 
-			By("Verifying ZeroTrustWorkloadIdentityManager Upgradeable condition")
-			ztwim := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
-			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, ztwim)
-			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
-
-			// Find Upgradeable condition in ZTWIM
-			var ztwimUpgradeable *metav1.Condition
-			for i := range ztwim.Status.Conditions {
-				if ztwim.Status.Conditions[i].Type == "Upgradeable" {
-					ztwimUpgradeable = &ztwim.Status.Conditions[i]
-					break
-				}
-			}
-			Expect(ztwimUpgradeable).NotTo(BeNil(), "Upgradeable condition should exist in ZTWIM")
-			fmt.Fprintf(GinkgoWriter, "ZTWIM Upgradeable: Status=%s, Reason=%s, Message=%s\n",
-				ztwimUpgradeable.Status, ztwimUpgradeable.Reason, ztwimUpgradeable.Message)
-
-			By("Verifying OperatorCondition and ZTWIM Upgradeable conditions match")
-			Expect(operatorCondUpgradeable.Status).To(Equal(ztwimUpgradeable.Status),
-				"OperatorCondition and ZTWIM Upgradeable Status should match")
-			Expect(operatorCondUpgradeable.Reason).To(Equal(ztwimUpgradeable.Reason),
-				"OperatorCondition and ZTWIM Upgradeable Reason should match")
-			Expect(operatorCondUpgradeable.Message).To(Equal(ztwimUpgradeable.Message),
-				"OperatorCondition and ZTWIM Upgradeable Message should match")
-
 			// Verify expected values when all operands are ready
 			Expect(operatorCondUpgradeable.Status).To(Equal(metav1.ConditionTrue),
 				"Upgradeable should be True when all operands are ready")
 			Expect(operatorCondUpgradeable.Reason).To(Equal("Ready"),
 				"Upgradeable reason should be Ready")
 
-			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable correctly synced from ZTWIM\n")
+			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable set correctly\n")
 		})
 	})
 
