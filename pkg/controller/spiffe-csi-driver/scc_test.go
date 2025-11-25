@@ -1,7 +1,6 @@
 package spiffe_csi_driver
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -205,8 +204,9 @@ func testFSGroupStrategy(t *testing.T, strategy securityv1.FSGroupStrategyOption
 }
 
 func testUsers(t *testing.T, users []string) {
+	csiServiceAccountUser := "system:serviceaccount:" + utils.GetOperatorNamespace() + ":spire-spiffe-csi-driver"
 	expectedUsers := []string{
-		fmt.Sprintf("system:serviceaccount:%s:spire-spiffe-csi-driver", utils.GetOperatorNamespace()),
+		csiServiceAccountUser,
 	}
 
 	if len(users) != len(expectedUsers) {

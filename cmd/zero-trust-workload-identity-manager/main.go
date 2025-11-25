@@ -119,7 +119,7 @@ func main() {
 	// Validate that OPERATOR_NAMESPACE is set
 	operatorNamespace := utils.GetOperatorNamespace()
 	if operatorNamespace == "" {
-		setupLog.Error(nil, "OPERATOR_NAMESPACE environment variable is not set - operator cannot start")
+		setupLog.Error(nil, "failed to start the operator, operator namespace is empty")
 		os.Exit(1)
 	}
 	setupLog.Info("Operator namespace configured", "namespace", operatorNamespace)

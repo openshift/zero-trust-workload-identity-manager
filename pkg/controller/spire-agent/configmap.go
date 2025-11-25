@@ -78,13 +78,14 @@ func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1
 }
 
 func generateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
+	spireServerAddress := "spire-server." + utils.GetOperatorNamespace()
 	agentConf := map[string]interface{}{
 		"agent": map[string]interface{}{
 			"data_dir":          "/var/lib/spire",
 			"log_level":         utils.GetLogLevelFromString(cfg.Spec.LogLevel),
 			"log_format":        utils.GetLogFormatFromString(cfg.Spec.LogFormat),
 			"retry_bootstrap":   true,
-			"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
+			"server_address":    spireServerAddress,
 			"server_port":       "443",
 			"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 			"trust_bundle_path": "/run/spire/bundle/bundle.crt",
