@@ -47,6 +47,7 @@ import (
 	spireAgentController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-agent"
 	spireOIDCDiscoveryProviderController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-oidc-discovery-provider"
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	ztwimController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/zero-trust-workload-identity-manager"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 
@@ -114,6 +115,14 @@ func main() {
 
 	logConfig := textlogger.NewConfig(textlogger.Verbosity(logLevel))
 	ctrl.SetLogger(textlogger.NewLogger(logConfig))
+
+	// Validate that OPERATOR_NAMESPACE is set
+	operatorNamespace := utils.GetOperatorNamespace()
+	if operatorNamespace == "" {
+		setupLog.Error(nil, "failed to start the operator, operator namespace is empty")
+		os.Exit(1)
+	}
+	setupLog.Info("Operator namespace configured", "namespace", operatorNamespace)
 
 	if !enableHTTP2 {
 		// if the enable-http2 flag is false (the default), http/2 should be disabled

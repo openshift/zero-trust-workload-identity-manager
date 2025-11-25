@@ -90,7 +90,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    labels,
 		},
 		Spec: appsv1.DeploymentSpec{

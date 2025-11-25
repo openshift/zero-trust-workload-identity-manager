@@ -20,6 +20,7 @@ import (
 
 // generateSpiffeCSIDriverSCC returns a pointer to the desired SCC object
 func generateSpiffeCSIDriverSCC(customLabels map[string]string) *securityv1.SecurityContextConstraints {
+	csiServiceAccountUser := "system:serviceaccount:" + utils.GetOperatorNamespace() + ":spire-spiffe-csi-driver"
 	return &securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "spire-spiffe-csi-driver",
@@ -39,7 +40,7 @@ func generateSpiffeCSIDriverSCC(customLabels map[string]string) *securityv1.Secu
 			Type: securityv1.FSGroupStrategyMustRunAs,
 		},
 		Users: []string{
-			"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-csi-driver",
+			csiServiceAccountUser,
 		},
 		Volumes: []securityv1.FSType{
 			securityv1.FSTypeConfigMap,

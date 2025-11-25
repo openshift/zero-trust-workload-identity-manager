@@ -179,5 +179,9 @@ func getSpireAgentClusterRole(customLabels map[string]string) *rbacv1.ClusterRol
 func getSpireAgentClusterRoleBinding(customLabels map[string]string) *rbacv1.ClusterRoleBinding {
 	crb := utils.DecodeClusterRoleBindingObjBytes(assets.MustAsset(utils.SpireAgentClusterRoleBindingAssetName))
 	crb.Labels = utils.SpireAgentLabels(customLabels)
+	// Update the subject namespace
+	for i := range crb.Subjects {
+		crb.Subjects[i].Namespace = utils.GetOperatorNamespace()
+	}
 	return crb
 }

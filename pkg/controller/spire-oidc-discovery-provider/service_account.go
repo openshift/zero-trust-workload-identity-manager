@@ -99,5 +99,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileServiceAccount(ctx conte
 func getSpireOIDCDiscoveryProviderServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireOIDCDiscoveryProviderServiceAccountAssetName))
 	sa.Labels = utils.SpireOIDCDiscoveryProviderLabels(customLabels)
+	sa.Namespace = utils.GetOperatorNamespace()
 	return sa
 }

@@ -70,6 +70,10 @@ spec:
             name: http
             protocol: TCP
         env:
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['olm.operatorNamespace']
         - name: OPERATOR_NAME
           value: zero-trust-workload-identity-manager
         - name: RELATED_IMAGE_SPIRE_SERVER

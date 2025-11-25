@@ -162,7 +162,7 @@ func generateSpireIODCDiscoveryProviderSpiffeID(customLabels map[string]string) 
 						Key:      "kubernetes.io/metadata.name",
 						Operator: metav1.LabelSelectorOpIn,
 						Values: []string{
-							"zero-trust-workload-identity-manager",
+							utils.GetOperatorNamespace(),
 						},
 					},
 				},
@@ -189,7 +189,7 @@ func generateDefaultFallbackClusterSPIFFEID(customLabels map[string]string) *spi
 						Key:      "kubernetes.io/metadata.name",
 						Operator: metav1.LabelSelectorOpNotIn,
 						Values: []string{
-							"zero-trust-workload-identity-manager",
+							utils.GetOperatorNamespace(),
 						},
 					},
 				},

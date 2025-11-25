@@ -24,8 +24,8 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 		t.Errorf("Expected name 'spire-spiffe-csi-driver', got '%s'", daemonSet.Name)
 	}
 
-	if daemonSet.Namespace != utils.OperatorNamespace {
-		t.Errorf("Expected namespace '%s', got '%s'", utils.OperatorNamespace, daemonSet.Namespace)
+	if daemonSet.Namespace != utils.GetOperatorNamespace() {
+		t.Errorf("Expected namespace '%s', got '%s'", utils.GetOperatorNamespace(), daemonSet.Namespace)
 	}
 
 	expectedLabels := utils.SpiffeCSIDriverLabels(nil)

@@ -38,7 +38,7 @@ func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityCont
 			Type: securityv1.FSGroupStrategyMustRunAs,
 		},
 		Users: []string{
-			"system:serviceaccount:zero-trust-workload-identity-manager:spire-agent",
+			fmt.Sprintf("system:serviceaccount:%s:spire-agent", utils.GetOperatorNamespace()),
 		},
 		Volumes: []securityv1.FSType{
 			securityv1.FSTypeConfigMap,

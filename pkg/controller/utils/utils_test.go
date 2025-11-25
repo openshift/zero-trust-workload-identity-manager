@@ -1291,3 +1291,48 @@ func TestGetLogFormatFromString(t *testing.T) {
 		})
 	}
 }
+
+func TestGetOperatorNamespace(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected string
+	}{
+		{
+			name:     "returns custom namespace when environment variable is set",
+			envValue: "custom-namespace",
+			expected: "custom-namespace",
+		},
+		{
+			name:     "returns empty string when environment variable is empty",
+			envValue: "",
+			expected: "",
+		},
+		{
+			name:     "returns namespace with hyphens and special characters",
+			envValue: "my-custom-operator-namespace-123",
+			expected: "my-custom-operator-namespace-123",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanup := setEnvVar("OPERATOR_NAMESPACE", tt.envValue)
+			defer cleanup()
+
+			result := GetOperatorNamespace()
+			if result != tt.expected {
+				t.Errorf("GetOperatorNamespace() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+
+	// Test when environment variable is not set at all
+	t.Run("returns empty string when environment variable is not set", func(t *testing.T) {
+		os.Unsetenv("OPERATOR_NAMESPACE")
+		result := GetOperatorNamespace()
+		if result != "" {
+			t.Errorf("GetOperatorNamespace() = %q, want empty string", result)
+		}
+	})
+}

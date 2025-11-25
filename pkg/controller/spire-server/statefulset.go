@@ -94,7 +94,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    labels,
 		},
 		Spec: appsv1.StatefulSetSpec{

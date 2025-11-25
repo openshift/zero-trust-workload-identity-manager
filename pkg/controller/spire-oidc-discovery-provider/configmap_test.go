@@ -2,6 +2,7 @@ package spire_oidc_discovery_provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 
 		// Verify ConfigMap metadata
 		assert.Equal(t, "spire-spiffe-oidc-discovery-provider", result.ObjectMeta.Name)
-		assert.Equal(t, utils.OperatorNamespace, result.ObjectMeta.Namespace)
+		assert.Equal(t, utils.GetOperatorNamespace(), result.ObjectMeta.Namespace)
 
 		// Verify ConfigMap data keys exist
 		require.Contains(t, result.Data, "oidc-discovery-provider.conf")
@@ -45,8 +46,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		require.True(t, ok)
 		expectedDomains := []string{
 			"spire-spiffe-oidc-discovery-provider",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager.svc.cluster.local",
+			fmt.Sprintf("spire-spiffe-oidc-discovery-provider.%s", utils.GetOperatorNamespace()),
+			fmt.Sprintf("spire-spiffe-oidc-discovery-provider.%s.svc.cluster.local", utils.GetOperatorNamespace()),
 			"oidc-discovery.example.org", // Default JWT issuer
 		}
 		assert.Len(t, domains, len(expectedDomains))
@@ -99,8 +100,8 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		require.True(t, ok)
 		expectedDomains := []string{
 			"spire-spiffe-oidc-discovery-provider",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager.svc.cluster.local",
+			fmt.Sprintf("spire-spiffe-oidc-discovery-provider.%s", utils.GetOperatorNamespace()),
+			fmt.Sprintf("spire-spiffe-oidc-discovery-provider.%s.svc.cluster.local", utils.GetOperatorNamespace()),
 			"custom-jwt-issuer.example.com",
 		}
 		assert.Len(t, domains, len(expectedDomains))

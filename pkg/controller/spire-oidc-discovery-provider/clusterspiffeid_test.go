@@ -3,6 +3,7 @@ package spire_oidc_discovery_provider
 import (
 	"testing"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,7 +49,7 @@ func TestGenerateSpireIODCDiscoveryProviderSpiffeID(t *testing.T) {
 		assert.Equal(t, "kubernetes.io/metadata.name", nsExpression.Key)
 		assert.Equal(t, metav1.LabelSelectorOpIn, nsExpression.Operator)
 		expectedNamespaces := []string{
-			"zero-trust-workload-identity-manager",
+			utils.GetOperatorNamespace(),
 		}
 		assert.Equal(t, expectedNamespaces, nsExpression.Values)
 	})
@@ -99,7 +100,7 @@ func TestGenerateDefaultFallbackClusterSPIFFEID(t *testing.T) {
 		assert.Equal(t, "kubernetes.io/metadata.name", nsExpression.Key)
 		assert.Equal(t, metav1.LabelSelectorOpNotIn, nsExpression.Operator)
 		expectedNamespaces := []string{
-			"zero-trust-workload-identity-manager",
+			utils.GetOperatorNamespace(),
 		}
 		assert.Equal(t, expectedNamespaces, nsExpression.Values)
 	})
@@ -175,7 +176,7 @@ func BenchmarkGenerateDefaultFallbackClusterSPIFFEID(b *testing.B) {
 // Table-driven test for namespace values validation
 func TestNamespaceValues(t *testing.T) {
 	expectedNamespaces := []string{
-		"zero-trust-workload-identity-manager",
+		utils.GetOperatorNamespace(),
 	}
 
 	testCases := []struct {

@@ -2,6 +2,7 @@ package spire_agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -30,7 +31,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"log_level":         "info",
 					"log_format":        "text",
 					"retry_bootstrap":   true,
-					"server_address":    "spire-server.zero-trust-workload-identity-manager",
+					"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
 					"server_port":       "443",
 					"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 					"trust_bundle_path": "/run/spire/bundle/bundle.crt",
@@ -73,7 +74,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"log_level":         "info",
 					"log_format":        "text",
 					"retry_bootstrap":   true,
-					"server_address":    "spire-server.zero-trust-workload-identity-manager",
+					"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
 					"server_port":       "443",
 					"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 					"trust_bundle_path": "/run/spire/bundle/bundle.crt",
@@ -126,7 +127,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"log_level":         "info",
 					"log_format":        "text",
 					"retry_bootstrap":   true,
-					"server_address":    "spire-server.zero-trust-workload-identity-manager",
+					"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
 					"server_port":       "443",
 					"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 					"trust_bundle_path": "/run/spire/bundle/bundle.crt",
@@ -187,7 +188,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"log_level":         "info",
 					"log_format":        "text",
 					"retry_bootstrap":   true,
-					"server_address":    "spire-server.zero-trust-workload-identity-manager",
+					"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
 					"server_port":       "443",
 					"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 					"trust_bundle_path": "/run/spire/bundle/bundle.crt",
@@ -252,7 +253,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"log_level":         "info",
 					"log_format":        "text",
 					"retry_bootstrap":   true,
-					"server_address":    "spire-server.zero-trust-workload-identity-manager",
+					"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
 					"server_port":       "443",
 					"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 					"trust_bundle_path": "/run/spire/bundle/bundle.crt",
@@ -294,7 +295,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 					"log_level":         "info",
 					"log_format":        "text",
 					"retry_bootstrap":   true,
-					"server_address":    "spire-server.zero-trust-workload-identity-manager",
+					"server_address":    fmt.Sprintf("spire-server.%s", utils.GetOperatorNamespace()),
 					"server_port":       "443",
 					"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 					"trust_bundle_path": "/run/spire/bundle/bundle.crt",
@@ -331,9 +332,6 @@ func TestGenerateAgentConfig(t *testing.T) {
 }
 
 func TestGenerateSpireAgentConfigMap(t *testing.T) {
-	// Mock the utils.OperatorNamespace for testing
-	originalNamespace := utils.OperatorNamespace
-
 	tests := []struct {
 		name                       string
 		spireAgentConfig           *v1alpha1.SpireAgent
@@ -347,14 +345,14 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 			spireAgentConfig: &v1alpha1.SpireAgent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-agent-config",
-					Namespace: originalNamespace,
+					Namespace: utils.GetOperatorNamespace(),
 				},
 				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "example.org",
 				},
 			},
 			expectedConfigMapName:      "spire-agent",
-			expectedConfigMapNamespace: originalNamespace,
+			expectedConfigMapNamespace: utils.GetOperatorNamespace(),
 			expectError:                false,
 			validateConfigData:         true,
 		},
@@ -363,7 +361,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 			spireAgentConfig: &v1alpha1.SpireAgent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-agent-config",
-					Namespace: originalNamespace,
+					Namespace: utils.GetOperatorNamespace(),
 				},
 				Spec: v1alpha1.SpireAgentSpec{
 					TrustDomain: "example.org",
@@ -381,7 +379,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 				},
 			},
 			expectedConfigMapName:      "spire-agent",
-			expectedConfigMapNamespace: originalNamespace,
+			expectedConfigMapNamespace: utils.GetOperatorNamespace(),
 			expectError:                false,
 			validateConfigData:         true,
 		},
@@ -465,13 +463,10 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 }
 
 func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
-	// Mock the utils.OperatorNamespace for testing
-	originalNamespace := utils.OperatorNamespace
-
 	spireAgentConfig := &v1alpha1.SpireAgent{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "consistency-test",
-			Namespace: originalNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 		},
 		Spec: v1alpha1.SpireAgentSpec{
 			TrustDomain: "consistency.test",
@@ -559,13 +554,10 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 }
 
 func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
-	// Mock the utils.OperatorNamespace for testing
-	originalNamespace := utils.OperatorNamespace
-
 	spireAgentConfig := &v1alpha1.SpireAgent{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "empty-labels-test",
-			Namespace: originalNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    nil, // Explicitly nil labels
 		},
 		Spec: v1alpha1.SpireAgentSpec{

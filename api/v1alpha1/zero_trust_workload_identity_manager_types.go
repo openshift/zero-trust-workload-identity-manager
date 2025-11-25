@@ -112,12 +112,6 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 
 // ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerSpec struct {
-	// namespace to install the deployments and other resources managed by
-	// zero-trust-workload-identity-manager.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default:="zero-trust-workload-identity-manager"
-	Namespace string `json:"namespace,omitempty"`
-
 	CommonConfig `json:",inline"`
 }
 

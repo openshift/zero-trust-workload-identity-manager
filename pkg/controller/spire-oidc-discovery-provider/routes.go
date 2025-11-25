@@ -115,7 +115,7 @@ func generateOIDCDiscoveryProviderRoute(config *v1alpha1.SpireOIDCDiscoveryProvi
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-oidc-discovery-provider",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    labels,
 		},
 		Spec: routev1.RouteSpec{

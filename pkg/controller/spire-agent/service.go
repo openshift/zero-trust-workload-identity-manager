@@ -117,6 +117,7 @@ func (r *SpireAgentReconciler) reconcileAgentService(ctx context.Context, agent 
 func getSpireAgentService(customLabels map[string]string) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireAgentServiceAssetName))
 	svc.Labels = utils.SpireAgentLabels(customLabels)
+	svc.Namespace = utils.GetOperatorNamespace()
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-agent",
 		"app.kubernetes.io/instance": utils.StandardInstance,

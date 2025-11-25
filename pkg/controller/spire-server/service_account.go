@@ -99,5 +99,6 @@ func (r *SpireServerReconciler) reconcileServiceAccount(ctx context.Context, ser
 func getSpireServerServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpireServerServiceAccountAssetName))
 	sa.Labels = utils.SpireServerLabels(customLabels)
+	sa.Namespace = utils.GetOperatorNamespace()
 	return sa
 }

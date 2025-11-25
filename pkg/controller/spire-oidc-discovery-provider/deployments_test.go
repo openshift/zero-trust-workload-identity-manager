@@ -28,7 +28,7 @@ func TestBuildDeployment(t *testing.T) {
 			hash: "test-hash-123",
 			expected: func(deployment *appsv1.Deployment) {
 				assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Name)
-				assert.Equal(t, utils.OperatorNamespace, deployment.Namespace)
+				assert.Equal(t, utils.GetOperatorNamespace(), deployment.Namespace)
 				assert.Equal(t, int32(1), *deployment.Spec.Replicas)
 				// Verify the annotation is on the pod template, not on the deployment itself
 				assert.Equal(t, "test-hash-123", deployment.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey])
@@ -213,7 +213,7 @@ func TestBuildDeployment(t *testing.T) {
 			// Common assertions for all tests
 			require.NotNil(t, deployment)
 			assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Name)
-			assert.Equal(t, utils.OperatorNamespace, deployment.Namespace)
+			assert.Equal(t, utils.GetOperatorNamespace(), deployment.Namespace)
 
 			// Check labels using centralized approach
 			expectedLabels := utils.SpireOIDCDiscoveryProviderLabels(tt.config.Spec.Labels)

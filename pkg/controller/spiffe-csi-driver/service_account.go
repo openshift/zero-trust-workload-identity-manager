@@ -99,5 +99,6 @@ func (r *SpiffeCsiReconciler) reconcileServiceAccount(ctx context.Context, drive
 func getSpiffeCSIDriverServiceAccount(customLabels map[string]string) *corev1.ServiceAccount {
 	sa := utils.DecodeServiceAccountObjBytes(assets.MustAsset(utils.SpiffeCsiDriverServiceAccountAssetName))
 	sa.Labels = utils.SpiffeCSIDriverLabels(customLabels)
+	sa.Namespace = utils.GetOperatorNamespace()
 	return sa
 }

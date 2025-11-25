@@ -204,8 +204,9 @@ func testFSGroupStrategy(t *testing.T, strategy securityv1.FSGroupStrategyOption
 }
 
 func testUsers(t *testing.T, users []string) {
+	csiServiceAccountUser := "system:serviceaccount:" + utils.GetOperatorNamespace() + ":spire-spiffe-csi-driver"
 	expectedUsers := []string{
-		"system:serviceaccount:zero-trust-workload-identity-manager:spire-spiffe-csi-driver",
+		csiServiceAccountUser,
 	}
 
 	if len(users) != len(expectedUsers) {

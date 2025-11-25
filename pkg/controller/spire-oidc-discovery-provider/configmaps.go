@@ -99,11 +99,13 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 		return nil, fmt.Errorf("invalid JWT issuer URL: %w", err)
 	}
 	// OIDC config map data
+	oidcDefaultDomain := "spire-spiffe-oidc-discovery-provider." + utils.OperatorNamespace
+	oidcSVCDomain := "spire-spiffe-oidc-discovery-provider." + utils.OperatorNamespace + ".svc.cluster.local"
 	oidcConfig := map[string]interface{}{
 		"domains": []string{
 			"spire-spiffe-oidc-discovery-provider",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager",
-			"spire-spiffe-oidc-discovery-provider.zero-trust-workload-identity-manager.svc.cluster.local",
+			oidcDefaultDomain,
+			oidcSVCDomain,
 			jwtIssuer,
 		},
 		"health_checks": map[string]string{
@@ -132,7 +134,7 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
-			Namespace: utils.OperatorNamespace,
+			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireOIDCDiscoveryProviderLabels(dp.Spec.Labels),
 		},
 		Data: map[string]string{
