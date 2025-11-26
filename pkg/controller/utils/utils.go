@@ -28,6 +28,13 @@ var (
 	codecs serializer.CodecFactory
 )
 
+const (
+	createOnlyEnvName        = "CREATE_ONLY_MODE"
+	CreateOnlyModeStatusType = "CreateOnlyMode"
+	CreateOnlyModeEnabled    = "CreateOnlyModeEnabled"
+	CreateOnlyModeDisabled   = "CreateOnlyModeDisabled"
+)
+
 func init() {
 	// Register core, storage and rbac schemes
 	_ = corev1.AddToScheme(scheme)
@@ -455,4 +462,12 @@ func GetLogFormatFromString(logFormat string) string {
 		return LogFormatText
 	}
 	return logFormat
+}
+
+// IsInCreateOnlyMode checks if create-only mode is enabled
+// If the environment variable is set to "true", it returns true
+// Otherwise, it returns false
+func IsInCreateOnlyMode() bool {
+	createOnlyEnvValue := os.Getenv(createOnlyEnvName)
+	return createOnlyEnvValue == "true"
 }

@@ -1336,3 +1336,51 @@ func TestGetOperatorNamespace(t *testing.T) {
 		}
 	})
 }
+
+func TestIsInCreateOnlyModeEnvCheck(t *testing.T) {
+	tests := []struct {
+		name        string
+		envValue    string
+		expected    bool
+		description string
+	}{
+		{
+			name:        "env var set to true",
+			envValue:    "true",
+			expected:    true,
+			description: "should return true when CREATE_ONLY_MODE is 'true'",
+		},
+		{
+			name:        "env var set to false",
+			envValue:    "false",
+			expected:    false,
+			description: "should return false when CREATE_ONLY_MODE is 'false'",
+		},
+		{
+			name:        "env var not set",
+			envValue:    "",
+			expected:    false,
+			description: "should return false when CREATE_ONLY_MODE is not set",
+		},
+		{
+			name:        "env var set to invalid value",
+			envValue:    "invalid",
+			expected:    false,
+			description: "should return false when CREATE_ONLY_MODE has invalid value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				t.Setenv(createOnlyEnvName, tt.envValue)
+			} else {
+				t.Setenv(createOnlyEnvName, "")
+			}
+			result := IsInCreateOnlyMode()
+			if result != tt.expected {
+				t.Errorf("IsInCreateOnlyMode() = %v, expected %v - %s", result, tt.expected, tt.description)
+			}
+		})
+	}
+}

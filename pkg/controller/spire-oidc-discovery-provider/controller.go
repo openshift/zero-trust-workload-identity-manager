@@ -47,12 +47,11 @@ const (
 
 // SpireOidcDiscoveryProviderReconciler reconciles a SpireOidcDiscoveryProvider object
 type SpireOidcDiscoveryProviderReconciler struct {
-	ctrlClient     customClient.CustomCtrlClient
-	ctx            context.Context
-	eventRecorder  record.EventRecorder
-	log            logr.Logger
-	scheme         *runtime.Scheme
-	createOnlyMode bool
+	ctrlClient    customClient.CustomCtrlClient
+	ctx           context.Context
+	eventRecorder record.EventRecorder
+	log           logr.Logger
+	scheme        *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
@@ -65,12 +64,11 @@ func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {
 		return nil, err
 	}
 	return &SpireOidcDiscoveryProviderReconciler{
-		ctrlClient:     c,
-		ctx:            context.Background(),
-		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		scheme:         mgr.GetScheme(),
-		createOnlyMode: false,
+		ctrlClient:    c,
+		ctx:           context.Background(),
+		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		scheme:        mgr.GetScheme(),
 	}, nil
 }
 
@@ -134,7 +132,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	}
 
 	// Reconcile Route (if enabled)
-	if err := r.reconcileRoute(ctx, &oidcDiscoveryProviderConfig, statusMgr); err != nil {
+	if err := r.reconcileRoute(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -174,11 +172,11 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 
 // handleCreateOnlyMode checks and updates the create-only mode status
 func (r *SpireOidcDiscoveryProviderReconciler) handleCreateOnlyMode(oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) bool {
-	createOnlyMode := utils.IsInCreateOnlyMode(oidc, &r.createOnlyMode)
+	createOnlyMode := utils.IsInCreateOnlyMode()
 	if createOnlyMode {
 		r.log.Info("Running in create-only mode - will create resources if they don't exist but skip updates")
 		statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeEnabled,
-			"Create-only mode is enabled via ztwim.openshift.io/create-only annotation",
+			"Create-Only Mode is active: Updates are not reconciled to existing resources",
 			metav1.ConditionTrue)
 	} else {
 		existingCondition := apimeta.FindStatusCondition(oidc.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
