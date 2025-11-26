@@ -23,14 +23,14 @@ const (
 	Ready string = "Ready"
 
 	// Upgradeable indicates whether the operator and operands are in a state
-	// that allows for safe upgrades. It is True when all operands are healthy
-	// or not yet created, and CreateOnlyMode is not enabled.
+	// that allows for safe upgrades. It is True when all existing operand CRs
+	// are ready, and CreateOnlyMode is not enabled. CRs that don't exist yet are OK.
 	//   Status:
-	//   - True: Safe to upgrade (operands ready or don't exist yet, and no CreateOnlyMode)
-	//   - False: Not safe to upgrade (operands exist but failing, or CreateOnlyMode enabled)
+	//   - True: Safe to upgrade (all existing CRs are ready, CRs that don't exist are OK, and no CreateOnlyMode)
+	//   - False: Not safe to upgrade (any existing CR is not ready, or CreateOnlyMode enabled)
 	//   Reason:
-	//   - Ready: All operands are ready or don't exist
-	//   - OperandsNotReady: Some operands exist but are not ready, or CreateOnlyMode is enabled
+	//   - Ready: All existing operands are ready or CRs don't exist yet
+	//   - OperandsNotReady: Some existing operands are not ready, or CreateOnlyMode is enabled
 	Upgradeable string = "Upgradeable"
 )
 
