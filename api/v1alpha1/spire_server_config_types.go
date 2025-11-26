@@ -38,19 +38,6 @@ type SpireServerSpec struct {
 	// +kubebuilder:default:="text"
 	LogFormat string `json:"logFormat,omitempty"`
 
-	// trustDomain to be used for the SPIFFE identifiers
-	// +kubebuilder:validation:Required
-	TrustDomain string `json:"trustDomain,omitempty"`
-
-	// clusterName will have the cluster name required to configure spire server.
-	// +kubebuilder:validation:Required
-	ClusterName string `json:"clusterName,omitempty"`
-
-	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default:=spire-bundle
-	BundleConfigMap string `json:"bundleConfigMap"`
-
 	// jwtIssuer is the JWT issuer url.
 	// +kubebuilder:validation:Required
 	JwtIssuer string `json:"jwtIssuer"`

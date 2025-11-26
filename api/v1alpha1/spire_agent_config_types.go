@@ -39,19 +39,6 @@ type SpireAgentSpec struct {
 	// +kubebuilder:default:="text"
 	LogFormat string `json:"logFormat,omitempty"`
 
-	// trustDomain to be used for the SPIFFE identifiers
-	// +kubebuilder:validation:Required
-	TrustDomain string `json:"trustDomain,omitempty"`
-
-	// clusterName will have the cluster name required to configure spire agent.
-	// +kubebuilder:validation:Required
-	ClusterName string `json:"clusterName,omitempty"`
-
-	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default:=spire-bundle
-	BundleConfigMap string `json:"bundleConfigMap"`
-
 	// nodeAttestor specifies the configuration for the Node Attestor.
 	// +kubebuilder:validation:Optional
 	NodeAttestor *NodeAttestor `json:"nodeAttestor,omitempty"`

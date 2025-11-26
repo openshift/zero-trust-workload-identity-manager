@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -29,7 +28,6 @@ import (
 
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -50,7 +48,6 @@ import (
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	ztwimController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/zero-trust-workload-identity-manager"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/bootstrap"
 
 	securityv1 "github.com/openshift/api/security/v1"
 
@@ -236,12 +233,6 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 	})
 	exitOnError(err, "unable to start manager")
-
-	uncachedClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: scheme})
-	exitOnError(err, "unable to create uncached client")
-	if err = bootstrap.BootstrapCR(context.Background(), uncachedClient, setupLog); err != nil {
-		exitOnError(err, "Failed to bootstrap ZeroTrustWorkloadIdentityManager CR")
-	}
 
 	ztwimControllerManager, err := ztwimController.New(mgr)
 	exitOnError(err, "unable to set up ztwim controller manager")

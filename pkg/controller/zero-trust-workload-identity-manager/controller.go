@@ -220,9 +220,10 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	if err != nil {
 		if apierror.IsNotFound(err) {
 			// Ensure the 'cluster' instance always exists
-			if req.Name == "cluster" {
-				return r.recreateClusterInstance(ctx, req.Name)
-			}
+			// TODO: do not create if not exists
+			//if req.Name == "cluster" {
+			//	return r.recreateClusterInstance(ctx, req.Name)
+			//}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err

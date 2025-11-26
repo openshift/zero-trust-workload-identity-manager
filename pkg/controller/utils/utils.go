@@ -11,6 +11,8 @@ import (
 	securityv1 "github.com/openshift/api/security/v1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -470,4 +472,22 @@ func GetLogFormatFromString(logFormat string) string {
 func IsInCreateOnlyMode() bool {
 	createOnlyEnvValue := os.Getenv(createOnlyEnvName)
 	return createOnlyEnvValue == "true"
+}
+
+// ZTWIMSpecChangedPredicate triggers reconciliation when key ZTWIM spec fields change
+// This ensures operands reconcile when trustDomain, clusterName, or bundleConfigMap changes
+// while avoiding unnecessary reconciliations when only non-critical fields change
+var ZTWIMSpecChangedPredicate = predicate.Funcs{
+	CreateFunc: func(e event.CreateEvent) bool {
+		return true
+	},
+	UpdateFunc: func(e event.UpdateEvent) bool {
+		return false
+	},
+	DeleteFunc: func(e event.DeleteEvent) bool {
+		return true
+	},
+	GenericFunc: func(e event.GenericEvent) bool {
+		return false
+	},
 }

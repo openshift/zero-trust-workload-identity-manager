@@ -13,6 +13,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -98,6 +99,36 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}()
 
+	var ztwim v1alpha1.ZeroTrustWorkloadIdentityManager
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &ztwim); err != nil {
+		if kerrors.IsNotFound(err) {
+			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Set ZTWIM as the owner of SpireAgent
+	if err := controllerutil.SetControllerReference(&ztwim, &agent, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on SpireAgent")
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on SpireAgent: %v", err),
+			metav1.ConditionFalse)
+		return ctrl.Result{}, err
+	}
+
+	// Persist the owner reference to the cluster
+	if err := r.ctrlClient.Update(ctx, &agent); err != nil {
+		r.log.Error(err, "failed to update SpireAgent with owner reference")
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			fmt.Sprintf("failed to update SpireAgent with owner reference: %v", err),
+			metav1.ConditionFalse)
+		return ctrl.Result{}, err
+	}
+
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&agent, statusMgr)
 
@@ -125,7 +156,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Reconcile ConfigMap
-	configHash, err := r.reconcileConfigMap(ctx, &agent, statusMgr, createOnlyMode)
+	configHash, err := r.reconcileConfigMap(ctx, &agent, statusMgr, &ztwim, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -163,6 +194,7 @@ func (r *SpireAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&rbacv1.ClusterRole{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.ClusterRoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
 		Complete(r)
 	if err != nil {
 		return err

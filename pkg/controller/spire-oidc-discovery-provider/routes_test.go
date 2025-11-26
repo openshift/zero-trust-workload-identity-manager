@@ -1,9 +1,10 @@
 package spire_oidc_discovery_provider
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -17,8 +18,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		// Arrange
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "https://oidc-discovery.apps.example.com",
-				TrustDomain: "example.org",
+				JwtIssuer: "https://oidc-discovery.apps.example.com",
 			},
 		}
 
@@ -70,8 +70,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		}
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "https://test.apps.cluster.com",
-				TrustDomain: "test.domain",
+				JwtIssuer: "https://test.apps.cluster.com",
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: customLabels,
 				},
@@ -104,8 +103,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		// Arrange
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "", // Empty
-				TrustDomain: "fallback.example.org",
+				JwtIssuer: "", // Empty
 			},
 		}
 
@@ -122,8 +120,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		// Arrange
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "https://nil-labels.example.com",
-				TrustDomain: "example.org",
+				JwtIssuer: "https://nil-labels.example.com",
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: nil,
 				},
@@ -146,8 +143,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		// Arrange
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "https://test.example.com",
-				TrustDomain: "example.org",
+				JwtIssuer: "https://test.example.com",
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: map[string]string{
 						utils.AppManagedByLabelKey: "different-value",
@@ -171,8 +167,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		// Arrange
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "https://consistent.example.com",
-				TrustDomain: "example.org",
+				JwtIssuer: "https://consistent.example.com",
 			},
 		}
 
@@ -195,8 +190,7 @@ func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
 		// Arrange
 		config := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				JwtIssuer:   "https://structure-test.example.com",
-				TrustDomain: "example.org",
+				JwtIssuer: "https://structure-test.example.com",
 			},
 		}
 
@@ -232,31 +226,26 @@ func TestGenerateOIDCDiscoveryProviderRoute_HostScenarios(t *testing.T) {
 	testCases := []struct {
 		name         string
 		jwtIssuer    string
-		trustDomain  string
 		expectedHost string
 	}{
 		{
 			name:         "simple hostname from JwtIssuer",
 			jwtIssuer:    "https://oidc.example.com",
-			trustDomain:  "example.com",
 			expectedHost: "oidc.example.com",
 		},
 		{
 			name:         "openshift apps subdomain from JwtIssuer",
 			jwtIssuer:    "https://oidc-discovery.apps.cluster.example.com",
-			trustDomain:  "cluster.example.com",
 			expectedHost: "oidc-discovery.apps.cluster.example.com",
 		},
 		{
 			name:         "empty host when JwtIssuer is empty",
 			jwtIssuer:    "",
-			trustDomain:  "fallback.local",
 			expectedHost: "",
 		},
 		{
 			name:         "IP address in JwtIssuer",
 			jwtIssuer:    "https://192.168.1.100",
-			trustDomain:  "internal.local",
 			expectedHost: "192.168.1.100",
 		},
 	}
@@ -265,8 +254,7 @@ func TestGenerateOIDCDiscoveryProviderRoute_HostScenarios(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &v1alpha1.SpireOIDCDiscoveryProvider{
 				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-					JwtIssuer:   tc.jwtIssuer,
-					TrustDomain: tc.trustDomain,
+					JwtIssuer: tc.jwtIssuer,
 				},
 			}
 
@@ -286,8 +274,7 @@ func TestGenerateOIDCDiscoveryProviderRoute_NoMutation(t *testing.T) {
 	}
 	config := &v1alpha1.SpireOIDCDiscoveryProvider{
 		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-			JwtIssuer:   "https://test.example.com",
-			TrustDomain: "example.org",
+			JwtIssuer: "https://test.example.com",
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: originalLabels,
 			},

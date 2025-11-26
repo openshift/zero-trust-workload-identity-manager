@@ -19,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -91,6 +92,36 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}()
 
+	var ztwim v1alpha1.ZeroTrustWorkloadIdentityManager
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &ztwim); err != nil {
+		if kerrors.IsNotFound(err) {
+			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Set ZTWIM as the owner of SpiffeCSIDriver
+	if err := controllerutil.SetControllerReference(&ztwim, &spiffeCSIDriver, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on SpiffeCSIDriver")
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on SpiffeCSIDriver: %v", err),
+			metav1.ConditionFalse)
+		return ctrl.Result{}, err
+	}
+
+	// Persist the owner reference to the cluster
+	if err := r.ctrlClient.Update(ctx, &spiffeCSIDriver); err != nil {
+		r.log.Error(err, "failed to update SpiffeCSIDriver with owner reference")
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update SpiffeCSIDriver with owner reference: %v", err),
+			metav1.ConditionFalse)
+		return ctrl.Result{}, err
+	}
+
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&spiffeCSIDriver, statusMgr)
 
@@ -143,6 +174,7 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&storagev1.CSIDriver{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
 		Complete(r)
 	if err != nil {
 		return err
