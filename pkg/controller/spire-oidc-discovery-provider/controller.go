@@ -191,6 +191,11 @@ func (r *SpireOidcDiscoveryProviderReconciler) handleCreateOnlyMode(oidc *v1alph
 
 // validateConfiguration validates the SpireOIDCDiscoveryProvider configuration
 func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
+	// Validate common configuration
+	if err := r.validateCommonConfig(oidc, statusMgr); err != nil {
+		return err
+	}
+
 	// Validate JWT issuer URL format
 	if err := utils.IsValidURL(oidc.Spec.JwtIssuer); err != nil {
 		r.log.Error(err, "Invalid JWT issuer URL in SpireOIDCDiscoveryProvider configuration", "jwtIssuer", oidc.Spec.JwtIssuer)
@@ -208,6 +213,21 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alp
 			metav1.ConditionTrue)
 	}
 	return nil
+}
+
+// validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
+func (r *SpireOidcDiscoveryProviderReconciler) validateCommonConfig(oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpireOIDCDiscoveryProvider,
+		oidc.Name,
+		oidc.Spec.Affinity,
+		oidc.Spec.Tolerations,
+		oidc.Spec.NodeSelector,
+		oidc.Spec.Resources,
+		oidc.Spec.Labels,
+	)
 }
 
 // needsUpdate returns true if Deployment needs to be updated based on config checksum

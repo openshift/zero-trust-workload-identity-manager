@@ -219,6 +219,11 @@ func (r *SpireServerReconciler) handleCreateOnlyMode(server *v1alpha1.SpireServe
 
 // validateConfiguration validates the SpireServer configuration
 func (r *SpireServerReconciler) validateConfiguration(server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+	// Validate common configuration (affinity, tolerations, node selector, resources, labels)
+	if err := r.validateCommonConfig(server, statusMgr); err != nil {
+		return err
+	}
+
 	// Validate JWT issuer URL format
 	if err := utils.IsValidURL(server.Spec.JwtIssuer); err != nil {
 		r.log.Error(err, "Invalid JWT issuer URL in SpireServer configuration", "jwtIssuer", server.Spec.JwtIssuer)
@@ -236,6 +241,21 @@ func (r *SpireServerReconciler) validateConfiguration(server *v1alpha1.SpireServ
 			metav1.ConditionTrue)
 	}
 	return nil
+}
+
+// validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
+func (r *SpireServerReconciler) validateCommonConfig(server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpireServer,
+		server.Name,
+		server.Spec.Affinity,
+		server.Spec.Tolerations,
+		server.Spec.NodeSelector,
+		server.Spec.Resources,
+		server.Spec.Labels,
+	)
 }
 
 // needsUpdate returns true if StatefulSet needs to be updated based on config checksum

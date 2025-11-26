@@ -101,6 +101,11 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&agent, statusMgr)
 
+	// Validate common configuration
+	if err := r.validateCommonConfig(&agent, statusMgr); err != nil {
+		return ctrl.Result{}, nil
+	}
+
 	// Reconcile static resources (RBAC, ServiceAccount, Service)
 	if err := r.reconcileServiceAccount(ctx, &agent, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
@@ -182,6 +187,21 @@ func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, 
 		}
 	}
 	return createOnlyMode
+}
+
+// validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
+func (r *SpireAgentReconciler) validateCommonConfig(agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpireAgent,
+		agent.Name,
+		agent.Spec.Affinity,
+		agent.Spec.Tolerations,
+		agent.Spec.NodeSelector,
+		agent.Spec.Resources,
+		agent.Spec.Labels,
+	)
 }
 
 // needsUpdate returns true if DaemonSet needs to be updated based on config checksum

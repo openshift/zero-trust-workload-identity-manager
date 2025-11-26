@@ -94,6 +94,11 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&spiffeCSIDriver, statusMgr)
 
+	// Validate common configuration
+	if err := r.validateCommonConfig(&spiffeCSIDriver, statusMgr); err != nil {
+		return ctrl.Result{}, nil
+	}
+
 	// Reconcile static resources (ServiceAccount, CSI Driver)
 	if err := r.reconcileServiceAccount(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
@@ -162,4 +167,19 @@ func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDri
 		}
 	}
 	return createOnlyMode
+}
+
+// validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
+func (r *SpiffeCsiReconciler) validateCommonConfig(driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager) error {
+	return utils.ValidateAndUpdateStatus(
+		r.log,
+		statusMgr,
+		utils.ResourceKindSpiffeCSIDriver,
+		driver.Name,
+		driver.Spec.Affinity,
+		driver.Spec.Tolerations,
+		driver.Spec.NodeSelector,
+		driver.Spec.Resources,
+		driver.Spec.Labels,
+	)
 }
