@@ -87,7 +87,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 		replicas = int32(config.Spec.ReplicaCount)
 	}
 
-	return &appsv1.Deployment{
+	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
 			Namespace: utils.GetOperatorNamespace(),
@@ -189,4 +189,9 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 			},
 		},
 	}
+
+	// Add proxy configuration if enabled
+	utils.AddProxyConfigToPod(&deployment.Spec.Template.Spec)
+
+	return deployment
 }

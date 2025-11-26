@@ -6,3 +6,18 @@ images:
 - name: controller
   newName: openshift.io/zero-trust-workload-identity-manager
   newTag: latest
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+- name: trusted-ca-bundle
+  options:
+    labels:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/name: zero-trust-workload-identity-manager
+      config.openshift.io/inject-trusted-cabundle: "true"
+      control-plane: controller-manager
+patches:
+- path: trusted-ca-patch.yaml
+  target:
+    kind: Deployment
+    name: controller-manager
