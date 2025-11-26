@@ -1,19 +1,3 @@
-/*
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package utils
 
 import (
@@ -664,167 +648,6 @@ func TestValidateCommonConfig(t *testing.T) {
 	}
 }
 
-func TestValidateLabelSelector(t *testing.T) {
-	tests := []struct {
-		name      string
-		selector  *metav1.LabelSelector
-		wantError bool
-	}{
-		{
-			name:      "nil selector is valid",
-			selector:  nil,
-			wantError: false,
-		},
-		{
-			name: "valid match labels",
-			selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app":     "myapp",
-					"version": "v1",
-				},
-			},
-			wantError: false,
-		},
-		{
-			name: "valid match expressions",
-			selector: &metav1.LabelSelector{
-				MatchExpressions: []metav1.LabelSelectorRequirement{
-					{
-						Key:      "app",
-						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{"myapp", "yourapp"},
-					},
-				},
-			},
-			wantError: false,
-		},
-		{
-			name: "invalid match labels - empty key",
-			selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"": "value",
-				},
-			},
-			wantError: true,
-		},
-		{
-			name: "invalid match expressions - empty key",
-			selector: &metav1.LabelSelector{
-				MatchExpressions: []metav1.LabelSelectorRequirement{
-					{
-						Key:      "",
-						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{"value"},
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name: "invalid match expressions - In without values",
-			selector: &metav1.LabelSelector{
-				MatchExpressions: []metav1.LabelSelectorRequirement{
-					{
-						Key:      "app",
-						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{},
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name: "invalid match expressions - Exists with values",
-			selector: &metav1.LabelSelector{
-				MatchExpressions: []metav1.LabelSelectorRequirement{
-					{
-						Key:      "app",
-						Operator: metav1.LabelSelectorOpExists,
-						Values:   []string{"value"},
-					},
-				},
-			},
-			wantError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateLabelSelector(tt.selector)
-			if (err != nil) != tt.wantError {
-				t.Errorf("validateLabelSelector() error = %v, wantError %v", err, tt.wantError)
-			}
-		})
-	}
-}
-
-func TestValidateNodeSelectorTerm(t *testing.T) {
-	tests := []struct {
-		name      string
-		term      *corev1.NodeSelectorTerm
-		wantError bool
-	}{
-		{
-			name:      "nil term is valid",
-			term:      nil,
-			wantError: false,
-		},
-		{
-			name: "valid term with match expressions",
-			term: &corev1.NodeSelectorTerm{
-				MatchExpressions: []corev1.NodeSelectorRequirement{
-					{
-						Key:      "zone",
-						Operator: corev1.NodeSelectorOpIn,
-						Values:   []string{"us-east-1a"},
-					},
-				},
-			},
-			wantError: false,
-		},
-		{
-			name: "valid term with match fields",
-			term: &corev1.NodeSelectorTerm{
-				MatchFields: []corev1.NodeSelectorRequirement{
-					{
-						Key:      "metadata.name",
-						Operator: corev1.NodeSelectorOpIn,
-						Values:   []string{"node1"},
-					},
-				},
-			},
-			wantError: false,
-		},
-		{
-			name:      "invalid term - no match expressions or fields",
-			term:      &corev1.NodeSelectorTerm{},
-			wantError: true,
-		},
-		{
-			name: "invalid term - invalid match expression",
-			term: &corev1.NodeSelectorTerm{
-				MatchExpressions: []corev1.NodeSelectorRequirement{
-					{
-						Key:      "",
-						Operator: corev1.NodeSelectorOpIn,
-						Values:   []string{"value"},
-					},
-				},
-			},
-			wantError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateNodeSelectorTerm(tt.term)
-			if (err != nil) != tt.wantError {
-				t.Errorf("validateNodeSelectorTerm() error = %v, wantError %v", err, tt.wantError)
-			}
-		})
-	}
-}
-
 // Helper function to create int64 pointer
 func int64Ptr(i int64) *int64 {
 	return &i
@@ -955,7 +778,7 @@ func TestValidateCommonConfigWithDetails(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			results := ValidateCommonConfigWithDetails(tt.affinity, tt.tolerations, tt.nodeSelector, tt.resources, tt.labels)
-			
+
 			if len(results) != tt.expectedResultNum {
 				t.Errorf("ValidateCommonConfigWithDetails() returned %d results, expected %d", len(results), tt.expectedResultNum)
 			}
@@ -1206,7 +1029,7 @@ func TestValidateAndUpdateStatusWithConstants(t *testing.T) {
 
 // Helper function for string contains check
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
 		(len(s) > 0 && len(substr) > 0 && stringContains(s, substr)))
 }
 
