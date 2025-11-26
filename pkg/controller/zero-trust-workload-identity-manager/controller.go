@@ -174,7 +174,7 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events;secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions,verbs=get;list;watch
-// +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions/status,verbs=get;update
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) {
@@ -184,7 +184,7 @@ func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) 
 	}
 	operatorConditionName := os.Getenv("OPERATOR_CONDITION_NAME")
 	if operatorConditionName == "" {
-		return nil, errors.New("OPERATOR_CONDITION_NAME must be set")
+		return nil, errors.New("operator condition CR name is empty")
 	}
 	return &ZeroTrustWorkloadIdentityManagerReconciler{
 		ctrlClient:            c,
@@ -578,10 +578,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) updateOperatorCondition(ctx
 		return nil
 	}
 
-	// Calculate Upgradeable condition based on operand health and CreateOnlyMode
-	var upgradeableStatus metav1.ConditionStatus
-	var upgradeableReason string
-	var upgradeableMessage string
+	upgradeableStatus := metav1.ConditionTrue
+	upgradeableReason := v1alpha1.ReasonReady
+	upgradeableMessage := "Operator is Upgradeable"
 
 	if anyCreateOnlyModeEnabled {
 		// CreateOnlyMode prevents updates - not safe to upgrade
@@ -605,11 +604,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) updateOperatorCondition(ctx
 			upgradeableStatus = metav1.ConditionFalse
 			upgradeableReason = v1alpha1.ReasonOperandsNotReady
 			upgradeableMessage = fmt.Sprintf("Not safe to upgrade - existing operands are not ready: %v", notReadyOperands)
-		} else {
-			// All existing operands are ready (or CRs don't exist yet) - safe to upgrade
-			upgradeableStatus = metav1.ConditionTrue
-			upgradeableReason = v1alpha1.ReasonReady
-			upgradeableMessage = "Operator is Upgradeable"
 		}
 	}
 
@@ -656,8 +650,8 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) findOperatorCondition(ctx c
 	}
 
 	// OperatorCondition not found (likely running outside OLM)
-	r.log.V(1).Info("OperatorCondition not found - operator may be running outside OLM")
-	return nil, nil
+	r.log.V(1).Error(errors.New("OperatorCondition not found"), "operator may be running outside OLM")
+	return nil, errors.New("OperatorCondition not found")
 }
 
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.Manager) error {
