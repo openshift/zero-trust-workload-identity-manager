@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-11-18T12:17:58Z"
+    createdAt: "2025-11-26T12:25:00Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -401,6 +401,9 @@ spec:
                     - ALL
                   readOnlyRootFilesystem: true
                 volumeMounts:
+                - mountPath: /etc/pki/tls/certs
+                  name: trusted-ca-bundle
+                  readOnly: true
                 - mountPath: /etc/metrics-certs
                   name: metrics-serving-cert
                   readOnly: true
@@ -411,6 +414,9 @@ spec:
               serviceAccountName: zero-trust-workload-identity-manager-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:
+              - configMap:
+                  name: zero-trust-workload-identity-manager-trusted-ca-bundle
+                name: trusted-ca-bundle
               - name: metrics-serving-cert
                 secret:
                   secretName: metrics-serving-cert
