@@ -8,12 +8,12 @@ var (
 	SHORTCOMMIT string
 
 	// Operator version (informational)
-	OperatorVersion string = "0.2.0"
+	OperatorVersion string = "1.0.0"
 
 	// Per-component versions (used for app.kubernetes.io/version labels)
-	SpiffeCsiVersion                  string = "0.2.7"
-	SpireAgentVersion                 string = "1.12.4"
-	SpireControllerManagerVersion     string = "0.6.2"
-	SpireOIDCDiscoveryProviderVersion string = "1.12.4"
-	SpireServerVersion                string = "1.12.4"
+	SpiffeCsiVersion                  string = "0.2.8"
+	SpireAgentVersion                 string = "1.13.3"
+	SpireControllerManagerVersion     string = "0.6.3"
+	SpireOIDCDiscoveryProviderVersion string = "1.13.3"
+	SpireServerVersion                string = "1.13.3"
 )

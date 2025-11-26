@@ -22,7 +22,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-11-18T12:17:58Z"
+    createdAt: "2025-11-25T12:33:53Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -46,7 +46,7 @@ metadata:
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
-  name: zero-trust-workload-identity-manager.v0.2.0
+  name: zero-trust-workload-identity-manager.v1.0.0
   namespace: zero-trust-workload-identity-manager
 spec:
   apiservicedefinitions: {}
@@ -346,16 +346,18 @@ spec:
                       fieldPath: metadata.annotations['olm.operatorNamespace']
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
+                - name: OPERATOR_VERSION
+                  value: 1.0.0
                 - name: RELATED_IMAGE_SPIRE_SERVER
-                  value: ghcr.io/spiffe/spire-server:1.12.4
+                  value: ghcr.io/spiffe/spire-server:1.13.3
                 - name: RELATED_IMAGE_SPIRE_AGENT
-                  value: ghcr.io/spiffe/spire-agent:1.12.4
+                  value: ghcr.io/spiffe/spire-agent:1.13.3
                 - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
-                  value: ghcr.io/spiffe/spiffe-csi-driver:0.2.7
+                  value: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
                 - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
-                  value: ghcr.io/spiffe/oidc-discovery-provider:1.12.4
+                  value: ghcr.io/spiffe/oidc-discovery-provider:1.13.3
                 - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-                  value: ghcr.io/spiffe/spire-controller-manager:0.6.2
+                  value: ghcr.io/spiffe/spire-controller-manager:0.6.3
                 - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
@@ -441,18 +443,18 @@ spec:
   provider:
     name: Red Hat
   relatedImages:
-  - image: ghcr.io/spiffe/spire-server:1.12.4
+  - image: ghcr.io/spiffe/spire-server:1.13.3
     name: spire-server
-  - image: ghcr.io/spiffe/spire-agent:1.12.4
+  - image: ghcr.io/spiffe/spire-agent:1.13.3
     name: spire-agent
-  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.7
+  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
     name: spiffe-csi-driver
-  - image: ghcr.io/spiffe/oidc-discovery-provider:1.12.4
+  - image: ghcr.io/spiffe/oidc-discovery-provider:1.13.3
     name: spire-oidc-discovery-provider
-  - image: ghcr.io/spiffe/spire-controller-manager:0.6.2
+  - image: ghcr.io/spiffe/spire-controller-manager:0.6.3
     name: spire-controller-manager
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
     name: node-driver-registrar
   - image: registry.access.redhat.com/ubi9:latest
     name: spiffe-csi-init-container
-  version: 0.2.0
+  version: 1.0.0
