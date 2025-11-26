@@ -91,7 +91,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	if config.Persistence != nil && config.Persistence.Size != "" {
 		volumeResourceRequest = config.Persistence.Size
 	}
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
 			Namespace: utils.GetOperatorNamespace(),
@@ -207,4 +207,9 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 			},
 		},
 	}
+
+	// Add proxy configuration if enabled
+	utils.AddProxyConfigToPod(&sts.Spec.Template.Spec)
+
+	return sts
 }
