@@ -113,6 +113,34 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 // ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerSpec struct {
 	CommonConfig `json:",inline"`
+
+	// trustDomain to be used for the SPIFFE identifiers
+	// Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="trustDomain is immutable and cannot be changed"
+	TrustDomain string `json:"trustDomain,omitempty"`
+
+	// clusterName will have the cluster name required to configure spire agent.
+	// Must be a valid DNS-1123 subdomain.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="clusterName is immutable and cannot be changed"
+	ClusterName string `json:"clusterName,omitempty"`
+
+	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
+	// Must be a valid Kubernetes name.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:=spire-bundle
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="bundleConfigMap is immutable and cannot be changed"
+	BundleConfigMap string `json:"bundleConfigMap"`
 }
 
 // CommonConfig will have similar config required for all other APIs

@@ -16,13 +16,18 @@ func TestGenerateAgentConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		cfg      *v1alpha1.SpireAgent
+		ztwim    *v1alpha1.ZeroTrustWorkloadIdentityManager
 		expected map[string]interface{}
 	}{
 		{
 			name: "minimal config",
 			cfg: &v1alpha1.SpireAgent{
-				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "example.org",
+				Spec: v1alpha1.SpireAgentSpec{},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expected: map[string]interface{}{
@@ -61,11 +66,16 @@ func TestGenerateAgentConfig(t *testing.T) {
 			name: "config with k8s_psat node attestor enabled",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
-					ClusterName: "test-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
 						K8sPSATEnabled: "true",
 					},
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "test.domain",
+					ClusterName:     "test-cluster",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expected: map[string]interface{}{
@@ -113,12 +123,17 @@ func TestGenerateAgentConfig(t *testing.T) {
 			name: "config with k8s workload attestor enabled",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "workload.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled:                "true",
 						DisableContainerSelectors: "true",
 						UseNewContainerLocator:    "false",
 					},
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "workload.domain",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expected: map[string]interface{}{
@@ -170,8 +185,6 @@ func TestGenerateAgentConfig(t *testing.T) {
 			name: "config with both attestors enabled",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "full.domain",
-					ClusterName: "full-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
 						K8sPSATEnabled: "true",
 					},
@@ -180,6 +193,13 @@ func TestGenerateAgentConfig(t *testing.T) {
 						DisableContainerSelectors: "false",
 						UseNewContainerLocator:    "true",
 					},
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "full.domain",
+					ClusterName:     "full-cluster",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expected: map[string]interface{}{
@@ -240,11 +260,16 @@ func TestGenerateAgentConfig(t *testing.T) {
 			name: "config with node attestor disabled",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "disabled.domain",
-					ClusterName: "disabled-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
 						K8sPSATEnabled: "false",
 					},
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "disabled.domain",
+					ClusterName:     "disabled-cluster",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expected: map[string]interface{}{
@@ -283,10 +308,15 @@ func TestGenerateAgentConfig(t *testing.T) {
 			name: "config with workload attestor disabled",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "workload-disabled.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "false",
 					},
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "workload-disabled.domain",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expected: map[string]interface{}{
@@ -325,7 +355,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateAgentConfig(tt.cfg)
+			result := generateAgentConfig(tt.cfg, tt.ztwim)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -335,6 +365,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 	tests := []struct {
 		name                       string
 		spireAgentConfig           *v1alpha1.SpireAgent
+		ztwim                      *v1alpha1.ZeroTrustWorkloadIdentityManager
 		expectedConfigMapName      string
 		expectedConfigMapNamespace string
 		expectError                bool
@@ -347,8 +378,12 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 					Name:      "test-agent-config",
 					Namespace: utils.GetOperatorNamespace(),
 				},
-				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "example.org",
+				Spec: v1alpha1.SpireAgentSpec{},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expectedConfigMapName:      "spire-agent",
@@ -364,8 +399,6 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 					Namespace: utils.GetOperatorNamespace(),
 				},
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "example.org",
-					ClusterName: "test-cluster",
 					NodeAttestor: &v1alpha1.NodeAttestor{
 						K8sPSATEnabled: "true",
 					},
@@ -378,6 +411,13 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 					},
 				},
 			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					ClusterName:     "test-cluster",
+					BundleConfigMap: "spire-bundle",
+				},
+			},
 			expectedConfigMapName:      "spire-agent",
 			expectedConfigMapNamespace: utils.GetOperatorNamespace(),
 			expectError:                false,
@@ -387,7 +427,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, hash, err := generateSpireAgentConfigMap(tt.spireAgentConfig)
+			cm, hash, err := generateSpireAgentConfigMap(tt.spireAgentConfig, tt.ztwim)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -437,7 +477,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 
 				// Validate agent section
 				agentSection := configData["agent"].(map[string]interface{})
-				assert.Equal(t, tt.spireAgentConfig.Spec.TrustDomain, agentSection["trust_domain"])
+				assert.Equal(t, tt.ztwim.Spec.TrustDomain, agentSection["trust_domain"])
 				assert.Equal(t, "/var/lib/spire", agentSection["data_dir"])
 				assert.Equal(t, "info", agentSection["log_level"])
 				assert.Equal(t, "text", agentSection["log_format"])
@@ -453,7 +493,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 				assert.Contains(t, pluginsSection, "KeyManager")
 
 				// Test that hash is deterministic
-				cm2, hash2, err2 := generateSpireAgentConfigMap(tt.spireAgentConfig)
+				cm2, hash2, err2 := generateSpireAgentConfigMap(tt.spireAgentConfig, tt.ztwim)
 				require.NoError(t, err2)
 				assert.Equal(t, hash, hash2)
 				assert.Equal(t, cm.Data["agent.conf"], cm2.Data["agent.conf"])
@@ -469,8 +509,6 @@ func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
 			Namespace: utils.GetOperatorNamespace(),
 		},
 		Spec: v1alpha1.SpireAgentSpec{
-			TrustDomain: "consistency.test",
-			ClusterName: "consistency-cluster",
 			NodeAttestor: &v1alpha1.NodeAttestor{
 				K8sPSATEnabled: "true",
 			},
@@ -482,14 +520,22 @@ func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
 		},
 	}
 
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "consistency.test",
+			ClusterName:     "consistency-cluster",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
 	// Generate the same config multiple times
-	cm1, hash1, err1 := generateSpireAgentConfigMap(spireAgentConfig)
+	cm1, hash1, err1 := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
 	require.NoError(t, err1)
 
-	cm2, hash2, err2 := generateSpireAgentConfigMap(spireAgentConfig)
+	cm2, hash2, err2 := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
 	require.NoError(t, err2)
 
-	cm3, hash3, err3 := generateSpireAgentConfigMap(spireAgentConfig)
+	cm3, hash3, err3 := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
 	require.NoError(t, err3)
 
 	// All results should be identical
@@ -508,7 +554,6 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 			name: "nil node attestor",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain:  "test.domain",
 					NodeAttestor: nil,
 				},
 			},
@@ -517,7 +562,6 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 			name: "nil workload attestors",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain:       "test.domain",
 					WorkloadAttestors: nil,
 				},
 			},
@@ -526,7 +570,6 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 			name: "both nil",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain:       "test.domain",
 					NodeAttestor:      nil,
 					WorkloadAttestors: nil,
 				},
@@ -537,7 +580,14 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Should not panic
-			result := generateAgentConfig(tt.cfg)
+			ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "test.domain",
+					ClusterName:     "test-cluster",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+			result := generateAgentConfig(tt.cfg, ztwim)
 
 			// Basic validation
 			assert.Contains(t, result, "agent")
@@ -560,12 +610,17 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 			Namespace: utils.GetOperatorNamespace(),
 			Labels:    nil, // Explicitly nil labels
 		},
-		Spec: v1alpha1.SpireAgentSpec{
-			TrustDomain: "empty.labels",
+		Spec: v1alpha1.SpireAgentSpec{},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "empty.labels",
+			BundleConfigMap: "spire-bundle",
 		},
 	}
 
-	cm, hash, err := generateSpireAgentConfigMap(spireAgentConfig)
+	cm, hash, err := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
 	require.NoError(t, err)
 	require.NotNil(t, cm)
 	assert.NotEmpty(t, hash)

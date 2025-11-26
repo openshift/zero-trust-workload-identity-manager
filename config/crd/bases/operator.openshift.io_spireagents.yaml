@@ -965,15 +965,6 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
-              bundleConfigMap:
-                default: spire-bundle
-                description: bundleConfigMap is Configmap name for Spire bundle, it
-                  sets the trust domain to be used for the SPIFFE identifiers
-                type: string
-              clusterName:
-                description: clusterName will have the cluster name required to configure
-                  spire agent.
-                type: string
               labels:
                 additionalProperties:
                   type: string
@@ -1124,9 +1115,6 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
-              trustDomain:
-                description: trustDomain to be used for the SPIFFE identifiers
-                type: string
               workloadAttestors:
                 description: workloadAttestors specifies the configuration for the
                   Workload Attestors.
@@ -1178,9 +1166,6 @@ spec:
                         type: string
                     type: object
                 type: object
-            required:
-            - clusterName
-            - trustDomain
             type: object
           status:
             description: SpireAgentStatus defines the observed state of spire agents

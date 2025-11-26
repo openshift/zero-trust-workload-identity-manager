@@ -34,8 +34,8 @@ type ControllerManagerConfigYAML struct {
 }
 
 // reconcileSpireServerConfigMap reconciles the Spire Server ConfigMap
-func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	spireServerConfigMap, err := generateSpireServerConfigMap(&server.Spec)
+func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) (string, error) {
+	spireServerConfigMap, err := generateSpireServerConfigMap(&server.Spec, ztwim)
 	if err != nil {
 		r.log.Error(err, "failed to generate spire server config map")
 		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
@@ -88,7 +88,7 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 		metav1.ConditionTrue)
 
 	// Generate config hash
-	spireServerConfJSON, err := marshalToJSON(generateServerConfMap(&server.Spec))
+	spireServerConfJSON, err := marshalToJSON(generateServerConfMap(&server.Spec, ztwim))
 	if err != nil {
 		r.log.Error(err, "failed to marshal spire server config map to JSON")
 		return "", err
@@ -98,8 +98,8 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 }
 
 // reconcileSpireControllerManagerConfigMap reconciles the Spire Controller Manager ConfigMap
-func (r *SpireServerReconciler) reconcileSpireControllerManagerConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	spireControllerManagerConfig, err := generateSpireControllerManagerConfigYaml(&server.Spec)
+func (r *SpireServerReconciler) reconcileSpireControllerManagerConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) (string, error) {
+	spireControllerManagerConfig, err := generateSpireControllerManagerConfigYaml(&server.Spec, ztwim)
 	if err != nil {
 		r.log.Error(err, "Failed to generate spire controller manager config")
 		statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
@@ -155,8 +155,8 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerConfigMap(ctx con
 }
 
 // reconcileSpireBundleConfigMap reconciles the Spire Bundle ConfigMap
-func (r *SpireServerReconciler) reconcileSpireBundleConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
-	spireBundleCM, err := generateSpireBundleConfigMap(&server.Spec)
+func (r *SpireServerReconciler) reconcileSpireBundleConfigMap(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) error {
+	spireBundleCM, err := generateSpireBundleConfigMap(&server.Spec, ztwim)
 	if err != nil {
 		r.log.Error(err, "failed to generate spire bundle config map")
 		statusMgr.AddCondition(BundleConfigAvailable, "SpireBundleConfigMapGenerationFailed",
@@ -189,14 +189,14 @@ func (r *SpireServerReconciler) reconcileSpireBundleConfigMap(ctx context.Contex
 }
 
 // generateSpireServerConfigMap generates the spire-server ConfigMap
-func generateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.ConfigMap, error) {
+func generateSpireServerConfigMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
-	if config.TrustDomain == "" {
+	if ztwim.Spec.TrustDomain == "" {
 		return nil, fmt.Errorf("trust_domain is empty")
 	}
-	if config.BundleConfigMap == "" {
+	if ztwim.Spec.BundleConfigMap == "" {
 		return nil, fmt.Errorf("bundle configmap is empty")
 	}
 	if config.Datastore == nil {
@@ -205,7 +205,7 @@ func generateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 	if config.CASubject == nil {
 		return nil, fmt.Errorf("CASubject is empty")
 	}
-	confMap := generateServerConfMap(config)
+	confMap := generateServerConfMap(config, ztwim)
 	confJSON, err := marshalToJSON(confMap)
 	if err != nil {
 		return nil, err
@@ -226,7 +226,7 @@ func generateSpireServerConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.Con
 }
 
 // generateServerConfMap builds the server.conf structure as a Go map
-func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interface{} {
+func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) map[string]interface{} {
 	// Build the server config
 	serverConfig := map[string]interface{}{
 		"audit_log_enabled": false,
@@ -247,7 +247,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 		"jwt_issuer":            config.JwtIssuer,
 		"log_level":             utils.GetLogLevelFromString(config.LogLevel),
 		"log_format":            utils.GetLogFormatFromString(config.LogFormat),
-		"trust_domain":          config.TrustDomain,
+		"trust_domain":          ztwim.Spec.TrustDomain,
 	}
 
 	// Only add jwt_key_type if it's explicitly set
@@ -292,7 +292,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 						"plugin_data": map[string]interface{}{
 							"clusters": []map[string]interface{}{
 								{
-									config.ClusterName: map[string]interface{}{
+									ztwim.Spec.ClusterName: map[string]interface{}{
 										"allowed_node_label_keys": []string{},
 										"allowed_pod_label_keys":  []string{},
 										"audience":                []string{"spire-server"},
@@ -310,7 +310,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec) map[string]interfac
 				{
 					"k8sbundle": map[string]interface{}{
 						"plugin_data": map[string]interface{}{
-							"config_map": config.BundleConfigMap,
+							"config_map": ztwim.Spec.BundleConfigMap,
 							"namespace":  utils.GetOperatorNamespace(),
 						},
 					},
@@ -357,11 +357,11 @@ func getCAKeyType(keyType string) string {
 	return keyType
 }
 
-func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*ControllerManagerConfigYAML, error) {
-	if config.TrustDomain == "" {
+func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*ControllerManagerConfigYAML, error) {
+	if ztwim.Spec.TrustDomain == "" {
 		return nil, errors.New("trust_domain is empty")
 	}
-	if config.ClusterName == "" {
+	if ztwim.Spec.ClusterName == "" {
 		return nil, errors.New("cluster name is empty")
 	}
 	return &ControllerManagerConfigYAML{
@@ -373,8 +373,8 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 			Labels:    utils.SpireControllerManagerLabels(config.Labels),
 		},
 		ControllerManagerConfig: spiffev1alpha.ControllerManagerConfig{
-			ClusterName: config.ClusterName,
-			TrustDomain: config.TrustDomain,
+			ClusterName: ztwim.Spec.ClusterName,
+			TrustDomain: ztwim.Spec.TrustDomain,
 			ControllerManagerConfigurationSpec: spiffev1alpha.ControllerManagerConfigurationSpec{
 				Metrics: spiffev1alpha.ControllerMetrics{
 					BindAddress: "0.0.0.0:8082",
@@ -382,7 +382,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 				Health: spiffev1alpha.ControllerHealth{
 					HealthProbeBindAddress: "0.0.0.0:8083",
 				},
-				EntryIDPrefix:    config.ClusterName,
+				EntryIDPrefix:    ztwim.Spec.ClusterName,
 				WatchClassless:   false,
 				ClassName:        "zero-trust-workload-identity-manager-spire",
 				ParentIDTemplate: "spiffe://{{ .TrustDomain }}/spire/agent/k8s_psat/{{ .ClusterName }}/{{ .NodeMeta.UID }}",
@@ -404,8 +404,8 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec) (*Control
 	}, nil
 }
 
-func generateSpireControllerManagerConfigYaml(config *v1alpha1.SpireServerSpec) (string, error) {
-	controllerManagerConfig, err := generateControllerManagerConfig(config)
+func generateSpireControllerManagerConfigYaml(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (string, error) {
+	controllerManagerConfig, err := generateControllerManagerConfig(config, ztwim)
 	if err != nil {
 		return "", err
 	}
@@ -429,13 +429,13 @@ func generateControllerManagerConfigMap(configYAML string) *corev1.ConfigMap {
 	}
 }
 
-func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec) (*corev1.ConfigMap, error) {
-	if config.BundleConfigMap == "" {
+func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, error) {
+	if ztwim.Spec.BundleConfigMap == "" {
 		return nil, errors.New("bundle ConfigMap is empty")
 	}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      config.BundleConfigMap,
+			Name:      ztwim.Spec.BundleConfigMap,
 			Namespace: utils.GetOperatorNamespace(),
 			Labels:    utils.SpireServerLabels(config.Labels),
 		},

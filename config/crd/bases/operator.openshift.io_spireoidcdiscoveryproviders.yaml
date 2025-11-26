@@ -1129,12 +1129,8 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
-              trustDomain:
-                description: trustDomain to be used for the SPIFFE identifiers
-                type: string
             required:
             - jwtIssuer
-            - trustDomain
             type: object
           status:
             description: |-

@@ -14,31 +14,45 @@ import (
 func TestGenerateSpireServerConfigMap(t *testing.T) {
 	validConfig := createValidConfig()
 
+	validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
 	tests := []struct {
 		name        string
 		config      *v1alpha1.SpireServerSpec
+		ztwim       *v1alpha1.ZeroTrustWorkloadIdentityManager
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name:        "Valid config",
 			config:      validConfig,
+			ztwim:       validZTWIM,
 			expectError: false,
 		},
 		{
 			name:        "Nil config",
 			config:      nil,
+			ztwim:       validZTWIM,
 			expectError: true,
 			errorMsg:    "config is nil",
 		},
 		{
 			name: "Empty trust domain",
 			config: &v1alpha1.SpireServerSpec{
-				TrustDomain:     "",
-				BundleConfigMap: "spire-bundle",
 				Datastore: &v1alpha1.DataStore{
 					ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
 					DatabaseType:     "postgres",
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "",
+					BundleConfigMap: "spire-bundle",
 				},
 			},
 			expectError: true,
@@ -47,11 +61,15 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		{
 			name: "Empty bundle configmap",
 			config: &v1alpha1.SpireServerSpec{
-				TrustDomain:     "example.org",
-				BundleConfigMap: "",
 				Datastore: &v1alpha1.DataStore{
 					ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
 					DatabaseType:     "postgres",
+				},
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "",
 				},
 			},
 			expectError: true,
@@ -60,9 +78,13 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		{
 			name: "Nil datastore",
 			config: &v1alpha1.SpireServerSpec{
-				TrustDomain:     "example.org",
-				BundleConfigMap: "spire-bundle",
-				Datastore:       nil,
+				Datastore: nil,
+			},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "spire-bundle",
+				},
 			},
 			expectError: true,
 			errorMsg:    "datastore configuration is required",
@@ -71,7 +93,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, err := generateSpireServerConfigMap(tt.config)
+			cm, err := generateSpireServerConfigMap(tt.config, tt.ztwim)
 
 			// Check error expectations
 			if tt.expectError {
@@ -131,8 +153,8 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 				t.Fatal("Failed to get server section from config")
 			}
 
-			if td, ok := serverConfig["trust_domain"].(string); !ok || td != tt.config.TrustDomain {
-				t.Errorf("Expected trust_domain %q, got %v", tt.config.TrustDomain, td)
+			if td, ok := serverConfig["trust_domain"].(string); !ok || td != tt.ztwim.Spec.TrustDomain {
+				t.Errorf("Expected trust_domain %q, got %v", tt.ztwim.Spec.TrustDomain, td)
 			}
 		})
 	}
@@ -141,7 +163,14 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 func TestGenerateServerConfMap(t *testing.T) {
 	validConfig := createValidConfig()
 
-	confMap := generateServerConfMap(validConfig)
+	validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
+	confMap := generateServerConfMap(validConfig, validZTWIM)
 
 	// Test server section
 	server, ok := confMap["server"].(map[string]interface{})
@@ -149,8 +178,8 @@ func TestGenerateServerConfMap(t *testing.T) {
 		t.Fatal("Failed to get server section")
 	}
 
-	if server["trust_domain"] != validConfig.TrustDomain {
-		t.Errorf("Expected trust_domain %q, got %v", validConfig.TrustDomain, server["trust_domain"])
+	if server["trust_domain"] != validZTWIM.Spec.TrustDomain {
+		t.Errorf("Expected trust_domain %q, got %v", validZTWIM.Spec.TrustDomain, server["trust_domain"])
 	}
 
 	if server["jwt_issuer"] != validConfig.JwtIssuer {
@@ -219,9 +248,9 @@ func TestGenerateServerConfMap(t *testing.T) {
 	k8sBundle := notifier[0]["k8sbundle"].(map[string]interface{})
 	bundleData := k8sBundle["plugin_data"].(map[string]interface{})
 
-	if bundleData["config_map"] != validConfig.BundleConfigMap {
+	if bundleData["config_map"] != validZTWIM.Spec.BundleConfigMap {
 		t.Errorf("Expected config_map %q, got %v",
-			validConfig.BundleConfigMap,
+			validZTWIM.Spec.BundleConfigMap,
 			bundleData["config_map"])
 	}
 
@@ -278,7 +307,14 @@ func TestGenerateServerConfMapTTLFields(t *testing.T) {
 			config.DefaultX509Validity = tt.expectedX509Validity
 			config.DefaultJWTValidity = tt.expectedJWTValidity
 
-			confMap := generateServerConfMap(config)
+			validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+
+			confMap := generateServerConfMap(config, validZTWIM)
 
 			server, ok := confMap["server"].(map[string]interface{})
 			if !ok {
@@ -310,7 +346,14 @@ func TestGenerateSpireServerConfigMapWithTTLFields(t *testing.T) {
 	config.DefaultX509Validity = metav1.Duration{Duration: mustParseDuration("2h")}
 	config.DefaultJWTValidity = metav1.Duration{Duration: mustParseDuration("15m")}
 
-	cm, err := generateSpireServerConfigMap(config)
+	validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
+	cm, err := generateSpireServerConfigMap(config, validZTWIM)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -473,9 +516,18 @@ func TestGenerateConfigHash(t *testing.T) {
 func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 	validConfig := createValidConfig()
 
+	validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			ClusterName:     "test-cluster",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
 	tests := []struct {
 		name        string
 		config      *v1alpha1.SpireServerSpec
+		ztwim       *v1alpha1.ZeroTrustWorkloadIdentityManager
 		expectError bool
 		errorMsg    string
 		checkFields map[string]string
@@ -483,6 +535,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 		{
 			name:        "Valid config",
 			config:      validConfig,
+			ztwim:       validZTWIM,
 			expectError: false,
 			checkFields: map[string]string{
 				"clusterName: test-cluster":            "",
@@ -493,19 +546,25 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 			},
 		},
 		{
-			name: "Empty trust domain",
-			config: &v1alpha1.SpireServerSpec{
-				TrustDomain: "",
-				ClusterName: "test-cluster",
+			name:   "Empty trust domain",
+			config: &v1alpha1.SpireServerSpec{},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain: "",
+					ClusterName: "test-cluster",
+				},
 			},
 			expectError: true,
 			errorMsg:    "trust_domain is empty",
 		},
 		{
-			name: "Empty cluster name",
-			config: &v1alpha1.SpireServerSpec{
-				TrustDomain: "example.org",
-				ClusterName: "",
+			name:   "Empty cluster name",
+			config: &v1alpha1.SpireServerSpec{},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain: "example.org",
+					ClusterName: "",
+				},
 			},
 			expectError: true,
 			errorMsg:    "cluster name is empty",
@@ -514,7 +573,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			yamlStr, err := generateSpireControllerManagerConfigYaml(tt.config)
+			yamlStr, err := generateSpireControllerManagerConfigYaml(tt.config, tt.ztwim)
 
 			// Check error expectations
 			if tt.expectError {
@@ -576,21 +635,34 @@ func TestGenerateControllerManagerConfigMap(t *testing.T) {
 func TestGenerateSpireBundleConfigMap(t *testing.T) {
 	validConfig := createValidConfig()
 
+	validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
 	tests := []struct {
 		name        string
 		config      *v1alpha1.SpireServerSpec
+		ztwim       *v1alpha1.ZeroTrustWorkloadIdentityManager
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name:        "Valid config",
 			config:      validConfig,
+			ztwim:       validZTWIM,
 			expectError: false,
 		},
 		{
-			name: "Empty bundle configmap",
-			config: &v1alpha1.SpireServerSpec{
-				BundleConfigMap: "",
+			name:   "Empty bundle configmap",
+			config: &v1alpha1.SpireServerSpec{},
+			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "",
+				},
 			},
 			expectError: true,
 			errorMsg:    "bundle ConfigMap is empty",
@@ -599,7 +671,7 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, err := generateSpireBundleConfigMap(tt.config)
+			cm, err := generateSpireBundleConfigMap(tt.config, tt.ztwim)
 
 			// Check error expectations
 			if tt.expectError {
@@ -616,8 +688,8 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 			}
 
 			// Check ConfigMap metadata
-			if cm.Name != tt.config.BundleConfigMap {
-				t.Errorf("Expected name %q, got %q", tt.config.BundleConfigMap, cm.Name)
+			if cm.Name != tt.ztwim.Spec.BundleConfigMap {
+				t.Errorf("Expected name %q, got %q", tt.ztwim.Spec.BundleConfigMap, cm.Name)
 			}
 
 			if cm.Namespace != utils.GetOperatorNamespace() {
@@ -642,10 +714,7 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 // Helper function to create a valid config for testing
 func createValidConfig() *v1alpha1.SpireServerSpec {
 	return &v1alpha1.SpireServerSpec{
-		TrustDomain:     "example.org",
-		ClusterName:     "test-cluster",
-		BundleConfigMap: "spire-bundle",
-		JwtIssuer:       "example.org",
+		JwtIssuer: "example.org",
 		CASubject: &v1alpha1.CASubject{
 			CommonName:   "SPIRE Server CA",
 			Country:      "US",
@@ -793,7 +862,14 @@ func TestGenerateServerConfMapWithKeyTypes(t *testing.T) {
 			config.CAKeyType = tt.caKeyType
 			config.JWTKeyType = tt.jwtKeyType
 
-			confMap := generateServerConfMap(config)
+			validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+
+			confMap := generateServerConfMap(config, validZTWIM)
 
 			// Get server section
 			server, ok := confMap["server"].(map[string]interface{})
@@ -864,7 +940,14 @@ func TestGenerateSpireServerConfigMapWithKeyTypes(t *testing.T) {
 			config.CAKeyType = tt.caKeyType
 			config.JWTKeyType = tt.jwtKeyType
 
-			cm, err := generateSpireServerConfigMap(config)
+			validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+
+			cm, err := generateSpireServerConfigMap(config, validZTWIM)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}

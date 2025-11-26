@@ -17,13 +17,19 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		// Arrange
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain: "example.org",
-				JwtIssuer:   "https://oidc-discovery.example.org",
+				JwtIssuer: "https://oidc-discovery.example.org",
+			},
+		}
+
+		ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+				TrustDomain:     "example.org",
+				BundleConfigMap: "spire-bundle",
 			},
 		}
 
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
 
 		// Assert
 		require.NoError(t, err)
@@ -70,7 +76,6 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain:     "custom.domain.com",
 				AgentSocketName: "custom-agent.sock",
 				JwtIssuer:       "https://custom-jwt-issuer.example.com",
 				CommonConfig: v1alpha1.CommonConfig{
@@ -79,8 +84,15 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 			},
 		}
 
+		ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+				TrustDomain:     "custom.domain.com",
+				BundleConfigMap: "spire-bundle",
+			},
+		}
+
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
 
 		// Assert
 		require.NoError(t, err)
@@ -120,13 +132,19 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		// Arrange
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				TrustDomain:     "test.domain",
 				AgentSocketName: "", // Empty should use default
 			},
 		}
 
+		ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+				TrustDomain:     "test.domain",
+				BundleConfigMap: "spire-bundle",
+			},
+		}
+
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
 
 		// Assert
 		require.NoError(t, err)
@@ -142,13 +160,17 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 	t.Run("should generate valid OIDC config structure", func(t *testing.T) {
 		// Arrange
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{},
+		}
+
+		ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
 				TrustDomain: "example.org",
 			},
 		}
 
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
 
 		// Assert
 		require.NoError(t, err)
@@ -186,12 +208,17 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 // Test to verify JSON formatting
 func TestOIDCConfigJSONFormatting(t *testing.T) {
 	cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-			TrustDomain: "example.org",
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
 		},
 	}
 
-	result, err := generateOIDCConfigMapFromCR(cr)
+	result, err := generateOIDCConfigMapFromCR(cr, ztwim)
 	require.NoError(t, err)
 
 	oidcJSON := result.Data["oidc-discovery-provider.conf"]
