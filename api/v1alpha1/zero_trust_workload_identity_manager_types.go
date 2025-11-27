@@ -119,8 +119,10 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 type CommonConfig struct {
 
 	// labels to apply to all resources managed by the API.
+	// Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
 	// +mapType=granular
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxProperties=64
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// resources are for defining the resource requirements.
@@ -134,14 +136,18 @@ type CommonConfig struct {
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 
 	// tolerations are for setting the pod tolerations.
+	// Maximum 50 tolerations allowed.
 	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=50
 	// +listType=atomic
 	Tolerations []*corev1.Toleration `json:"tolerations,omitempty"`
 
 	// nodeSelector is for defining the scheduling criteria using node labels.
+	// Maximum 50 node selectors allowed.
 	// ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxProperties=50
 	// +mapType=atomic
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }

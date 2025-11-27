@@ -966,13 +966,19 @@ spec:
                 type: object
               agentSocketPath:
                 default: /run/spire/agent-sockets/spire-agent.sock
-                description: agentSocketPath is the path to spiffe csi driver the
-                  agent socket.
+                description: |-
+                  agentSocketPath is the path to spiffe csi driver the agent socket.
+                  Must be an absolute path without traversal attempts or null bytes.
+                maxLength: 256
+                pattern: ^/[a-zA-Z0-9._/\-]*$
                 type: string
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources managed by the API.
+                description: |-
+                  labels to apply to all resources managed by the API.
+                  Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
+                maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
               nodeSelector:
@@ -980,13 +986,18 @@ spec:
                   type: string
                 description: |-
                   nodeSelector is for defining the scheduling criteria using node labels.
+                  Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+                maxProperties: 50
                 type: object
                 x-kubernetes-map-type: atomic
               pluginName:
                 default: csi.spiffe.io
-                description: pluginName defines the name of the CSI plugin, Sets the
-                  csi driver name deployed to the cluster.
+                description: |-
+                  pluginName defines the name of the CSI plugin, Sets the csi driver name deployed to the cluster.
+                  Must be a valid domain name format (e.g., csi.spiffe.io).
+                maxLength: 127
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
                 type: string
               resources:
                 description: |-
@@ -1052,6 +1063,7 @@ spec:
               tolerations:
                 description: |-
                   tolerations are for setting the pod tolerations.
+                  Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
                   description: |-
@@ -1089,6 +1101,7 @@ spec:
                         If the operator is Exists, the value should be empty, otherwise just a regular string.
                       type: string
                   type: object
+                maxItems: 50
                 type: array
                 x-kubernetes-list-type: atomic
             type: object
