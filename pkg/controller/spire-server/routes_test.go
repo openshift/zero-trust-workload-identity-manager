@@ -66,9 +66,7 @@ func TestGenerateFederationRoute(t *testing.T) {
 						BundleEndpoint: v1alpha1.BundleEndpointConfig{
 							Profile: v1alpha1.HttpsWebProfile,
 							HttpsWeb: &v1alpha1.HttpsWebConfig{
-								ServingCert: &v1alpha1.ServingCertConfig{
-									SecretName: "my-cert",
-								},
+								ServingCert: &v1alpha1.ServingCertConfig{},
 							},
 						},
 					},
@@ -88,7 +86,6 @@ func TestGenerateFederationRoute(t *testing.T) {
 							Profile: v1alpha1.HttpsWebProfile,
 							HttpsWeb: &v1alpha1.HttpsWebConfig{
 								ServingCert: &v1alpha1.ServingCertConfig{
-									SecretName:        "my-cert",
 									ExternalSecretRef: "external-cert-secret",
 								},
 							},

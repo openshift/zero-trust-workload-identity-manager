@@ -263,15 +263,14 @@ func validateAcmeConfig(acme *v1alpha1.AcmeConfig) error {
 }
 
 // validateServingCertConfig validates ServingCert configuration
+// The service CA certificate is always used for internal communication (Route to Pod)
 func validateServingCertConfig(servingCert *v1alpha1.ServingCertConfig) error {
 	if servingCert == nil {
 		return nil
 	}
 
-	// SecretName is optional - if empty, defaults to service CA certificate (spire-server-serving-cert)
-
-	if servingCert.FileSyncInterval > 0 && (servingCert.FileSyncInterval < 300 || servingCert.FileSyncInterval > 86400) {
-		return fmt.Errorf("fileSyncInterval must be between 300 and 86400 seconds, got %d", servingCert.FileSyncInterval)
+	if servingCert.FileSyncInterval > 0 && (servingCert.FileSyncInterval < 3600 || servingCert.FileSyncInterval > 7776000) {
+		return fmt.Errorf("fileSyncInterval must be between 3600 and 7776000 seconds, got %d", servingCert.FileSyncInterval)
 	}
 
 	return nil

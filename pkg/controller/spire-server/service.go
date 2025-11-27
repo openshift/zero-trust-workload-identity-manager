@@ -8,6 +8,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -37,7 +38,7 @@ func (r *SpireServerReconciler) reconcileService(ctx context.Context, server *v1
 
 // reconcileSpireServerService reconciles the Spire Server Service
 func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
-	desired := getSpireServerService(server.Spec.Labels)
+	desired := getSpireServerService(&server.Spec)
 
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on service")
@@ -201,15 +202,47 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 	return nil
 }
 
-// getSpireServerService returns the Spire Server Service with proper labels and selectors
-func getSpireServerService(customLabels map[string]string) *corev1.Service {
+// getSpireServerService returns the Spire Server Service with proper labels, selectors, and conditional federation support
+func getSpireServerService(config *v1alpha1.SpireServerSpec) *corev1.Service {
 	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireServerServiceAssetName))
-	svc.Labels = utils.SpireServerLabels(customLabels)
+	svc.Labels = utils.SpireServerLabels(config.Labels)
 	svc.Namespace = utils.GetOperatorNamespace()
 	svc.Spec.Selector = map[string]string{
 		"app.kubernetes.io/name":     "spire-server",
 		"app.kubernetes.io/instance": utils.StandardInstance,
 	}
+
+	// Conditionally add federation support based on configuration
+	if config.Federation != nil {
+		// Add service CA annotation for internal communication (Route to Pod)
+		if svc.Annotations == nil {
+			svc.Annotations = make(map[string]string)
+		}
+		svc.Annotations[utils.ServiceCAAnnotationKey] = utils.SpireServerServingCertName
+
+		// Add federation port
+		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
+			Name:       "federation",
+			Port:       8443,
+			TargetPort: intstr.FromInt(8443),
+			Protocol:   corev1.ProtocolTCP,
+		})
+	} else {
+		// Remove service CA annotation if federation is not configured
+		if svc.Annotations != nil {
+			delete(svc.Annotations, utils.ServiceCAAnnotationKey)
+		}
+
+		// Remove federation port if it exists
+		filteredPorts := []corev1.ServicePort{}
+		for _, port := range svc.Spec.Ports {
+			if port.Name != "federation" {
+				filteredPorts = append(filteredPorts, port)
+			}
+		}
+		svc.Spec.Ports = filteredPorts
+	}
+
 	return svc
 }
 

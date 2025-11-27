@@ -305,8 +305,7 @@ func TestValidateFederationConfig(t *testing.T) {
 					RefreshHint: 300,
 					HttpsWeb: &v1alpha1.HttpsWebConfig{
 						ServingCert: &v1alpha1.ServingCertConfig{
-							SecretName:       "my-tls-cert",
-							FileSyncInterval: 300,
+							FileSyncInterval: 3600,
 						},
 					},
 				},
@@ -452,8 +451,7 @@ func TestValidateBundleEndpoint(t *testing.T) {
 				RefreshHint: 300,
 				HttpsWeb: &v1alpha1.HttpsWebConfig{
 					ServingCert: &v1alpha1.ServingCertConfig{
-						SecretName:       "my-cert",
-						FileSyncInterval: 300,
+						FileSyncInterval: 3600,
 					},
 				},
 			},
@@ -480,9 +478,7 @@ func TestValidateBundleEndpoint(t *testing.T) {
 						Email:        "admin@example.org",
 						TosAccepted:  "true",
 					},
-					ServingCert: &v1alpha1.ServingCertConfig{
-						SecretName: "my-cert",
-					},
+					ServingCert: &v1alpha1.ServingCertConfig{},
 				},
 			},
 			expectError: true,
@@ -635,13 +631,12 @@ func TestValidateServingCertConfig(t *testing.T) {
 		{
 			name: "Valid ServingCert config",
 			servingCert: &v1alpha1.ServingCertConfig{
-				SecretName:       "my-cert",
 				FileSyncInterval: 3600,
 			},
 			expectError: false,
 		},
 		{
-			name: "Valid ServingCert without secret name (defaults to service CA)",
+			name: "Valid ServingCert with service CA certificate",
 			servingCert: &v1alpha1.ServingCertConfig{
 				FileSyncInterval: 3600,
 			},
@@ -650,36 +645,32 @@ func TestValidateServingCertConfig(t *testing.T) {
 		{
 			name: "Valid FileSyncInterval at minimum",
 			servingCert: &v1alpha1.ServingCertConfig{
-				SecretName:       "my-cert",
-				FileSyncInterval: 300,
+				FileSyncInterval: 3600,
 			},
 			expectError: false,
 		},
 		{
 			name: "Valid FileSyncInterval at maximum",
 			servingCert: &v1alpha1.ServingCertConfig{
-				SecretName:       "my-cert",
-				FileSyncInterval: 86400,
+				FileSyncInterval: 7776000,
 			},
 			expectError: false,
 		},
 		{
 			name: "Invalid FileSyncInterval - too low",
 			servingCert: &v1alpha1.ServingCertConfig{
-				SecretName:       "my-cert",
-				FileSyncInterval: 200,
+				FileSyncInterval: 3599,
 			},
 			expectError: true,
-			errorMsg:    "fileSyncInterval must be between 300 and 86400 seconds",
+			errorMsg:    "fileSyncInterval must be between 3600 and 7776000 seconds",
 		},
 		{
 			name: "Invalid FileSyncInterval - too high",
 			servingCert: &v1alpha1.ServingCertConfig{
-				SecretName:       "my-cert",
-				FileSyncInterval: 90000,
+				FileSyncInterval: 7776001,
 			},
 			expectError: true,
-			errorMsg:    "fileSyncInterval must be between 300 and 86400 seconds",
+			errorMsg:    "fileSyncInterval must be between 3600 and 7776000 seconds",
 		},
 	}
 
