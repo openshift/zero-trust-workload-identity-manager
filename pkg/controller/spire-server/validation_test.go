@@ -638,7 +638,8 @@ func TestValidateServingCertConfig(t *testing.T) {
 		{
 			name: "Valid ServingCert with service CA certificate",
 			servingCert: &v1alpha1.ServingCertConfig{
-				FileSyncInterval: 3600,
+				FileSyncInterval:  3600,
+				ExternalSecretRef: "federation-tls-cert",
 			},
 			expectError: false,
 		},
