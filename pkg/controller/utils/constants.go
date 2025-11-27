@@ -44,6 +44,10 @@ const (
 	// Validating Webhook Configurations
 	SpireControllerManagerValidatingWebhookConfigurationAssetName = "spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml"
 
+	// Service CA Certificate
+	ServiceCAAnnotationKey     = "service.beta.openshift.io/serving-cert-secret-name"
+	SpireServerServingCertName = "spire-server-serving-cert"
+
 	// Image Reference
 	SpireServerImageEnv                = "RELATED_IMAGE_SPIRE_SERVER"
 	SpireAgentImageEnv                 = "RELATED_IMAGE_SPIRE_AGENT"
