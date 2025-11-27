@@ -200,19 +200,15 @@ type AcmeConfig struct {
 	TosAccepted string `json:"tosAccepted,omitempty"`
 }
 
-// ServingCertConfig references a Secret containing TLS certificate
+// ServingCertConfig configures TLS certificates for the federation endpoint.
+// The service CA certificate is always used for internal communication from the Route to the
+// SPIRE server pod. For external communication from clients to the Route, the certificate is
+// controlled by ExternalSecretRef.
 type ServingCertConfig struct {
-	// SecretName is the name of the Secret containing tls.crt and tls.key
-	// The secret must be in the same namespace where the operator and operands are deployed.
-	// The secret must contain tls.crt and tls.key fields.
-	// If not specified, defaults to the service CA certificate (spire-server-serving-cert).
-	// +kubebuilder:validation:Optional
-	SecretName string `json:"secretName,omitempty"`
-
 	// FileSyncInterval is how often to check for certificate updates (seconds)
-	// +kubebuilder:validation:Minimum=300
-	// +kubebuilder:validation:Maximum=86400
-	// +kubebuilder:default=3600
+	// +kubebuilder:validation:Minimum=3600
+	// +kubebuilder:validation:Maximum=7776000
+	// +kubebuilder:default=86400
 	FileSyncInterval int32 `json:"fileSyncInterval,omitempty"`
 
 	// ExternalSecretRef is a reference to an externally managed secret that contains

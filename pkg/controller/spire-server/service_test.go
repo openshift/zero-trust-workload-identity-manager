@@ -3,12 +3,14 @@ package spire_server
 import (
 	"testing"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
 func TestGetSpireServerService(t *testing.T) {
-	t.Run("without custom labels", func(t *testing.T) {
-		svc := getSpireServerService(nil)
+	t.Run("without custom labels and without federation", func(t *testing.T) {
+		config := &v1alpha1.SpireServerSpec{}
+		svc := getSpireServerService(config)
 
 		if svc == nil {
 			t.Fatal("Expected Service, got nil")
@@ -48,6 +50,53 @@ func TestGetSpireServerService(t *testing.T) {
 		if val, ok := svc.Spec.Selector["app.kubernetes.io/instance"]; !ok || val != utils.StandardInstance {
 			t.Errorf("Expected selector app.kubernetes.io/instance=%s", utils.StandardInstance)
 		}
+
+		// Check that service CA annotation is NOT present when federation is disabled
+		if _, ok := svc.Annotations[utils.ServiceCAAnnotationKey]; ok {
+			t.Error("Expected service CA annotation to be absent when federation is not configured")
+		}
+
+		// Check that federation port is NOT present
+		for _, port := range svc.Spec.Ports {
+			if port.Name == "federation" {
+				t.Error("Expected federation port to be absent when federation is not configured")
+			}
+		}
+	})
+
+	t.Run("with federation enabled", func(t *testing.T) {
+		config := &v1alpha1.SpireServerSpec{
+			Federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile: v1alpha1.HttpsSpiffeProfile,
+				},
+			},
+		}
+		svc := getSpireServerService(config)
+
+		if svc == nil {
+			t.Fatal("Expected Service, got nil")
+		}
+
+		// Check that service CA annotation IS present when federation is enabled
+		if val, ok := svc.Annotations[utils.ServiceCAAnnotationKey]; !ok || val != utils.SpireServerServingCertName {
+			t.Errorf("Expected service CA annotation when federation is configured, got %v", val)
+		}
+
+		// Check that federation port IS present
+		federationPortFound := false
+		for _, port := range svc.Spec.Ports {
+			if port.Name == "federation" {
+				federationPortFound = true
+				if port.Port != 8443 {
+					t.Errorf("Expected federation port 8443, got %d", port.Port)
+				}
+				break
+			}
+		}
+		if !federationPortFound {
+			t.Error("Expected federation port to be present when federation is configured")
+		}
 	})
 
 	t.Run("with custom labels", func(t *testing.T) {
@@ -56,7 +105,12 @@ func TestGetSpireServerService(t *testing.T) {
 			"priority":     "critical",
 		}
 
-		svc := getSpireServerService(customLabels)
+		config := &v1alpha1.SpireServerSpec{
+			CommonConfig: v1alpha1.CommonConfig{
+				Labels: customLabels,
+			},
+		}
+		svc := getSpireServerService(config)
 
 		if svc == nil {
 			t.Fatal("Expected Service, got nil")
@@ -83,7 +137,8 @@ func TestGetSpireServerService(t *testing.T) {
 
 	t.Run("preserves all asset labels", func(t *testing.T) {
 		// Get labels without custom labels (these come from asset file)
-		svcWithoutCustom := getSpireServerService(nil)
+		configWithoutCustom := &v1alpha1.SpireServerSpec{}
+		svcWithoutCustom := getSpireServerService(configWithoutCustom)
 		assetLabels := make(map[string]string)
 		for k, v := range svcWithoutCustom.Labels {
 			assetLabels[k] = v
@@ -93,7 +148,12 @@ func TestGetSpireServerService(t *testing.T) {
 		customLabels := map[string]string{
 			"cluster": "production",
 		}
-		svcWithCustom := getSpireServerService(customLabels)
+		configWithCustom := &v1alpha1.SpireServerSpec{
+			CommonConfig: v1alpha1.CommonConfig{
+				Labels: customLabels,
+			},
+		}
+		svcWithCustom := getSpireServerService(configWithCustom)
 
 		// All asset labels should still be present
 		for k, v := range assetLabels {

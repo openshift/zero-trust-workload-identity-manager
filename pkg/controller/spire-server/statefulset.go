@@ -136,7 +136,6 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
 								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
-								{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
@@ -227,16 +226,18 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	return sts
 }
 
-// addFederationConfigurationToStatefulSet adds federation volume and mount to the StatefulSet when using ServingCert
+// addFederationConfigurationToStatefulSet adds federation port, volume and mount to the StatefulSet
 func addFederationConfigurationToStatefulSet(sts *appsv1.StatefulSet, federation *v1alpha1.FederationConfig) {
+	// Add federation port to spire-server container (first container)
+	sts.Spec.Template.Spec.Containers[0].Ports = append(
+		sts.Spec.Template.Spec.Containers[0].Ports,
+		corev1.ContainerPort{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
+	)
+
 	// Only add spire-server-tls volume if ServingCert is configured
 	if federation.BundleEndpoint.HttpsWeb != nil && federation.BundleEndpoint.HttpsWeb.ServingCert != nil {
-		// Determine which secret to use
-		secretName := federation.BundleEndpoint.HttpsWeb.ServingCert.SecretName
-		if secretName == "" {
-			// Default to service CA certificate if no secret name provided
-			secretName = "spire-server-serving-cert"
-		}
+		// Always use service CA certificate for internal communication
+		secretName := utils.SpireServerServingCertName
 
 		// Add volume mount to spire-server container (first container)
 		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(

@@ -1134,20 +1134,13 @@ spec:
                                   this secret to configure the route's TLS certificate.
                                 type: string
                               fileSyncInterval:
-                                default: 3600
+                                default: 86400
                                 description: FileSyncInterval is how often to check
                                   for certificate updates (seconds)
                                 format: int32
-                                maximum: 86400
-                                minimum: 300
+                                maximum: 7776000
+                                minimum: 3600
                                 type: integer
-                              secretName:
-                                description: |-
-                                  SecretName is the name of the Secret containing tls.crt and tls.key
-                                  The secret must be in the same namespace where the operator and operands are deployed.
-                                  The secret must contain tls.crt and tls.key fields.
-                                  If not specified, defaults to the service CA certificate (spire-server-serving-cert).
-                                type: string
                             type: object
                         type: object
                         x-kubernetes-validations:

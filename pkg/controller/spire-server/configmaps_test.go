@@ -1137,8 +1137,7 @@ func TestGenerateBundleEndpointConfig(t *testing.T) {
 				RefreshHint: 300,
 				HttpsWeb: &v1alpha1.HttpsWebConfig{
 					ServingCert: &v1alpha1.ServingCertConfig{
-						SecretName:       "my-cert",
-						FileSyncInterval: 600,
+						FileSyncInterval: 3600,
 					},
 				},
 			},

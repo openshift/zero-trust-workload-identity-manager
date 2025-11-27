@@ -441,7 +441,6 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
 								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
-								{Name: "federation", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
@@ -523,36 +522,18 @@ func TestAddFederationConfigurationToStatefulSet(t *testing.T) {
 		expectedSecretName string
 	}{
 		{
-			name: "Federation with ServingCert and custom secret",
+			name: "Federation with ServingCert using service CA certificate",
 			federation: &v1alpha1.FederationConfig{
 				BundleEndpoint: v1alpha1.BundleEndpointConfig{
 					Profile: v1alpha1.HttpsWebProfile,
 					HttpsWeb: &v1alpha1.HttpsWebConfig{
-						ServingCert: &v1alpha1.ServingCertConfig{
-							SecretName: "my-custom-cert",
-						},
+						ServingCert: &v1alpha1.ServingCertConfig{},
 					},
 				},
 			},
 			expectVolume:       true,
 			expectVolumeMount:  true,
-			expectedSecretName: "my-custom-cert",
-		},
-		{
-			name: "Federation with ServingCert and default secret",
-			federation: &v1alpha1.FederationConfig{
-				BundleEndpoint: v1alpha1.BundleEndpointConfig{
-					Profile: v1alpha1.HttpsWebProfile,
-					HttpsWeb: &v1alpha1.HttpsWebConfig{
-						ServingCert: &v1alpha1.ServingCertConfig{
-							// No SecretName specified, should use default
-						},
-					},
-				},
-			},
-			expectVolume:       true,
-			expectVolumeMount:  true,
-			expectedSecretName: "spire-server-serving-cert",
+			expectedSecretName: utils.SpireServerServingCertName,
 		},
 		{
 			name: "Federation with ACME (no volume needed)",
@@ -662,18 +643,20 @@ func TestAddFederationConfigurationToStatefulSet(t *testing.T) {
 
 func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 	tests := []struct {
-		name                string
-		federation          *v1alpha1.FederationConfig
-		expectedVolumeCount int
-		expectedPortCount   int
-		expectTLSVolume     bool
+		name                 string
+		federation           *v1alpha1.FederationConfig
+		expectedVolumeCount  int
+		expectedPortCount    int
+		expectTLSVolume      bool
+		expectFederationPort bool
 	}{
 		{
-			name:                "Without federation",
-			federation:          nil,
-			expectedVolumeCount: 5,
-			expectedPortCount:   3, // grpc, healthz, federation (always present)
-			expectTLSVolume:     false,
+			name:                 "Without federation",
+			federation:           nil,
+			expectedVolumeCount:  5,
+			expectedPortCount:    2, // grpc, healthz only
+			expectTLSVolume:      false,
+			expectFederationPort: false,
 		},
 		{
 			name: "With https_spiffe federation",
@@ -682,9 +665,10 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 					Profile: v1alpha1.HttpsSpiffeProfile,
 				},
 			},
-			expectedVolumeCount: 5, // No additional volume needed for https_spiffe
-			expectedPortCount:   3, // grpc, healthz, federation
-			expectTLSVolume:     false,
+			expectedVolumeCount:  5, // No additional volume needed for https_spiffe
+			expectedPortCount:    3, // grpc, healthz, federation
+			expectTLSVolume:      false,
+			expectFederationPort: true,
 		},
 		{
 			name: "With https_web federation and ServingCert",
@@ -692,15 +676,14 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 				BundleEndpoint: v1alpha1.BundleEndpointConfig{
 					Profile: v1alpha1.HttpsWebProfile,
 					HttpsWeb: &v1alpha1.HttpsWebConfig{
-						ServingCert: &v1alpha1.ServingCertConfig{
-							SecretName: "my-cert",
-						},
+						ServingCert: &v1alpha1.ServingCertConfig{},
 					},
 				},
 			},
-			expectedVolumeCount: 6, // One additional volume for TLS cert
-			expectedPortCount:   3,
-			expectTLSVolume:     true,
+			expectedVolumeCount:  6, // One additional volume for TLS cert
+			expectedPortCount:    3,
+			expectTLSVolume:      true,
+			expectFederationPort: true,
 		},
 	}
 
@@ -739,7 +722,7 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 				t.Errorf("Expected %d ports, got %d", tt.expectedPortCount, len(spireServerContainer.Ports))
 			}
 
-			// Check for federation port (always present)
+			// Check for federation port (only when federation is configured)
 			federationPortFound := false
 			for _, port := range spireServerContainer.Ports {
 				if port.Name == "federation" {
@@ -754,8 +737,8 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 				}
 			}
 
-			if !federationPortFound {
-				t.Error("Expected federation port to always be present")
+			if tt.expectFederationPort != federationPortFound {
+				t.Errorf("Expected federation port presence: %v, got: %v", tt.expectFederationPort, federationPortFound)
 			}
 		})
 	}
