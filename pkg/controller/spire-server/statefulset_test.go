@@ -132,8 +132,8 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 		}
 
 		// Check ports
-		if len(spireServerContainer.Ports) != 3 {
-			t.Errorf("Expected 3 ports, got %d", len(spireServerContainer.Ports))
+		if len(spireServerContainer.Ports) != 2 {
+			t.Errorf("Expected 2 ports, got %d", len(spireServerContainer.Ports))
 		}
 
 		// Check environment variables
