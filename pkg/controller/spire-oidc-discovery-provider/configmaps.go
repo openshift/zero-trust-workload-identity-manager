@@ -20,8 +20,8 @@ import (
 )
 
 // reconcileConfigMap reconciles the OIDC Discovery Provider ConfigMap
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	cm, err := generateOIDCConfigMapFromCR(oidc)
+func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) (string, error) {
+	cm, err := generateOIDCConfigMapFromCR(oidc, ztwim)
 	if err != nil {
 		r.log.Error(err, "failed to generate OIDC ConfigMap from CR")
 		statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
@@ -80,7 +80,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Co
 }
 
 // generateOIDCConfigMapFromCR creates a ConfigMap for the spire oidc discovery provider from the CR spec
-func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*corev1.ConfigMap, error) {
+func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, error) {
 	if dp == nil {
 		return nil, errors.New("spire OIDC Discovery Provider Config is nil")
 	}
@@ -91,7 +91,7 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 	}
 
 	// Determine trust domain
-	trustDomain := dp.Spec.TrustDomain
+	trustDomain := ztwim.Spec.TrustDomain
 
 	// JWT Issuer validation and normalization
 	jwtIssuer, err := utils.StripProtocolFromJWTIssuer(dp.Spec.JwtIssuer)
@@ -99,8 +99,8 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider) (*core
 		return nil, fmt.Errorf("invalid JWT issuer URL: %w", err)
 	}
 	// OIDC config map data
-	oidcDefaultDomain := "spire-spiffe-oidc-discovery-provider." + utils.OperatorNamespace
-	oidcSVCDomain := "spire-spiffe-oidc-discovery-provider." + utils.OperatorNamespace + ".svc.cluster.local"
+	oidcDefaultDomain := "spire-spiffe-oidc-discovery-provider." + utils.GetOperatorNamespace()
+	oidcSVCDomain := "spire-spiffe-oidc-discovery-provider." + utils.GetOperatorNamespace() + ".svc.cluster.local"
 	oidcConfig := map[string]interface{}{
 		"domains": []string{
 			"spire-spiffe-oidc-discovery-provider",

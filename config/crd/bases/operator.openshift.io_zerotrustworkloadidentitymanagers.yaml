@@ -970,6 +970,29 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
+              bundleConfigMap:
+                default: spire-bundle
+                description: |-
+                  bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
+                  Must be a valid Kubernetes name.
+                maxLength: 253
+                minLength: 1
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: bundleConfigMap is immutable and cannot be changed
+                  rule: self == oldSelf
+              clusterName:
+                description: |-
+                  clusterName will have the cluster name required to configure spire agent.
+                  Must be a valid DNS-1123 subdomain.
+                maxLength: 63
+                minLength: 1
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                type: string
+                x-kubernetes-validations:
+                - message: clusterName is immutable and cannot be changed
+                  rule: self == oldSelf
               labels:
                 additionalProperties:
                   type: string
@@ -1087,6 +1110,20 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
+              trustDomain:
+                description: |-
+                  trustDomain to be used for the SPIFFE identifiers
+                  Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
+                maxLength: 255
+                minLength: 1
+                pattern: ^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: trustDomain is immutable and cannot be changed
+                  rule: self == oldSelf
+            required:
+            - clusterName
+            - trustDomain
             type: object
           status:
             description: |-

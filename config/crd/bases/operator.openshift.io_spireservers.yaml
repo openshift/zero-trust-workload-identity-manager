@@ -965,11 +965,6 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
-              bundleConfigMap:
-                default: spire-bundle
-                description: bundleConfigMap is Configmap name for Spire bundle, it
-                  sets the trust domain to be used for the SPIFFE identifiers
-                type: string
               caKeyType:
                 default: rsa-2048
                 description: |-
@@ -1001,10 +996,6 @@ spec:
                   caValidity is the validity period (TTL) for the SPIRE Server's own CA certificate.
                   This determines how long the server's root or intermediate certificate is valid.
                 format: duration
-                type: string
-              clusterName:
-                description: clusterName will have the cluster name required to configure
-                  spire server.
                 type: string
               datastore:
                 description: spireSQLConfig has the config required for the spire
@@ -1296,13 +1287,8 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
-              trustDomain:
-                description: trustDomain to be used for the SPIFFE identifiers
-                type: string
             required:
-            - clusterName
             - jwtIssuer
-            - trustDomain
             type: object
           status:
             description: SpireServerStatus defines the observed state of spire-server
