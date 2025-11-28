@@ -964,11 +964,6 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
-              agentSocketPath:
-                default: /run/spire/agent-sockets/spire-agent.sock
-                description: agentSocketPath is the path to spiffe csi driver the
-                  agent socket.
-                type: string
               labels:
                 additionalProperties:
                   type: string
@@ -983,11 +978,6 @@ spec:
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 type: object
                 x-kubernetes-map-type: atomic
-              pluginName:
-                default: csi.spiffe.io
-                description: pluginName defines the name of the CSI plugin, Sets the
-                  csi driver name deployed to the cluster.
-                type: string
               resources:
                 description: |-
                   resources are for defining the resource requirements.

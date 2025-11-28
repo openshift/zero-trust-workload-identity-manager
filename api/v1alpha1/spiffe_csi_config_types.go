@@ -23,15 +23,6 @@ type SpiffeCSIDriver struct {
 
 // SpiffeCSIDriverSpec will have specifications for configuration related to the spiffe-csi driver.
 type SpiffeCSIDriverSpec struct {
-
-	// agentSocketPath is the path to spiffe csi driver the agent socket.
-	// +kubebuilder:default:="/run/spire/agent-sockets/spire-agent.sock"
-	AgentSocket string `json:"agentSocketPath,omitempty"`
-
-	// pluginName defines the name of the CSI plugin, Sets the csi driver name deployed to the cluster.
-	// +kubebuilder:default:="csi.spiffe.io"
-	PluginName string `json:"pluginName,omitempty"`
-
 	CommonConfig `json:",inline"`
 }
 

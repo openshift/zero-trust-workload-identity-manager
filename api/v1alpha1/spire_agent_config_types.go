@@ -82,12 +82,6 @@ type WorkloadAttestors struct {
 	// +kubebuilder:validation:Optional
 	K8sEnabled string `json:"k8sEnabled,omitempty"`
 
-	// workloadAttestorsVerification tells what kind of verification to do against kubelet.
-	// auto will first attempt to use hostCert, and then fall back to apiServerCA.
-	// Valid options are [auto, hostCert, apiServerCA, skip]
-	// +kubebuilder:validation:Optional
-	WorkloadAttestorsVerification *WorkloadAttestorsVerification `json:"workloadAttestorsVerification,omitempty"`
-
 	// disableContainerSelectors specifies whether to disable container selectors in the Kubernetes workload attestor.
 	// Set to true if using holdApplicationUntilProxyStarts in Istio
 	// +kubebuilder:default:="false"
@@ -101,21 +95,6 @@ type WorkloadAttestors struct {
 	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
 	UseNewContainerLocator string `json:"useNewContainerLocator,omitempty"`
-}
-
-type WorkloadAttestorsVerification struct {
-	// type specifies the type of verification to be used.
-	// +kubebuilder: default:="skip"
-	Type string `json:"type,omitempty"`
-
-	// hostCertBasePath specifies the base Path where kubelet places its certificates.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default:="/var/lib/kubelet/pki"
-	HostCertBasePath string `json:"hostCertBasePath,omitempty"`
-
-	// hostCertFileName specifies the file name for the host certificate.
-	// +kubebuilder:validation:Optional
-	HostCertFileName string `json:"hostCertFileName,omitempty"`
 }
 
 // SpireAgentStatus defines the observed state of spire agents related reconciliation made by operator
