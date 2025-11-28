@@ -1010,16 +1010,6 @@ spec:
                 description: spireSQLConfig has the config required for the spire
                   server SQL DataStore.
                 properties:
-                  clientCertPath:
-                    type: string
-                  clientKeyPath:
-                    type: string
-                  connMaxLifetime:
-                    description: |-
-                      connMaxLifetime will specify maximum lifetime connections.
-                      Max time (in seconds) a connection may live.
-                    minimum: 0
-                    type: integer
                   connectionString:
                     default: /run/spire/data/datastore.sqlite3
                     description: connectionString contain connection credentials required
@@ -1058,18 +1048,7 @@ spec:
                       maxOpenConns will specify the maximum connections for the DB pool.
                     minimum: 0
                     type: integer
-                  options:
-                    default: []
-                    description: options specifies extra DB options.
-                    items:
-                      type: string
-                    type: array
-                  rootCAPath:
-                    default: ""
-                    description: MySQL TLS options.
-                    type: string
                 required:
-                - connMaxLifetime
                 - connectionString
                 - databaseType
                 - maxIdleConns
@@ -1103,24 +1082,6 @@ spec:
                 - ec-p256
                 - ec-p384
                 type: string
-              keyManager:
-                description: keyManager has configs for the spire server key manager.
-                properties:
-                  diskEnabled:
-                    default: "true"
-                    description: diskEnabled is a flag to enable keyManager on disk.
-                    enum:
-                    - "true"
-                    - "false"
-                    type: string
-                  memoryEnabled:
-                    default: "false"
-                    description: memoryEnabled is a flag to enable keyManager on memory
-                    enum:
-                    - "true"
-                    - "false"
-                    type: string
-                type: object
               labels:
                 additionalProperties:
                   type: string
@@ -1159,39 +1120,13 @@ spec:
                 description: persistence has config for spire server volume related
                   configs
                 properties:
-                  accessMode:
-                    default: ReadWriteOnce
-                    description: accessMode for the volume.
-                    enum:
-                    - ReadWriteOnce
-                    - ReadWriteOncePod
-                    - ReadWriteMany
-                    type: string
-                  hostPath:
-                    default: ""
-                    description: hostPath to be used when type is hostPath.
-                    type: string
                   size:
                     default: 1Gi
                     description: size of the persistent volume (e.g., 1Gi).
                     pattern: ^[1-9][0-9]*Gi$
                     type: string
-                  storageClass:
-                    default: ""
-                    description: storageClass to be used for the PVC.
-                    type: string
-                  type:
-                    default: pvc
-                    description: type of volume to use for persistence.
-                    enum:
-                    - pvc
-                    - hostPath
-                    - emptyDir
-                    type: string
                 required:
-                - accessMode
                 - size
-                - type
                 type: object
               resources:
                 description: |-

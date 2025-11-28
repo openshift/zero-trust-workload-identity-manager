@@ -93,10 +93,6 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Enum=rsa-2048;rsa-4096;ec-p256;ec-p384
 	JWTKeyType string `json:"jwtKeyType,omitempty"`
 
-	// keyManager has configs for the spire server key manager.
-	// +kubebuilder:validation:Optional
-	KeyManager *KeyManager `json:"keyManager,omitempty"`
-
 	// caSubject contains subject information for the Spire CA.
 	// +kubebuilder:validation:Optional
 	CASubject *CASubject `json:"caSubject,omitempty"`
@@ -114,30 +110,10 @@ type SpireServerSpec struct {
 
 // Persistence defines volume-related settings.
 type Persistence struct {
-	// type of volume to use for persistence.
-	// +kubebuilder:validation:Enum=pvc;hostPath;emptyDir
-	// +kubebuilder:default:=pvc
-	Type string `json:"type"`
-
 	// size of the persistent volume (e.g., 1Gi).
 	// +kubebuilder:validation:Pattern=^[1-9][0-9]*Gi$
 	// +kubebuilder:default:="1Gi"
 	Size string `json:"size"`
-
-	// accessMode for the volume.
-	// +kubebuilder:validation:Enum=ReadWriteOnce;ReadWriteOncePod;ReadWriteMany
-	// +kubebuilder:default:=ReadWriteOnce
-	AccessMode string `json:"accessMode"`
-
-	// storageClass to be used for the PVC.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:default:=""
-	StorageClass string `json:"storageClass,omitempty"`
-
-	// hostPath to be used when type is hostPath.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:default:=""
-	HostPath string `json:"hostPath,omitempty"`
 }
 
 // DataStore configures the Spire SQL datastore backend.
@@ -151,17 +127,6 @@ type DataStore struct {
 	// +kubebuilder:default:=/run/spire/data/datastore.sqlite3
 	ConnectionString string `json:"connectionString"`
 
-	// options specifies extra DB options.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:default:={}
-	Options []string `json:"options,omitempty"`
-
-	// MySQL TLS options.
-	// +kubebuilder:default:=""
-	RootCAPath     string `json:"rootCAPath,omitempty"`
-	ClientCertPath string `json:"clientCertPath,omitempty"`
-	ClientKeyPath  string `json:"clientKeyPath,omitempty"`
-
 	// DB pool config
 	// maxOpenConns will specify the maximum connections for the DB pool.
 	// +kubebuilder:validation:Minimum=0
@@ -173,32 +138,12 @@ type DataStore struct {
 	// +kubebuilder:default:=2
 	MaxIdleConns int `json:"maxIdleConns"`
 
-	// connMaxLifetime will specify maximum lifetime connections.
-	// Max time (in seconds) a connection may live.
-	// +kubebuilder:validation:Minimum=0
-	ConnMaxLifetime int `json:"connMaxLifetime"`
-
 	// disableMigration specifies the migration state
 	// If true, disables DB auto-migration.
 	// +kubebuilder:default:="false"
 	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
 	DisableMigration string `json:"disableMigration"`
-}
-
-// KeyManager will contain configs for the spire server key manager
-type KeyManager struct {
-	// diskEnabled is a flag to enable keyManager on disk.
-	// +kubebuilder:default:="true"
-	// +kubebuilder:validation:Enum:="true";"false"
-	// +kubebuilder:validation:Optional
-	DiskEnabled string `json:"diskEnabled,omitempty"`
-
-	// memoryEnabled is a flag to enable keyManager on memory
-	// +kubebuilder:default:="false"
-	// +kubebuilder:validation:Enum:="true";"false"
-	// +kubebuilder:validation:Optional
-	MemoryEnabled string `json:"memoryEnabled,omitempty"`
 }
 
 // CASubject defines the subject information for the Spire CA.

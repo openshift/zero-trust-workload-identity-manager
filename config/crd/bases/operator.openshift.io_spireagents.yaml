@@ -1157,26 +1157,6 @@ spec:
                     - "true"
                     - "false"
                     type: string
-                  workloadAttestorsVerification:
-                    description: |-
-                      workloadAttestorsVerification tells what kind of verification to do against kubelet.
-                      auto will first attempt to use hostCert, and then fall back to apiServerCA.
-                      Valid options are [auto, hostCert, apiServerCA, skip]
-                    properties:
-                      hostCertBasePath:
-                        default: /var/lib/kubelet/pki
-                        description: hostCertBasePath specifies the base Path where
-                          kubelet places its certificates.
-                        type: string
-                      hostCertFileName:
-                        description: hostCertFileName specifies the file name for
-                          the host certificate.
-                        type: string
-                      type:
-                        description: type specifies the type of verification to be
-                          used.
-                        type: string
-                    type: object
                 type: object
             required:
             - clusterName

@@ -112,7 +112,6 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 
 // ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerSpec struct {
-	CommonConfig `json:",inline"`
 }
 
 // CommonConfig will have similar config required for all other APIs
