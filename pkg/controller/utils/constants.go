@@ -63,6 +63,7 @@ const (
 	ConditionTypeConfigurationValid = "ConfigurationValid"
 
 	// Validation Condition Reasons
+	ConditionReasonConfigurationValid  = "ConfigurationValid"
 	ConditionReasonInvalidAffinity     = "InvalidAffinity"
 	ConditionReasonInvalidTolerations  = "InvalidTolerations"
 	ConditionReasonInvalidNodeSelector = "InvalidNodeSelector"

@@ -51,6 +51,9 @@ func ValidateAndUpdateStatus(
 		return fmt.Errorf("%s/%s validation failed: %w", resourceKind, resourceName, validationResults[0].Error)
 	}
 
+	// Set success condition when all validations pass
+	statusMgr.AddCondition(ConditionTypeConfigurationValid, ConditionReasonConfigurationValid, "All configuration fields are valid", metav1.ConditionTrue)
+
 	return nil
 }
 

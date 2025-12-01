@@ -854,7 +854,7 @@ func TestValidateAndUpdateStatus(t *testing.T) {
 			resources:         nil,
 			labels:            nil,
 			expectError:       false,
-			expectedCondCount: 0,
+			expectedCondCount: 1, // Success condition: ConfigurationValid = True
 		},
 		{
 			name:         "invalid affinity - error logged and condition set",
