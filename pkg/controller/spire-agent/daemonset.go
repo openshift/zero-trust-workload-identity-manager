@@ -176,7 +176,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 						{
 							Name: "spire-bundle",
 							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-bundle"}},
+								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: config.BundleConfigMap}},
 							},
 						},
 						{
