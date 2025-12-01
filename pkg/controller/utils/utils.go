@@ -474,8 +474,7 @@ func IsInCreateOnlyMode() bool {
 	return createOnlyEnvValue == "true"
 }
 
-// ZTWIMSpecChangedPredicate triggers reconciliation when key ZTWIM spec fields change
-// This ensures operands reconcile when trustDomain, clusterName, or bundleConfigMap changes
+// ZTWIMSpecChangedPredicate triggers reconciliation when ZTWIM spec is created
 // while avoiding unnecessary reconciliations when only non-critical fields change
 var ZTWIMSpecChangedPredicate = predicate.Funcs{
 	CreateFunc: func(e event.CreateEvent) bool {
