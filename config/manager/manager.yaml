@@ -98,8 +98,6 @@ spec:
           value: ":8443"
         - name: METRICS_SECURE
           value: "true"
-        - name: OPERATOR_VERSION
-          value: "0.2.0"
         image: controller:latest
         name: manager
         securityContext:
