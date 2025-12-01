@@ -1512,6 +1512,10 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
+        - message: Federation BundleEndpoint configuration is immutable and cannot
+            be removed once set.
+          rule: oldSelf == null || !has(oldSelf.spec.federation) || (has(self.spec.federation)
+            && oldSelf.spec.federation.bundleEndpoint == self.spec.federation.bundleEndpoint)
         - message: SpireServer is a singleton, .metadata.name must be 'cluster'
           rule: self.metadata.name == 'cluster'
         - message: spec.persistence.size is immutable

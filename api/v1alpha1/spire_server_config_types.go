@@ -9,6 +9,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:validation:XValidation:rule="oldSelf == null || !has(oldSelf.spec.federation) || (has(self.spec.federation) && oldSelf.spec.federation.bundleEndpoint == self.spec.federation.bundleEndpoint)",message="Federation BundleEndpoint configuration is immutable and cannot be removed once set."
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServer is a singleton, .metadata.name must be 'cluster'"
 // +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.size == self.spec.persistence.size",message="spec.persistence.size is immutable"
 // +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.accessMode == self.spec.persistence.accessMode",message="spec.persistence.accessMode is immutable"
