@@ -286,7 +286,7 @@ func needsUpdate(current, desired appsv1.Deployment) bool {
 		return true
 	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true
-	} else if utils.DeploymentSpecModified(&desired, &current) {
+	} else if utils.DeploymentNeedsUpdate(&current, &desired) {
 		return true
 	}
 	return false

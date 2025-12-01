@@ -73,7 +73,7 @@ func (r *SpiffeCsiReconciler) reconcileDaemonSet(ctx context.Context, driver *v1
 
 // needsUpdate returns true if DaemonSet needs to be updated.
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
-	if utils.DaemonSetSpecModified(&desired, &current) {
+	if utils.DaemonSetNeedsUpdate(&current, &desired) {
 		return true
 	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true

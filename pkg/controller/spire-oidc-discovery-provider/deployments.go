@@ -136,6 +136,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
 									SecretName: "oidc-serving-cert",
+									DefaultMode: ptr.To(int32(420)),
 								},
 							},
 						},
@@ -150,8 +151,8 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args:            []string{"-config", "/run/spire/oidc/config/oidc-discovery-provider.conf"},
 							Ports: []corev1.ContainerPort{
-								{Name: "healthz", ContainerPort: 8008},
-								{Name: "https", ContainerPort: 8443},
+								{Name: "healthz", ContainerPort: 8008, Protocol: corev1.ProtocolTCP},
+								{Name: "https", ContainerPort: 8443, Protocol: corev1.ProtocolTCP},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},
@@ -164,6 +165,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 									HTTPGet: &corev1.HTTPGetAction{
 										Path: "/ready",
 										Port: intstr.FromString("healthz"),
+										Scheme: corev1.URISchemeHTTP,
 									},
 								},
 								InitialDelaySeconds: 5,
@@ -174,6 +176,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 									HTTPGet: &corev1.HTTPGetAction{
 										Path: "/live",
 										Port: intstr.FromString("healthz"),
+										Scheme: corev1.URISchemeHTTP,
 									},
 								},
 								InitialDelaySeconds: 5,

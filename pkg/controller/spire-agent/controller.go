@@ -259,7 +259,7 @@ func (r *SpireAgentReconciler) validateProxyConfiguration(statusMgr *status.Mana
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
 	if current.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] {
 		return true
-	} else if utils.DaemonSetSpecModified(&desired, &current) {
+	} else if utils.DaemonSetNeedsUpdate(&current, &desired) {
 		return true
 	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true

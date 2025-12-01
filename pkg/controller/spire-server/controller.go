@@ -315,7 +315,7 @@ func needsUpdate(current, desired appsv1.StatefulSet) bool {
 		return true
 	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
 		return true
-	} else if utils.StatefulSetSpecModified(&desired, &current) {
+	} else if utils.StatefulSetNeedsUpdate(&current, &desired) {
 		return true
 	}
 	return false
