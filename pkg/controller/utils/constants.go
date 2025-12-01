@@ -52,4 +52,21 @@ const (
 	SpireControllerManagerImageEnv     = "RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER"
 	NodeDriverRegistrarImageEnv        = "RELATED_IMAGE_NODE_DRIVER_REGISTRAR"
 	SpiffeCSIInitContainerImageEnv     = "RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER"
+
+	// Resource Kinds - used for validation and logging
+	ResourceKindSpireServer                = "SpireServer"
+	ResourceKindSpireAgent                 = "SpireAgent"
+	ResourceKindSpiffeCSIDriver            = "SpiffeCSIDriver"
+	ResourceKindSpireOIDCDiscoveryProvider = "SpireOIDCDiscoveryProvider"
+
+	// Validation Condition Types
+	ConditionTypeConfigurationValid = "ConfigurationValid"
+
+	// Validation Condition Reasons
+	ConditionReasonConfigurationValid  = "ConfigurationValid"
+	ConditionReasonInvalidAffinity     = "InvalidAffinity"
+	ConditionReasonInvalidTolerations  = "InvalidTolerations"
+	ConditionReasonInvalidNodeSelector = "InvalidNodeSelector"
+	ConditionReasonInvalidResources    = "InvalidResources"
+	ConditionReasonInvalidLabels       = "InvalidLabels"
 )
