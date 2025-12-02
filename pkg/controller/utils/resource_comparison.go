@@ -449,6 +449,9 @@ func volumesEqual(fetched, desired []corev1.Volume) bool {
 			if desiredVol.Secret.SecretName != fetchedVol.Secret.SecretName {
 				return false
 			}
+			if !ptr.Equal(desiredVol.Secret.DefaultMode, fetchedVol.Secret.DefaultMode) {
+				return false
+			}
 			if !equality.Semantic.DeepEqual(desiredVol.Secret.Items, fetchedVol.Secret.Items) {
 				return false
 			}
@@ -511,6 +514,11 @@ func containerSpecModified(fetched, desired *corev1.Container) bool {
 	if desired.Name != fetched.Name ||
 		desired.Image != fetched.Image ||
 		desired.ImagePullPolicy != fetched.ImagePullPolicy {
+		return true
+	}
+
+	// Check command
+	if !equality.Semantic.DeepEqual(desired.Command, fetched.Command) {
 		return true
 	}
 
