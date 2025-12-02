@@ -374,6 +374,107 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	})
 }
 
+func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
+	serverConfigHash := "test-server-hash"
+	controllerConfigHash := "test-controller-hash"
+
+	t.Run("Adds TLS Secret volume and mount at fixed path", func(t *testing.T) {
+		config := &v1alpha1.SpireServerSpec{
+			Datastore: v1alpha1.DataStore{
+				DatabaseType:     "postgres",
+				ConnectionString: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db-tls/ca.crt",
+				TLSSecretName:    "postgres-tls-certs",
+			},
+		}
+
+		statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash)
+		podSpec := statefulSet.Spec.Template.Spec
+
+		// Check that we have 6 volumes (5 base + 1 TLS)
+		expectedVolumeCount := 6
+		if len(podSpec.Volumes) != expectedVolumeCount {
+			t.Errorf("Expected %d volumes, got %d", expectedVolumeCount, len(podSpec.Volumes))
+		}
+
+		// Find the db-tls volume
+		var dbTLSVolume *corev1.Volume
+		for i := range podSpec.Volumes {
+			if podSpec.Volumes[i].Name == "db-tls" {
+				dbTLSVolume = &podSpec.Volumes[i]
+				break
+			}
+		}
+
+		if dbTLSVolume == nil {
+			t.Fatal("db-tls volume not found")
+		}
+
+		if dbTLSVolume.VolumeSource.Secret == nil {
+			t.Fatal("db-tls volume should be a Secret volume")
+		}
+
+		if dbTLSVolume.VolumeSource.Secret.SecretName != "postgres-tls-certs" {
+			t.Errorf("Expected secret name 'postgres-tls-certs', got %q", dbTLSVolume.VolumeSource.Secret.SecretName)
+		}
+
+		// Check the spire-server container has the TLS volume mount
+		spireServerContainer := findContainerByName(podSpec.Containers, "spire-server")
+		if spireServerContainer == nil {
+			t.Fatal("spire-server container not found")
+		}
+
+		// Should have 5 volume mounts (4 base + 1 TLS)
+		expectedVolumeMountCount := 5
+		if len(spireServerContainer.VolumeMounts) != expectedVolumeMountCount {
+			t.Errorf("Expected %d volume mounts, got %d", expectedVolumeMountCount, len(spireServerContainer.VolumeMounts))
+		}
+
+		// Find the db-tls volume mount
+		var dbTLSMount *corev1.VolumeMount
+		for i := range spireServerContainer.VolumeMounts {
+			if spireServerContainer.VolumeMounts[i].Name == "db-tls" {
+				dbTLSMount = &spireServerContainer.VolumeMounts[i]
+				break
+			}
+		}
+
+		if dbTLSMount == nil {
+			t.Fatal("db-tls volume mount not found")
+		}
+
+		// Mount path should always be the fixed path
+		if dbTLSMount.MountPath != DBTLSMountPath {
+			t.Errorf("Expected mount path %q, got %q", DBTLSMountPath, dbTLSMount.MountPath)
+		}
+	})
+
+	t.Run("Does not add TLS volume when TLSSecretName is empty", func(t *testing.T) {
+		config := &v1alpha1.SpireServerSpec{
+			Datastore: v1alpha1.DataStore{
+				DatabaseType:     "postgres",
+				ConnectionString: "dbname=spire user=spire host=postgres.example.com sslmode=disable",
+				TLSSecretName:    "",
+			},
+		}
+
+		statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash)
+		podSpec := statefulSet.Spec.Template.Spec
+
+		// Should have 5 volumes (no TLS volume)
+		expectedVolumeCount := 5
+		if len(podSpec.Volumes) != expectedVolumeCount {
+			t.Errorf("Expected %d volumes, got %d", expectedVolumeCount, len(podSpec.Volumes))
+		}
+
+		// Ensure no db-tls volume exists
+		for _, volume := range podSpec.Volumes {
+			if volume.Name == "db-tls" {
+				t.Error("db-tls volume should not exist when TLSSecretName is empty")
+			}
+		}
+	})
+}
+
 // Helper function to find a container by name
 func findContainerByName(containers []corev1.Container, name string) *corev1.Container {
 	for i := range containers {

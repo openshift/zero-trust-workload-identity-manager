@@ -261,13 +261,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 			"DataStore": []map[string]interface{}{
 				{
 					"sql": map[string]interface{}{
-						"plugin_data": map[string]interface{}{
-							"connection_string": config.Datastore.ConnectionString,
-							"database_type":     config.Datastore.DatabaseType,
-							"disable_migration": utils.StringToBool(config.Datastore.DisableMigration),
-							"max_idle_conns":    config.Datastore.MaxIdleConns,
-							"max_open_conns":    config.Datastore.MaxOpenConns,
-						},
+						"plugin_data": buildDataStorePluginData(config.Datastore),
 					},
 				},
 			},
@@ -453,6 +447,23 @@ func getCAKeyType(keyType string) string {
 		return defaultCaKeyType
 	}
 	return keyType
+}
+
+// buildDataStorePluginData builds the plugin_data map for the DataStore plugin
+func buildDataStorePluginData(datastore v1alpha1.DataStore) map[string]interface{} {
+	pluginData := map[string]interface{}{
+		"connection_string": datastore.ConnectionString,
+		"database_type":     datastore.DatabaseType,
+		"disable_migration": utils.StringToBool(datastore.DisableMigration),
+		"max_idle_conns":    datastore.MaxIdleConns,
+		"max_open_conns":    datastore.MaxOpenConns,
+	}
+
+	// Add conn_max_lifetime if set (value > 0)
+	if datastore.ConnMaxLifetime > 0 {
+		pluginData["conn_max_lifetime"] = fmt.Sprintf("%ds", datastore.ConnMaxLifetime)
+	}
+	return pluginData
 }
 
 func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*ControllerManagerConfigYAML, error) {

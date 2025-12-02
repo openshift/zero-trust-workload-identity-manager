@@ -162,8 +162,8 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/ready",
-										Port: intstr.FromString("healthz"),
+										Path:   "/ready",
+										Port:   intstr.FromString("healthz"),
 										Scheme: corev1.URISchemeHTTP,
 									},
 								},
@@ -173,8 +173,8 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/live",
-										Port: intstr.FromString("healthz"),
+										Path:   "/live",
+										Port:   intstr.FromString("healthz"),
 										Scheme: corev1.URISchemeHTTP,
 									},
 								},
