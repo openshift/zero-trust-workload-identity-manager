@@ -91,6 +91,81 @@ func TestVolumesEqual(t *testing.T) {
 		}
 	})
 
+	t.Run("ConfigMap volume - different default mode", func(t *testing.T) {
+		mode1 := int32(0644)
+		mode2 := int32(0600)
+		fetched := []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+					DefaultMode:          &mode1,
+				},
+			},
+		}}
+		desired := []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+					DefaultMode:          &mode2,
+				},
+			},
+		}}
+		if volumesEqual(fetched, desired) {
+			t.Error("Expected false when ConfigMap default modes differ")
+		}
+	})
+
+	t.Run("ConfigMap volume - desired DefaultMode nil does not trigger update", func(t *testing.T) {
+		mode := int32(0644)
+		fetched := []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+					DefaultMode:          &mode,
+				},
+			},
+		}}
+		desired := []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+					DefaultMode:          nil,
+				},
+			},
+		}}
+		if !volumesEqual(fetched, desired) {
+			t.Error("Expected true when desired ConfigMap DefaultMode is nil")
+		}
+	})
+
+	t.Run("ConfigMap volume - different items", func(t *testing.T) {
+		fetched := []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+					Items:                []corev1.KeyToPath{{Key: "key1", Path: "path1"}},
+				},
+			},
+		}}
+		desired := []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+					Items:                []corev1.KeyToPath{{Key: "key2", Path: "path2"}},
+				},
+			},
+		}}
+		if volumesEqual(fetched, desired) {
+			t.Error("Expected false when ConfigMap items differ")
+		}
+	})
+
 	t.Run("Secret volume - same", func(t *testing.T) {
 		mode := int32(0644)
 		fetched := []corev1.Volume{{
@@ -153,6 +228,25 @@ func TestVolumesEqual(t *testing.T) {
 		}}
 		if volumesEqual(fetched, desired) {
 			t.Error("Expected false when Secret default modes differ")
+		}
+	})
+
+	t.Run("Secret volume - desired DefaultMode nil does not trigger update", func(t *testing.T) {
+		mode := int32(0644)
+		fetched := []corev1.Volume{{
+			Name: "secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "my-secret", DefaultMode: &mode},
+			},
+		}}
+		desired := []corev1.Volume{{
+			Name: "secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "my-secret", DefaultMode: nil},
+			},
+		}}
+		if !volumesEqual(fetched, desired) {
+			t.Error("Expected true when desired Secret DefaultMode is nil")
 		}
 	})
 

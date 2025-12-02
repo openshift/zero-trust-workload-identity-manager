@@ -136,7 +136,6 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
 									SecretName: "oidc-serving-cert",
-									DefaultMode: ptr.To(int32(420)),
 								},
 							},
 						},

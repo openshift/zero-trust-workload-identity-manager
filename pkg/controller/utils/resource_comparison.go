@@ -439,6 +439,14 @@ func volumesEqual(fetched, desired []corev1.Volume) bool {
 			if desiredVol.ConfigMap.Name != fetchedVol.ConfigMap.Name {
 				return false
 			}
+			if desiredVol.ConfigMap.DefaultMode != nil {
+				if !ptr.Equal(desiredVol.ConfigMap.DefaultMode, fetchedVol.ConfigMap.DefaultMode) {
+					return false
+				}
+			}
+			if !equality.Semantic.DeepEqual(desiredVol.ConfigMap.Items, fetchedVol.ConfigMap.Items) {
+				return false
+			}
 		}
 
 		// Check Secret volume
@@ -449,8 +457,10 @@ func volumesEqual(fetched, desired []corev1.Volume) bool {
 			if desiredVol.Secret.SecretName != fetchedVol.Secret.SecretName {
 				return false
 			}
-			if !ptr.Equal(desiredVol.Secret.DefaultMode, fetchedVol.Secret.DefaultMode) {
-				return false
+			if desiredVol.Secret.DefaultMode != nil {
+				if !ptr.Equal(desiredVol.Secret.DefaultMode, fetchedVol.Secret.DefaultMode) {
+					return false
+				}
 			}
 			if !equality.Semantic.DeepEqual(desiredVol.Secret.Items, fetchedVol.Secret.Items) {
 				return false
