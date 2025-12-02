@@ -1006,20 +1006,6 @@ spec:
                 description: spireSQLConfig has the config required for the spire
                   server SQL DataStore.
                 properties:
-                  clientCertPath:
-                    maxLength: 256
-                    pattern: ^(/[a-zA-Z0-9._-]+)+$
-                    type: string
-                  clientKeyPath:
-                    maxLength: 256
-                    pattern: ^(/[a-zA-Z0-9._-]+)+$
-                    type: string
-                  connMaxLifetime:
-                    description: |-
-                      connMaxLifetime will specify maximum lifetime connections.
-                      Max time (in seconds) a connection may live.
-                    minimum: 0
-                    type: integer
                   connectionString:
                     default: /run/spire/data/datastore.sqlite3
                     description: |-
@@ -1064,25 +1050,7 @@ spec:
                     maximum: 10000
                     minimum: 1
                     type: integer
-                  options:
-                    default: []
-                    description: |-
-                      options specifies extra DB options.
-                      Maximum 32 options allowed.
-                    items:
-                      type: string
-                    maxItems: 32
-                    type: array
-                  rootCAPath:
-                    default: ""
-                    description: |-
-                      MySQL TLS options.
-                      Paths must be absolute and not contain directory traversal attempts.
-                    maxLength: 256
-                    pattern: ^$|^(/[a-zA-Z0-9._-]+)+$
-                    type: string
                 required:
-                - connMaxLifetime
                 - connectionString
                 - databaseType
                 - maxIdleConns
@@ -1189,10 +1157,6 @@ spec:
                     - ReadWriteOncePod
                     - ReadWriteMany
                     type: string
-                  hostPath:
-                    default: ""
-                    description: hostPath to be used when type is hostPath.
-                    type: string
                   size:
                     default: 1Gi
                     description: size of the persistent volume (e.g., 1Gi).
@@ -1202,18 +1166,9 @@ spec:
                     default: ""
                     description: storageClass to be used for the PVC.
                     type: string
-                  type:
-                    default: pvc
-                    description: type of volume to use for persistence.
-                    enum:
-                    - pvc
-                    - hostPath
-                    - emptyDir
-                    type: string
                 required:
                 - accessMode
                 - size
-                - type
                 type: object
               resources:
                 description: |-

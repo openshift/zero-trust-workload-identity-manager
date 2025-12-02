@@ -104,11 +104,6 @@ type SpireServerSpec struct {
 
 // Persistence defines volume-related settings.
 type Persistence struct {
-	// type of volume to use for persistence.
-	// +kubebuilder:validation:Enum=pvc;hostPath;emptyDir
-	// +kubebuilder:default:=pvc
-	Type string `json:"type"`
-
 	// size of the persistent volume (e.g., 1Gi).
 	// +kubebuilder:validation:Pattern=^[1-9][0-9]*Gi$
 	// +kubebuilder:default:="1Gi"
@@ -123,11 +118,6 @@ type Persistence struct {
 	// +kubebuilder:validation:optional
 	// +kubebuilder:default:=""
 	StorageClass string `json:"storageClass,omitempty"`
-
-	// hostPath to be used when type is hostPath.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:default:=""
-	HostPath string `json:"hostPath,omitempty"`
 }
 
 // DataStore configures the Spire SQL datastore backend.
@@ -144,28 +134,6 @@ type DataStore struct {
 	// +kubebuilder:default:=/run/spire/data/datastore.sqlite3
 	ConnectionString string `json:"connectionString"`
 
-	// options specifies extra DB options.
-	// Maximum 32 options allowed.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:validation:MaxItems=32
-	// +kubebuilder:default:={}
-	Options []string `json:"options,omitempty"`
-
-	// MySQL TLS options.
-	// Paths must be absolute and not contain directory traversal attempts.
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^$|^(/[a-zA-Z0-9._-]+)+$`
-	// +kubebuilder:default:=""
-	RootCAPath string `json:"rootCAPath,omitempty"`
-
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
-	ClientCertPath string `json:"clientCertPath,omitempty"`
-
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
-	ClientKeyPath string `json:"clientKeyPath,omitempty"`
-
 	// DB pool config
 	// maxOpenConns will specify the maximum connections for the DB pool.
 	// Must be between 1 and 10000.
@@ -179,11 +147,6 @@ type DataStore struct {
 	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=2
 	MaxIdleConns int `json:"maxIdleConns"`
-
-	// connMaxLifetime will specify maximum lifetime connections.
-	// Max time (in seconds) a connection may live.
-	// +kubebuilder:validation:Minimum=0
-	ConnMaxLifetime int `json:"connMaxLifetime"`
 
 	// disableMigration specifies the migration state
 	// If true, disables DB auto-migration.
