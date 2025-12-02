@@ -11,6 +11,7 @@ import (
 	securityv1 "github.com/openshift/api/security/v1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -489,4 +490,69 @@ var ZTWIMSpecChangedPredicate = predicate.Funcs{
 	GenericFunc: func(e event.GenericEvent) bool {
 		return false
 	},
+}
+
+// OwnerReferenceChangedPredicate triggers reconciliation when owner references change
+// This is useful for detecting when owner references are removed or modified
+var OwnerReferenceChangedPredicate = predicate.Funcs{
+	CreateFunc: func(e event.CreateEvent) bool {
+		return true
+	},
+	UpdateFunc: func(e event.UpdateEvent) bool {
+		oldOwners := e.ObjectOld.GetOwnerReferences()
+		newOwners := e.ObjectNew.GetOwnerReferences()
+
+		// Check if owner references length changed
+		if len(oldOwners) != len(newOwners) {
+			return true
+		}
+
+		// Check if any owner reference was modified
+		oldOwnerMap := make(map[string]string)
+		for _, owner := range oldOwners {
+			oldOwnerMap[string(owner.UID)] = owner.Name
+		}
+
+		for _, owner := range newOwners {
+			oldName, exists := oldOwnerMap[string(owner.UID)]
+			if !exists || oldName != owner.Name {
+				return true
+			}
+		}
+
+		// No owner reference changes detected
+		return false
+	},
+	DeleteFunc: func(e event.DeleteEvent) bool {
+		return true
+	},
+	GenericFunc: func(e event.GenericEvent) bool {
+		return false
+	},
+}
+
+// NeedsOwnerReferenceUpdate checks if an object's owner reference needs to be updated
+// This prevents unnecessary reconciliations by only updating when the owner reference
+// is missing or different from what's expected
+func NeedsOwnerReferenceUpdate(obj client.Object, expectedOwner client.Object) bool {
+	owners := obj.GetOwnerReferences()
+	expectedUID := expectedOwner.GetUID()
+	expectedName := expectedOwner.GetName()
+	expectedKind := expectedOwner.GetObjectKind().GroupVersionKind().Kind
+
+	// If no owner references exist, update is needed
+	if len(owners) == 0 {
+		return true
+	}
+
+	// Check if expected owner exists and matches (by UID, name, and kind)
+	for _, owner := range owners {
+		if owner.UID == expectedUID && owner.Name == expectedName && owner.Kind == expectedKind {
+			// Owner reference is correct, no update needed
+			return false
+		}
+	}
+
+	// Expected owner not found or mismatched, update is needed
+	return true
 }

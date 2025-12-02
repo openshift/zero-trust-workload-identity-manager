@@ -119,22 +119,24 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	// Set ZTWIM as the owner of SpireServer
-	if err := controllerutil.SetControllerReference(&ztwim, &server, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on SpireServer")
-		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to set owner reference on SpireServer: %v", err),
-			metav1.ConditionFalse)
-		return ctrl.Result{}, err
-	}
+	// Set ZTWIM as the owner of SpireServer only if needed
+	if utils.NeedsOwnerReferenceUpdate(&server, &ztwim) {
+		if err := controllerutil.SetControllerReference(&ztwim, &server, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference on SpireServer")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to set owner reference on SpireServer: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
 
-	// Persist the owner reference to the cluster
-	if err := r.ctrlClient.Update(ctx, &server); err != nil {
-		r.log.Error(err, "failed to update SpireServer with owner reference")
-		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to update SpireServer with owner reference: %v", err),
-			metav1.ConditionFalse)
-		return ctrl.Result{}, err
+		// Persist the owner reference to the cluster
+		if err := r.ctrlClient.Update(ctx, &server); err != nil {
+			r.log.Error(err, "failed to update SpireServer with owner reference")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to update SpireServer with owner reference: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Handle create-only mode
@@ -211,7 +213,12 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentControlPlane))
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireServer{}, builder.WithPredicates(
+			predicate.Or(
+				predicate.GenerationChangedPredicate{},
+				utils.OwnerReferenceChangedPredicate,
+			),
+		)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).

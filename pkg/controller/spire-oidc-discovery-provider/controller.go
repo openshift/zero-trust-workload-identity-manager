@@ -111,22 +111,24 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, err
 	}
 
-	// Set ZTWIM as the owner of SpireOidcDiscoveryProvider
-	if err := controllerutil.SetControllerReference(&ztwim, &oidcDiscoveryProviderConfig, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on SpireOidcDiscoveryProvider")
-		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to set owner reference on SpireOidcDiscoveryProvider: %v", err),
-			metav1.ConditionFalse)
-		return ctrl.Result{}, err
-	}
+	// Set ZTWIM as the owner of SpireOidcDiscoveryProvider only if needed
+	if utils.NeedsOwnerReferenceUpdate(&oidcDiscoveryProviderConfig, &ztwim) {
+		if err := controllerutil.SetControllerReference(&ztwim, &oidcDiscoveryProviderConfig, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference on SpireOidcDiscoveryProvider")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to set owner reference on SpireOidcDiscoveryProvider: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
 
-	// Persist the owner reference to the cluster
-	if err := r.ctrlClient.Update(ctx, &oidcDiscoveryProviderConfig); err != nil {
-		r.log.Error(err, "failed to update SpireOIDCDiscoveryProvider with owner reference")
-		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to update SpireOIDCDiscoveryProvider with owner reference: %v", err),
-			metav1.ConditionFalse)
-		return ctrl.Result{}, err
+		// Persist the owner reference to the cluster
+		if err := r.ctrlClient.Update(ctx, &oidcDiscoveryProviderConfig); err != nil {
+			r.log.Error(err, "failed to update SpireOIDCDiscoveryProvider with owner reference")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to update SpireOIDCDiscoveryProvider with owner reference: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Handle create-only mode
@@ -186,7 +188,12 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentDiscovery))
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireOIDCDiscoveryProvider{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireOIDCDiscoveryProvider{}, builder.WithPredicates(
+			predicate.Or(
+				predicate.GenerationChangedPredicate{},
+				utils.OwnerReferenceChangedPredicate,
+			),
+		)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName).
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).

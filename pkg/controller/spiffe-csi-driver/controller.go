@@ -104,22 +104,24 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Set ZTWIM as the owner of SpiffeCSIDriver
-	if err := controllerutil.SetControllerReference(&ztwim, &spiffeCSIDriver, r.scheme); err != nil {
-		r.log.Error(err, "failed to set controller reference on SpiffeCSIDriver")
-		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to set owner reference on SpiffeCSIDriver: %v", err),
-			metav1.ConditionFalse)
-		return ctrl.Result{}, err
-	}
+	// Set ZTWIM as the owner of SpiffeCSIDriver only if needed
+	if utils.NeedsOwnerReferenceUpdate(&spiffeCSIDriver, &ztwim) {
+		if err := controllerutil.SetControllerReference(&ztwim, &spiffeCSIDriver, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference on SpiffeCSIDriver")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to set owner reference on SpiffeCSIDriver: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
 
-	// Persist the owner reference to the cluster
-	if err := r.ctrlClient.Update(ctx, &spiffeCSIDriver); err != nil {
-		r.log.Error(err, "failed to update SpiffeCSIDriver with owner reference")
-		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-			fmt.Sprintf("Failed to update SpiffeCSIDriver with owner reference: %v", err),
-			metav1.ConditionFalse)
-		return ctrl.Result{}, err
+		// Persist the owner reference to the cluster
+		if err := r.ctrlClient.Update(ctx, &spiffeCSIDriver); err != nil {
+			r.log.Error(err, "failed to update SpiffeCSIDriver with owner reference")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to update SpiffeCSIDriver with owner reference: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Handle create-only mode
@@ -168,7 +170,12 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentCSI))
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpiffeCSIDriver{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpiffeCSIDriver{}, builder.WithPredicates(
+			predicate.Or(
+				predicate.GenerationChangedPredicate{},
+				utils.OwnerReferenceChangedPredicate,
+			),
+		)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName).
 		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
