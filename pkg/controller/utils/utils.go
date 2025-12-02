@@ -556,3 +556,12 @@ func NeedsOwnerReferenceUpdate(obj client.Object, expectedOwner client.Object) b
 	// Expected owner not found or mismatched, update is needed
 	return true
 }
+
+// GenerationOrOwnerReferenceChangedPredicate triggers reconciliation when either:
+// 1. The resource generation changes (spec/status changes)
+// 2. Owner references change (removed/modified)
+// This is the standard predicate for all operand controllers
+var GenerationOrOwnerReferenceChangedPredicate = predicate.Or(
+	predicate.GenerationChangedPredicate{},
+	OwnerReferenceChangedPredicate,
+)

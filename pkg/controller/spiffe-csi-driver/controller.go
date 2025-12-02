@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
@@ -170,12 +169,7 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentCSI))
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpiffeCSIDriver{}, builder.WithPredicates(
-			predicate.Or(
-				predicate.GenerationChangedPredicate{},
-				utils.OwnerReferenceChangedPredicate,
-			),
-		)).
+		For(&v1alpha1.SpiffeCSIDriver{}, builder.WithPredicates(utils.GenerationOrOwnerReferenceChangedPredicate)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName).
 		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
