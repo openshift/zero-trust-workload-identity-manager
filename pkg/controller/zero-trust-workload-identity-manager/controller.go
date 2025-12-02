@@ -678,7 +678,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) reconcileTrustedCABundleCon
 		if existingCondition != nil {
 			statusMgr.AddCondition(ProxyConfigAvailable, "ProxyDisabled",
 				"Cluster proxy configuration has been disabled",
-				metav1.ConditionFalse)
+				metav1.ConditionTrue)
 		}
 		// Don't create or delete the ConfigMap when proxy is not enabled
 		// If it exists, it's harmless to leave it
@@ -705,13 +705,17 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) reconcileTrustedCABundleCon
 	}, &existingConfigMap)
 
 	if err != nil && apierror.IsNotFound(err) {
-		// ConfigMap doesn't exist, create it
 		if err := r.ctrlClient.Create(ctx, configMap); err != nil {
-			r.log.Error(err, "failed to create shared trusted CA bundle ConfigMap for proxy support")
-			statusMgr.AddCondition(ProxyConfigAvailable, "ProxyConfigMapCreationFailed",
-				fmt.Sprintf("Failed to create trusted CA bundle ConfigMap: %v", err),
-				metav1.ConditionFalse)
-			return err
+			// Ignore AlreadyExists errors - ConfigMap was created by concurrent reconcile
+			if !apierror.IsAlreadyExists(err) {
+				r.log.Error(err, "failed to create shared trusted CA bundle ConfigMap for proxy support")
+				statusMgr.AddCondition(ProxyConfigAvailable, "ProxyConfigMapCreationFailed",
+					fmt.Sprintf("Failed to create trusted CA bundle ConfigMap: %v", err),
+					metav1.ConditionFalse)
+				return err
+			}
+
+			r.log.Info("Shared trusted CA bundle ConfigMap already exists (created by concurrent reconcile)")
 		}
 		r.log.Info("Created shared trusted CA bundle ConfigMap for proxy support")
 		statusMgr.AddCondition(ProxyConfigAvailable, v1alpha1.ReasonReady,

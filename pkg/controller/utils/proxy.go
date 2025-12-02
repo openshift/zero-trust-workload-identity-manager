@@ -23,6 +23,8 @@ const (
 
 	// Label for OpenShift CNO to inject trusted CA bundle
 	InjectCABundleLabel = "config.openshift.io/inject-trusted-cabundle"
+
+	trustedCABundleVolumeName = "trusted-ca-bundle"
 )
 
 // GetProxyEnvVars retrieves proxy environment variables from the operator's environment
@@ -111,7 +113,7 @@ func GetTrustedCABundleVolume() corev1.Volume {
 // GetTrustedCABundleVolumeMount returns a VolumeMount for the trusted CA bundle
 func GetTrustedCABundleVolumeMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
-		Name:      "trusted-ca-bundle",
+		Name:      trustedCABundleVolumeName,
 		MountPath: TrustedCABundlePath,
 		ReadOnly:  true,
 	}
@@ -121,7 +123,7 @@ func GetTrustedCABundleVolumeMount() corev1.VolumeMount {
 func AddTrustedCABundleToContainer(container *corev1.Container) {
 	// Check if volume mount already exists
 	for _, vm := range container.VolumeMounts {
-		if vm.Name == "trusted-ca-bundle" {
+		if vm.Name == trustedCABundleVolumeName {
 			return
 		}
 	}
@@ -152,7 +154,7 @@ func AddProxyConfigToPod(podSpec *corev1.PodSpec) {
 	// Check if volume already exists
 	volumeExists := false
 	for _, vol := range podSpec.Volumes {
-		if vol.Name == "trusted-ca-bundle" {
+		if vol.Name == trustedCABundleVolumeName {
 			volumeExists = true
 			break
 		}
