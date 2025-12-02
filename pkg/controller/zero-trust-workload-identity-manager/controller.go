@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -37,9 +36,8 @@ import (
 
 const (
 	// Condition types for ZTWIM
-	OperandsAvailable    = "OperandsAvailable"
-	CreateOnlyMode       = "CreateOnlyMode"
-	ProxyConfigAvailable = "ProxyConfigAvailable"
+	OperandsAvailable = "OperandsAvailable"
+	CreateOnlyMode    = "CreateOnlyMode"
 )
 
 // Operand state constants for structured state tracking
@@ -244,12 +242,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 			r.log.Error(err, "failed to update status")
 		}
 	}()
-
-	// Reconcile shared operand trusted CA bundle ConfigMap for proxy support
-	// This is managed centrally by the main controller to avoid duplication
-	if err := r.reconcileTrustedCABundleConfigMap(ctx, &config, statusMgr); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	// Aggregate status from all operand CRs
 	result := r.aggregateOperandStatus(ctx)
@@ -663,121 +655,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) findOperatorCondition(ctx c
 	return nil, errors.New("OperatorCondition not found")
 }
 
-// reconcileTrustedCABundleConfigMap creates/updates the shared operand trusted CA bundle ConfigMap
-// This ConfigMap is used by OpenShift CNO to inject the cluster's trusted CA bundle
-// for proxy support. It's managed centrally here to avoid duplication across operand controllers.
-// Note: This is separate from the operator's own trusted CA bundle (created by OLM).
-func (r *ZeroTrustWorkloadIdentityManagerReconciler) reconcileTrustedCABundleConfigMap(ctx context.Context, config *v1alpha1.ZeroTrustWorkloadIdentityManager, statusMgr *status.Manager) error {
-	// Check if proxy was previously enabled (has a status condition)
-	existingCondition := apimeta.FindStatusCondition(config.Status.ConditionalStatus.Conditions, ProxyConfigAvailable)
-
-	// Only reconcile if proxy is enabled
-	if !utils.IsProxyEnabled() {
-		// If proxy is now disabled but we had a previous condition,
-		// mark it as disabled to provides better visibility
-		if existingCondition != nil {
-			statusMgr.AddCondition(ProxyConfigAvailable, "ProxyDisabled",
-				"Cluster proxy configuration has been disabled",
-				metav1.ConditionTrue)
-		}
-		// Don't create or delete the ConfigMap when proxy is not enabled
-		// If it exists, it's harmless to leave it
-		return nil
-	}
-
-	// Create the operand trusted CA bundle ConfigMap (separate from operator's ConfigMap)
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.OperandTrustedCABundleConfigMapName,
-			Namespace: utils.GetOperatorNamespace(),
-			Labels: map[string]string{
-				utils.InjectCABundleLabel: "true",
-			},
-		},
-		Data: map[string]string{},
-	}
-
-	// Try to get existing ConfigMap
-	var existingConfigMap corev1.ConfigMap
-	err := r.ctrlClient.Get(ctx, types.NamespacedName{
-		Name:      configMap.Name,
-		Namespace: configMap.Namespace,
-	}, &existingConfigMap)
-
-	if err != nil && apierror.IsNotFound(err) {
-		if err := r.ctrlClient.Create(ctx, configMap); err != nil {
-			// Ignore AlreadyExists errors - ConfigMap was created by concurrent reconcile
-			if !apierror.IsAlreadyExists(err) {
-				r.log.Error(err, "failed to create shared trusted CA bundle ConfigMap for proxy support")
-				statusMgr.AddCondition(ProxyConfigAvailable, "ProxyConfigMapCreationFailed",
-					fmt.Sprintf("Failed to create trusted CA bundle ConfigMap: %v", err),
-					metav1.ConditionFalse)
-				return err
-			}
-
-			r.log.Info("Shared trusted CA bundle ConfigMap already exists (created by concurrent reconcile)")
-		}
-		r.log.Info("Created shared trusted CA bundle ConfigMap for proxy support")
-		statusMgr.AddCondition(ProxyConfigAvailable, v1alpha1.ReasonReady,
-			"Proxy configuration is available",
-			metav1.ConditionTrue)
-	} else if err == nil {
-		// ConfigMap exists, ensure it has the correct labels
-		// Do not update the data of the ConfigMap since it is managed by CNO
-		// Check if metadata (labels) has been modified
-		// Note: In the future we may want to check annotations as well, CNO may race with this update since
-		// both controllers are watching/updating the same ConfigMap
-		needsUpdate := false
-		if existingConfigMap.Labels == nil || existingConfigMap.Labels[utils.InjectCABundleLabel] != "true" {
-			needsUpdate = true
-		}
-
-		if needsUpdate {
-			configMap.ResourceVersion = existingConfigMap.ResourceVersion
-			// Only update metadata (labels), preserve the data field managed by CNO
-			configMap.Data = existingConfigMap.Data
-			if err := r.ctrlClient.Update(ctx, configMap); err != nil {
-				r.log.Error(err, "failed to update shared trusted CA bundle ConfigMap for proxy support")
-				statusMgr.AddCondition(ProxyConfigAvailable, "ProxyConfigMapUpdateFailed",
-					fmt.Sprintf("Failed to update trusted CA bundle ConfigMap: %v", err),
-					metav1.ConditionFalse)
-				return err
-			}
-			r.log.Info("Updated shared trusted CA bundle ConfigMap for proxy support")
-		}
-		statusMgr.AddCondition(ProxyConfigAvailable, v1alpha1.ReasonReady,
-			"Proxy configuration is available",
-			metav1.ConditionTrue)
-	} else if err != nil {
-		r.log.Error(err, "failed to get shared trusted CA bundle ConfigMap for proxy support")
-		statusMgr.AddCondition(ProxyConfigAvailable, "ProxyConfigMapGetFailed",
-			fmt.Sprintf("Failed to get trusted CA bundle ConfigMap: %v", err),
-			metav1.ConditionFalse)
-		return err
-	}
-
-	return nil
-}
-
-// trustedCABundleChangedPredicate watches for changes to the operand trusted CA bundle ConfigMap
-var trustedCABundleChangedPredicate = predicate.Funcs{
-	CreateFunc: func(e event.CreateEvent) bool {
-		return e.Object.GetName() == utils.OperandTrustedCABundleConfigMapName &&
-			e.Object.GetNamespace() == utils.GetOperatorNamespace()
-	},
-	UpdateFunc: func(e event.UpdateEvent) bool {
-		return e.ObjectNew.GetName() == utils.OperandTrustedCABundleConfigMapName &&
-			e.ObjectNew.GetNamespace() == utils.GetOperatorNamespace()
-	},
-	DeleteFunc: func(e event.DeleteEvent) bool {
-		return e.Object.GetName() == utils.OperandTrustedCABundleConfigMapName &&
-			e.Object.GetNamespace() == utils.GetOperatorNamespace()
-	},
-	GenericFunc: func(e event.GenericEvent) bool {
-		return false
-	},
-}
-
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Always enqueue the "cluster" CR for reconciliation when any operand status changes
 	mapFunc := func(ctx context.Context, _ client.Object) []reconcile.Request {
@@ -792,7 +669,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.M
 
 	// Watch ZTWIM CR and all operand CRs to aggregate their status
 	// Reconcile on operand creation and status changes
-	// Also watch the operand trusted CA bundle ConfigMap for proxy support (CNO updates)
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerControllerName).
@@ -801,7 +677,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.M
 		Watches(&v1alpha1.SpireAgent{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
 		Watches(&v1alpha1.SpiffeCSIDriver{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
 		Watches(&v1alpha1.SpireOIDCDiscoveryProvider{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
-		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(trustedCABundleChangedPredicate)).
 		Complete(r)
 	if err != nil {
 		return err

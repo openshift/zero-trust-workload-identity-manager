@@ -142,7 +142,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	createOnlyMode := r.handleCreateOnlyMode(&server, statusMgr)
 
 	// Validate configuration
-	if err := r.validateConfiguration(&server, statusMgr); err != nil {
+	if err := r.validateConfiguration(ctx, &server, statusMgr); err != nil {
 		return ctrl.Result{}, nil
 	}
 
@@ -251,9 +251,14 @@ func (r *SpireServerReconciler) handleCreateOnlyMode(server *v1alpha1.SpireServe
 }
 
 // validateConfiguration validates the SpireServer configuration
-func (r *SpireServerReconciler) validateConfiguration(server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
 	// Validate common configuration (affinity, tolerations, node selector, resources, labels)
 	if err := r.validateCommonConfig(server, statusMgr); err != nil {
+		return err
+	}
+
+	// Validate proxy configuration - if proxy is enabled, CA bundle ConfigMap must be configured
+	if err := r.validateProxyConfiguration(statusMgr); err != nil {
 		return err
 	}
 
@@ -289,6 +294,17 @@ func (r *SpireServerReconciler) validateCommonConfig(server *v1alpha1.SpireServe
 		server.Spec.Resources,
 		server.Spec.Labels,
 	)
+}
+
+// validateProxyConfiguration validates proxy configuration using shared validation logic
+func (r *SpireServerReconciler) validateProxyConfiguration(statusMgr *status.Manager) error {
+	result := utils.ValidateProxyConfiguration()
+	if !result.Valid {
+		r.log.Error(fmt.Errorf(result.Reason), result.Message)
+		statusMgr.AddCondition(ConfigurationValid, result.Reason, result.Message, metav1.ConditionFalse)
+		return fmt.Errorf("proxy configuration invalid: %s", result.Message)
+	}
+	return nil
 }
 
 // needsUpdate returns true if StatefulSet needs to be updated based on config checksum

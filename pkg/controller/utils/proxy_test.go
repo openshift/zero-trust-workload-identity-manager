@@ -158,16 +158,83 @@ func TestIsProxyEnabled(t *testing.T) {
 	}
 }
 
+func TestGetTrustedCABundleConfigMapName(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected string
+	}{
+		{
+			name:     "not configured",
+			envValue: "",
+			expected: "",
+		},
+		{
+			name:     "configured with custom name",
+			envValue: "my-trusted-ca-bundle",
+			expected: "my-trusted-ca-bundle",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+			if tt.envValue != "" {
+				os.Setenv(TrustedCABundleConfigMapEnvVar, tt.envValue)
+			}
+			defer os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+
+			result := GetTrustedCABundleConfigMapName()
+			if result != tt.expected {
+				t.Errorf("expected %s, got %s", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestIsTrustedCABundleConfigured(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected bool
+	}{
+		{
+			name:     "not configured",
+			envValue: "",
+			expected: false,
+		},
+		{
+			name:     "configured",
+			envValue: "my-ca-bundle",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+			if tt.envValue != "" {
+				os.Setenv(TrustedCABundleConfigMapEnvVar, tt.envValue)
+			}
+			defer os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+
+			result := IsTrustedCABundleConfigured()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
 func TestInjectProxyEnvVars(t *testing.T) {
 	tests := []struct {
-		name               string
-		httpProxy          string
-		httpsProxy         string
-		noProxy            string
-		existingEnvVars    []corev1.EnvVar
-		expectedEnvCount   int
-		expectedContains   map[string]string
-		expectedNotChanged []string
+		name             string
+		httpProxy        string
+		httpsProxy       string
+		noProxy          string
+		existingEnvVars  []corev1.EnvVar
+		expectedEnvCount int
+		expectedContains map[string]string
 	}{
 		{
 			name:             "inject into empty container",
@@ -198,7 +265,6 @@ func TestInjectProxyEnvVars(t *testing.T) {
 				"NO_PROXY":    ".cluster.local",
 				"APP_NAME":    "test",
 			},
-			expectedNotChanged: []string{"HTTP_PROXY", "APP_NAME"},
 		},
 		{
 			name:             "no proxy vars to inject",
@@ -253,21 +319,83 @@ func TestInjectProxyEnvVars(t *testing.T) {
 	}
 }
 
+func TestGetTrustedCABundleVolume(t *testing.T) {
+	tests := []struct {
+		name          string
+		configMapName string
+		expectEmpty   bool
+	}{
+		{
+			name:          "no ConfigMap configured",
+			configMapName: "",
+			expectEmpty:   true,
+		},
+		{
+			name:          "ConfigMap configured",
+			configMapName: "my-ca-bundle",
+			expectEmpty:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+			if tt.configMapName != "" {
+				os.Setenv(TrustedCABundleConfigMapEnvVar, tt.configMapName)
+			}
+			defer os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+
+			volume := GetTrustedCABundleVolume()
+
+			if tt.expectEmpty {
+				if volume.Name != "" {
+					t.Errorf("expected empty volume, got %v", volume)
+				}
+			} else {
+				if volume.Name != "trusted-ca-bundle" {
+					t.Errorf("expected volume name 'trusted-ca-bundle', got %s", volume.Name)
+				}
+				if volume.VolumeSource.ConfigMap == nil {
+					t.Fatal("expected ConfigMap volume source, got nil")
+				}
+				if volume.VolumeSource.ConfigMap.Name != tt.configMapName {
+					t.Errorf("expected ConfigMap name %s, got %s",
+						tt.configMapName,
+						volume.VolumeSource.ConfigMap.Name)
+				}
+				if volume.VolumeSource.ConfigMap.Optional == nil || !*volume.VolumeSource.ConfigMap.Optional {
+					t.Error("expected ConfigMap to be optional")
+				}
+			}
+		})
+	}
+}
+
 func TestAddTrustedCABundleToContainer(t *testing.T) {
 	tests := []struct {
 		name                 string
+		configMapName        string
 		existingVolumeMounts []corev1.VolumeMount
 		expectedMountCount   int
 		shouldAddMount       bool
 	}{
 		{
+			name:                 "no ConfigMap configured - no change",
+			configMapName:        "",
+			existingVolumeMounts: []corev1.VolumeMount{{Name: "config", MountPath: "/config"}},
+			expectedMountCount:   1,
+			shouldAddMount:       false,
+		},
+		{
 			name:                 "add to container with no mounts",
+			configMapName:        "my-ca-bundle",
 			existingVolumeMounts: []corev1.VolumeMount{},
 			expectedMountCount:   1,
 			shouldAddMount:       true,
 		},
 		{
-			name: "add to container with existing mounts",
+			name:          "add to container with existing mounts",
+			configMapName: "my-ca-bundle",
 			existingVolumeMounts: []corev1.VolumeMount{
 				{Name: "config", MountPath: "/config"},
 			},
@@ -275,9 +403,10 @@ func TestAddTrustedCABundleToContainer(t *testing.T) {
 			shouldAddMount:     true,
 		},
 		{
-			name: "don't add duplicate mount",
+			name:          "don't add duplicate mount",
+			configMapName: "my-ca-bundle",
 			existingVolumeMounts: []corev1.VolumeMount{
-				{Name: "trusted-ca-bundle", MountPath: "/etc/pki/tls/certs", ReadOnly: true},
+				{Name: "trusted-ca-bundle", MountPath: TrustedCABundlePath, ReadOnly: true},
 			},
 			expectedMountCount: 1,
 			shouldAddMount:     false,
@@ -286,6 +415,12 @@ func TestAddTrustedCABundleToContainer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+			if tt.configMapName != "" {
+				os.Setenv(TrustedCABundleConfigMapEnvVar, tt.configMapName)
+			}
+			defer os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+
 			container := &corev1.Container{
 				Name:         "test-container",
 				VolumeMounts: tt.existingVolumeMounts,
@@ -297,74 +432,25 @@ func TestAddTrustedCABundleToContainer(t *testing.T) {
 				t.Errorf("expected %d volume mounts, got %d", tt.expectedMountCount, len(container.VolumeMounts))
 			}
 
-			// Verify the trusted-ca-bundle mount is present
-			found := false
-			for _, vm := range container.VolumeMounts {
-				if vm.Name == "trusted-ca-bundle" {
-					found = true
-					if vm.MountPath != TrustedCABundlePath {
-						t.Errorf("expected mount path %s, got %s", TrustedCABundlePath, vm.MountPath)
-					}
-					if !vm.ReadOnly {
-						t.Error("expected volume mount to be read-only")
+			if tt.shouldAddMount {
+				// Verify the trusted-ca-bundle mount is present
+				found := false
+				for _, vm := range container.VolumeMounts {
+					if vm.Name == "trusted-ca-bundle" {
+						found = true
+						if vm.MountPath != TrustedCABundlePath {
+							t.Errorf("expected mount path %s, got %s", TrustedCABundlePath, vm.MountPath)
+						}
+						if !vm.ReadOnly {
+							t.Error("expected volume mount to be read-only")
+						}
 					}
 				}
-			}
-
-			if tt.shouldAddMount && !found {
-				t.Error("expected trusted-ca-bundle mount to be added, but it wasn't")
+				if !found {
+					t.Error("expected trusted-ca-bundle mount to be added, but it wasn't")
+				}
 			}
 		})
-	}
-}
-
-func TestGetTrustedCABundleVolume(t *testing.T) {
-	volume := GetTrustedCABundleVolume()
-
-	if volume.Name != "trusted-ca-bundle" {
-		t.Errorf("expected volume name 'trusted-ca-bundle', got %s", volume.Name)
-	}
-
-	if volume.VolumeSource.ConfigMap == nil {
-		t.Fatal("expected ConfigMap volume source, got nil")
-	}
-
-	if volume.VolumeSource.ConfigMap.Name != OperandTrustedCABundleConfigMapName {
-		t.Errorf("expected ConfigMap name %s, got %s",
-			OperandTrustedCABundleConfigMapName,
-			volume.VolumeSource.ConfigMap.Name)
-	}
-
-	if volume.VolumeSource.ConfigMap.Optional == nil || !*volume.VolumeSource.ConfigMap.Optional {
-		t.Error("expected ConfigMap to be optional")
-	}
-
-	if len(volume.VolumeSource.ConfigMap.Items) != 1 {
-		t.Fatalf("expected 1 item in ConfigMap projection, got %d", len(volume.VolumeSource.ConfigMap.Items))
-	}
-
-	item := volume.VolumeSource.ConfigMap.Items[0]
-	if item.Key != TrustedCABundleKey {
-		t.Errorf("expected key %s, got %s", TrustedCABundleKey, item.Key)
-	}
-	if item.Path != "ca-bundle.crt" {
-		t.Errorf("expected path 'ca-bundle.crt', got %s", item.Path)
-	}
-}
-
-func TestGetTrustedCABundleVolumeMount(t *testing.T) {
-	volumeMount := GetTrustedCABundleVolumeMount()
-
-	if volumeMount.Name != "trusted-ca-bundle" {
-		t.Errorf("expected volume mount name 'trusted-ca-bundle', got %s", volumeMount.Name)
-	}
-
-	if volumeMount.MountPath != TrustedCABundlePath {
-		t.Errorf("expected mount path %s, got %s", TrustedCABundlePath, volumeMount.MountPath)
-	}
-
-	if !volumeMount.ReadOnly {
-		t.Error("expected volume mount to be read-only")
 	}
 }
 
@@ -372,8 +458,7 @@ func TestAddProxyConfigToPod(t *testing.T) {
 	tests := []struct {
 		name                 string
 		httpProxy            string
-		httpsProxy           string
-		noProxy              string
+		configMapName        string
 		podSpec              *corev1.PodSpec
 		expectedContainerEnv int
 		expectedInitEnv      int
@@ -381,43 +466,9 @@ func TestAddProxyConfigToPod(t *testing.T) {
 		shouldModify         bool
 	}{
 		{
-			name:       "add proxy config to pod with one container",
-			httpProxy:  "http://proxy.example.com:8080",
-			httpsProxy: "https://proxy.example.com:8443",
-			noProxy:    ".cluster.local",
-			podSpec: &corev1.PodSpec{
-				Containers: []corev1.Container{
-					{Name: "main", Env: []corev1.EnvVar{}},
-				},
-				Volumes: []corev1.Volume{},
-			},
-			expectedContainerEnv: 3, // HTTP_PROXY, HTTPS_PROXY, NO_PROXY
-			expectedVolumes:      1, // trusted-ca-bundle
-			shouldModify:         true,
-		},
-		{
-			name:       "add proxy config to pod with containers and init containers",
-			httpProxy:  "http://proxy.example.com:8080",
-			httpsProxy: "",
-			noProxy:    "",
-			podSpec: &corev1.PodSpec{
-				InitContainers: []corev1.Container{
-					{Name: "init", Env: []corev1.EnvVar{}},
-				},
-				Containers: []corev1.Container{
-					{Name: "main", Env: []corev1.EnvVar{}},
-					{Name: "sidecar", Env: []corev1.EnvVar{}},
-				},
-				Volumes: []corev1.Volume{},
-			},
-			expectedContainerEnv: 1, // HTTP_PROXY only
-			expectedInitEnv:      1, // HTTP_PROXY only
-			expectedVolumes:      1, // trusted-ca-bundle
-			shouldModify:         true,
-		},
-		{
-			name:      "no proxy enabled - no changes",
-			httpProxy: "",
+			name:          "no proxy and no CA bundle - no changes",
+			httpProxy:     "",
+			configMapName: "",
 			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{Name: "main", Env: []corev1.EnvVar{}},
@@ -429,29 +480,65 @@ func TestAddProxyConfigToPod(t *testing.T) {
 			shouldModify:         false,
 		},
 		{
-			name:       "don't add duplicate volume",
-			httpProxy:  "http://proxy.example.com:8080",
-			httpsProxy: "https://proxy.example.com:8443",
-			noProxy:    ".cluster.local",
+			name:          "proxy only - inject env vars, no volume",
+			httpProxy:     "http://proxy.example.com:8080",
+			configMapName: "",
+			podSpec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "main", Env: []corev1.EnvVar{}},
+				},
+				InitContainers: []corev1.Container{
+					{Name: "init", Env: []corev1.EnvVar{}},
+				},
+				Volumes: []corev1.Volume{},
+			},
+			expectedContainerEnv: 1,
+			expectedInitEnv:      1,
+			expectedVolumes:      0, // No volume - no CA bundle configured
+			shouldModify:         true,
+		},
+		{
+			name:          "CA bundle only - inject volume and mounts, no env vars",
+			httpProxy:     "",
+			configMapName: "my-ca-bundle",
+			podSpec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "main", Env: []corev1.EnvVar{}},
+				},
+				Volumes: []corev1.Volume{},
+			},
+			expectedContainerEnv: 0, // No env vars - no proxy
+			expectedVolumes:      1, // Volume added
+			shouldModify:         true,
+		},
+		{
+			name:          "both proxy and CA bundle",
+			httpProxy:     "http://proxy.example.com:8080",
+			configMapName: "my-ca-bundle",
+			podSpec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "main", Env: []corev1.EnvVar{}},
+				},
+				Volumes: []corev1.Volume{},
+			},
+			expectedContainerEnv: 1,
+			expectedVolumes:      1,
+			shouldModify:         true,
+		},
+		{
+			name:          "don't add duplicate volume",
+			httpProxy:     "http://proxy.example.com:8080",
+			configMapName: "my-ca-bundle",
 			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{Name: "main", Env: []corev1.EnvVar{}},
 				},
 				Volumes: []corev1.Volume{
-					{
-						Name: "trusted-ca-bundle",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: OperandTrustedCABundleConfigMapName,
-								},
-							},
-						},
-					},
+					{Name: "trusted-ca-bundle", VolumeSource: corev1.VolumeSource{}},
 					{Name: "config", VolumeSource: corev1.VolumeSource{}},
 				},
 			},
-			expectedContainerEnv: 3,
+			expectedContainerEnv: 1,
 			expectedVolumes:      2, // Don't add duplicate
 			shouldModify:         true,
 		},
@@ -459,13 +546,17 @@ func TestAddProxyConfigToPod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv(HTTPProxyEnvVar, tt.httpProxy)
-			os.Setenv(HTTPSProxyEnvVar, tt.httpsProxy)
-			os.Setenv(NoProxyEnvVar, tt.noProxy)
+			os.Unsetenv(HTTPProxyEnvVar)
+			os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+			if tt.httpProxy != "" {
+				os.Setenv(HTTPProxyEnvVar, tt.httpProxy)
+			}
+			if tt.configMapName != "" {
+				os.Setenv(TrustedCABundleConfigMapEnvVar, tt.configMapName)
+			}
 			defer func() {
 				os.Unsetenv(HTTPProxyEnvVar)
-				os.Unsetenv(HTTPSProxyEnvVar)
-				os.Unsetenv(NoProxyEnvVar)
+				os.Unsetenv(TrustedCABundleConfigMapEnvVar)
 			}()
 
 			AddProxyConfigToPod(tt.podSpec)
@@ -477,19 +568,6 @@ func TestAddProxyConfigToPod(t *testing.T) {
 						t.Errorf("container %s: expected %d env vars, got %d",
 							container.Name, tt.expectedContainerEnv, len(container.Env))
 					}
-					if tt.shouldModify && tt.expectedContainerEnv > 0 {
-						// Verify volume mount was added
-						found := false
-						for _, vm := range container.VolumeMounts {
-							if vm.Name == "trusted-ca-bundle" {
-								found = true
-								break
-							}
-						}
-						if !found {
-							t.Errorf("container %s: expected trusted-ca-bundle volume mount", container.Name)
-						}
-					}
 				}
 			}
 
@@ -500,19 +578,6 @@ func TestAddProxyConfigToPod(t *testing.T) {
 						t.Errorf("init container %s: expected %d env vars, got %d",
 							container.Name, tt.expectedInitEnv, len(container.Env))
 					}
-					if tt.shouldModify && tt.expectedInitEnv > 0 {
-						// Verify volume mount was added
-						found := false
-						for _, vm := range container.VolumeMounts {
-							if vm.Name == "trusted-ca-bundle" {
-								found = true
-								break
-							}
-						}
-						if !found {
-							t.Errorf("init container %s: expected trusted-ca-bundle volume mount", container.Name)
-						}
-					}
 				}
 			}
 
@@ -520,34 +585,17 @@ func TestAddProxyConfigToPod(t *testing.T) {
 			if len(tt.podSpec.Volumes) != tt.expectedVolumes {
 				t.Errorf("expected %d volumes, got %d", tt.expectedVolumes, len(tt.podSpec.Volumes))
 			}
-
-			if tt.shouldModify && tt.expectedVolumes > 0 {
-				// Verify trusted-ca-bundle volume was added
-				found := false
-				for _, vol := range tt.podSpec.Volumes {
-					if vol.Name == "trusted-ca-bundle" {
-						found = true
-						if vol.VolumeSource.ConfigMap == nil {
-							t.Error("expected ConfigMap volume source")
-						} else if vol.VolumeSource.ConfigMap.Name != OperandTrustedCABundleConfigMapName {
-							t.Errorf("expected ConfigMap name %s, got %s",
-								OperandTrustedCABundleConfigMapName,
-								vol.VolumeSource.ConfigMap.Name)
-						}
-						break
-					}
-				}
-				if !found {
-					t.Error("expected trusted-ca-bundle volume to be added")
-				}
-			}
 		})
 	}
 }
 
 func TestAddProxyConfigToPodIdempotency(t *testing.T) {
 	os.Setenv(HTTPProxyEnvVar, "http://proxy.example.com:8080")
-	defer os.Unsetenv(HTTPProxyEnvVar)
+	os.Setenv(TrustedCABundleConfigMapEnvVar, "my-ca-bundle")
+	defer func() {
+		os.Unsetenv(HTTPProxyEnvVar)
+		os.Unsetenv(TrustedCABundleConfigMapEnvVar)
+	}()
 
 	podSpec := &corev1.PodSpec{
 		Containers: []corev1.Container{

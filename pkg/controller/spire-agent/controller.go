@@ -40,6 +40,7 @@ const (
 	ServiceAccountAvailable             = "ServiceAccountAvailable"
 	ServiceAvailable                    = "ServiceAvailable"
 	RBACAvailable                       = "RBACAvailable"
+	ConfigurationValid                  = "ConfigurationValid"
 )
 
 const spireAgentDaemonSetSpireAgentConfigHashAnnotationKey = "ztwim.openshift.io/spire-agent-config-hash"
@@ -133,8 +134,8 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&agent, statusMgr)
 
-	// Validate common configuration
-	if err := r.validateCommonConfig(&agent, statusMgr); err != nil {
+	// Validate configuration (including proxy)
+	if err := r.validateConfiguration(ctx, &agent, statusMgr); err != nil {
 		return ctrl.Result{}, nil
 	}
 
@@ -222,8 +223,13 @@ func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, 
 	return createOnlyMode
 }
 
-// validateCommonConfig validates common configuration fields (affinity, tolerations, nodeSelector, resources, labels)
-func (r *SpireAgentReconciler) validateCommonConfig(agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
+// validateConfiguration validates SpireAgent configuration including proxy settings
+func (r *SpireAgentReconciler) validateConfiguration(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
+	// Validate proxy configuration - if proxy is enabled, CA bundle ConfigMap must be configured
+	if err := r.validateProxyConfiguration(statusMgr); err != nil {
+		return err
+	}
+
 	return utils.ValidateAndUpdateStatus(
 		r.log,
 		statusMgr,
@@ -235,6 +241,18 @@ func (r *SpireAgentReconciler) validateCommonConfig(agent *v1alpha1.SpireAgent, 
 		agent.Spec.Resources,
 		agent.Spec.Labels,
 	)
+}
+
+// validateProxyConfiguration validates proxy configuration using shared validation logic
+func (r *SpireAgentReconciler) validateProxyConfiguration(statusMgr *status.Manager) error {
+	result := utils.ValidateProxyConfiguration()
+
+	if !result.Valid {
+		r.log.Error(fmt.Errorf(result.Reason), result.Message)
+		statusMgr.AddCondition(ConfigurationValid, result.Reason, result.Message, metav1.ConditionFalse)
+		return fmt.Errorf("proxy configuration invalid: %s", result.Message)
+	}
+	return nil
 }
 
 // needsUpdate returns true if DaemonSet needs to be updated based on config checksum

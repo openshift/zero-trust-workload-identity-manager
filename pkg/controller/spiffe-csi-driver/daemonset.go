@@ -277,8 +277,6 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 		},
 	}
 
-	// Add proxy configuration if enabled
-	utils.AddProxyConfigToPod(&ds.Spec.Template.Spec)
 	return ds
 }
 
