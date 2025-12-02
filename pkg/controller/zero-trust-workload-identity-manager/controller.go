@@ -2,12 +2,15 @@ package zero_trust_workload_identity_manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
+	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierror "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -114,11 +117,12 @@ func contains(s, substr string) bool {
 // ZeroTrustWorkloadIdentityManagerReconciler manages the ZeroTrustWorkloadIdentityManager singleton instance
 // and aggregates status from all operand CRs
 type ZeroTrustWorkloadIdentityManagerReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient            customClient.CustomCtrlClient
+	ctx                   context.Context
+	eventRecorder         record.EventRecorder
+	log                   logr.Logger
+	scheme                *runtime.Scheme
+	operatorConditionName string
 }
 
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers,verbs=get;list;watch;create;update;patch;delete
@@ -169,6 +173,8 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events;secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions,verbs=get;list;watch
+// +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions/status,verbs=get;update
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) {
@@ -176,12 +182,17 @@ func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) 
 	if err != nil {
 		return nil, err
 	}
+	operatorConditionName := os.Getenv("OPERATOR_CONDITION_NAME")
+	if operatorConditionName == "" {
+		return nil, errors.New("operator condition CR name is empty")
+	}
 	return &ZeroTrustWorkloadIdentityManagerReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:            c,
+		ctx:                   context.Background(),
+		eventRecorder:         mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerControllerName),
+		log:                   ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerControllerName),
+		scheme:                mgr.GetScheme(),
+		operatorConditionName: operatorConditionName,
 	}, nil
 }
 
@@ -200,46 +211,6 @@ func setCreateOnlyModeCondition(statusMgr *status.Manager, anyOperandHasCreateOn
 	}
 }
 
-// setUpgradeableCondition sets the Upgradeable condition based on operand readiness and CreateOnlyMode
-// Upgradeable is False only if:
-// - CreateOnlyMode is enabled, OR
-// - Operand CRs exist but are not ready (failing operands)
-// Upgradeable is True if:
-// - All operands are ready, OR
-// - Operands don't exist yet (will be created during upgrade)
-func setUpgradeableCondition(statusMgr *status.Manager, allReady bool, anyCreateOnlyModeEnabled bool, operandStatuses []v1alpha1.OperandStatus) {
-	if anyCreateOnlyModeEnabled {
-		// CreateOnlyMode prevents updates - not safe to upgrade
-		statusMgr.AddCondition(v1alpha1.Upgradeable, v1alpha1.ReasonOperandsNotReady,
-			"Not safe to upgrade - create-only mode is enabled on one or more operands",
-			metav1.ConditionFalse)
-		return
-	}
-
-	// Check if any operands exist but are not ready (failing operands)
-	var failingOperands []string
-	for _, operand := range operandStatuses {
-		// Only count operands that exist but are not ready
-		// Operands that don't exist (CR not found) are OK for upgrade
-		if !utils.StringToBool(operand.Ready) && operand.Message != OperandMessageCRNotFound {
-			failingOperands = append(failingOperands, fmt.Sprintf("%s/%s", operand.Kind, operand.Name))
-		}
-	}
-
-	if len(failingOperands) > 0 {
-		// Some operands exist but are failing - not safe to upgrade
-		message := fmt.Sprintf("Not safe to upgrade - operands exist but are not ready: %v", failingOperands)
-		statusMgr.AddCondition(v1alpha1.Upgradeable, v1alpha1.ReasonOperandsNotReady,
-			message,
-			metav1.ConditionFalse)
-	} else {
-		// All operands are either ready or don't exist yet - safe to upgrade
-		statusMgr.AddCondition(v1alpha1.Upgradeable, v1alpha1.ReasonReady,
-			"All operands are ready or not yet created",
-			metav1.ConditionTrue)
-	}
-}
-
 // Reconcile ensures the ZeroTrustWorkloadIdentityManager 'cluster' instance exists
 // and aggregates status from all managed operand CRs
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -247,7 +218,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	var config v1alpha1.ZeroTrustWorkloadIdentityManager
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierror.IsNotFound(err) {
 			// Ensure the 'cluster' instance always exists
 			if req.Name == "cluster" {
 				return r.recreateClusterInstance(ctx, req.Name)
@@ -336,10 +307,13 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	// Set CreateOnlyMode condition if any operand has it
 	setCreateOnlyModeCondition(statusMgr, result.anyOperandHasCreateOnlyCondition, result.anyCreateOnlyModeEnabled)
 
-	// Set Upgradeable condition based on operand health and CreateOnlyMode
-	setUpgradeableCondition(statusMgr, result.allReady, result.anyCreateOnlyModeEnabled, result.operandStatuses)
-
 	r.log.Info("Aggregated operand status", "allReady", result.allReady, "notCreated", result.notCreatedCount, "failed", result.failedCount, "anyCreateOnlyModeEnabled", result.anyCreateOnlyModeEnabled, "anyOperandHasCreateOnlyCondition", result.anyOperandHasCreateOnlyCondition, "anyOperandExists", result.anyOperandExists)
+
+	// Update OperatorCondition for OLM integration (best effort - don't fail reconciliation if it fails)
+	// Upgradeable condition is only set on OperatorCondition, not on ZTWIM CR
+	if err := r.updateOperatorCondition(ctx, result.anyCreateOnlyModeEnabled, result.operandStatuses); err != nil {
+		r.log.Error(err, "failed to update OperatorCondition, continuing (operator may be running outside OLM)")
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -445,7 +419,7 @@ func getOperandStatus[T operandStatusGetter](ctx context.Context, r *ZeroTrustWo
 	}
 
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierror.IsNotFound(err) {
 			operandStatus.Ready = "false"
 			operandStatus.Message = OperandMessageCRNotFound
 			return operandStatus
@@ -589,6 +563,97 @@ var operandStatusChangedPredicate = predicate.Funcs{
 	},
 }
 
+// updateOperatorCondition syncs the Upgradeable condition to the OperatorCondition resource for OLM
+// The Upgradeable condition is only set on OperatorCondition, not on the ZTWIM CR
+func (r *ZeroTrustWorkloadIdentityManagerReconciler) updateOperatorCondition(ctx context.Context, anyCreateOnlyModeEnabled bool, operandStatuses []v1alpha1.OperandStatus) error {
+	// Find the OperatorCondition resource created by OLM
+	operatorCondition, err := r.findOperatorCondition(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to find OperatorCondition: %w", err)
+	}
+
+	if operatorCondition == nil {
+		// OperatorCondition not found (likely running outside OLM)
+		r.log.V(1).Info("OperatorCondition not found, skipping update (operator may be running outside OLM)")
+		return nil
+	}
+
+	upgradeableStatus := metav1.ConditionTrue
+	upgradeableReason := v1alpha1.ReasonReady
+	upgradeableMessage := "Operator is Upgradeable"
+
+	if anyCreateOnlyModeEnabled {
+		// CreateOnlyMode prevents updates - not safe to upgrade
+		upgradeableStatus = metav1.ConditionFalse
+		upgradeableReason = v1alpha1.ReasonOperandsNotReady
+		upgradeableMessage = "Not safe to upgrade - create-only mode is enabled on one or more operands"
+	} else {
+		// Check if any operands exist but are not ready
+		// CRs that don't exist (CR not found) are OK for upgrade
+		var notReadyOperands []string
+		for _, operand := range operandStatuses {
+			// Only count operands that exist but are not ready
+			// If operand exists (not CR not found) and is not ready, it blocks upgrade
+			if !utils.StringToBool(operand.Ready) && operand.Message != OperandMessageCRNotFound {
+				notReadyOperands = append(notReadyOperands, fmt.Sprintf("%s", operand.Kind))
+			}
+		}
+
+		if len(notReadyOperands) > 0 {
+			// Some operands exist but are not ready - not safe to upgrade
+			upgradeableStatus = metav1.ConditionFalse
+			upgradeableReason = v1alpha1.ReasonOperandsNotReady
+			upgradeableMessage = fmt.Sprintf("Not safe to upgrade - existing operands are not ready: %v", notReadyOperands)
+		}
+	}
+
+	// Update the OperatorCondition with the Upgradeable status
+	condition := metav1.Condition{
+		Type:               v1alpha1.Upgradeable,
+		Status:             upgradeableStatus,
+		Reason:             upgradeableReason,
+		Message:            upgradeableMessage,
+		LastTransitionTime: metav1.Now(),
+		ObservedGeneration: operatorCondition.Generation,
+	}
+
+	apimeta.SetStatusCondition(&operatorCondition.Status.Conditions, condition)
+
+	// Update the OperatorCondition status using the status subresource
+	if err = r.ctrlClient.StatusUpdateWithRetry(ctx, operatorCondition); err != nil {
+		return fmt.Errorf("failed to update OperatorCondition status: %w", err)
+	}
+
+	r.log.Info("Successfully updated OperatorCondition", "name", operatorCondition.Name, "upgradeable", upgradeableStatus)
+	return nil
+}
+
+// findOperatorCondition finds the OperatorCondition resource created by OLM
+func (r *ZeroTrustWorkloadIdentityManagerReconciler) findOperatorCondition(ctx context.Context) (*operatorv1.OperatorCondition, error) {
+	if r.operatorConditionName != "" {
+		operatorCondition := &operatorv1.OperatorCondition{}
+		err := r.ctrlClient.Get(ctx, types.NamespacedName{
+			Name:      r.operatorConditionName,
+			Namespace: utils.OperatorNamespace,
+		}, operatorCondition)
+
+		if err == nil {
+			r.log.V(1).Info("Found OperatorCondition", "name", r.operatorConditionName)
+			return operatorCondition, nil
+		}
+
+		if !apierror.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get OperatorCondition %s: %w", r.operatorConditionName, err)
+		}
+		// Not found with the cached name
+		r.log.Info("OperatorCondition not found", "name", r.operatorConditionName)
+	}
+
+	// OperatorCondition not found (likely running outside OLM)
+	r.log.V(1).Error(errors.New("OperatorCondition not found"), "operator may be running outside OLM")
+	return nil, errors.New("OperatorCondition not found")
+}
+
 func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Always enqueue the "cluster" CR for reconciliation when any operand status changes
 	mapFunc := func(ctx context.Context, _ client.Object) []reconcile.Request {
@@ -606,6 +671,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) SetupWithManager(mgr ctrl.M
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(utils.ZeroTrustWorkloadIdentityManagerControllerName).
+		Watches(&operatorv1.OperatorCondition{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
 		Watches(&v1alpha1.SpireServer{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
 		Watches(&v1alpha1.SpireAgent{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).
 		Watches(&v1alpha1.SpiffeCSIDriver{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(operandStatusChangedPredicate)).

@@ -19,12 +19,14 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
+	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -314,6 +316,47 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Expect(operand.Message).To(Equal("Ready"), "%s message should be 'Ready'", kind)
 				fmt.Fprintf(GinkgoWriter, "Operand %s is ready\n", kind)
 			}
+		})
+
+		It("OperatorCondition should have Upgradeable condition set correctly", func() {
+			By("Finding OperatorCondition resource dynamically")
+			operatorConditionList := &operatorv1.OperatorConditionList{}
+			err := k8sClient.List(testCtx, operatorConditionList, client.InNamespace(utils.OperatorNamespace))
+			Expect(err).NotTo(HaveOccurred(), "failed to list OperatorConditions")
+			Expect(operatorConditionList.Items).NotTo(BeEmpty(), "no OperatorCondition found in namespace")
+
+			// Find the OperatorCondition for this operator (name contains operator name prefix)
+			var operatorCondition *operatorv1.OperatorCondition
+			for i := range operatorConditionList.Items {
+				if operatorConditionList.Items[i].Name == "zero-trust-workload-identity-manager" ||
+					strings.HasPrefix(operatorConditionList.Items[i].Name, "zero-trust-workload-identity-manager.v") {
+					operatorCondition = &operatorConditionList.Items[i]
+					break
+				}
+			}
+			Expect(operatorCondition).NotTo(BeNil(), "OperatorCondition for zero-trust-workload-identity-manager not found")
+			fmt.Fprintf(GinkgoWriter, "Found OperatorCondition: %s\n", operatorCondition.Name)
+
+			By("Verifying OperatorCondition Upgradeable condition")
+			// Find Upgradeable condition in OperatorCondition
+			var operatorCondUpgradeable *metav1.Condition
+			for i := range operatorCondition.Status.Conditions {
+				if operatorCondition.Status.Conditions[i].Type == "Upgradeable" {
+					operatorCondUpgradeable = &operatorCondition.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(operatorCondUpgradeable).NotTo(BeNil(), "Upgradeable condition should exist in OperatorCondition")
+			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable: Status=%s, Reason=%s, Message=%s\n",
+				operatorCondUpgradeable.Status, operatorCondUpgradeable.Reason, operatorCondUpgradeable.Message)
+
+			// Verify expected values when all operands are ready
+			Expect(operatorCondUpgradeable.Status).To(Equal(metav1.ConditionTrue),
+				"Upgradeable should be True when all operands are ready")
+			Expect(operatorCondUpgradeable.Reason).To(Equal("Ready"),
+				"Upgradeable reason should be Ready")
+
+			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable set correctly\n")
 		})
 	})
 
