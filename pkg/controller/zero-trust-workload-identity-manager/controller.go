@@ -221,7 +221,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		if apierror.IsNotFound(err) {
 			// Update OperatorCondition for OLM integration (best effort - don't fail reconciliation if it fails)
 			// Upgradeable condition is only set on OperatorCondition, not on ZTWIM CR
-			if err := r.updateOperatorCondition(ctx, false, []v1alpha1.OperandStatus{}); err != nil {
+			if err := r.updateOperatorCondition(ctx, utils.IsInCreateOnlyMode(), []v1alpha1.OperandStatus{}); err != nil {
 				r.log.Error(err, "failed to update OperatorCondition, continuing (operator may be running outside OLM)")
 			}
 			return ctrl.Result{}, nil
