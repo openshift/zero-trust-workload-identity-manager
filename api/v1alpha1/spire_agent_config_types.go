@@ -94,9 +94,9 @@ type WorkloadAttestors struct {
 // +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertFileName) && self.hostCertFileName != '')",message="hostCertFileName is required when type is 'hostCert'"
 type WorkloadAttestorsVerification struct {
 	// type specifies the kubelet certificate verification mode.
-	// - skip: Skip TLS verification entirely
-	// - auto: Verify kubelet certificate. If hostCertBasePath and hostCertFileName are specified,
-	//   uses that CA. Otherwise, SPIRE uses default cluster CA bundle.
+	// - skip: Skip TLS verification entirely.
+	// - auto: Verify kubelet certificate using OpenShift defaults (/etc/kubernetes/kubelet-ca.crt)
+	//   unless hostCertBasePath and hostCertFileName are explicitly specified.
 	// - hostCert: Use a custom CA certificate for kubelet verification. Requires hostCertBasePath
 	//   and hostCertFileName to be specified.
 	// +kubebuilder:validation:Optional
@@ -105,13 +105,15 @@ type WorkloadAttestorsVerification struct {
 	Type string `json:"type,omitempty"`
 
 	// hostCertBasePath specifies the directory containing the kubelet CA certificate.
-	// Required when type is "hostCert". Optional when type is "auto".
+	// Required when type is "hostCert".
+	// Optional when type is "auto" (defaults to "/etc/kubernetes" if not specified).
 	// +kubebuilder:validation:Optional
 	HostCertBasePath string `json:"hostCertBasePath,omitempty"`
 
 	// hostCertFileName specifies the file name for the kubelet's CA certificate.
 	// Combined with hostCertBasePath to form the full path for SPIRE's kubelet_ca_path.
-	// Required when type is "hostCert". Optional when type is "auto".
+	// Required when type is "hostCert".
+	// Optional when type is "auto" (defaults to "kubelet-ca.crt" if not specified).
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxLength=256
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._-]+$`

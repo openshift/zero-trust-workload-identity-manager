@@ -74,4 +74,9 @@ const (
 	WorkloadAttestorVerificationTypeSkip     = "skip"
 	WorkloadAttestorVerificationTypeAuto     = "auto"
 	WorkloadAttestorVerificationTypeHostCert = "hostCert"
+
+	// Default Kubelet CA Paths (for OpenShift clusters)
+	// These are used as defaults for 'auto' mode when no explicit paths are provided.
+	DefaultKubeletCABasePath = "/etc/kubernetes"
+	DefaultKubeletCAFileName = "kubelet-ca.crt"
 )

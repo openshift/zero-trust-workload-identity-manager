@@ -217,7 +217,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 								},
 							},
 							VolumeMounts: volumeMounts,
-							Resources: utils.DerefResourceRequirements(config.Resources),
+							Resources:    utils.DerefResourceRequirements(config.Resources),
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: ptr.To(true),
 							},
@@ -226,7 +226,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
-					Volumes: volumes,
+					Volumes:      volumes,
 				},
 			},
 		},
@@ -242,7 +242,8 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 }
 
 // getHostCertMountPath returns the host path to mount for kubelet CA verification.
-// Returns empty string if no host mount is needed (skip, or hostCert/auto without paths specified).
+// Returns empty string if no host mount is needed (skip mode).
+// For auto mode without explicit paths, returns the OpenShift default path.
 func getHostCertMountPath(workloadAttestors *v1alpha1.WorkloadAttestors) string {
 	if workloadAttestors == nil || workloadAttestors.WorkloadAttestorsVerification == nil {
 		return ""
@@ -250,14 +251,19 @@ func getHostCertMountPath(workloadAttestors *v1alpha1.WorkloadAttestors) string 
 
 	verification := workloadAttestors.WorkloadAttestorsVerification
 
-	// Only mount for hostCert or auto modes when both hostCertBasePath and hostCertFileName are specified
 	switch verification.Type {
-	case utils.WorkloadAttestorVerificationTypeHostCert, utils.WorkloadAttestorVerificationTypeAuto:
-		// Both basePath and fileName must be specified for mounting
-		if verification.HostCertBasePath == "" || verification.HostCertFileName == "" {
-			return ""
-		}
+	case utils.WorkloadAttestorVerificationTypeHostCert:
+		// hostCert: paths are required by CEL validation
 		return verification.HostCertBasePath
+
+	case utils.WorkloadAttestorVerificationTypeAuto:
+		// auto: use specified path or fall back to OpenShift defaults
+		if verification.HostCertBasePath != "" && verification.HostCertFileName != "" {
+			return verification.HostCertBasePath
+		}
+		// Use OpenShift default path for seamless operation
+		return utils.DefaultKubeletCABasePath
+
 	default:
 		// skip or unknown - no host mount needed
 		return ""

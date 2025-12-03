@@ -50,7 +50,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			expected: "/etc/kubernetes",
 		},
 		{
-			name: "hostCert type with only basePath - no mount (incomplete config)",
+			name: "hostCert type with only basePath - uses basePath (CEL would block this)",
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -58,10 +58,10 @@ func TestGetHostCertMountPath(t *testing.T) {
 					HostCertBasePath: "/etc/kubernetes",
 				},
 			},
-			expected: "",
+			expected: "/etc/kubernetes",
 		},
 		{
-			name: "hostCert type with only fileName - no mount (incomplete config)",
+			name: "hostCert type with only fileName - uses empty basePath (CEL would block this)",
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -72,37 +72,37 @@ func TestGetHostCertMountPath(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "auto type without paths - no mount (uses SPIRE default)",
+			name: "auto type without paths - uses OpenShift defaults",
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
 					Type: utils.WorkloadAttestorVerificationTypeAuto,
 				},
 			},
-			expected: "",
+			expected: utils.DefaultKubeletCABasePath,
 		},
 		{
-			name: "auto type with both paths - mount needed",
+			name: "auto type with both paths - mount specified path",
+			workloadAttestors: &v1alpha1.WorkloadAttestors{
+				K8sEnabled: "true",
+				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+					Type:             utils.WorkloadAttestorVerificationTypeAuto,
+					HostCertBasePath: "/custom/path",
+					HostCertFileName: "custom-ca.crt",
+				},
+			},
+			expected: "/custom/path",
+		},
+		{
+			name: "auto type with only basePath - uses OpenShift defaults",
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
 					Type:             utils.WorkloadAttestorVerificationTypeAuto,
 					HostCertBasePath: "/etc/kubernetes",
-					HostCertFileName: "kubelet-ca.crt",
 				},
 			},
-			expected: "/etc/kubernetes",
-		},
-		{
-			name: "auto type with only basePath - no mount",
-			workloadAttestors: &v1alpha1.WorkloadAttestors{
-				K8sEnabled: "true",
-				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             utils.WorkloadAttestorVerificationTypeAuto,
-					HostCertBasePath: "/etc/kubernetes",
-				},
-			},
-			expected: "",
+			expected: utils.DefaultKubeletCABasePath,
 		},
 		{
 			name: "unknown type - no mount",
@@ -129,7 +129,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "custom path",
+			name: "custom path with hostCert",
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{

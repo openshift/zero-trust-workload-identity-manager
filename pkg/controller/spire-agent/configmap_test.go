@@ -690,15 +690,17 @@ func TestConfigureKubeletVerification(t *testing.T) {
 			},
 			expected: map[string]interface{}{
 				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "",
 			},
 		},
 		{
-			name: "auto type without paths (uses SPIRE default)",
+			name: "auto type without paths (uses OpenShift defaults)",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
 				Type: utils.WorkloadAttestorVerificationTypeAuto,
 			},
 			expected: map[string]interface{}{
 				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/etc/kubernetes/kubelet-ca.crt",
 			},
 		},
 		{
@@ -726,13 +728,26 @@ func TestConfigureKubeletVerification(t *testing.T) {
 			},
 		},
 		{
-			name: "auto type with only basePath (incomplete)",
+			name: "auto type with only basePath (falls back to defaults)",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
 				Type:             utils.WorkloadAttestorVerificationTypeAuto,
 				HostCertBasePath: "/etc/kubernetes",
 			},
 			expected: map[string]interface{}{
 				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/etc/kubernetes/kubelet-ca.crt",
+			},
+		},
+		{
+			name: "auto type with custom paths",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type:             utils.WorkloadAttestorVerificationTypeAuto,
+				HostCertBasePath: "/custom/path",
+				HostCertFileName: "custom-ca.crt",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/custom/path/custom-ca.crt",
 			},
 		},
 		{
@@ -893,7 +908,7 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			kubeletCAPathShouldBeSet: true,
 		},
 		{
-			name: "workload attestor with auto verification (no paths)",
+			name: "workload attestor with auto verification (no paths - uses OpenShift defaults)",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
@@ -905,7 +920,8 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 				},
 			},
 			expectedSkipVerification: false,
-			kubeletCAPathShouldBeSet: false,
+			expectedKubeletCAPath:    "/etc/kubernetes/kubelet-ca.crt",
+			kubeletCAPathShouldBeSet: true,
 		},
 		{
 			name: "workload attestor with auto verification (with paths)",

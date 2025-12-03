@@ -154,13 +154,18 @@ func configureKubeletVerification(plugin map[string]interface{}, verification *v
 	}
 
 	switch verification.Type {
-	case utils.WorkloadAttestorVerificationTypeHostCert, utils.WorkloadAttestorVerificationTypeAuto:
-		// Verify kubelet certificate.
-		// - hostCert: hostCertPath is required by CEL validation
-		// - auto: if hostCertPath is specified use it, otherwise SPIRE uses its default cluster CA
+	case utils.WorkloadAttestorVerificationTypeHostCert:
+		// hostCert: hostCertPath is required by CEL validation
+		plugin["skip_kubelet_verification"] = false
+		plugin["kubelet_ca_path"] = buildHostCertPath(verification)
+
+	case utils.WorkloadAttestorVerificationTypeAuto:
+		// auto: if hostCertPath is specified use it, otherwise use OpenShift defaults
 		plugin["skip_kubelet_verification"] = false
 		if hostCertPath := buildHostCertPath(verification); hostCertPath != "" {
 			plugin["kubelet_ca_path"] = hostCertPath
+		} else {
+			plugin["kubelet_ca_path"] = path.Join(utils.DefaultKubeletCABasePath, utils.DefaultKubeletCAFileName)
 		}
 
 	default:
