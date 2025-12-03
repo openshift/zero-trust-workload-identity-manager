@@ -10,6 +10,9 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServer is a singleton, .metadata.name must be 'cluster'"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.persistence) || !has(self.spec.persistence) || !has(oldSelf.spec.persistence.size) || oldSelf.spec.persistence.size == self.spec.persistence.size",message="spec.persistence.size is immutable once set"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.persistence) || !has(self.spec.persistence) || !has(oldSelf.spec.persistence.accessMode) || oldSelf.spec.persistence.accessMode == self.spec.persistence.accessMode",message="spec.persistence.accessMode is immutable once set"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.persistence) || !has(self.spec.persistence) || !has(oldSelf.spec.persistence.storageClass) || oldSelf.spec.persistence.storageClass == self.spec.persistence.storageClass",message="spec.persistence.storageClass is immutable once set"
 // +operator-sdk:csv:customresourcedefinitions:displayName="SpireServer"
 
 // SpireServer defines the configuration for the SPIRE Server managed by zero trust workload identity manager.

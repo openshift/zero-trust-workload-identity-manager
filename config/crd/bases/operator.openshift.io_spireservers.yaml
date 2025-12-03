@@ -1350,6 +1350,18 @@ spec:
         x-kubernetes-validations:
         - message: SpireServer is a singleton, .metadata.name must be 'cluster'
           rule: self.metadata.name == 'cluster'
+        - message: spec.persistence.size is immutable once set
+          rule: '!has(oldSelf.spec.persistence) || !has(self.spec.persistence) ||
+            !has(oldSelf.spec.persistence.size) || oldSelf.spec.persistence.size ==
+            self.spec.persistence.size'
+        - message: spec.persistence.accessMode is immutable once set
+          rule: '!has(oldSelf.spec.persistence) || !has(self.spec.persistence) ||
+            !has(oldSelf.spec.persistence.accessMode) || oldSelf.spec.persistence.accessMode
+            == self.spec.persistence.accessMode'
+        - message: spec.persistence.storageClass is immutable once set
+          rule: '!has(oldSelf.spec.persistence) || !has(self.spec.persistence) ||
+            !has(oldSelf.spec.persistence.storageClass) || oldSelf.spec.persistence.storageClass
+            == self.spec.persistence.storageClass'
     served: true
     storage: true
     subresources:
