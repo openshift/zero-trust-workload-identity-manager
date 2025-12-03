@@ -629,3 +629,288 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 	expectedLabels := utils.SpireAgentLabels(nil)
 	assert.Equal(t, expectedLabels, cm.Labels)
 }
+
+func TestConfigureKubeletVerification(t *testing.T) {
+	tests := []struct {
+		name         string
+		verification *v1alpha1.WorkloadAttestorsVerification
+		expected     map[string]interface{}
+	}{
+		{
+			name:         "nil verification defaults to skip",
+			verification: nil,
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": true,
+			},
+		},
+		{
+			name:         "empty type defaults to skip",
+			verification: &v1alpha1.WorkloadAttestorsVerification{},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": true,
+			},
+		},
+		{
+			name: "skip type",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type: "skip",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": true,
+			},
+		},
+		{
+			name: "hostCert type with paths",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type:             "hostCert",
+				HostCertBasePath: "/etc/kubernetes",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/etc/kubernetes/kubelet-ca.crt",
+			},
+		},
+		{
+			name: "hostCert type without paths (CEL would block this, but test the fallback)",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type: "hostCert",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+			},
+		},
+		{
+			name: "auto type without paths (uses SPIRE default)",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type: "auto",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+			},
+		},
+		{
+			name: "auto type with paths",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type:             "auto",
+				HostCertBasePath: "/etc/kubernetes",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/etc/kubernetes/kubelet-ca.crt",
+			},
+		},
+		{
+			name: "auto type with only basePath (incomplete)",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type:             "auto",
+				HostCertBasePath: "/etc/kubernetes",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+			},
+		},
+		{
+			name: "unknown type defaults to skip",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type: "unknown",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plugin := make(map[string]interface{})
+			configureKubeletVerification(plugin, tt.verification)
+
+			for key, expectedValue := range tt.expected {
+				assert.Equal(t, expectedValue, plugin[key], "key: %s", key)
+			}
+
+			// Ensure no extra keys
+			assert.Equal(t, len(tt.expected), len(plugin))
+		})
+	}
+}
+
+func TestBuildHostCertPath(t *testing.T) {
+	tests := []struct {
+		name         string
+		verification *v1alpha1.WorkloadAttestorsVerification
+		expected     string
+	}{
+		{
+			name:         "nil verification",
+			verification: nil,
+			expected:     "",
+		},
+		{
+			name:         "empty verification",
+			verification: &v1alpha1.WorkloadAttestorsVerification{},
+			expected:     "",
+		},
+		{
+			name: "only basePath",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				HostCertBasePath: "/etc/kubernetes",
+			},
+			expected: "",
+		},
+		{
+			name: "only fileName",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: "",
+		},
+		{
+			name: "both basePath and fileName",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				HostCertBasePath: "/etc/kubernetes",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: "/etc/kubernetes/kubelet-ca.crt",
+		},
+		{
+			name: "custom paths",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				HostCertBasePath: "/custom/path",
+				HostCertFileName: "custom-ca.pem",
+			},
+			expected: "/custom/path/custom-ca.pem",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildHostCertPath(tt.verification)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGenerateAgentConfigWithVerification(t *testing.T) {
+	tests := []struct {
+		name                     string
+		cfg                      *v1alpha1.SpireAgent
+		expectedSkipVerification bool
+		expectedKubeletCAPath    string
+		kubeletCAPathShouldBeSet bool
+	}{
+		{
+			name: "workload attestor with skip verification",
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "test.domain",
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+							Type: "skip",
+						},
+					},
+				},
+			},
+			expectedSkipVerification: true,
+			kubeletCAPathShouldBeSet: false,
+		},
+		{
+			name: "workload attestor with hostCert verification",
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "test.domain",
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+							Type:             "hostCert",
+							HostCertBasePath: "/etc/kubernetes",
+							HostCertFileName: "kubelet-ca.crt",
+						},
+					},
+				},
+			},
+			expectedSkipVerification: false,
+			expectedKubeletCAPath:    "/etc/kubernetes/kubelet-ca.crt",
+			kubeletCAPathShouldBeSet: true,
+		},
+		{
+			name: "workload attestor with auto verification (no paths)",
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "test.domain",
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+							Type: "auto",
+						},
+					},
+				},
+			},
+			expectedSkipVerification: false,
+			kubeletCAPathShouldBeSet: false,
+		},
+		{
+			name: "workload attestor with auto verification (with paths)",
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "test.domain",
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+							Type:             "auto",
+							HostCertBasePath: "/etc/kubernetes",
+							HostCertFileName: "kubelet-ca.crt",
+						},
+					},
+				},
+			},
+			expectedSkipVerification: false,
+			expectedKubeletCAPath:    "/etc/kubernetes/kubelet-ca.crt",
+			kubeletCAPathShouldBeSet: true,
+		},
+		{
+			name: "workload attestor without verification config (defaults to skip)",
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "test.domain",
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+					},
+				},
+			},
+			expectedSkipVerification: true,
+			kubeletCAPathShouldBeSet: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateAgentConfig(tt.cfg)
+
+			// Get the WorkloadAttestor plugin data
+			plugins := result["plugins"].(map[string]interface{})
+			workloadAttestors, ok := plugins["WorkloadAttestor"]
+			require.True(t, ok, "WorkloadAttestor should be present")
+
+			attestorList := workloadAttestors.([]map[string]interface{})
+			require.Len(t, attestorList, 1)
+
+			k8sAttestor := attestorList[0]["k8s"].(map[string]interface{})
+			pluginData := k8sAttestor["plugin_data"].(map[string]interface{})
+
+			// Check skip_kubelet_verification
+			assert.Equal(t, tt.expectedSkipVerification, pluginData["skip_kubelet_verification"])
+
+			// Check kubelet_ca_path
+			if tt.kubeletCAPathShouldBeSet {
+				assert.Equal(t, tt.expectedKubeletCAPath, pluginData["kubelet_ca_path"])
+			} else {
+				_, exists := pluginData["kubelet_ca_path"]
+				assert.False(t, exists, "kubelet_ca_path should not be set")
+			}
+		})
+	}
+}

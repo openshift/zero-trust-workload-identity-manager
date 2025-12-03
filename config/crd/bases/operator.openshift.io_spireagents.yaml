@@ -1153,38 +1153,44 @@ spec:
                     - "false"
                     type: string
                   workloadAttestorsVerification:
-                    description: |-
-                      workloadAttestorsVerification tells what kind of verification to do against kubelet.
-                      auto will first attempt to use hostCert, and then fall back to apiServerCA.
-                      Valid options are [auto, hostCert, apiServerCA, skip]
+                    description: workloadAttestorsVerification configures how the
+                      SPIRE agent verifies the kubelet's TLS certificate
                     properties:
                       hostCertBasePath:
-                        default: /var/lib/kubelet/pki
                         description: |-
-                          hostCertBasePath specifies the base Path where kubelet places its certificates.
-                          Must be an absolute path without traversal attempts.
-                        maxLength: 256
-                        pattern: ^/([a-zA-Z0-9._-]+/?)*$
+                          hostCertBasePath specifies the directory containing the kubelet CA certificate.
+                          Required when type is "hostCert". Optional when type is "auto".
                         type: string
                       hostCertFileName:
                         description: |-
-                          hostCertFileName specifies the file name for the host certificate.
-                          Must be a valid file name without special characters or path traversal.
+                          hostCertFileName specifies the file name for the kubelet's CA certificate.
+                          Combined with hostCertBasePath to form the full path for SPIRE's kubelet_ca_path.
+                          Required when type is "hostCert". Optional when type is "auto".
                         maxLength: 256
                         pattern: ^[a-zA-Z0-9._-]+$
                         type: string
                       type:
-                        default: auto
+                        default: skip
                         description: |-
-                          type specifies the type of verification to be used.
-                          Valid values are: auto, hostCert, apiServerCA, skip.
+                          type specifies the kubelet certificate verification mode.
+                          - skip: Skip TLS verification entirely
+                          - auto: Verify kubelet certificate. If hostCertBasePath and hostCertFileName are specified,
+                            uses that CA. Otherwise, SPIRE uses default cluster CA bundle.
+                          - hostCert: Use a custom CA certificate for kubelet verification. Requires hostCertBasePath
+                            and hostCertFileName to be specified.
                         enum:
                         - auto
                         - hostCert
-                        - apiServerCA
                         - skip
                         type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: hostCertBasePath is required when type is 'hostCert'
+                      rule: self.type != 'hostCert' || (has(self.hostCertBasePath)
+                        && self.hostCertBasePath != '')
+                    - message: hostCertFileName is required when type is 'hostCert'
+                      rule: self.type != 'hostCert' || (has(self.hostCertFileName)
+                        && self.hostCertFileName != '')
                 type: object
             type: object
           status:

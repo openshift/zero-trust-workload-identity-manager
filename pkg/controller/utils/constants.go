@@ -69,4 +69,9 @@ const (
 	ConditionReasonInvalidNodeSelector = "InvalidNodeSelector"
 	ConditionReasonInvalidResources    = "InvalidResources"
 	ConditionReasonInvalidLabels       = "InvalidLabels"
+
+	// Workload Attestor Verification Types
+	WorkloadAttestorVerificationTypeSkip     = "skip"
+	WorkloadAttestorVerificationTypeAuto     = "auto"
+	WorkloadAttestorVerificationTypeHostCert = "hostCert"
 )

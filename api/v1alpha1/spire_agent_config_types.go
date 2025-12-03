@@ -69,9 +69,7 @@ type WorkloadAttestors struct {
 	// +kubebuilder:validation:Optional
 	K8sEnabled string `json:"k8sEnabled,omitempty"`
 
-	// workloadAttestorsVerification tells what kind of verification to do against kubelet.
-	// auto will first attempt to use hostCert, and then fall back to apiServerCA.
-	// Valid options are [auto, hostCert, apiServerCA, skip]
+	// workloadAttestorsVerification configures how the SPIRE agent verifies the kubelet's TLS certificate
 	// +kubebuilder:validation:Optional
 	WorkloadAttestorsVerification *WorkloadAttestorsVerification `json:"workloadAttestorsVerification,omitempty"`
 
@@ -90,23 +88,30 @@ type WorkloadAttestors struct {
 	UseNewContainerLocator string `json:"useNewContainerLocator,omitempty"`
 }
 
+// WorkloadAttestorsVerification configures kubelet TLS certificate verification.
+// +kubebuilder:validation:Optional
+// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertBasePath) && self.hostCertBasePath != '')",message="hostCertBasePath is required when type is 'hostCert'"
+// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertFileName) && self.hostCertFileName != '')",message="hostCertFileName is required when type is 'hostCert'"
 type WorkloadAttestorsVerification struct {
-	// type specifies the type of verification to be used.
-	// Valid values are: auto, hostCert, apiServerCA, skip.
-	// +kubebuilder:validation:Enum=auto;hostCert;apiServerCA;skip
-	// +kubebuilder:default:="auto"
+	// type specifies the kubelet certificate verification mode.
+	// - skip: Skip TLS verification entirely
+	// - auto: Verify kubelet certificate. If hostCertBasePath and hostCertFileName are specified,
+	//   uses that CA. Otherwise, SPIRE uses default cluster CA bundle.
+	// - hostCert: Use a custom CA certificate for kubelet verification. Requires hostCertBasePath
+	//   and hostCertFileName to be specified.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=auto;hostCert;skip
+	// +kubebuilder:default:="skip"
 	Type string `json:"type,omitempty"`
 
-	// hostCertBasePath specifies the base Path where kubelet places its certificates.
-	// Must be an absolute path without traversal attempts.
+	// hostCertBasePath specifies the directory containing the kubelet CA certificate.
+	// Required when type is "hostCert". Optional when type is "auto".
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^/([a-zA-Z0-9._-]+/?)*$`
-	// +kubebuilder:default:="/var/lib/kubelet/pki"
 	HostCertBasePath string `json:"hostCertBasePath,omitempty"`
 
-	// hostCertFileName specifies the file name for the host certificate.
-	// Must be a valid file name without special characters or path traversal.
+	// hostCertFileName specifies the file name for the kubelet's CA certificate.
+	// Combined with hostCertBasePath to form the full path for SPIRE's kubelet_ca_path.
+	// Required when type is "hostCert". Optional when type is "auto".
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxLength=256
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._-]+$`
