@@ -152,6 +152,11 @@ type DataStore struct {
 	// +kubebuilder:default:=2
 	MaxIdleConns int `json:"maxIdleConns"`
 
+	// connMaxLifetime will specify maximum lifetime connections.
+	// Max time (in seconds) a connection may live.
+	// +kubebuilder:validation:Minimum=0
+	ConnMaxLifetime int `json:"connMaxLifetime"`
+
 	// disableMigration specifies the migration state
 	// If true, disables DB auto-migration.
 	// +kubebuilder:default:="false"

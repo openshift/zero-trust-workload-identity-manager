@@ -1006,6 +1006,12 @@ spec:
                 description: spireSQLConfig has the config required for the spire
                   server SQL DataStore.
                 properties:
+                  connMaxLifetime:
+                    description: |-
+                      connMaxLifetime will specify maximum lifetime connections.
+                      Max time (in seconds) a connection may live.
+                    minimum: 0
+                    type: integer
                   connectionString:
                     default: /run/spire/data/datastore.sqlite3
                     description: |-
@@ -1051,6 +1057,7 @@ spec:
                     minimum: 1
                     type: integer
                 required:
+                - connMaxLifetime
                 - connectionString
                 - databaseType
                 - maxIdleConns
