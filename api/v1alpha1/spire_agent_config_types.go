@@ -101,7 +101,7 @@ type WorkloadAttestorsVerification struct {
 	//   and hostCertFileName to be specified.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Enum=auto;hostCert;skip
-	// +kubebuilder:default:="skip"
+	// +kubebuilder:default:="auto"
 	Type string `json:"type,omitempty"`
 
 	// hostCertBasePath specifies the directory containing the kubelet CA certificate.

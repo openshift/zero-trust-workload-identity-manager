@@ -1172,7 +1172,7 @@ spec:
                         pattern: ^[a-zA-Z0-9._-]+$
                         type: string
                       type:
-                        default: skip
+                        default: auto
                         description: |-
                           type specifies the kubelet certificate verification mode.
                           - skip: Skip TLS verification entirely.
