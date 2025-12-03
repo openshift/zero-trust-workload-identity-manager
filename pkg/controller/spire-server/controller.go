@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -313,12 +312,8 @@ func needsUpdate(current, desired appsv1.StatefulSet) bool {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
 		return true
-	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
-		return true
-	} else if utils.StatefulSetNeedsUpdate(&current, &desired) {
-		return true
 	}
-	return false
+	return utils.ResourceNeedsUpdate(&current, &desired)
 }
 
 // handleTTLValidation performs TTL validation and handles warnings, events, and status updates

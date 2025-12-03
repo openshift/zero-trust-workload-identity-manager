@@ -9,7 +9,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -259,10 +258,6 @@ func (r *SpireAgentReconciler) validateProxyConfiguration(statusMgr *status.Mana
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
 	if current.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] {
 		return true
-	} else if utils.DaemonSetNeedsUpdate(&current, &desired) {
-		return true
-	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
-		return true
 	}
-	return false
+	return utils.ResourceNeedsUpdate(&current, &desired)
 }
