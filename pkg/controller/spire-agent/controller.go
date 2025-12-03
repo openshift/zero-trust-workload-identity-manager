@@ -164,7 +164,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Reconcile DaemonSet
-	if err := r.reconcileDaemonSet(ctx, &agent, statusMgr, createOnlyMode, configHash); err != nil {
+	if err := r.reconcileDaemonSet(ctx, &agent, statusMgr, &ztwim, createOnlyMode, configHash); err != nil {
 		return ctrl.Result{}, err
 	}
 

@@ -20,8 +20,8 @@ import (
 )
 
 // reconcileDaemonSet reconciles the Spire Agent DaemonSet
-func (r *SpireAgentReconciler) reconcileDaemonSet(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool, configHash string) error {
-	spireAgentDaemonset := generateSpireAgentDaemonSet(agent.Spec, configHash)
+func (r *SpireAgentReconciler) reconcileDaemonSet(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool, configHash string) error {
+	spireAgentDaemonset := generateSpireAgentDaemonSet(agent.Spec, ztwim, configHash)
 	if err := controllerutil.SetControllerReference(agent, spireAgentDaemonset, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference")
 		statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetGenerationFailed",
@@ -69,7 +69,7 @@ func (r *SpireAgentReconciler) reconcileDaemonSet(ctx context.Context, agent *v1
 	return nil
 }
 
-func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfigHash string) *appsv1.DaemonSet {
+func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, spireAgentConfigHash string) *appsv1.DaemonSet {
 
 	// Generate standardized labels once and reuse them
 	labels := utils.SpireAgentLabels(config.Labels)
@@ -176,7 +176,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 						{
 							Name: "spire-bundle",
 							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: config.BundleConfigMap}},
+								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: ztwim.Spec.BundleConfigMap}},
 							},
 						},
 						{
