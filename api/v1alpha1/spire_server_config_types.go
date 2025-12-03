@@ -154,7 +154,7 @@ type DataStore struct {
 	// MySQL TLS options.
 	// Paths must be absolute and not contain directory traversal attempts.
 	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
+	// +kubebuilder:validation:Pattern=`^$|^(/[a-zA-Z0-9._-]+)+$`
 	// +kubebuilder:default:=""
 	RootCAPath string `json:"rootCAPath,omitempty"`
 

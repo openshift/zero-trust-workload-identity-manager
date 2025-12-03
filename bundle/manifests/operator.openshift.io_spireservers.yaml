@@ -1079,7 +1079,7 @@ spec:
                       MySQL TLS options.
                       Paths must be absolute and not contain directory traversal attempts.
                     maxLength: 256
-                    pattern: ^(/[a-zA-Z0-9._-]+)+$
+                    pattern: ^$|^(/[a-zA-Z0-9._-]+)+$
                     type: string
                 required:
                 - connMaxLifetime
