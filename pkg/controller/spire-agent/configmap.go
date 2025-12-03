@@ -19,8 +19,8 @@ import (
 )
 
 // reconcileConfigMap reconciles the Spire Agent ConfigMap
-func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) (string, error) {
-	spireAgentConfigMap, spireAgentConfigHash, err := generateSpireAgentConfigMap(agent)
+func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) (string, error) {
+	spireAgentConfigMap, spireAgentConfigHash, err := generateSpireAgentConfigMap(agent, ztwim)
 	if err != nil {
 		r.log.Error(err, "failed to generate spire-agent config map")
 		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
@@ -77,7 +77,7 @@ func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1
 	return spireAgentConfigHash, nil
 }
 
-func generateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
+func generateAgentConfig(cfg *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) map[string]interface{} {
 	spireServerAddress := "spire-server." + utils.GetOperatorNamespace()
 	agentConf := map[string]interface{}{
 		"agent": map[string]interface{}{
@@ -89,7 +89,7 @@ func generateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 			"server_port":       "443",
 			"socket_path":       "/tmp/spire-agent/public/spire-agent.sock",
 			"trust_bundle_path": "/run/spire/bundle/bundle.crt",
-			"trust_domain":      cfg.Spec.TrustDomain,
+			"trust_domain":      ztwim.Spec.TrustDomain,
 		},
 		"health_checks": map[string]interface{}{
 			"bind_address":     "0.0.0.0",
@@ -116,7 +116,7 @@ func generateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 			{
 				"k8s_psat": map[string]interface{}{
 					"plugin_data": map[string]interface{}{
-						"cluster": cfg.Spec.ClusterName,
+						"cluster": ztwim.Spec.ClusterName,
 					},
 				},
 			},
@@ -140,8 +140,8 @@ func generateAgentConfig(cfg *v1alpha1.SpireAgent) map[string]interface{} {
 	return agentConf
 }
 
-func generateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent) (*corev1.ConfigMap, string, error) {
-	agentConfig := generateAgentConfig(spireAgentConfig)
+func generateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, string, error) {
+	agentConfig := generateAgentConfig(spireAgentConfig, ztwim)
 	agentConfigJSON, err := json.MarshalIndent(agentConfig, "", "  ")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal agent config: %w", err)

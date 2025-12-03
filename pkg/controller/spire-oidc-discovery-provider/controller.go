@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -98,6 +98,38 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		}
 	}()
 
+	var ztwim v1alpha1.ZeroTrustWorkloadIdentityManager
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &ztwim); err != nil {
+		if kerrors.IsNotFound(err) {
+			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Set ZTWIM as the owner of SpireOidcDiscoveryProvider only if needed
+	if utils.NeedsOwnerReferenceUpdate(&oidcDiscoveryProviderConfig, &ztwim) {
+		if err := controllerutil.SetControllerReference(&ztwim, &oidcDiscoveryProviderConfig, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference on SpireOidcDiscoveryProvider")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to set owner reference on SpireOidcDiscoveryProvider: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
+
+		// Persist the owner reference to the cluster
+		if err := r.ctrlClient.Update(ctx, &oidcDiscoveryProviderConfig); err != nil {
+			r.log.Error(err, "failed to update SpireOIDCDiscoveryProvider with owner reference")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to update SpireOIDCDiscoveryProvider with owner reference: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&oidcDiscoveryProviderConfig, statusMgr)
 
@@ -121,7 +153,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	}
 
 	// Reconcile ConfigMap
-	configHash, err := r.reconcileConfigMap(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode)
+	configHash, err := r.reconcileConfigMap(ctx, &oidcDiscoveryProviderConfig, statusMgr, &ztwim, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -155,7 +187,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentDiscovery))
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireOIDCDiscoveryProvider{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireOIDCDiscoveryProvider{}, builder.WithPredicates(utils.GenerationOrOwnerReferenceChangedPredicate)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName).
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
@@ -163,6 +195,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&spiffev1alpha1.ClusterSPIFFEID{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
 		Complete(r)
 	if err != nil {
 		return err

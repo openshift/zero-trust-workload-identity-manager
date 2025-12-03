@@ -219,9 +219,10 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	err := r.ctrlClient.Get(ctx, req.NamespacedName, &config)
 	if err != nil {
 		if apierror.IsNotFound(err) {
-			// Ensure the 'cluster' instance always exists
-			if req.Name == "cluster" {
-				return r.recreateClusterInstance(ctx, req.Name)
+			// Update OperatorCondition for OLM integration (best effort - don't fail reconciliation if it fails)
+			// Upgradeable condition is only set on OperatorCondition, not on ZTWIM CR
+			if err := r.updateOperatorCondition(ctx, utils.IsInCreateOnlyMode(), []v1alpha1.OperandStatus{}); err != nil {
+				r.log.Error(err, "failed to update OperatorCondition, continuing (operator may be running outside OLM)")
 			}
 			return ctrl.Result{}, nil
 		}

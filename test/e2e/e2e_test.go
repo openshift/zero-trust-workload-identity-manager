@@ -81,6 +81,22 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
 		})
 
+		It("Global common configurations should be defined in ZeroTrustWorkloadIdentityManager object", func() {
+			By("Creating ZeroTrustWorkloadIdentityManager object")
+			ztwim := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: operatorv1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					BundleConfigMap: bundleConfigMap,
+					TrustDomain:     appDomain,
+					ClusterName:     clusterName,
+				},
+			}
+			err := k8sClient.Create(testCtx, ztwim)
+			Expect(err).NotTo(HaveOccurred(), "failed to create ZeroTrustWorkloadIdentityManager object")
+		})
+
 		It("Operator should recover from the force Pod deletion", func() {
 			By("Getting operator Pod")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.OperatorLabelSelector})
@@ -138,9 +154,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					Name: "cluster",
 				},
 				Spec: operatorv1alpha1.SpireServerSpec{
-					TrustDomain:         appDomain,
-					ClusterName:         clusterName,
-					BundleConfigMap:     bundleConfigMap,
 					JwtIssuer:           jwtIssuer,
 					CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
 					DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
@@ -195,9 +208,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					Name: "cluster",
 				},
 				Spec: operatorv1alpha1.SpireAgentSpec{
-					TrustDomain:     appDomain,
-					ClusterName:     clusterName,
-					BundleConfigMap: bundleConfigMap,
 					NodeAttestor: &operatorv1alpha1.NodeAttestor{
 						K8sPSATEnabled: "true",
 					},
@@ -262,8 +272,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					Name: "cluster",
 				},
 				Spec: operatorv1alpha1.SpireOIDCDiscoveryProviderSpec{
-					TrustDomain: appDomain,
-					JwtIssuer:   jwtIssuer,
+					JwtIssuer: jwtIssuer,
 				},
 			}
 			err := k8sClient.Create(testCtx, spireOIDCDiscoveryProvider)

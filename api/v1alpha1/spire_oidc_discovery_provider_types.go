@@ -39,10 +39,6 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:="text"
 	LogFormat string `json:"logFormat,omitempty"`
 
-	// trustDomain to be used for the SPIFFE identifiers
-	// +kubebuilder:validation:Required
-	TrustDomain string `json:"trustDomain,omitempty"`
-
 	// agentSocketName is the name of the agent socket.
 	// +kubebuilder:default:="spire-agent.sock"
 	AgentSocketName string `json:"agentSocketName,omitempty"`

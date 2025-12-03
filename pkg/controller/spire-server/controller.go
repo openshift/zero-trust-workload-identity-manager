@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
@@ -106,6 +106,38 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}()
 
+	var ztwim v1alpha1.ZeroTrustWorkloadIdentityManager
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &ztwim); err != nil {
+		if kerrors.IsNotFound(err) {
+			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Set ZTWIM as the owner of SpireServer only if needed
+	if utils.NeedsOwnerReferenceUpdate(&server, &ztwim) {
+		if err := controllerutil.SetControllerReference(&ztwim, &server, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference on SpireServer")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to set owner reference on SpireServer: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
+
+		// Persist the owner reference to the cluster
+		if err := r.ctrlClient.Update(ctx, &server); err != nil {
+			r.log.Error(err, "failed to update SpireServer with owner reference")
+			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to update SpireServer with owner reference: %v", err),
+				metav1.ConditionFalse)
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Handle create-only mode
 	createOnlyMode := r.handleCreateOnlyMode(&server, statusMgr)
 
@@ -140,19 +172,19 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Reconcile ConfigMaps
-	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, createOnlyMode)
+	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, &ztwim, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Reconcile Spire Controller Manager ConfigMap
-	spireControllerManagerConfigMapHash, err := r.reconcileSpireControllerManagerConfigMap(ctx, &server, statusMgr, createOnlyMode)
+	spireControllerManagerConfigMapHash, err := r.reconcileSpireControllerManagerConfigMap(ctx, &server, statusMgr, &ztwim, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Reconcile Spire Bundle ConfigMap
-	if err := r.reconcileSpireBundleConfigMap(ctx, &server, statusMgr); err != nil {
+	if err := r.reconcileSpireBundleConfigMap(ctx, &server, statusMgr, &ztwim); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -180,7 +212,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerManagedResourcePredicates := builder.WithPredicates(utils.ControllerManagedResourcesForComponent(utils.ComponentControlPlane))
 
 	err := ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.SpireServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&v1alpha1.SpireServer{}, builder.WithPredicates(utils.GenerationOrOwnerReferenceChangedPredicate)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
@@ -191,6 +223,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&rbacv1.Role{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&admissionregistrationv1.ValidatingWebhookConfiguration{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
 		Complete(r)
 	if err != nil {
 		return err
