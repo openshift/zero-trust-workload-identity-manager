@@ -15,8 +15,13 @@ import (
 )
 
 func TestGenerateSpireServerStatefulSet(t *testing.T) {
-	// Setup test inputs
+	// Setup test inputs with required Persistence field (now a value type, not pointer)
 	config := &v1alpha1.SpireServerSpec{
+		Persistence: v1alpha1.Persistence{
+			Size:         "1Gi",
+			AccessMode:   "ReadWriteOnce",
+			StorageClass: "",
+		},
 		CommonConfig: v1alpha1.CommonConfig{
 			Labels: map[string]string{
 				"custom-label": "test-value",
@@ -224,7 +229,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	t.Run("Validates custom persistence settings", func(t *testing.T) {
 		customStorageClass := "fast-ssd"
 		configWithPersistence := &v1alpha1.SpireServerSpec{
-			Persistence: &v1alpha1.Persistence{
+			Persistence: v1alpha1.Persistence{
 				Size:         "10Gi",
 				AccessMode:   "ReadWriteOncePod",
 				StorageClass: customStorageClass,
@@ -259,7 +264,8 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	// Test ReadWriteMany access mode
 	t.Run("Validates ReadWriteMany access mode", func(t *testing.T) {
 		configWithRWX := &v1alpha1.SpireServerSpec{
-			Persistence: &v1alpha1.Persistence{
+			Persistence: v1alpha1.Persistence{
+				Size:       "1Gi",
 				AccessMode: "ReadWriteMany",
 			},
 		}
@@ -276,7 +282,9 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	t.Run("Validates persistence with only StorageClass", func(t *testing.T) {
 		customStorageClass := "premium-storage"
 		configWithStorageClassOnly := &v1alpha1.SpireServerSpec{
-			Persistence: &v1alpha1.Persistence{
+			Persistence: v1alpha1.Persistence{
+				Size:         "1Gi",
+				AccessMode:   "ReadWriteOnce",
 				StorageClass: customStorageClass,
 			},
 		}
@@ -302,6 +310,10 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	// Test with nil labels
 	t.Run("Handles nil labels gracefully", func(t *testing.T) {
 		configWithNilLabels := &v1alpha1.SpireServerSpec{
+			Persistence: v1alpha1.Persistence{
+				Size:       "1Gi",
+				AccessMode: "ReadWriteOnce",
+			},
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: nil,
 			},
@@ -322,6 +334,10 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	// Test with empty labels map
 	t.Run("Handles empty labels map gracefully", func(t *testing.T) {
 		configWithEmptyLabels := &v1alpha1.SpireServerSpec{
+			Persistence: v1alpha1.Persistence{
+				Size:       "1Gi",
+				AccessMode: "ReadWriteOnce",
+			},
 			CommonConfig: v1alpha1.CommonConfig{
 				Labels: map[string]string{},
 			},

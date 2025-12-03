@@ -163,7 +163,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 						Country:      "US",
 						Organization: "RH",
 					},
-					Persistence: &operatorv1alpha1.Persistence{
+					Persistence: operatorv1alpha1.Persistence{
 						Size:       "1Gi",
 						AccessMode: "ReadWriteOncePod",
 					},
