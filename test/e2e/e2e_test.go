@@ -164,7 +164,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 						Organization: "RH",
 					},
 					Persistence: &operatorv1alpha1.Persistence{
-						Type:       "pvc",
 						Size:       "1Gi",
 						AccessMode: "ReadWriteOncePod",
 					},
@@ -173,7 +172,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 						ConnectionString: "/run/spire/data/datastore.sqlite3",
 						MaxOpenConns:     100,
 						MaxIdleConns:     2,
-						ConnMaxLifetime:  3600,
 						DisableMigration: "false",
 					},
 				},
