@@ -144,7 +144,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	createOnlyMode := r.handleCreateOnlyMode(&server, statusMgr)
 
 	// Validate configuration
-	if err := r.validateConfiguration(ctx, &server, statusMgr); err != nil {
+	if err := r.validateConfiguration(ctx, &server, statusMgr, &ztwim); err != nil {
 		return ctrl.Result{}, nil
 	}
 
@@ -196,7 +196,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// reconcile Route if enabled
-	if err := r.reconcileRoute(ctx, &server, statusMgr, createOnlyMode); err != nil {
+	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -259,7 +259,7 @@ func (r *SpireServerReconciler) handleCreateOnlyMode(server *v1alpha1.SpireServe
 }
 
 // validateConfiguration validates the SpireServer configuration
-func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) error {
 	// Validate common configuration (affinity, tolerations, node selector, resources, labels)
 	if err := r.validateCommonConfig(server, statusMgr); err != nil {
 		return err
@@ -280,8 +280,8 @@ func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, serve
 	}
 
 	if server.Spec.Federation != nil {
-		if err := validateFederationConfig(server.Spec.Federation, server.Spec.TrustDomain); err != nil {
-			r.log.Error(err, "Invalid federation configuration", "trustDomain", server.Spec.TrustDomain)
+		if err := validateFederationConfig(server.Spec.Federation, ztwim.Spec.TrustDomain); err != nil {
+			r.log.Error(err, "Invalid federation configuration", "trustDomain", ztwim.Spec.TrustDomain)
 			statusMgr.AddCondition(ConfigurationValid, "InvalidFederationConfiguration",
 				fmt.Sprintf("Federation configuration validation failed: %v", err),
 				metav1.ConditionFalse)

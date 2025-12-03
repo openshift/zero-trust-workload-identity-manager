@@ -22,7 +22,6 @@ func TestGenerateFederationRoute(t *testing.T) {
 			name: "https_spiffe profile with passthrough TLS",
 			server: &v1alpha1.SpireServer{
 				Spec: v1alpha1.SpireServerSpec{
-					TrustDomain: "example.org",
 					Federation: &v1alpha1.FederationConfig{
 						BundleEndpoint: v1alpha1.BundleEndpointConfig{
 							Profile: v1alpha1.HttpsSpiffeProfile,
@@ -38,7 +37,6 @@ func TestGenerateFederationRoute(t *testing.T) {
 			name: "https_web profile with ACME uses passthrough TLS",
 			server: &v1alpha1.SpireServer{
 				Spec: v1alpha1.SpireServerSpec{
-					TrustDomain: "example.org",
 					Federation: &v1alpha1.FederationConfig{
 						BundleEndpoint: v1alpha1.BundleEndpointConfig{
 							Profile: v1alpha1.HttpsWebProfile,
@@ -61,7 +59,6 @@ func TestGenerateFederationRoute(t *testing.T) {
 			name: "https_web profile with ServingCert uses re-encrypt TLS",
 			server: &v1alpha1.SpireServer{
 				Spec: v1alpha1.SpireServerSpec{
-					TrustDomain: "example.org",
 					Federation: &v1alpha1.FederationConfig{
 						BundleEndpoint: v1alpha1.BundleEndpointConfig{
 							Profile: v1alpha1.HttpsWebProfile,
@@ -80,7 +77,6 @@ func TestGenerateFederationRoute(t *testing.T) {
 			name: "https_web profile with external certificate",
 			server: &v1alpha1.SpireServer{
 				Spec: v1alpha1.SpireServerSpec{
-					TrustDomain: "example.org",
 					Federation: &v1alpha1.FederationConfig{
 						BundleEndpoint: v1alpha1.BundleEndpointConfig{
 							Profile: v1alpha1.HttpsWebProfile,
@@ -101,7 +97,14 @@ func TestGenerateFederationRoute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			route := generateFederationRoute(tt.server)
+			ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "example.org",
+					ClusterName:     "test-cluster",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+			route := generateFederationRoute(tt.server, ztwim)
 
 			// Check route name
 			if route.Name != "spire-server-federation" {
@@ -266,7 +269,6 @@ func TestGenerateFederationRouteWithDifferentTrustDomains(t *testing.T) {
 		t.Run(td, func(t *testing.T) {
 			server := &v1alpha1.SpireServer{
 				Spec: v1alpha1.SpireServerSpec{
-					TrustDomain: td,
 					Federation: &v1alpha1.FederationConfig{
 						BundleEndpoint: v1alpha1.BundleEndpointConfig{
 							Profile: v1alpha1.HttpsSpiffeProfile,
@@ -275,7 +277,15 @@ func TestGenerateFederationRouteWithDifferentTrustDomains(t *testing.T) {
 				},
 			}
 
-			route := generateFederationRoute(server)
+			ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     td,
+					ClusterName:     "test-cluster",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+
+			route := generateFederationRoute(server, ztwim)
 			expectedHost := "federation." + td
 
 			if route.Spec.Host != expectedHost {
@@ -293,7 +303,6 @@ func TestGenerateFederationRouteLabels(t *testing.T) {
 
 	server := &v1alpha1.SpireServer{
 		Spec: v1alpha1.SpireServerSpec{
-			TrustDomain: "example.org",
 			Federation: &v1alpha1.FederationConfig{
 				BundleEndpoint: v1alpha1.BundleEndpointConfig{
 					Profile: v1alpha1.HttpsSpiffeProfile,
@@ -305,7 +314,15 @@ func TestGenerateFederationRouteLabels(t *testing.T) {
 		},
 	}
 
-	route := generateFederationRoute(server)
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			ClusterName:     "test-cluster",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
+	route := generateFederationRoute(server, ztwim)
 
 	// Check that custom labels are present
 	for key, expectedValue := range customLabels {

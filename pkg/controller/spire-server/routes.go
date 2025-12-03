@@ -18,11 +18,11 @@ import (
 )
 
 // generateFederationRoute creates an OpenShift Route resource for the SPIRE federation endpoint
-func generateFederationRoute(server *v1alpha1.SpireServer) *routev1.Route {
+func generateFederationRoute(server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) *routev1.Route {
 	labels := utils.SpireServerLabels(server.Spec.Labels)
 
 	// Construct federation host using trust domain
-	federationHost := "federation." + server.Spec.TrustDomain
+	federationHost := "federation." + ztwim.Spec.TrustDomain
 
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
@@ -89,7 +89,7 @@ func checkFederationRouteConflict(current, desired *routev1.Route) bool {
 }
 
 // reconcileRoute creates/updates route when managedRoute is enabled else sets status to disabled
-func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) error {
 	// Check if federation is configured
 	if server.Spec.Federation == nil {
 		// No federation configured - don't manage route, don't set status
@@ -98,7 +98,7 @@ func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1al
 
 	if utils.StringToBool(server.Spec.Federation.ManagedRoute) {
 		// Create Route for federation endpoint
-		route := generateFederationRoute(server)
+		route := generateFederationRoute(server, ztwim)
 
 		var existingRoute routev1.Route
 		err := r.ctrlClient.Get(ctx, types.NamespacedName{
