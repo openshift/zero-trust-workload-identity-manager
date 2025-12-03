@@ -845,7 +845,6 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			name: "workload attestor with skip verification",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -861,7 +860,6 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			name: "workload attestor with hostCert verification",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -880,7 +878,6 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			name: "workload attestor with hostCert verification (trailing slash)",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -899,7 +896,6 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			name: "workload attestor with auto verification (no paths)",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -915,7 +911,6 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			name: "workload attestor with auto verification (with paths)",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
@@ -934,7 +929,6 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			name: "workload attestor without verification config (defaults to skip)",
 			cfg: &v1alpha1.SpireAgent{
 				Spec: v1alpha1.SpireAgentSpec{
-					TrustDomain: "test.domain",
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 					},
@@ -947,7 +941,14 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateAgentConfig(tt.cfg)
+			ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+					TrustDomain:     "test.domain",
+					ClusterName:     "test-cluster",
+					BundleConfigMap: "spire-bundle",
+				},
+			}
+			result := generateAgentConfig(tt.cfg, ztwim)
 
 			// Get the WorkloadAttestor plugin data
 			plugins := result["plugins"].(map[string]interface{})
