@@ -653,7 +653,7 @@ func TestConfigureKubeletVerification(t *testing.T) {
 		{
 			name: "skip type",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
-				Type: "skip",
+				Type: utils.WorkloadAttestorVerificationTypeSkip,
 			},
 			expected: map[string]interface{}{
 				"skip_kubelet_verification": true,
@@ -662,8 +662,20 @@ func TestConfigureKubeletVerification(t *testing.T) {
 		{
 			name: "hostCert type with paths",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
-				Type:             "hostCert",
+				Type:             utils.WorkloadAttestorVerificationTypeHostCert,
 				HostCertBasePath: "/etc/kubernetes",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/etc/kubernetes/kubelet-ca.crt",
+			},
+		},
+		{
+			name: "hostCert type with trailing slash in basePath",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type:             utils.WorkloadAttestorVerificationTypeHostCert,
+				HostCertBasePath: "/etc/kubernetes/",
 				HostCertFileName: "kubelet-ca.crt",
 			},
 			expected: map[string]interface{}{
@@ -674,7 +686,7 @@ func TestConfigureKubeletVerification(t *testing.T) {
 		{
 			name: "hostCert type without paths (CEL would block this, but test the fallback)",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
-				Type: "hostCert",
+				Type: utils.WorkloadAttestorVerificationTypeHostCert,
 			},
 			expected: map[string]interface{}{
 				"skip_kubelet_verification": false,
@@ -683,7 +695,7 @@ func TestConfigureKubeletVerification(t *testing.T) {
 		{
 			name: "auto type without paths (uses SPIRE default)",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
-				Type: "auto",
+				Type: utils.WorkloadAttestorVerificationTypeAuto,
 			},
 			expected: map[string]interface{}{
 				"skip_kubelet_verification": false,
@@ -692,8 +704,20 @@ func TestConfigureKubeletVerification(t *testing.T) {
 		{
 			name: "auto type with paths",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
-				Type:             "auto",
+				Type:             utils.WorkloadAttestorVerificationTypeAuto,
 				HostCertBasePath: "/etc/kubernetes",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: map[string]interface{}{
+				"skip_kubelet_verification": false,
+				"kubelet_ca_path":           "/etc/kubernetes/kubelet-ca.crt",
+			},
+		},
+		{
+			name: "auto type with trailing slash in basePath",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				Type:             utils.WorkloadAttestorVerificationTypeAuto,
+				HostCertBasePath: "/etc/kubernetes/",
 				HostCertFileName: "kubelet-ca.crt",
 			},
 			expected: map[string]interface{}{
@@ -704,7 +728,7 @@ func TestConfigureKubeletVerification(t *testing.T) {
 		{
 			name: "auto type with only basePath (incomplete)",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
-				Type:             "auto",
+				Type:             utils.WorkloadAttestorVerificationTypeAuto,
 				HostCertBasePath: "/etc/kubernetes",
 			},
 			expected: map[string]interface{}{
@@ -776,6 +800,22 @@ func TestBuildHostCertPath(t *testing.T) {
 			expected: "/etc/kubernetes/kubelet-ca.crt",
 		},
 		{
+			name: "basePath with trailing slash normalizes correctly",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				HostCertBasePath: "/etc/kubernetes/",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: "/etc/kubernetes/kubelet-ca.crt",
+		},
+		{
+			name: "basePath with multiple trailing slashes normalizes correctly",
+			verification: &v1alpha1.WorkloadAttestorsVerification{
+				HostCertBasePath: "/etc/kubernetes///",
+				HostCertFileName: "kubelet-ca.crt",
+			},
+			expected: "/etc/kubernetes/kubelet-ca.crt",
+		},
+		{
 			name: "custom paths",
 			verification: &v1alpha1.WorkloadAttestorsVerification{
 				HostCertBasePath: "/custom/path",
@@ -809,7 +849,7 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-							Type: "skip",
+							Type: utils.WorkloadAttestorVerificationTypeSkip,
 						},
 					},
 				},
@@ -825,8 +865,27 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-							Type:             "hostCert",
+							Type:             utils.WorkloadAttestorVerificationTypeHostCert,
 							HostCertBasePath: "/etc/kubernetes",
+							HostCertFileName: "kubelet-ca.crt",
+						},
+					},
+				},
+			},
+			expectedSkipVerification: false,
+			expectedKubeletCAPath:    "/etc/kubernetes/kubelet-ca.crt",
+			kubeletCAPathShouldBeSet: true,
+		},
+		{
+			name: "workload attestor with hostCert verification (trailing slash)",
+			cfg: &v1alpha1.SpireAgent{
+				Spec: v1alpha1.SpireAgentSpec{
+					TrustDomain: "test.domain",
+					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
+						K8sEnabled: "true",
+						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
+							Type:             utils.WorkloadAttestorVerificationTypeHostCert,
+							HostCertBasePath: "/etc/kubernetes/",
 							HostCertFileName: "kubelet-ca.crt",
 						},
 					},
@@ -844,7 +903,7 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-							Type: "auto",
+							Type: utils.WorkloadAttestorVerificationTypeAuto,
 						},
 					},
 				},
@@ -860,7 +919,7 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 					WorkloadAttestors: &v1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-							Type:             "auto",
+							Type:             utils.WorkloadAttestorVerificationTypeAuto,
 							HostCertBasePath: "/etc/kubernetes",
 							HostCertFileName: "kubelet-ca.crt",
 						},

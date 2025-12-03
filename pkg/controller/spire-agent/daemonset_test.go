@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,7 +32,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type: "skip",
+					Type: utils.WorkloadAttestorVerificationTypeSkip,
 				},
 			},
 			expected: "",
@@ -41,7 +42,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             "hostCert",
+					Type:             utils.WorkloadAttestorVerificationTypeHostCert,
 					HostCertBasePath: "/etc/kubernetes",
 					HostCertFileName: "kubelet-ca.crt",
 				},
@@ -53,7 +54,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             "hostCert",
+					Type:             utils.WorkloadAttestorVerificationTypeHostCert,
 					HostCertBasePath: "/etc/kubernetes",
 				},
 			},
@@ -64,7 +65,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             "hostCert",
+					Type:             utils.WorkloadAttestorVerificationTypeHostCert,
 					HostCertFileName: "kubelet-ca.crt",
 				},
 			},
@@ -75,7 +76,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type: "auto",
+					Type: utils.WorkloadAttestorVerificationTypeAuto,
 				},
 			},
 			expected: "",
@@ -85,7 +86,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             "auto",
+					Type:             utils.WorkloadAttestorVerificationTypeAuto,
 					HostCertBasePath: "/etc/kubernetes",
 					HostCertFileName: "kubelet-ca.crt",
 				},
@@ -97,7 +98,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             "auto",
+					Type:             utils.WorkloadAttestorVerificationTypeAuto,
 					HostCertBasePath: "/etc/kubernetes",
 				},
 			},
@@ -132,7 +133,7 @@ func TestGetHostCertMountPath(t *testing.T) {
 			workloadAttestors: &v1alpha1.WorkloadAttestors{
 				K8sEnabled: "true",
 				WorkloadAttestorsVerification: &v1alpha1.WorkloadAttestorsVerification{
-					Type:             "hostCert",
+					Type:             utils.WorkloadAttestorVerificationTypeHostCert,
 					HostCertBasePath: "/var/lib/kubelet/pki",
 					HostCertFileName: "ca.crt",
 				},

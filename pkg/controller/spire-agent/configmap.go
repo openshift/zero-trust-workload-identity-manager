@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -180,7 +181,7 @@ func buildHostCertPath(verification *v1alpha1.WorkloadAttestorsVerification) str
 		return ""
 	}
 
-	return verification.HostCertBasePath + "/" + verification.HostCertFileName
+	return path.Join(verification.HostCertBasePath, verification.HostCertFileName)
 }
 
 func generateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, string, error) {
