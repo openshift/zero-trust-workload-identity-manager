@@ -564,11 +564,7 @@ func (in *SpireServerSpec) DeepCopyInto(out *SpireServerSpec) {
 		**out = **in
 	}
 	out.CASubject = in.CASubject
-	if in.Persistence != nil {
-		in, out := &in.Persistence, &out.Persistence
-		*out = new(Persistence)
-		**out = **in
-	}
+	out.Persistence = in.Persistence
 	out.Datastore = in.Datastore
 	in.CommonConfig.DeepCopyInto(&out.CommonConfig)
 }

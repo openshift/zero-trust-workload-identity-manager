@@ -10,9 +10,9 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServer is a singleton, .metadata.name must be 'cluster'"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.persistence) || !has(self.spec.persistence) || !has(oldSelf.spec.persistence.size) || oldSelf.spec.persistence.size == self.spec.persistence.size",message="spec.persistence.size is immutable once set"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.persistence) || !has(self.spec.persistence) || !has(oldSelf.spec.persistence.accessMode) || oldSelf.spec.persistence.accessMode == self.spec.persistence.accessMode",message="spec.persistence.accessMode is immutable once set"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.persistence) || !has(self.spec.persistence) || !has(oldSelf.spec.persistence.storageClass) || oldSelf.spec.persistence.storageClass == self.spec.persistence.storageClass",message="spec.persistence.storageClass is immutable once set"
+// +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.size == self.spec.persistence.size",message="spec.persistence.size is immutable"
+// +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.accessMode == self.spec.persistence.accessMode",message="spec.persistence.accessMode is immutable"
+// +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.storageClass == self.spec.persistence.storageClass",message="spec.persistence.storageClass is immutable"
 // +operator-sdk:csv:customresourcedefinitions:displayName="SpireServer"
 
 // SpireServer defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
@@ -94,9 +94,10 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Required
 	CASubject CASubject `json:"caSubject,omitempty"`
 
-	// persistence has config for spire server volume related configs
-	// +kubebuilder:validation:Optional
-	Persistence *Persistence `json:"persistence,omitempty"`
+	// persistence has config for spire server volume related configs.
+	// This field is required and immutable once set.
+	// +kubebuilder:validation:Required
+	Persistence Persistence `json:"persistence"`
 
 	// spireSQLConfig has the config required for the spire server SQL DataStore.
 	// +kubebuilder:validation:Required
