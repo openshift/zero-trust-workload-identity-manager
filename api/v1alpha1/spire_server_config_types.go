@@ -39,7 +39,10 @@ type SpireServerSpec struct {
 	LogFormat string `json:"logFormat,omitempty"`
 
 	// jwtIssuer is the JWT issuer url.
+	// Must be a valid HTTPS or HTTP URL.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^(?i)https?://[^\s?#]+$`
 	JwtIssuer string `json:"jwtIssuer"`
 
 	// caValidity is the validity period (TTL) for the SPIRE Server's own CA certificate.
@@ -85,16 +88,16 @@ type SpireServerSpec struct {
 	KeyManager *KeyManager `json:"keyManager,omitempty"`
 
 	// caSubject contains subject information for the Spire CA.
-	// +kubebuilder:validation:Optional
-	CASubject *CASubject `json:"caSubject,omitempty"`
+	// +kubebuilder:validation:Required
+	CASubject CASubject `json:"caSubject,omitempty"`
 
 	// persistence has config for spire server volume related configs
 	// +kubebuilder:validation:Optional
 	Persistence *Persistence `json:"persistence,omitempty"`
 
 	// spireSQLConfig has the config required for the spire server SQL DataStore.
-	// +kubebuilder:validation:Optional
-	Datastore *DataStore `json:"datastore,omitempty"`
+	// +kubebuilder:validation:Required
+	Datastore DataStore `json:"datastore,omitempty"`
 
 	CommonConfig `json:",inline"`
 }
@@ -135,28 +138,45 @@ type DataStore struct {
 	DatabaseType string `json:"databaseType"`
 
 	// connectionString contain connection credentials required for spire server Datastore.
+	// Must not be empty and should contain valid connection parameters for the specified database type.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=1024
 	// +kubebuilder:default:=/run/spire/data/datastore.sqlite3
 	ConnectionString string `json:"connectionString"`
 
 	// options specifies extra DB options.
+	// Maximum 32 options allowed.
 	// +kubebuilder:validation:optional
+	// +kubebuilder:validation:MaxItems=32
 	// +kubebuilder:default:={}
 	Options []string `json:"options,omitempty"`
 
 	// MySQL TLS options.
+	// Paths must be absolute and not contain directory traversal attempts.
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^$|^(/[a-zA-Z0-9._-]+)+$`
 	// +kubebuilder:default:=""
-	RootCAPath     string `json:"rootCAPath,omitempty"`
+	RootCAPath string `json:"rootCAPath,omitempty"`
+
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
 	ClientCertPath string `json:"clientCertPath,omitempty"`
-	ClientKeyPath  string `json:"clientKeyPath,omitempty"`
+
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
+	ClientKeyPath string `json:"clientKeyPath,omitempty"`
 
 	// DB pool config
 	// maxOpenConns will specify the maximum connections for the DB pool.
-	// +kubebuilder:validation:Minimum=0
+	// Must be between 1 and 10000.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=100
 	MaxOpenConns int `json:"maxOpenConns"`
 
 	// maxIdleConns specifies the maximum idle connection to be configured.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=2
 	MaxIdleConns int `json:"maxIdleConns"`
 
@@ -191,15 +211,19 @@ type KeyManager struct {
 // CASubject defines the subject information for the Spire CA.
 type CASubject struct {
 	// country specifies the country for the CA.
+	// ISO 3166-1 alpha-2 country code (2 characters).
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=2
 	Country string `json:"country,omitempty"`
 
 	// organization specifies the organization for the CA.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=64
 	Organization string `json:"organization,omitempty"`
 
 	// commonName specifies the common name for the CA.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=255
 	CommonName string `json:"commonName,omitempty"`
 }
 

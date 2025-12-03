@@ -44,7 +44,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		{
 			name: "Empty trust domain",
 			config: &v1alpha1.SpireServerSpec{
-				Datastore: &v1alpha1.DataStore{
+				Datastore: v1alpha1.DataStore{
 					ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
 					DatabaseType:     "postgres",
 				},
@@ -61,7 +61,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 		{
 			name: "Empty bundle configmap",
 			config: &v1alpha1.SpireServerSpec{
-				Datastore: &v1alpha1.DataStore{
+				Datastore: v1alpha1.DataStore{
 					ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
 					DatabaseType:     "postgres",
 				},
@@ -74,20 +74,6 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "bundle configmap is empty",
-		},
-		{
-			name: "Nil datastore",
-			config: &v1alpha1.SpireServerSpec{
-				Datastore: nil,
-			},
-			ztwim: &v1alpha1.ZeroTrustWorkloadIdentityManager{
-				Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
-					TrustDomain:     "example.org",
-					BundleConfigMap: "spire-bundle",
-				},
-			},
-			expectError: true,
-			errorMsg:    "datastore configuration is required",
 		},
 	}
 
@@ -715,12 +701,12 @@ func TestGenerateSpireBundleConfigMap(t *testing.T) {
 func createValidConfig() *v1alpha1.SpireServerSpec {
 	return &v1alpha1.SpireServerSpec{
 		JwtIssuer: "example.org",
-		CASubject: &v1alpha1.CASubject{
+		CASubject: v1alpha1.CASubject{
 			CommonName:   "SPIRE Server CA",
 			Country:      "US",
 			Organization: "SPIRE",
 		},
-		Datastore: &v1alpha1.DataStore{
+		Datastore: v1alpha1.DataStore{
 			ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
 			DatabaseType:     "postgres",
 			DisableMigration: "false",

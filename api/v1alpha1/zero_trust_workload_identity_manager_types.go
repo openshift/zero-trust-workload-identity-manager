@@ -114,7 +114,8 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 type ZeroTrustWorkloadIdentityManagerSpec struct {
 	CommonConfig `json:",inline"`
 
-	// trustDomain to be used for the SPIFFE identifiers
+	// trustDomain to be used for the SPIFFE identifiers.
+	// This field is immutable.
 	// Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -124,6 +125,7 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	TrustDomain string `json:"trustDomain,omitempty"`
 
 	// clusterName will have the cluster name required to configure spire agent.
+	// This field is immutable.
 	// Must be a valid DNS-1123 subdomain.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -132,7 +134,8 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="clusterName is immutable and cannot be changed"
 	ClusterName string `json:"clusterName,omitempty"`
 
-	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
+	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers.
+	// This field is immutable.
 	// Must be a valid Kubernetes name.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=spire-bundle
@@ -147,8 +150,10 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 type CommonConfig struct {
 
 	// labels to apply to all resources managed by the API.
+	// Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
 	// +mapType=granular
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxProperties=64
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// resources are for defining the resource requirements.
@@ -162,14 +167,18 @@ type CommonConfig struct {
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 
 	// tolerations are for setting the pod tolerations.
+	// Maximum 50 tolerations allowed.
 	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=50
 	// +listType=atomic
 	Tolerations []*corev1.Toleration `json:"tolerations,omitempty"`
 
 	// nodeSelector is for defining the scheduling criteria using node labels.
+	// Maximum 50 node selectors allowed.
 	// ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxProperties=50
 	// +mapType=atomic
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }

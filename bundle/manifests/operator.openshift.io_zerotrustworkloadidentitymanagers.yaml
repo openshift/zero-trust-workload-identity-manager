@@ -973,7 +973,8 @@ spec:
               bundleConfigMap:
                 default: spire-bundle
                 description: |-
-                  bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers
+                  bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers.
+                  This field is immutable.
                   Must be a valid Kubernetes name.
                 maxLength: 253
                 minLength: 1
@@ -985,6 +986,7 @@ spec:
               clusterName:
                 description: |-
                   clusterName will have the cluster name required to configure spire agent.
+                  This field is immutable.
                   Must be a valid DNS-1123 subdomain.
                 maxLength: 63
                 minLength: 1
@@ -996,7 +998,10 @@ spec:
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources managed by the API.
+                description: |-
+                  labels to apply to all resources managed by the API.
+                  Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
+                maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
               nodeSelector:
@@ -1004,7 +1009,9 @@ spec:
                   type: string
                 description: |-
                   nodeSelector is for defining the scheduling criteria using node labels.
+                  Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+                maxProperties: 50
                 type: object
                 x-kubernetes-map-type: atomic
               resources:
@@ -1071,6 +1078,7 @@ spec:
               tolerations:
                 description: |-
                   tolerations are for setting the pod tolerations.
+                  Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
                   description: |-
@@ -1108,11 +1116,13 @@ spec:
                         If the operator is Exists, the value should be empty, otherwise just a regular string.
                       type: string
                   type: object
+                maxItems: 50
                 type: array
                 x-kubernetes-list-type: atomic
               trustDomain:
                 description: |-
-                  trustDomain to be used for the SPIFFE identifiers
+                  trustDomain to be used for the SPIFFE identifiers.
+                  This field is immutable.
                   Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
                 maxLength: 255
                 minLength: 1

@@ -92,16 +92,24 @@ type WorkloadAttestors struct {
 
 type WorkloadAttestorsVerification struct {
 	// type specifies the type of verification to be used.
-	// +kubebuilder: default:="skip"
+	// Valid values are: auto, hostCert, apiServerCA, skip.
+	// +kubebuilder:validation:Enum=auto;hostCert;apiServerCA;skip
+	// +kubebuilder:default:="auto"
 	Type string `json:"type,omitempty"`
 
 	// hostCertBasePath specifies the base Path where kubelet places its certificates.
+	// Must be an absolute path without traversal attempts.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^/([a-zA-Z0-9._-]+/?)*$`
 	// +kubebuilder:default:="/var/lib/kubelet/pki"
 	HostCertBasePath string `json:"hostCertBasePath,omitempty"`
 
 	// hostCertFileName specifies the file name for the host certificate.
+	// Must be a valid file name without special characters or path traversal.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._-]+$`
 	HostCertFileName string `json:"hostCertFileName,omitempty"`
 }
 

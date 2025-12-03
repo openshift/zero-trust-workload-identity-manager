@@ -25,10 +25,16 @@ type SpiffeCSIDriver struct {
 type SpiffeCSIDriverSpec struct {
 
 	// agentSocketPath is the path to spiffe csi driver the agent socket.
+	// Must be an absolute path without traversal attempts or null bytes.
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^/[a-zA-Z0-9._/\-]*$`
 	// +kubebuilder:default:="/run/spire/agent-sockets/spire-agent.sock"
 	AgentSocket string `json:"agentSocketPath,omitempty"`
 
 	// pluginName defines the name of the CSI plugin, Sets the csi driver name deployed to the cluster.
+	// Must be a valid domain name format (e.g., csi.spiffe.io).
+	// +kubebuilder:validation:MaxLength=127
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
 	// +kubebuilder:default:="csi.spiffe.io"
 	PluginName string `json:"pluginName,omitempty"`
 

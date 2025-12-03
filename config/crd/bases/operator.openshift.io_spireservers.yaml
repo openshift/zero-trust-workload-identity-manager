@@ -982,12 +982,17 @@ spec:
                 properties:
                   commonName:
                     description: commonName specifies the common name for the CA.
+                    maxLength: 255
                     type: string
                   country:
-                    description: country specifies the country for the CA.
+                    description: |-
+                      country specifies the country for the CA.
+                      ISO 3166-1 alpha-2 country code (2 characters).
+                    maxLength: 2
                     type: string
                   organization:
                     description: organization specifies the organization for the CA.
+                    maxLength: 64
                     type: string
                 type: object
               caValidity:
@@ -1002,8 +1007,12 @@ spec:
                   server SQL DataStore.
                 properties:
                   clientCertPath:
+                    maxLength: 256
+                    pattern: ^(/[a-zA-Z0-9._-]+)+$
                     type: string
                   clientKeyPath:
+                    maxLength: 256
+                    pattern: ^(/[a-zA-Z0-9._-]+)+$
                     type: string
                   connMaxLifetime:
                     description: |-
@@ -1013,8 +1022,11 @@ spec:
                     type: integer
                   connectionString:
                     default: /run/spire/data/datastore.sqlite3
-                    description: connectionString contain connection credentials required
-                      for spire server Datastore.
+                    description: |-
+                      connectionString contain connection credentials required for spire server Datastore.
+                      Must not be empty and should contain valid connection parameters for the specified database type.
+                    maxLength: 1024
+                    minLength: 1
                     type: string
                   databaseType:
                     default: sqlite3
@@ -1040,6 +1052,7 @@ spec:
                     default: 2
                     description: maxIdleConns specifies the maximum idle connection
                       to be configured.
+                    maximum: 10000
                     minimum: 0
                     type: integer
                   maxOpenConns:
@@ -1047,17 +1060,26 @@ spec:
                     description: |-
                       DB pool config
                       maxOpenConns will specify the maximum connections for the DB pool.
-                    minimum: 0
+                      Must be between 1 and 10000.
+                    maximum: 10000
+                    minimum: 1
                     type: integer
                   options:
                     default: []
-                    description: options specifies extra DB options.
+                    description: |-
+                      options specifies extra DB options.
+                      Maximum 32 options allowed.
                     items:
                       type: string
+                    maxItems: 32
                     type: array
                   rootCAPath:
                     default: ""
-                    description: MySQL TLS options.
+                    description: |-
+                      MySQL TLS options.
+                      Paths must be absolute and not contain directory traversal attempts.
+                    maxLength: 256
+                    pattern: ^$|^(/[a-zA-Z0-9._-]+)+$
                     type: string
                 required:
                 - connMaxLifetime
@@ -1081,7 +1103,11 @@ spec:
                 format: duration
                 type: string
               jwtIssuer:
-                description: jwtIssuer is the JWT issuer url.
+                description: |-
+                  jwtIssuer is the JWT issuer url.
+                  Must be a valid HTTPS or HTTP URL.
+                maxLength: 512
+                pattern: ^(?i)https?://[^\s?#]+$
                 type: string
               jwtKeyType:
                 description: |-
@@ -1115,7 +1141,10 @@ spec:
               labels:
                 additionalProperties:
                   type: string
-                description: labels to apply to all resources managed by the API.
+                description: |-
+                  labels to apply to all resources managed by the API.
+                  Maximum 64 labels allowed. Label keys and values must be valid Kubernetes labels.
+                maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
               logFormat:
@@ -1143,7 +1172,9 @@ spec:
                   type: string
                 description: |-
                   nodeSelector is for defining the scheduling criteria using node labels.
+                  Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+                maxProperties: 50
                 type: object
                 x-kubernetes-map-type: atomic
               persistence:
@@ -1248,6 +1279,7 @@ spec:
               tolerations:
                 description: |-
                   tolerations are for setting the pod tolerations.
+                  Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
                   description: |-
@@ -1285,9 +1317,12 @@ spec:
                         If the operator is Exists, the value should be empty, otherwise just a regular string.
                       type: string
                   type: object
+                maxItems: 50
                 type: array
                 x-kubernetes-list-type: atomic
             required:
+            - caSubject
+            - datastore
             - jwtIssuer
             type: object
           status:
