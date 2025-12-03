@@ -254,7 +254,7 @@ func (r *SpireAgentReconciler) validateProxyConfiguration(statusMgr *status.Mana
 	return nil
 }
 
-// needsUpdate returns true if DaemonSet needs to be updated based on config checksum
+// needsUpdate returns true if DaemonSet needs to be updated
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
 	if current.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireAgentDaemonSetSpireAgentConfigHashAnnotationKey] {
 		return true

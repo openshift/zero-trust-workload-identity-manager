@@ -306,7 +306,7 @@ func (r *SpireServerReconciler) validateProxyConfiguration(statusMgr *status.Man
 	return nil
 }
 
-// needsUpdate returns true if StatefulSet needs to be updated based on config checksum
+// needsUpdate returns true if StatefulSet needs to be updated
 func needsUpdate(current, desired appsv1.StatefulSet) bool {
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true

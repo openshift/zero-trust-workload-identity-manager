@@ -279,7 +279,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateCommonConfig(oidc *v1alph
 	)
 }
 
-// needsUpdate returns true if Deployment needs to be updated based on config checksum
+// needsUpdate returns true if Deployment needs to be updated
 func needsUpdate(current, desired appsv1.Deployment) bool {
 	if current.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] {
 		return true
