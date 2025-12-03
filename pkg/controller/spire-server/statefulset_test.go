@@ -278,10 +278,10 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 		}
 	})
 
-	// Test persistence with only StorageClass set (AccessMode should default to ReadWriteOnce)
-	t.Run("Validates persistence with only StorageClass", func(t *testing.T) {
+	// Test persistence with custom StorageClass
+	t.Run("Validates persistence with custom StorageClass", func(t *testing.T) {
 		customStorageClass := "premium-storage"
-		configWithStorageClassOnly := &v1alpha1.SpireServerSpec{
+		configWithCustomStorageClass := &v1alpha1.SpireServerSpec{
 			Persistence: v1alpha1.Persistence{
 				Size:         "1Gi",
 				AccessMode:   "ReadWriteOnce",
@@ -289,15 +289,15 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			},
 		}
 
-		storageClassStatefulSet := GenerateSpireServerStatefulSet(configWithStorageClassOnly, serverConfigHash, controllerConfigHash)
+		storageClassStatefulSet := GenerateSpireServerStatefulSet(configWithCustomStorageClass, serverConfigHash, controllerConfigHash)
 		pvc := storageClassStatefulSet.Spec.VolumeClaimTemplates[0]
 
-		// AccessMode should default to ReadWriteOnce
+		// Verify AccessMode is set correctly
 		if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteOnce {
 			t.Errorf("Expected access mode ReadWriteOnce, got %v", pvc.Spec.AccessModes)
 		}
 
-		// StorageClassName should be set
+		// Verify StorageClassName is set correctly
 		if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != customStorageClass {
 			var actualStorageClass string
 			if pvc.Spec.StorageClassName != nil {
@@ -398,6 +398,13 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
+	// Handle persistence settings (Persistence is required, so fields are always present)
+	volumeAccessMode := corev1.PersistentVolumeAccessMode(config.Persistence.AccessMode)
+	var storageClassName *string
+	if config.Persistence.StorageClass != "" {
+		storageClassName = ptr.To(config.Persistence.StorageClass)
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -490,12 +497,13 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{Name: "spire-data", Labels: labels},
+					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
 					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						AccessModes: []corev1.PersistentVolumeAccessMode{volumeAccessMode},
+						StorageClassName: storageClassName,
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceStorage: resource.MustParse("1Gi"),
+								corev1.ResourceStorage: resource.MustParse(config.Persistence.Size),
 							},
 						},
 					},
