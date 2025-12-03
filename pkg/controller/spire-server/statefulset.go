@@ -88,9 +88,21 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	}
 
 	volumeResourceRequest := "1Gi"
-	if config.Persistence != nil && config.Persistence.Size != "" {
-		volumeResourceRequest = config.Persistence.Size
+	volumeAccessMode := corev1.ReadWriteOnce
+	var storageClassName *string
+
+	if config.Persistence != nil {
+		if config.Persistence.Size != "" {
+			volumeResourceRequest = config.Persistence.Size
+		}
+		if config.Persistence.AccessMode != "" {
+			volumeAccessMode = corev1.PersistentVolumeAccessMode(config.Persistence.AccessMode)
+		}
+		if config.Persistence.StorageClass != "" {
+			storageClassName = ptr.To(config.Persistence.StorageClass)
+		}
 	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -196,7 +208,8 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
 					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						AccessModes: []corev1.PersistentVolumeAccessMode{volumeAccessMode},
+						StorageClassName: storageClassName,
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse(volumeResourceRequest),

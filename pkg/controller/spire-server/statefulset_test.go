@@ -208,10 +208,94 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			t.Errorf("Expected access mode ReadWriteOnce, got %v", pvc.Spec.AccessModes)
 		}
 
+		// Default should have no storage class set (uses cluster default)
+		if pvc.Spec.StorageClassName != nil {
+			t.Errorf("Expected nil storage class name for default config, got %v", *pvc.Spec.StorageClassName)
+		}
+
 		storageRequest := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 		expectedStorage := resource.MustParse("1Gi")
 		if !storageRequest.Equal(expectedStorage) {
 			t.Errorf("Expected storage request %v, got %v", expectedStorage, storageRequest)
+		}
+	})
+
+	// Test custom persistence settings (AccessMode and StorageClass)
+	t.Run("Validates custom persistence settings", func(t *testing.T) {
+		customStorageClass := "fast-ssd"
+		configWithPersistence := &v1alpha1.SpireServerSpec{
+			Persistence: &v1alpha1.Persistence{
+				Size:         "10Gi",
+				AccessMode:   "ReadWriteOncePod",
+				StorageClass: customStorageClass,
+			},
+		}
+
+		customStatefulSet := GenerateSpireServerStatefulSet(configWithPersistence, serverConfigHash, controllerConfigHash)
+		pvc := customStatefulSet.Spec.VolumeClaimTemplates[0]
+
+		// Check AccessMode
+		if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteOncePod {
+			t.Errorf("Expected access mode ReadWriteOncePod, got %v", pvc.Spec.AccessModes)
+		}
+
+		// Check StorageClassName
+		if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != customStorageClass {
+			var actualStorageClass string
+			if pvc.Spec.StorageClassName != nil {
+				actualStorageClass = *pvc.Spec.StorageClassName
+			}
+			t.Errorf("Expected storage class name %q, got %q", customStorageClass, actualStorageClass)
+		}
+
+		// Check Size
+		storageRequest := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		expectedStorage := resource.MustParse("10Gi")
+		if !storageRequest.Equal(expectedStorage) {
+			t.Errorf("Expected storage request %v, got %v", expectedStorage, storageRequest)
+		}
+	})
+
+	// Test ReadWriteMany access mode
+	t.Run("Validates ReadWriteMany access mode", func(t *testing.T) {
+		configWithRWX := &v1alpha1.SpireServerSpec{
+			Persistence: &v1alpha1.Persistence{
+				AccessMode: "ReadWriteMany",
+			},
+		}
+
+		rwxStatefulSet := GenerateSpireServerStatefulSet(configWithRWX, serverConfigHash, controllerConfigHash)
+		pvc := rwxStatefulSet.Spec.VolumeClaimTemplates[0]
+
+		if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteMany {
+			t.Errorf("Expected access mode ReadWriteMany, got %v", pvc.Spec.AccessModes)
+		}
+	})
+
+	// Test persistence with only StorageClass set (AccessMode should default to ReadWriteOnce)
+	t.Run("Validates persistence with only StorageClass", func(t *testing.T) {
+		customStorageClass := "premium-storage"
+		configWithStorageClassOnly := &v1alpha1.SpireServerSpec{
+			Persistence: &v1alpha1.Persistence{
+				StorageClass: customStorageClass,
+			},
+		}
+
+		storageClassStatefulSet := GenerateSpireServerStatefulSet(configWithStorageClassOnly, serverConfigHash, controllerConfigHash)
+		pvc := storageClassStatefulSet.Spec.VolumeClaimTemplates[0]
+
+		// AccessMode should default to ReadWriteOnce
+		if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteOnce {
+			t.Errorf("Expected access mode ReadWriteOnce, got %v", pvc.Spec.AccessModes)
+		}
+
+		// StorageClassName should be set
+		if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != customStorageClass {
+			var actualStorageClass string
+			if pvc.Spec.StorageClassName != nil {
+				actualStorageClass = *pvc.Spec.StorageClassName
+			}
+			t.Errorf("Expected storage class name %q, got %q", customStorageClass, actualStorageClass)
 		}
 	})
 
