@@ -81,8 +81,8 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
 		})
 
-		It("Create ZeroTrustWorkloadIdentityManager Resource", func() {
-			By("Create ZeroTrustWorkloadIdentityManager Resource")
+		It("Global common configurations should be defined in ZeroTrustWorkloadIdentityManager object", func() {
+			By("Creating ZeroTrustWorkloadIdentityManager object")
 			ztwim := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
@@ -94,7 +94,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 			}
 			err := k8sClient.Create(testCtx, ztwim)
-			Expect(err).NotTo(HaveOccurred(), "failed to create ZeroTrustWorkloadIdentityManager																																																															 object")
+			Expect(err).NotTo(HaveOccurred(), "failed to create ZeroTrustWorkloadIdentityManager object")
 		})
 
 		It("Operator should recover from the force Pod deletion", func() {
