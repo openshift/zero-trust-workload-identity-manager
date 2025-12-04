@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: zero-trust-workload-identity-manager
-    config.openshift.io/inject-trusted-cabundle: "true"
-    control-plane: controller-manager
-  name: zero-trust-workload-identity-manager-trusted-ca-bundle

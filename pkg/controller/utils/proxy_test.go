@@ -128,7 +128,7 @@ func TestIsProxyEnabled(t *testing.T) {
 			httpProxy:  "",
 			httpsProxy: "",
 			noProxy:    "localhost",
-			expected:   true,
+			expected:   false,
 		},
 		{
 			name:       "no proxy vars set",
@@ -362,9 +362,6 @@ func TestGetTrustedCABundleVolume(t *testing.T) {
 					t.Errorf("expected ConfigMap name %s, got %s",
 						tt.configMapName,
 						volume.VolumeSource.ConfigMap.Name)
-				}
-				if volume.VolumeSource.ConfigMap.Optional == nil || !*volume.VolumeSource.ConfigMap.Optional {
-					t.Error("expected ConfigMap to be optional")
 				}
 			}
 		})

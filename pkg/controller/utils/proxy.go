@@ -4,7 +4,6 @@ import (
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -78,11 +77,13 @@ func GetProxyEnvVarsWithNoProxyAdditions(additionalNoProxy []string) []corev1.En
 	return envVars
 }
 
-// IsProxyEnabled checks if any proxy environment variables are set
+// IsProxyEnabled checks if a proxy is actually configured.
+// A proxy is considered enabled only when HTTP_PROXY or HTTPS_PROXY is set.
+// NO_PROXY alone does not enable proxy functionality - it only specifies
+// exclusions when a proxy is configured.
 func IsProxyEnabled() bool {
 	return os.Getenv(HTTPProxyEnvVar) != "" ||
-		os.Getenv(HTTPSProxyEnvVar) != "" ||
-		os.Getenv(NoProxyEnvVar) != ""
+		os.Getenv(HTTPSProxyEnvVar) != ""
 }
 
 // ProxyValidationResult contains the result of proxy configuration validation
@@ -192,8 +193,6 @@ func GetTrustedCABundleVolume() corev1.Volume {
 						Path: TrustedCABundleFile,
 					},
 				},
-				// Optional: true allows the pod to start even if the ConfigMap doesn't exist yet
-				Optional: ptr.To(true),
 			},
 		},
 	}
