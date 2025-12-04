@@ -836,9 +836,6 @@ func TestBuildDataStorePluginData(t *testing.T) {
 			MaxIdleConns:     20,
 			MaxOpenConns:     200,
 			ConnMaxLifetime:  7200,
-			RootCAPath:       "/tls/ca.crt",
-			ClientCertPath:   "/tls/client.crt",
-			ClientKeyPath:    "/tls/client.key",
 		}
 
 		pluginData := buildDataStorePluginData(datastore)

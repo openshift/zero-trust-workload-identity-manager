@@ -380,6 +380,9 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 
 	t.Run("Adds TLS Secret volume and mount at fixed path", func(t *testing.T) {
 		config := &v1alpha1.SpireServerSpec{
+			Persistence: v1alpha1.Persistence{
+				Size: "1Gi",
+			},
 			Datastore: v1alpha1.DataStore{
 				DatabaseType:     "postgres",
 				ConnectionString: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db-tls/ca.crt",
@@ -450,6 +453,9 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 
 	t.Run("Does not add TLS volume when TLSSecretName is empty", func(t *testing.T) {
 		config := &v1alpha1.SpireServerSpec{
+			Persistence: v1alpha1.Persistence{
+				Size: "1Gi",
+			},
 			Datastore: v1alpha1.DataStore{
 				DatabaseType:     "postgres",
 				ConnectionString: "dbname=spire user=spire host=postgres.example.com sslmode=disable",
@@ -600,7 +606,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
 					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{volumeAccessMode},
+						AccessModes:      []corev1.PersistentVolumeAccessMode{volumeAccessMode},
 						StorageClassName: storageClassName,
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
