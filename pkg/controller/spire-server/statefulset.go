@@ -87,10 +87,16 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
-	volumeResourceRequest := "1Gi"
-	if config.Persistence != nil && config.Persistence.Size != "" {
-		volumeResourceRequest = config.Persistence.Size
+	// Persistence is required, so we can directly access its fields.
+	// Fields have defaults: Size="1Gi", AccessMode="ReadWriteOnce", StorageClass=""
+	volumeResourceRequest := config.Persistence.Size
+	volumeAccessMode := corev1.PersistentVolumeAccessMode(config.Persistence.AccessMode)
+
+	var storageClassName *string
+	if config.Persistence.StorageClass != "" {
+		storageClassName = ptr.To(config.Persistence.StorageClass)
 	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -196,7 +202,8 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
 					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						AccessModes: []corev1.PersistentVolumeAccessMode{volumeAccessMode},
+						StorageClassName: storageClassName,
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse(volumeResourceRequest),

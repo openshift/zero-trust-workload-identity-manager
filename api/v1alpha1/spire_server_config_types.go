@@ -10,6 +10,9 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServer is a singleton, .metadata.name must be 'cluster'"
+// +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.size == self.spec.persistence.size",message="spec.persistence.size is immutable"
+// +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.accessMode == self.spec.persistence.accessMode",message="spec.persistence.accessMode is immutable"
+// +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.storageClass == self.spec.persistence.storageClass",message="spec.persistence.storageClass is immutable"
 // +operator-sdk:csv:customresourcedefinitions:displayName="SpireServer"
 
 // SpireServer defines the configuration for the SPIRE Server managed by zero trust workload identity manager.
@@ -91,9 +94,10 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Required
 	CASubject CASubject `json:"caSubject,omitempty"`
 
-	// persistence has config for spire server volume related configs
-	// +kubebuilder:validation:Optional
-	Persistence *Persistence `json:"persistence,omitempty"`
+	// persistence has config for spire server volume related configs.
+	// This field is required and immutable once set.
+	// +kubebuilder:validation:Required
+	Persistence Persistence `json:"persistence"`
 
 	// spireSQLConfig has the config required for the spire server SQL DataStore.
 	// +kubebuilder:validation:Required
@@ -104,11 +108,6 @@ type SpireServerSpec struct {
 
 // Persistence defines volume-related settings.
 type Persistence struct {
-	// type of volume to use for persistence.
-	// +kubebuilder:validation:Enum=pvc;hostPath;emptyDir
-	// +kubebuilder:default:=pvc
-	Type string `json:"type"`
-
 	// size of the persistent volume (e.g., 1Gi).
 	// +kubebuilder:validation:Pattern=^[1-9][0-9]*Gi$
 	// +kubebuilder:default:="1Gi"
@@ -123,11 +122,6 @@ type Persistence struct {
 	// +kubebuilder:validation:optional
 	// +kubebuilder:default:=""
 	StorageClass string `json:"storageClass,omitempty"`
-
-	// hostPath to be used when type is hostPath.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:default:=""
-	HostPath string `json:"hostPath,omitempty"`
 }
 
 // DataStore configures the Spire SQL datastore backend.
@@ -143,28 +137,6 @@ type DataStore struct {
 	// +kubebuilder:validation:MaxLength=1024
 	// +kubebuilder:default:=/run/spire/data/datastore.sqlite3
 	ConnectionString string `json:"connectionString"`
-
-	// options specifies extra DB options.
-	// Maximum 32 options allowed.
-	// +kubebuilder:validation:optional
-	// +kubebuilder:validation:MaxItems=32
-	// +kubebuilder:default:={}
-	Options []string `json:"options,omitempty"`
-
-	// MySQL TLS options.
-	// Paths must be absolute and not contain directory traversal attempts.
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^$|^(/[a-zA-Z0-9._-]+)+$`
-	// +kubebuilder:default:=""
-	RootCAPath string `json:"rootCAPath,omitempty"`
-
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
-	ClientCertPath string `json:"clientCertPath,omitempty"`
-
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^(/[a-zA-Z0-9._-]+)+$`
-	ClientKeyPath string `json:"clientKeyPath,omitempty"`
 
 	// DB pool config
 	// maxOpenConns will specify the maximum connections for the DB pool.

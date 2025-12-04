@@ -112,8 +112,6 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 
 // ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerSpec struct {
-	CommonConfig `json:",inline"`
-
 	// trustDomain to be used for the SPIFFE identifiers.
 	// This field is immutable.
 	// Must be a valid SPIFFE trust domain (lowercase alphanumeric, hyphens, and dots).
