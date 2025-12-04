@@ -1078,6 +1078,16 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
+              socketPath:
+                default: /run/spire/agent-sockets
+                description: |-
+                  socketPath is the directory on the host where the SPIRE agent socket will be created.
+                  This directory is shared with the SPIFFE CSI driver via hostPath volume.
+                  Must match SpiffeCSIDriver.Spec.AgentSocketPath for workloads to access the socket.
+                  Must be an absolute path without traversal attempts or null bytes.
+                maxLength: 256
+                pattern: ^/[a-zA-Z0-9._/\-]*$
+                type: string
               tolerations:
                 description: |-
                   tolerations are for setting the pod tolerations.

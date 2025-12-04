@@ -8,14 +8,15 @@ import (
 
 func TestGetSpiffeCSIDriver(t *testing.T) {
 	t.Run("without custom labels", func(t *testing.T) {
-		csiDriver := getSpiffeCSIDriver(nil)
+		pluginName := "csi.spiffe.io"
+		csiDriver := getSpiffeCSIDriver(pluginName, nil)
 
 		if csiDriver == nil {
 			t.Fatal("Expected CSIDriver, got nil")
 		}
 
-		if csiDriver.Name != "csi.spiffe.io" {
-			t.Errorf("Expected CSIDriver name 'csi.spiffe.io', got '%s'", csiDriver.Name)
+		if csiDriver.Name != pluginName {
+			t.Errorf("Expected CSIDriver name '%s', got '%s'", pluginName, csiDriver.Name)
 		}
 
 		// Check labels
@@ -41,13 +42,14 @@ func TestGetSpiffeCSIDriver(t *testing.T) {
 	})
 
 	t.Run("with custom labels", func(t *testing.T) {
+		pluginName := "csi.spiffe.io"
 		customLabels := map[string]string{
 			"custom-label-1": "custom-value-1",
 			"custom-label-2": "custom-value-2",
 			"security.openshift.io/csi-ephemeral-volume-profile": "privileged",
 		}
 
-		csiDriver := getSpiffeCSIDriver(customLabels)
+		csiDriver := getSpiffeCSIDriver(pluginName, customLabels)
 
 		if csiDriver == nil {
 			t.Fatal("Expected CSIDriver, got nil")
@@ -71,6 +73,24 @@ func TestGetSpiffeCSIDriver(t *testing.T) {
 		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; !ok || val != "restricted" {
 			t.Errorf("Expected security label 'security.openshift.io/csi-ephemeral-volume-profile=restricted', got '%s=%s'", "security.openshift.io/csi-ephemeral-volume-profile", val)
 			t.Error("This label MUST be preserved from the asset file even when custom labels are provided")
+		}
+	})
+
+	t.Run("with custom plugin name", func(t *testing.T) {
+		pluginName := "csi.custom.io"
+		csiDriver := getSpiffeCSIDriver(pluginName, nil)
+
+		if csiDriver == nil {
+			t.Fatal("Expected CSIDriver, got nil")
+		}
+
+		if csiDriver.Name != pluginName {
+			t.Errorf("Expected CSIDriver name '%s', got '%s'", pluginName, csiDriver.Name)
+		}
+
+		// Verify standard labels are still present
+		if val, ok := csiDriver.Labels[utils.AppManagedByLabelKey]; !ok || val != utils.AppManagedByLabelValue {
+			t.Errorf("Expected label %s=%s", utils.AppManagedByLabelKey, utils.AppManagedByLabelValue)
 		}
 	})
 }

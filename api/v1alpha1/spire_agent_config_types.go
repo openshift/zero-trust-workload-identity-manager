@@ -25,6 +25,15 @@ type SpireAgent struct {
 // SpireAgentSpec will have specifications for configuration related to the spire agents.
 type SpireAgentSpec struct {
 
+	// socketPath is the directory on the host where the SPIRE agent socket will be created.
+	// This directory is shared with the SPIFFE CSI driver via hostPath volume.
+	// Must match SpiffeCSIDriver.Spec.AgentSocketPath for workloads to access the socket.
+	// Must be an absolute path without traversal attempts or null bytes.
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^/[a-zA-Z0-9._/\-]*$`
+	// +kubebuilder:default:="/run/spire/agent-sockets"
+	SocketPath string `json:"socketPath,omitempty"`
+
 	// logLevel sets the logging level for the operand.
 	// Valid values are: debug, info, warn, error.
 	// +kubebuilder:validation:Optional

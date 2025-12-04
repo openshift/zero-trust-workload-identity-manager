@@ -24,12 +24,14 @@ type SpiffeCSIDriver struct {
 // SpiffeCSIDriverSpec will have specifications for configuration related to the spiffe-csi driver.
 type SpiffeCSIDriverSpec struct {
 
-	// agentSocketPath is the path to spiffe csi driver the agent socket.
+	// agentSocketPath is the path to the directory containing the SPIRE agent's Workload API socket.
+	// This directory will be bind-mounted into workload containers by the CSI driver.
+	// The directory is shared between the SPIRE agent and CSI driver via a hostPath volume.
 	// Must be an absolute path without traversal attempts or null bytes.
 	// +kubebuilder:validation:MaxLength=256
 	// +kubebuilder:validation:Pattern=`^/[a-zA-Z0-9._/\-]*$`
-	// +kubebuilder:default:="/run/spire/agent-sockets/spire-agent.sock"
-	AgentSocket string `json:"agentSocketPath,omitempty"`
+	// +kubebuilder:default:="/run/spire/agent-sockets"
+	AgentSocketPath string `json:"agentSocketPath,omitempty"`
 
 	// pluginName defines the name of the CSI plugin, Sets the csi driver name deployed to the cluster.
 	// Must be a valid domain name format (e.g., csi.spiffe.io).

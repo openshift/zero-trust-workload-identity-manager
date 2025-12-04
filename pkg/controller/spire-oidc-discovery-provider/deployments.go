@@ -112,7 +112,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							Name: "spiffe-workload-api",
 							VolumeSource: corev1.VolumeSource{
 								CSI: &corev1.CSIVolumeSource{
-									Driver:   "csi.spiffe.io",
+									Driver:   config.Spec.CSIDriverName,
 									ReadOnly: ptr.To(true),
 								},
 							},

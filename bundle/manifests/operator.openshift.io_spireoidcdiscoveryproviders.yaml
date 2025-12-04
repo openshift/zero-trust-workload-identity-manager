@@ -965,13 +965,14 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
-              agentSocketName:
-                default: spire-agent.sock
+              csiDriverName:
+                default: csi.spiffe.io
                 description: |-
-                  agentSocketName is the name of the agent socket.
-                  Must be a relative file name (no path traversal or absolute paths).
-                maxLength: 256
-                pattern: ^[a-zA-Z0-9._-]+$
+                  csiDriverName is the name of the CSI driver to use for mounting the Workload API socket.
+                  This must match the SpiffeCSIDriver.spec.pluginName for the OIDC provider to access SPIFFE identities.
+                  Must be a valid DNS subdomain format (e.g., csi.spiffe.io).
+                maxLength: 127
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
                 type: string
               externalSecretRef:
                 description: |-

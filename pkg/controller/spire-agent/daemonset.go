@@ -124,7 +124,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 			Name: "spire-agent-socket-dir",
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/run/spire/agent-sockets",
+					Path: config.SocketPath,
 					Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
 				},
 			},
@@ -226,7 +226,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
-					Volumes:      volumes,
+					Volumes: volumes,
 				},
 			},
 		},

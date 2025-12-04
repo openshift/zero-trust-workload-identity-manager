@@ -39,12 +39,14 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:="text"
 	LogFormat string `json:"logFormat,omitempty"`
 
-	// agentSocketName is the name of the agent socket.
-	// Must be a relative file name (no path traversal or absolute paths).
-	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9._-]+$`
-	// +kubebuilder:default:="spire-agent.sock"
-	AgentSocketName string `json:"agentSocketName,omitempty"`
+	// csiDriverName is the name of the CSI driver to use for mounting the Workload API socket.
+	// This must match the SpiffeCSIDriver.spec.pluginName for the OIDC provider to access SPIFFE identities.
+	// Must be a valid DNS subdomain format (e.g., csi.spiffe.io).
+	// +kubebuilder:validation:MaxLength=127
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
+	// +kubebuilder:default:="csi.spiffe.io"
+	CSIDriverName string `json:"csiDriverName,omitempty"`
+
 
 	// jwtIssuer is the JWT issuer url.
 	// Must be a valid HTTPS or HTTP URL.

@@ -145,7 +145,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 							Image: utils.GetSpiffeCSIDriverImage(),
 							Args: []string{
 								"-workload-api-socket-dir", "/spire-agent-socket",
-								"-plugin-name", "csi.spiffe.io",
+								"-plugin-name", config.PluginName,
 								"-csi-socket-path", "/spiffe-csi/csi.sock",
 							},
 							ImagePullPolicy: corev1.PullIfNotPresent,
@@ -189,7 +189,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 							Image: utils.GetNodeDriverRegistrarImage(),
 							Args: []string{
 								"-csi-address", "/spiffe-csi/csi.sock",
-								"-kubelet-registration-path", "/var/lib/kubelet/plugins/csi.spiffe.io/csi.sock",
+								"-kubelet-registration-path", fmt.Sprintf("/var/lib/kubelet/plugins/%s/csi.sock", config.PluginName),
 								"-health-port", "9809",
 							},
 							ImagePullPolicy: corev1.PullIfNotPresent,
@@ -233,7 +233,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 							Name: "spire-agent-socket-dir",
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/run/spire/agent-sockets",
+									Path: config.AgentSocketPath,
 									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
 								},
 							},
@@ -242,7 +242,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 							Name: "spiffe-csi-socket-dir",
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/var/lib/kubelet/plugins/csi.spiffe.io",
+									Path: fmt.Sprintf("/var/lib/kubelet/plugins/%s", config.PluginName),
 									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
 								},
 							},
