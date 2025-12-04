@@ -6,23 +6,212 @@ metadata:
       [
         {
           "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpiffeCSIDriver",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "agentSocketPath": "/run/spire/agent-sockets/spire-agent.sock",
+            "pluginName": "csi.spiffe.io"
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpireAgent",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "logFormat": "text",
+            "logLevel": "info",
+            "nodeAttestor": {
+              "k8sPSATEnabled": "true"
+            },
+            "workloadAttestors": {
+              "k8sEnabled": "true",
+              "workloadAttestorsVerification": {
+                "type": "auto"
+              }
+            }
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpireOIDCDiscoveryProvider",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "agentSocketName": "spire-agent.sock",
+            "jwtIssuer": "https://oidc-discovery.example.com",
+            "logFormat": "text",
+            "logLevel": "info",
+            "managedRoute": true,
+            "replicaCount": 1
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "SpireServer",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "cluster"
+          },
+          "spec": {
+            "caKeyType": "rsa-2048",
+            "caSubject": {
+              "commonName": "SPIRE Server CA",
+              "country": "US",
+              "organization": "Example Corp"
+            },
+            "caValidity": "24h",
+            "datastore": {
+              "connectionString": "/run/spire/data/datastore.sqlite3",
+              "databaseType": "sqlite3",
+              "maxIdleConns": 2,
+              "maxOpenConns": 100
+            },
+            "defaultJWTValidity": "5m",
+            "defaultX509Validity": "1h",
+            "federation": {
+              "bundleEndpoint": {
+                "profile": "https_spiffe",
+                "refreshHint": 300
+              },
+              "federatesWith": [
+                {
+                  "bundleEndpointProfile": "https_spiffe",
+                  "bundleEndpointUrl": "https://federation.partner.example.com:8443",
+                  "endpointSpiffeId": "spiffe://partner.example.com/federation/endpoint",
+                  "trustDomain": "partner.example.com"
+                }
+              ],
+              "managedRoute": "true"
+            },
+            "jwtIssuer": "https://oidc-discovery.example.com",
+            "logFormat": "text",
+            "logLevel": "info",
+            "persistence": {
+              "accessMode": "ReadWriteOnce",
+              "size": "2Gi",
+              "storageClass": ""
+            }
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
           "kind": "ZeroTrustWorkloadIdentityManager",
           "metadata": {
             "labels": {
               "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
-              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
               "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
               "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
             },
-            "name": "zerotrustworkloadidentitymanager-sample"
+            "name": "cluster"
           },
-          "spec": null
+          "spec": {
+            "bundleConfigMap": "spire-bundle",
+            "clusterName": "prod-cluster",
+            "trustDomain": "example.com"
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterFederatedTrustDomain",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "example.com"
+          },
+          "spec": {
+            "bundleEndpointProfile": "https_web",
+            "trustDomain": "example.com"
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterSPIFFEID",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "example-workload",
+            "namespace": "default"
+          },
+          "spec": {
+            "dnsNameTemplates": [
+              "*.example.com"
+            ],
+            "ttl": 3600,
+            "workloadSelector": {
+              "k8sServiceAccount": {
+                "name": "example-sa",
+                "namespace": "example-ns"
+              }
+            }
+          }
+        },
+        {
+          "apiVersion": "spire.spiffe.io/v1alpha1",
+          "kind": "ClusterStaticEntry",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/managed-by": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/name": "zero-trust-workload-identity-manager",
+              "app.kubernetes.io/part-of": "zero-trust-workload-identity-manager"
+            },
+            "name": "example-static-entry",
+            "namespace": "default"
+          },
+          "spec": {
+            "parentID": "spiffe://example.com/spire/server",
+            "selectors": [
+              {
+                "type": "unix",
+                "value": "uid:1000"
+              }
+            ],
+            "spiffeID": "spiffe://example.com/example-workload",
+            "ttl": 3600
+          }
         }
       ]
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-12-05T04:30:56Z"
+    createdAt: "2025-12-05T09:29:07Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"

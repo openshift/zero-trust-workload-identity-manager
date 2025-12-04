@@ -1,4 +1,15 @@
 ## Append samples of your project ##
+# Note: Only include one SpireServer variant to avoid resource ID conflicts
+# Users can choose from the federation examples:
+#   - operator.openshift.io_v1alpha1_spireserver_with_federation_acme.yaml (ACME certs)
+#   - operator.openshift.io_v1alpha1_spireserver_with_federation_tls.yaml (Manual certs)
 resources:
 - operator.openshift.io_v1alpha1_zerotrustworkloadidentitymanager.yaml
+- operator.openshift.io_v1alpha1_spireserver.yaml
+- operator.openshift.io_v1alpha1_spireagent.yaml
+- operator.openshift.io_v1alpha1_spiffecsidriver.yaml
+- operator.openshift.io_v1alpha1_spireoidcdiscoveryprovider.yaml
+- spire.spiffe.io_v1alpha1_clusterfederatedtrustdomain.yaml
+- spire.spiffe.io_v1alpha1_clusterspiffeid.yaml
+- spire.spiffe.io_v1alpha1_clusterstaticentries.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

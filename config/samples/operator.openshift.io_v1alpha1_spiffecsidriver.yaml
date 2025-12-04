@@ -1,5 +1,5 @@
 apiVersion: operator.openshift.io/v1alpha1
-kind: ZeroTrustWorkloadIdentityManager
+kind: SpiffeCSIDriver
 metadata:
   labels:
     app.kubernetes.io/name: zero-trust-workload-identity-manager
@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
   name: cluster
 spec:
-  trustDomain: example.com
-  clusterName: prod-cluster
-  bundleConfigMap: spire-bundle
+  agentSocketPath: "/run/spire/agent-sockets/spire-agent.sock"
+  pluginName: "csi.spiffe.io"
+
+

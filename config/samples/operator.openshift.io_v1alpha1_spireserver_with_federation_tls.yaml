@@ -1,0 +1,60 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+  name: cluster
+spec:
+  logLevel: info
+  logFormat: text
+  jwtIssuer: "https://oidc-discovery.example.com"
+  caValidity: 24h
+  defaultX509Validity: 1h
+  defaultJWTValidity: 5m
+  caKeyType: rsa-2048
+  caSubject:
+    commonName: "SPIRE Server CA"
+    organization: "Example Corp"
+    country: "US"
+  datastore:
+    databaseType: sqlite3
+    connectionString: "/run/spire/data/datastore.sqlite3"
+    maxOpenConns: 100
+    maxIdleConns: 2
+  persistence:
+    size: "2Gi"
+    accessMode: ReadWriteOnce
+    storageClass: ""
+  # Federation with manual TLS certificate management
+  federation:
+    bundleEndpoint:
+      # Use https_web profile for Web PKI certificates (public CA)
+      profile: https_web
+      refreshHint: 300
+      # Manual certificate configuration from Kubernetes Secret
+      httpsWeb:
+        servingCert:
+          # Reference to a Kubernetes Secret containing tls.crt and tls.key
+          # Secret must be in the same namespace as the operator
+          # The Route will use this certificate for external TLS communication
+          externalSecretRef: "federation-tls-cert"
+          # How often to check for certificate updates (seconds)
+          # Must be between 3600 and 7776000 (1 hour to 90 days)
+          fileSyncInterval: 86400  # 24 hours
+    # Configure federation relationships with other trust domains
+    federatesWith:
+      # Example 1: Federation with https_spiffe profile (requires endpointSpiffeId)
+      - trustDomain: "partner1.example.com"
+        bundleEndpointUrl: "https://federation.partner1.example.com:8443"
+        bundleEndpointProfile: https_spiffe
+        endpointSpiffeId: "spiffe://partner1.example.com/federation/endpoint"
+      # Example 2: Federation with https_web profile (no endpointSpiffeId needed)
+      - trustDomain: "partner2.example.com"
+        bundleEndpointUrl: "https://federation.partner2.example.com:8443"
+        bundleEndpointProfile: https_web
+    # Enable automatic OpenShift Route creation with the external TLS certificate
+    managedRoute: "true"
+

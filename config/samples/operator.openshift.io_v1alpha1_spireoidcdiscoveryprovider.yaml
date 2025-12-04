@@ -1,5 +1,5 @@
 apiVersion: operator.openshift.io/v1alpha1
-kind: ZeroTrustWorkloadIdentityManager
+kind: SpireOIDCDiscoveryProvider
 metadata:
   labels:
     app.kubernetes.io/name: zero-trust-workload-identity-manager
@@ -8,6 +8,11 @@ metadata:
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
   name: cluster
 spec:
-  trustDomain: example.com
-  clusterName: prod-cluster
-  bundleConfigMap: spire-bundle
+  logLevel: info
+  logFormat: text
+  jwtIssuer: "https://oidc-discovery.example.com"
+  agentSocketName: "spire-agent.sock"
+  replicaCount: 1
+  managedRoute: true
+
+

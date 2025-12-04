@@ -1,13 +1,20 @@
-apiVersion: operator.openshift.io/v1alpha1
-kind: ZeroTrustWorkloadIdentityManager
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
 metadata:
   labels:
     app.kubernetes.io/name: zero-trust-workload-identity-manager
     app.kubernetes.io/created-by: zero-trust-workload-identity-manager
     app.kubernetes.io/part-of: zero-trust-workload-identity-manager
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
-  name: cluster
+  name: example-workload
+  namespace: default
 spec:
-  trustDomain: example.com
-  clusterName: prod-cluster
-  bundleConfigMap: spire-bundle
+  workloadSelector:
+    k8sServiceAccount:
+      name: example-sa
+      namespace: example-ns
+  dnsNameTemplates:
+  - "*.example.com"
+  ttl: 3600
+
+
