@@ -123,13 +123,13 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	if config.Datastore.TLSSecretName != "" {
 		// Add volume mount for the TLS secret at fixed path
 		spireServerVolumeMounts = append(spireServerVolumeMounts, corev1.VolumeMount{
-			Name:      "db-tls",
+			Name:      "db-certs",
 			MountPath: DBTLSMountPath,
 		})
 
 		// Add volume for the TLS secret
 		volumes = append(volumes, corev1.Volume{
-			Name: "db-tls",
+			Name: "db-certs",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: config.Datastore.TLSSecretName,

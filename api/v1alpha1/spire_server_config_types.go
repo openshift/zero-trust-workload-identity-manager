@@ -273,17 +273,17 @@ type DataStore struct {
 	// connectionString contain connection credentials required for spire server Datastore.
 	// Must not be empty and should contain valid connection parameters for the specified database type.
 	// For PostgreSQL with SSL, include sslmode and certificate paths in the connection string.
-	// Example: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db-tls/ca.crt"
+	// Example: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt"
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=2048
 	// +kubebuilder:default:=/run/spire/data/datastore.sqlite3
 	ConnectionString string `json:"connectionString"`
 
 	// tlsSecretName specifies the name of a Kubernetes Secret containing TLS certificates for database connections.
-	// The Secret will be mounted at /run/spire/db-tls in the SPIRE server container.
+	// The Secret will be mounted at /run/spire/db/certs in the SPIRE server container.
 	// The Secret should contain keys like 'ca.crt', 'tls.crt', 'tls.key' for the respective certificates.
 	// For PostgreSQL, reference these certificates in the connectionString, e.g.:
-	// "sslmode=verify-full sslrootcert=/run/spire/db-tls/ca.crt sslcert=/run/spire/db-tls/tls.crt sslkey=/run/spire/db-tls/tls.key"
+	// "sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt sslcert=/run/spire/db/certs/tls.crt sslkey=/run/spire/db/certs/tls.key"
 	// +kubebuilder:validation:Optional
 	TLSSecretName string `json:"tlsSecretName,omitempty"`
 

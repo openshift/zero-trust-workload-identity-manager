@@ -385,7 +385,7 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 			},
 			Datastore: v1alpha1.DataStore{
 				DatabaseType:     "postgres",
-				ConnectionString: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db-tls/ca.crt",
+				ConnectionString: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt",
 				TLSSecretName:    "postgres-tls-certs",
 			},
 		}
@@ -399,21 +399,21 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 			t.Errorf("Expected %d volumes, got %d", expectedVolumeCount, len(podSpec.Volumes))
 		}
 
-		// Find the db-tls volume
+		// Find the db-certs volume
 		var dbTLSVolume *corev1.Volume
 		for i := range podSpec.Volumes {
-			if podSpec.Volumes[i].Name == "db-tls" {
+			if podSpec.Volumes[i].Name == "db-certs" {
 				dbTLSVolume = &podSpec.Volumes[i]
 				break
 			}
 		}
 
 		if dbTLSVolume == nil {
-			t.Fatal("db-tls volume not found")
+			t.Fatal("db-certs volume not found")
 		}
 
 		if dbTLSVolume.VolumeSource.Secret == nil {
-			t.Fatal("db-tls volume should be a Secret volume")
+			t.Fatal("db-certs volume should be a Secret volume")
 		}
 
 		if dbTLSVolume.VolumeSource.Secret.SecretName != "postgres-tls-certs" {
@@ -432,17 +432,17 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 			t.Errorf("Expected %d volume mounts, got %d", expectedVolumeMountCount, len(spireServerContainer.VolumeMounts))
 		}
 
-		// Find the db-tls volume mount
+		// Find the db-certs volume mount
 		var dbTLSMount *corev1.VolumeMount
 		for i := range spireServerContainer.VolumeMounts {
-			if spireServerContainer.VolumeMounts[i].Name == "db-tls" {
+			if spireServerContainer.VolumeMounts[i].Name == "db-certs" {
 				dbTLSMount = &spireServerContainer.VolumeMounts[i]
 				break
 			}
 		}
 
 		if dbTLSMount == nil {
-			t.Fatal("db-tls volume mount not found")
+			t.Fatal("db-certs volume mount not found")
 		}
 
 		// Mount path should always be the fixed path
@@ -472,10 +472,10 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 			t.Errorf("Expected %d volumes, got %d", expectedVolumeCount, len(podSpec.Volumes))
 		}
 
-		// Ensure no db-tls volume exists
+		// Ensure no db-certs volume exists
 		for _, volume := range podSpec.Volumes {
-			if volume.Name == "db-tls" {
-				t.Error("db-tls volume should not exist when TLSSecretName is empty")
+			if volume.Name == "db-certs" {
+				t.Error("db-certs volume should not exist when TLSSecretName is empty")
 			}
 		}
 	})
