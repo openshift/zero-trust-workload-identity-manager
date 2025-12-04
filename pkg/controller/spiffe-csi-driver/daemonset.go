@@ -93,7 +93,7 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
-	return &appsv1.DaemonSet{
+	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-csi-driver",
 			Namespace: utils.GetOperatorNamespace(),
@@ -276,6 +276,8 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 			},
 		},
 	}
+
+	return ds
 }
 
 func hostPathTypePtr(t corev1.HostPathType) *corev1.HostPathType {

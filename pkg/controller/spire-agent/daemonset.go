@@ -81,7 +81,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
-	return &appsv1.DaemonSet{
+	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
 			Namespace: utils.GetOperatorNamespace(),
@@ -209,6 +209,14 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, spireAgentConfi
 			},
 		},
 	}
+
+	// Add proxy configuration with internal services added to NO_PROXY.
+	// spire-agent primarily communicates with internal services (spire-server, K8s API),
+	// but may need proxy for external access in some configurations (e.g., cloud attestation).
+	// The internal service names are added to NO_PROXY to ensure internal traffic bypasses the proxy.
+	utils.AddProxyConfigToPodWithInternalNoProxy(&ds.Spec.Template.Spec)
+
+	return ds
 }
 
 func hostPathTypePtr(t corev1.HostPathType) *corev1.HostPathType {

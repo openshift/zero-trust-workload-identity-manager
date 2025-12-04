@@ -134,7 +134,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	createOnlyMode := r.handleCreateOnlyMode(&oidcDiscoveryProviderConfig, statusMgr)
 
 	// Validate configuration
-	if err := r.validateConfiguration(&oidcDiscoveryProviderConfig, statusMgr); err != nil {
+	if err := r.validateConfiguration(ctx, &oidcDiscoveryProviderConfig, statusMgr); err != nil {
 		return ctrl.Result{}, nil
 	}
 
@@ -223,9 +223,14 @@ func (r *SpireOidcDiscoveryProviderReconciler) handleCreateOnlyMode(oidc *v1alph
 }
 
 // validateConfiguration validates the SpireOIDCDiscoveryProvider configuration
-func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
+func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
 	// Validate common configuration
 	if err := r.validateCommonConfig(oidc, statusMgr); err != nil {
+		return err
+	}
+
+	// Validate proxy configuration - if proxy is enabled, CA bundle ConfigMap must be configured
+	if err := r.validateProxyConfiguration(statusMgr); err != nil {
 		return err
 	}
 
@@ -244,6 +249,18 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(oidc *v1alp
 		statusMgr.AddCondition(ConfigurationValid, v1alpha1.ReasonReady,
 			"Configuration validation passed",
 			metav1.ConditionTrue)
+	}
+	return nil
+}
+
+// validateProxyConfiguration validates proxy configuration using shared validation logic
+func (r *SpireOidcDiscoveryProviderReconciler) validateProxyConfiguration(statusMgr *status.Manager) error {
+	result := utils.ValidateProxyConfiguration()
+
+	if !result.Valid {
+		r.log.Error(fmt.Errorf(result.Reason), result.Message)
+		statusMgr.AddCondition(ConfigurationValid, result.Reason, result.Message, metav1.ConditionFalse)
+		return fmt.Errorf("proxy configuration invalid: %s", result.Message)
 	}
 	return nil
 }
