@@ -6,7 +6,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -73,12 +72,7 @@ func (r *SpiffeCsiReconciler) reconcileDaemonSet(ctx context.Context, driver *v1
 
 // needsUpdate returns true if DaemonSet needs to be updated.
 func needsUpdate(current, desired appsv1.DaemonSet) bool {
-	if utils.DaemonSetSpecModified(&desired, &current) {
-		return true
-	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
-		return true
-	}
-	return false
+	return utils.ResourceNeedsUpdate(&current, &desired)
 }
 
 func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *appsv1.DaemonSet {

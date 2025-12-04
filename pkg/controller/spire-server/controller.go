@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -307,18 +306,14 @@ func (r *SpireServerReconciler) validateProxyConfiguration(statusMgr *status.Man
 	return nil
 }
 
-// needsUpdate returns true if StatefulSet needs to be updated based on config checksum
+// needsUpdate returns true if StatefulSet needs to be updated
 func needsUpdate(current, desired appsv1.StatefulSet) bool {
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
 		return true
-	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
-		return true
-	} else if utils.StatefulSetSpecModified(&desired, &current) {
-		return true
 	}
-	return false
+	return utils.ResourceNeedsUpdate(&current, &desired)
 }
 
 // handleTTLValidation performs TTL validation and handles warnings, events, and status updates

@@ -1,12 +1,16 @@
 package utils
 
 import (
+	"fmt"
+
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -54,6 +58,12 @@ func ResourceNeedsUpdate(existing, desired client.Object) bool {
 		typeSpecificResult = SecurityContextConstraintsNeedsUpdate(existingTyped, desired.(*securityv1.SecurityContextConstraints))
 	case *spiffev1alpha1.ClusterSPIFFEID:
 		typeSpecificResult = ClusterSPIFFEIDNeedsUpdate(existingTyped, desired.(*spiffev1alpha1.ClusterSPIFFEID))
+	case *appsv1.StatefulSet:
+		typeSpecificResult = StatefulSetNeedsUpdate(existingTyped, desired.(*appsv1.StatefulSet))
+	case *appsv1.Deployment:
+		typeSpecificResult = DeploymentNeedsUpdate(existingTyped, desired.(*appsv1.Deployment))
+	case *appsv1.DaemonSet:
+		typeSpecificResult = DaemonSetNeedsUpdate(existingTyped, desired.(*appsv1.DaemonSet))
 	default:
 		// For unknown types, just compare labels and annotations (already done above)
 		typeSpecificResult = false
@@ -394,6 +404,502 @@ func ClusterSPIFFEIDNeedsUpdate(existing, desired *spiffev1alpha1.ClusterSPIFFEI
 		!equality.Semantic.DeepEqual(existing.Spec.NamespaceSelector, desired.Spec.NamespaceSelector) ||
 		!equality.Semantic.DeepEqual(existing.Spec.WorkloadSelectorTemplates, desired.Spec.WorkloadSelectorTemplates) {
 		return true
+	}
+	return false
+}
+
+// volumesEqual compares two volume slices for equality
+func volumesEqual(fetched, desired []corev1.Volume) bool {
+	if len(desired) == 0 && len(fetched) == 0 {
+		return true
+	}
+	if len(desired) != len(fetched) {
+		return false
+	}
+
+	// Create a map of fetched volumes by name for easier lookup
+	fetchedMap := make(map[string]corev1.Volume)
+	for _, v := range fetched {
+		fetchedMap[v.Name] = v
+	}
+
+	// Check each desired volume exists and matches in fetched
+	for _, desiredVol := range desired {
+		fetchedVol, exists := fetchedMap[desiredVol.Name]
+		if !exists {
+			return false
+		}
+
+		// Compare volume sources
+		// Check ConfigMap volume
+		if desiredVol.ConfigMap != nil {
+			if fetchedVol.ConfigMap == nil {
+				return false
+			}
+			if desiredVol.ConfigMap.Name != fetchedVol.ConfigMap.Name {
+				return false
+			}
+			if desiredVol.ConfigMap.DefaultMode != nil {
+				if !ptr.Equal(desiredVol.ConfigMap.DefaultMode, fetchedVol.ConfigMap.DefaultMode) {
+					return false
+				}
+			}
+			if !equality.Semantic.DeepEqual(desiredVol.ConfigMap.Items, fetchedVol.ConfigMap.Items) {
+				return false
+			}
+		}
+
+		// Check Secret volume
+		if desiredVol.Secret != nil {
+			if fetchedVol.Secret == nil {
+				return false
+			}
+			if desiredVol.Secret.SecretName != fetchedVol.Secret.SecretName {
+				return false
+			}
+			if desiredVol.Secret.DefaultMode != nil {
+				if !ptr.Equal(desiredVol.Secret.DefaultMode, fetchedVol.Secret.DefaultMode) {
+					return false
+				}
+			}
+			if !equality.Semantic.DeepEqual(desiredVol.Secret.Items, fetchedVol.Secret.Items) {
+				return false
+			}
+		}
+
+		// Check EmptyDir volume
+		if desiredVol.EmptyDir != nil {
+			if fetchedVol.EmptyDir == nil {
+				return false
+			}
+		}
+
+		// Check HostPath volume
+		if desiredVol.HostPath != nil {
+			if fetchedVol.HostPath == nil {
+				return false
+			}
+			if desiredVol.HostPath.Path != fetchedVol.HostPath.Path {
+				return false
+			}
+		}
+
+		// Check PersistentVolumeClaim volume
+		if desiredVol.PersistentVolumeClaim != nil {
+			if fetchedVol.PersistentVolumeClaim == nil {
+				return false
+			}
+			if desiredVol.PersistentVolumeClaim.ClaimName != fetchedVol.PersistentVolumeClaim.ClaimName {
+				return false
+			}
+		}
+
+		// Check Projected volume
+		if desiredVol.Projected != nil {
+			if fetchedVol.Projected == nil {
+				return false
+			}
+			if !equality.Semantic.DeepEqual(desiredVol.Projected, fetchedVol.Projected) {
+				return false
+			}
+		}
+
+		// Check CSI volume
+		if desiredVol.CSI != nil {
+			if fetchedVol.CSI == nil {
+				return false
+			}
+			if !equality.Semantic.DeepEqual(desiredVol.CSI, fetchedVol.CSI) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// containerSpecModified checks if a container spec has been modified
+func containerSpecModified(fetched, desired *corev1.Container) bool {
+	// Check basic container properties
+	if desired.Name != fetched.Name ||
+		desired.Image != fetched.Image ||
+		desired.ImagePullPolicy != fetched.ImagePullPolicy {
+		return true
+	}
+
+	// Check command
+	if !equality.Semantic.DeepEqual(desired.Command, fetched.Command) {
+		return true
+	}
+
+	// Check args
+	if !equality.Semantic.DeepEqual(desired.Args, fetched.Args) {
+		return true
+	}
+
+	// Check environment variables
+	if !equality.Semantic.DeepEqual(desired.Env, fetched.Env) {
+		return true
+	}
+
+	// Check ports
+	if len(desired.Ports) != len(fetched.Ports) {
+		return true
+	}
+	fetchedByKey := make(map[string]corev1.ContainerPort, len(fetched.Ports))
+	for _, port := range fetched.Ports {
+		key := fmt.Sprintf("%d/%s", port.ContainerPort, port.Protocol)
+		fetchedByKey[key] = port
+	}
+	for _, desiredPort := range desired.Ports {
+		key := fmt.Sprintf("%d/%s", desiredPort.ContainerPort, desiredPort.Protocol)
+		fetchedPort, ok := fetchedByKey[key]
+		if !ok || !equality.Semantic.DeepEqual(desiredPort, fetchedPort) {
+			return true
+		}
+	}
+
+	// ReadinessProbe nil checks
+	if (desired.ReadinessProbe == nil) != (fetched.ReadinessProbe == nil) {
+		return true
+	}
+	if desired.ReadinessProbe != nil && fetched.ReadinessProbe != nil &&
+		!equality.Semantic.DeepEqual(desired.ReadinessProbe.HTTPGet, fetched.ReadinessProbe.HTTPGet) {
+		return true
+	}
+
+	// LivenessProbe nil checks
+	if (desired.LivenessProbe == nil) != (fetched.LivenessProbe == nil) {
+		return true
+	}
+	if desired.LivenessProbe != nil && fetched.LivenessProbe != nil &&
+		!equality.Semantic.DeepEqual(desired.LivenessProbe.HTTPGet, fetched.LivenessProbe.HTTPGet) {
+		return true
+	}
+
+	// SecurityContext checks
+	if (desired.SecurityContext == nil) != (fetched.SecurityContext == nil) {
+		return true
+	}
+	if desired.SecurityContext != nil && !equality.Semantic.DeepEqual(desired.SecurityContext, fetched.SecurityContext) {
+		return true
+	}
+
+	// Check volume mounts
+	if !equality.Semantic.DeepEqual(desired.VolumeMounts, fetched.VolumeMounts) {
+		return true
+	}
+
+	// Check resources
+	if !equality.Semantic.DeepEqual(desired.Resources, fetched.Resources) {
+		return true
+	}
+
+	return false
+}
+
+// StatefulSetNeedsUpdate checks if a StatefulSet needs updating
+func StatefulSetNeedsUpdate(fetched, desired *appsv1.StatefulSet) bool {
+	if desired == nil || fetched == nil {
+		return true
+	}
+	ds := desired.Spec
+	fs := fetched.Spec
+	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
+		return true
+	}
+	if ds.ServiceName != fs.ServiceName {
+		return true
+	}
+
+	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
+		return true
+	}
+
+	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+
+	for _, key := range []string{
+		"kubectl.kubernetes.io/default-container",
+		"ztwim.openshift.io/spire-server-config-hash",
+		"ztwim.openshift.io/spire-controller-manager-config-hash",
+	} {
+		if ds.Template.Annotations[key] != fs.Template.Annotations[key] {
+			return true
+		}
+	}
+	dPod := ds.Template.Spec
+	fPod := fs.Template.Spec
+	if dPod.ServiceAccountName != fPod.ServiceAccountName {
+		return true
+	}
+	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+		return true
+	}
+	// Check DNSPolicy
+	if dPod.DNSPolicy != "" && dPod.DNSPolicy != fPod.DNSPolicy {
+		return true
+	}
+	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
+		return true
+	}
+	if len(dPod.NodeSelector) > 0 && !equality.Semantic.DeepEqual(dPod.NodeSelector, fPod.NodeSelector) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(dPod.Affinity, fPod.Affinity) {
+		return true
+	}
+	if len(dPod.Tolerations) != len(fPod.Tolerations) {
+		return true
+	}
+	if len(dPod.Tolerations) > 0 && !equality.Semantic.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
+		return true
+	}
+	// Check volumes
+	if !volumesEqual(fPod.Volumes, dPod.Volumes) {
+		return true
+	}
+	// Check regular containers
+	if len(dPod.Containers) != len(fPod.Containers) {
+		return true
+	}
+	dMap := map[string]corev1.Container{}
+	fMap := map[string]corev1.Container{}
+	for _, c := range dPod.Containers {
+		dMap[c.Name] = c
+	}
+	for _, c := range fPod.Containers {
+		fMap[c.Name] = c
+	}
+
+	for name, dCont := range dMap {
+		fCont, ok := fMap[name]
+		if !ok {
+			return true
+		}
+		if containerSpecModified(&fCont, &dCont) {
+			return true
+		}
+	}
+
+	// Check init containers
+	if len(dPod.InitContainers) != len(fPod.InitContainers) {
+		return true
+	}
+	dInitMap := map[string]corev1.Container{}
+	fInitMap := map[string]corev1.Container{}
+	for _, c := range dPod.InitContainers {
+		dInitMap[c.Name] = c
+	}
+	for _, c := range fPod.InitContainers {
+		fInitMap[c.Name] = c
+	}
+	for name, dInitCont := range dInitMap {
+		fInitCont, ok := fInitMap[name]
+		if !ok {
+			return true
+		}
+		if containerSpecModified(&fInitCont, &dInitCont) {
+			return true
+		}
+	}
+	if len(ds.VolumeClaimTemplates) != len(fs.VolumeClaimTemplates) {
+		return true
+	}
+	for i := range ds.VolumeClaimTemplates {
+		dvc := ds.VolumeClaimTemplates[i]
+		fvc := fs.VolumeClaimTemplates[i]
+		if dvc.Name != fvc.Name {
+			return true
+		}
+		if !equality.Semantic.DeepEqual(dvc.Spec.AccessModes, fvc.Spec.AccessModes) {
+			return true
+		}
+		if !equality.Semantic.DeepEqual(dvc.Spec.Resources.Requests, fvc.Spec.Resources.Requests) {
+			return true
+		}
+	}
+	return false
+}
+
+// DeploymentNeedsUpdate checks if a Deployment needs updating
+func DeploymentNeedsUpdate(fetched, desired *appsv1.Deployment) bool {
+	if desired == nil || fetched == nil {
+		return true
+	}
+	ds := desired.Spec
+	fs := fetched.Spec
+	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+	dPod := ds.Template.Spec
+	fPod := fs.Template.Spec
+	if dPod.ServiceAccountName != fPod.ServiceAccountName {
+		return true
+	}
+	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+		return true
+	}
+	// Check DNSPolicy
+	if dPod.DNSPolicy != "" && dPod.DNSPolicy != fPod.DNSPolicy {
+		return true
+	}
+	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
+		return true
+	}
+	if len(dPod.NodeSelector) > 0 && !equality.Semantic.DeepEqual(dPod.NodeSelector, fPod.NodeSelector) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(dPod.Affinity, fPod.Affinity) {
+		return true
+	}
+	if len(dPod.Tolerations) != len(fPod.Tolerations) {
+		return true
+	}
+	if len(dPod.Tolerations) > 0 && !equality.Semantic.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
+		return true
+	}
+	// Check volumes
+	if !volumesEqual(fPod.Volumes, dPod.Volumes) {
+		return true
+	}
+	// Check regular containers
+	if len(dPod.Containers) != len(fPod.Containers) {
+		return true
+	}
+	dMap := map[string]corev1.Container{}
+	fMap := map[string]corev1.Container{}
+	for _, c := range dPod.Containers {
+		dMap[c.Name] = c
+	}
+	for _, c := range fPod.Containers {
+		fMap[c.Name] = c
+	}
+	for name, dCont := range dMap {
+		fCont, ok := fMap[name]
+		if !ok {
+			return true
+		}
+		if containerSpecModified(&fCont, &dCont) {
+			return true
+		}
+	}
+	// Check init containers
+	if len(dPod.InitContainers) != len(fPod.InitContainers) {
+		return true
+	}
+	dInitMap := map[string]corev1.Container{}
+	fInitMap := map[string]corev1.Container{}
+	for _, c := range dPod.InitContainers {
+		dInitMap[c.Name] = c
+	}
+	for _, c := range fPod.InitContainers {
+		fInitMap[c.Name] = c
+	}
+	for name, dInitCont := range dInitMap {
+		fInitCont, ok := fInitMap[name]
+		if !ok {
+			return true
+		}
+		if containerSpecModified(&fInitCont, &dInitCont) {
+			return true
+		}
+	}
+	return false
+}
+
+// DaemonSetNeedsUpdate checks if a DaemonSet needs updating
+func DaemonSetNeedsUpdate(fetched, desired *appsv1.DaemonSet) bool {
+	if desired == nil || fetched == nil {
+		return true
+	}
+	ds := desired.Spec
+	fs := fetched.Spec
+	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+	dPod := ds.Template.Spec
+	fPod := fs.Template.Spec
+	if dPod.ServiceAccountName != fPod.ServiceAccountName {
+		return true
+	}
+	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
+		return true
+	}
+	// Check DNSPolicy
+	if dPod.DNSPolicy != "" && dPod.DNSPolicy != fPod.DNSPolicy {
+		return true
+	}
+	if len(dPod.NodeSelector) != len(fPod.NodeSelector) {
+		return true
+	}
+	if len(dPod.NodeSelector) > 0 && !equality.Semantic.DeepEqual(dPod.NodeSelector, fPod.NodeSelector) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(dPod.Affinity, fPod.Affinity) {
+		return true
+	}
+	if len(dPod.Tolerations) != len(fPod.Tolerations) {
+		return true
+	}
+	if len(dPod.Tolerations) > 0 && !equality.Semantic.DeepEqual(dPod.Tolerations, fPod.Tolerations) {
+		return true
+	}
+	// Check volumes
+	if !volumesEqual(fPod.Volumes, dPod.Volumes) {
+		return true
+	}
+	// Check regular containers
+	if len(dPod.Containers) != len(fPod.Containers) {
+		return true
+	}
+	dMap := map[string]corev1.Container{}
+	fMap := map[string]corev1.Container{}
+	for _, c := range dPod.Containers {
+		dMap[c.Name] = c
+	}
+	for _, c := range fPod.Containers {
+		fMap[c.Name] = c
+	}
+	for name, dCont := range dMap {
+		fCont, ok := fMap[name]
+		if !ok {
+			return true
+		}
+		if containerSpecModified(&fCont, &dCont) {
+			return true
+		}
+	}
+	// Check init containers
+	if len(dPod.InitContainers) != len(fPod.InitContainers) {
+		return true
+	}
+	dInitMap := map[string]corev1.Container{}
+	fInitMap := map[string]corev1.Container{}
+	for _, c := range dPod.InitContainers {
+		dInitMap[c.Name] = c
+	}
+	for _, c := range fPod.InitContainers {
+		fInitMap[c.Name] = c
+	}
+	for name, dInitCont := range dInitMap {
+		fInitCont, ok := fInitMap[name]
+		if !ok {
+			return true
+		}
+		if containerSpecModified(&fInitCont, &dInitCont) {
+			return true
+		}
 	}
 	return false
 }

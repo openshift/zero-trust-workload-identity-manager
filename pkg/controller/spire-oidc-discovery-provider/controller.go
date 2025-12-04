@@ -11,7 +11,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -280,14 +279,10 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateCommonConfig(oidc *v1alph
 	)
 }
 
-// needsUpdate returns true if Deployment needs to be updated based on config checksum
+// needsUpdate returns true if Deployment needs to be updated
 func needsUpdate(current, desired appsv1.Deployment) bool {
 	if current.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey] {
 		return true
-	} else if !equality.Semantic.DeepEqual(current.Labels, desired.Labels) {
-		return true
-	} else if utils.DeploymentSpecModified(&desired, &current) {
-		return true
 	}
-	return false
+	return utils.ResourceNeedsUpdate(&current, &desired)
 }

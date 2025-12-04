@@ -10,18 +10,15 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
@@ -176,10 +173,7 @@ func GenerateMapHash(m map[string]string) string {
 }
 
 func StringToBool(s string) bool {
-	if s == "true" {
-		return true
-	}
-	return false
+	return s == "true"
 }
 
 func DerefResourceRequirements(r *corev1.ResourceRequirements) corev1.ResourceRequirements {
@@ -215,242 +209,6 @@ func DerefNodeSelector(selector map[string]string) map[string]string {
 		result[k] = v
 	}
 	return result
-}
-
-func StatefulSetSpecModified(desired, fetched *appsv1.StatefulSet) bool {
-	if desired == nil || fetched == nil {
-		return true
-	}
-	ds := desired.Spec
-	fs := fetched.Spec
-	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
-		return true
-	}
-	if ds.ServiceName != fs.ServiceName {
-		return true
-	}
-
-	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
-		return true
-	}
-
-	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
-		return true
-	}
-
-	for _, key := range []string{
-		"kubectl.kubernetes.io/default-container",
-		"ztwim.openshift.io/spire-server-config-hash",
-		"ztwim.openshift.io/spire-controller-manager-config-hash",
-	} {
-		if ds.Template.Annotations[key] != fs.Template.Annotations[key] {
-			return true
-		}
-	}
-	dPod := ds.Template.Spec
-	fPod := fs.Template.Spec
-	if dPod.ServiceAccountName != fPod.ServiceAccountName {
-		return true
-	}
-	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
-		return true
-	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
-		return true
-	}
-	if desired.Spec.Template.Spec.Affinity != nil && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
-		return true
-	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
-		return true
-	}
-	if len(dPod.Containers) != len(fPod.Containers) {
-		return true
-	}
-	dMap := map[string]corev1.Container{}
-	fMap := map[string]corev1.Container{}
-	for _, c := range dPod.Containers {
-		dMap[c.Name] = c
-	}
-	for _, c := range fPod.Containers {
-		fMap[c.Name] = c
-	}
-
-	for name, dCont := range dMap {
-		fCont, ok := fMap[name]
-		if !ok {
-			return true
-		}
-		if dCont.Image != fCont.Image {
-			return true
-		}
-		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Args, fCont.Args) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Env, fCont.Env) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Resources, fCont.Resources) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
-			return true
-		}
-	}
-	if len(ds.VolumeClaimTemplates) != len(fs.VolumeClaimTemplates) {
-		return true
-	}
-	for i := range ds.VolumeClaimTemplates {
-		dvc := ds.VolumeClaimTemplates[i]
-		fvc := fs.VolumeClaimTemplates[i]
-		if dvc.Name != fvc.Name {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dvc.Spec.AccessModes, fvc.Spec.AccessModes) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dvc.Spec.Resources.Requests, fvc.Spec.Resources.Requests) {
-			return true
-		}
-	}
-	return false
-}
-
-func DeploymentSpecModified(desired, fetched *appsv1.Deployment) bool {
-	if desired == nil || fetched == nil {
-		return true
-	}
-	ds := desired.Spec
-	fs := fetched.Spec
-	if ds.Replicas != nil && fs.Replicas != nil && *ds.Replicas != *fs.Replicas {
-		return true
-	}
-	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
-		return true
-	}
-	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
-		return true
-	}
-	dPod := ds.Template.Spec
-	fPod := fs.Template.Spec
-	if dPod.ServiceAccountName != fPod.ServiceAccountName {
-		return true
-	}
-	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
-		return true
-	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
-		return true
-	}
-	if desired.Spec.Template.Spec.Affinity != nil && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
-		return true
-	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
-		return true
-	}
-	if len(dPod.Containers) != len(fPod.Containers) {
-		return true
-	}
-	dMap := map[string]corev1.Container{}
-	fMap := map[string]corev1.Container{}
-	for _, c := range dPod.Containers {
-		dMap[c.Name] = c
-	}
-	for _, c := range fPod.Containers {
-		fMap[c.Name] = c
-	}
-	for name, dCont := range dMap {
-		fCont, ok := fMap[name]
-		if !ok {
-			return true
-		}
-		if dCont.Image != fCont.Image {
-			return true
-		}
-		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Args, fCont.Args) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Env, fCont.Env) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Resources, fCont.Resources) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
-			return true
-		}
-	}
-	return false
-}
-
-func DaemonSetSpecModified(desired, fetched *appsv1.DaemonSet) bool {
-	if desired == nil || fetched == nil {
-		return true
-	}
-	ds := desired.Spec
-	fs := fetched.Spec
-	if !equality.Semantic.DeepEqual(ds.Selector, fs.Selector) {
-		return true
-	}
-	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
-		return true
-	}
-	dPod := ds.Template.Spec
-	fPod := fs.Template.Spec
-	if dPod.ServiceAccountName != fPod.ServiceAccountName {
-		return true
-	}
-	if !ptr.Equal(dPod.ShareProcessNamespace, fPod.ShareProcessNamespace) {
-		return true
-	}
-	if desired.Spec.Template.Spec.NodeSelector != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.NodeSelector, fetched.Spec.Template.Spec.NodeSelector) {
-		return true
-	}
-	if desired.Spec.Template.Spec.Affinity != nil && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Affinity, fetched.Spec.Template.Spec.Affinity) {
-		return true
-	}
-	if desired.Spec.Template.Spec.Tolerations != nil && len(desired.Spec.Template.Spec.NodeSelector) != 0 && !equality.Semantic.DeepEqual(desired.Spec.Template.Spec.Tolerations, fetched.Spec.Template.Spec.Tolerations) {
-		return true
-	}
-	if len(dPod.Containers) != len(fPod.Containers) {
-		return true
-	}
-	dMap := map[string]corev1.Container{}
-	fMap := map[string]corev1.Container{}
-	for _, c := range dPod.Containers {
-		dMap[c.Name] = c
-	}
-	for _, c := range fPod.Containers {
-		fMap[c.Name] = c
-	}
-	for name, dCont := range dMap {
-		fCont, ok := fMap[name]
-		if !ok {
-			return true
-		}
-		if dCont.Image != fCont.Image {
-			return true
-		}
-		if dCont.ImagePullPolicy != fCont.ImagePullPolicy {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Args, fCont.Args) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.Resources, fCont.Resources) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(dCont.VolumeMounts, fCont.VolumeMounts) {
-			return true
-		}
-	}
-	return false
 }
 
 func GetLogLevelFromString(logLevel string) string {
