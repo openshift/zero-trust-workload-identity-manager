@@ -246,9 +246,9 @@ func TestBuildDeployment(t *testing.T) {
 				}
 				require.NotNil(t, csiVolume, "spiffe-workload-api volume should exist")
 				require.NotNil(t, csiVolume.CSI, "Volume should use CSI")
-				// When CSIDriverName is not set, it defaults to empty string which should become "csi.spiffe.io"
-				// We need to check what the actual behavior is
-				assert.NotEmpty(t, csiVolume.CSI.Driver, "CSI driver name should not be empty")
+				// When CSIDriverName is not set, it should default to "csi.spiffe.io"
+				assert.Equal(t, "csi.spiffe.io", csiVolume.CSI.Driver, "CSI driver name should default to csi.spiffe.io")
+				assert.True(t, *csiVolume.CSI.ReadOnly, "CSI volume should be read-only")
 			},
 		},
 	}

@@ -115,10 +115,10 @@ func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1
 // getSpiffeCSIDriver returns the Spiffe CSI Driver with proper labels and configurable plugin name
 func getSpiffeCSIDriver(pluginName string, customLabels map[string]string) *storagev1.CSIDriver {
 	csiDriver := utils.DecodeCsiDriverObjBytes(assets.MustAsset(utils.SpiffeCsiDriverAssetName))
-	
+
 	// Set the configurable plugin name
 	csiDriver.Name = pluginName
-	
+
 	// Set labels
 	csiDriver.Labels = utils.SpiffeCSIDriverLabels(customLabels)
 	csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"] = "restricted"

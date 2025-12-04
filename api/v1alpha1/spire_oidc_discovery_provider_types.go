@@ -47,7 +47,6 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:="csi.spiffe.io"
 	CSIDriverName string `json:"csiDriverName,omitempty"`
 
-
 	// jwtIssuer is the JWT issuer url.
 	// Must be a valid HTTPS or HTTP URL.
 	// +kubebuilder:validation:Required
