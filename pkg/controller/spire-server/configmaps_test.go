@@ -777,6 +777,88 @@ func TestGetCAKeyType(t *testing.T) {
 	}
 }
 
+func TestBuildDataStorePluginData(t *testing.T) {
+	t.Run("Basic PostgreSQL config", func(t *testing.T) {
+		datastore := v1alpha1.DataStore{
+			DatabaseType:     "postgres",
+			ConnectionString: "dbname=spire user=spire host=localhost",
+			DisableMigration: "false",
+			MaxIdleConns:     10,
+			MaxOpenConns:     100,
+		}
+
+		pluginData := buildDataStorePluginData(datastore)
+
+		if pluginData["database_type"] != "postgres" {
+			t.Errorf("Expected database_type 'postgres', got %v", pluginData["database_type"])
+		}
+		if pluginData["connection_string"] != "dbname=spire user=spire host=localhost" {
+			t.Errorf("Expected connection_string, got %v", pluginData["connection_string"])
+		}
+		if pluginData["max_idle_conns"] != 10 {
+			t.Errorf("Expected max_idle_conns 10, got %v", pluginData["max_idle_conns"])
+		}
+		if pluginData["max_open_conns"] != 100 {
+			t.Errorf("Expected max_open_conns 100, got %v", pluginData["max_open_conns"])
+		}
+		// conn_max_lifetime should not be set when value is 0
+		if _, exists := pluginData["conn_max_lifetime"]; exists {
+			t.Error("conn_max_lifetime should not be set when value is 0")
+		}
+	})
+
+	t.Run("PostgreSQL config with conn_max_lifetime", func(t *testing.T) {
+		datastore := v1alpha1.DataStore{
+			DatabaseType:     "postgres",
+			ConnectionString: "dbname=spire user=spire host=localhost",
+			DisableMigration: "false",
+			MaxIdleConns:     10,
+			MaxOpenConns:     100,
+			ConnMaxLifetime:  3600, // 1 hour in seconds
+		}
+
+		pluginData := buildDataStorePluginData(datastore)
+
+		connMaxLifetime, exists := pluginData["conn_max_lifetime"]
+		if !exists {
+			t.Fatal("conn_max_lifetime should be set")
+		}
+		if connMaxLifetime != "3600s" {
+			t.Errorf("Expected conn_max_lifetime '3600s', got %v", connMaxLifetime)
+		}
+	})
+
+	t.Run("Full config with all options", func(t *testing.T) {
+		datastore := v1alpha1.DataStore{
+			DatabaseType:     "mysql",
+			ConnectionString: "user:password@tcp(localhost:3306)/spire?parseTime=true",
+			DisableMigration: "true",
+			MaxIdleConns:     20,
+			MaxOpenConns:     200,
+			ConnMaxLifetime:  7200,
+		}
+
+		pluginData := buildDataStorePluginData(datastore)
+
+		// Verify all fields are set correctly
+		if pluginData["database_type"] != "mysql" {
+			t.Errorf("Expected database_type 'mysql', got %v", pluginData["database_type"])
+		}
+		if pluginData["disable_migration"] != true {
+			t.Errorf("Expected disable_migration true, got %v", pluginData["disable_migration"])
+		}
+		if pluginData["max_idle_conns"] != 20 {
+			t.Errorf("Expected max_idle_conns 20, got %v", pluginData["max_idle_conns"])
+		}
+		if pluginData["max_open_conns"] != 200 {
+			t.Errorf("Expected max_open_conns 200, got %v", pluginData["max_open_conns"])
+		}
+		if pluginData["conn_max_lifetime"] != "7200s" {
+			t.Errorf("Expected conn_max_lifetime '7200s', got %v", pluginData["conn_max_lifetime"])
+		}
+	})
+}
+
 func TestGenerateServerConfMapWithKeyTypes(t *testing.T) {
 	tests := []struct {
 		name           string

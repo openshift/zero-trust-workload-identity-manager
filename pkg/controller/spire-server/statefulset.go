@@ -73,6 +73,11 @@ func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server
 	return nil
 }
 
+const (
+	// DBTLSMountPath is the fixed mount path for database TLS certificates
+	DBTLSMountPath = "/run/spire/db/certs"
+)
+
 func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	spireServerConfigMapHash string,
 	spireControllerMangerConfigMapHash string) *appsv1.StatefulSet {
@@ -97,6 +102,41 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 		storageClassName = ptr.To(config.Persistence.StorageClass)
 	}
 
+	// Build base volume mounts for spire-server container
+	spireServerVolumeMounts := []corev1.VolumeMount{
+		{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private"},
+		{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
+		{Name: "spire-data", MountPath: "/run/spire/data"},
+		{Name: "server-tmp", MountPath: "/tmp"},
+	}
+
+	// Build base volumes
+	volumes := []corev1.Volume{
+		{Name: "server-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "spire-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-server"}}}},
+		{Name: "spire-server-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
+	}
+
+	// Add database TLS Secret volume and mount if configured
+	if config.Datastore.TLSSecretName != "" {
+		// Add volume mount for the TLS secret at fixed path
+		spireServerVolumeMounts = append(spireServerVolumeMounts, corev1.VolumeMount{
+			Name:      "db-certs",
+			MountPath: DBTLSMountPath,
+		})
+
+		// Add volume for the TLS secret
+		volumes = append(volumes, corev1.Volume{
+			Name: "db-certs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: config.Datastore.TLSSecretName,
+				},
+			},
+		})
+	}
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-server",
@@ -149,13 +189,8 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
 							},
-							Resources: utils.DerefResourceRequirements(config.Resources),
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private"},
-								{Name: "spire-config", MountPath: "/run/spire/config", ReadOnly: true},
-								{Name: "spire-data", MountPath: "/run/spire/data"},
-								{Name: "server-tmp", MountPath: "/tmp"},
-							},
+							Resources:    utils.DerefResourceRequirements(config.Resources),
+							VolumeMounts: spireServerVolumeMounts,
 						},
 						{
 							SecurityContext: &corev1.SecurityContext{
@@ -186,13 +221,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 							Resources: utils.DerefResourceRequirements(config.Resources),
 						},
 					},
-					Volumes: []corev1.Volume{
-						{Name: "server-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-server"}}}},
-						{Name: "spire-server-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-controller-manager-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
-					},
+					Volumes:      volumes,
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
@@ -202,7 +231,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "spire-data"},
 					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{volumeAccessMode},
+						AccessModes:      []corev1.PersistentVolumeAccessMode{volumeAccessMode},
 						StorageClassName: storageClassName,
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{

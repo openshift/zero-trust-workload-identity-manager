@@ -1017,7 +1017,9 @@ spec:
                     description: |-
                       connectionString contain connection credentials required for spire server Datastore.
                       Must not be empty and should contain valid connection parameters for the specified database type.
-                    maxLength: 1024
+                      For PostgreSQL with SSL, include sslmode and certificate paths in the connection string.
+                      Example: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt"
+                    maxLength: 2048
                     minLength: 1
                     type: string
                   databaseType:
@@ -1056,12 +1058,17 @@ spec:
                     maximum: 10000
                     minimum: 1
                     type: integer
+                  tlsSecretName:
+                    description: |-
+                      tlsSecretName specifies the name of a Kubernetes Secret containing TLS certificates for database connections.
+                      The Secret will be mounted at /run/spire/db/certs in the SPIRE server container.
+                      The Secret should contain keys like 'ca.crt', 'tls.crt', 'tls.key' for the respective certificates.
+                      For PostgreSQL, reference these certificates in the connectionString, e.g.:
+                      "sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt sslcert=/run/spire/db/certs/tls.crt sslkey=/run/spire/db/certs/tls.key"
+                    type: string
                 required:
-                - connMaxLifetime
                 - connectionString
                 - databaseType
-                - maxIdleConns
-                - maxOpenConns
                 type: object
               defaultJWTValidity:
                 default: 5m
