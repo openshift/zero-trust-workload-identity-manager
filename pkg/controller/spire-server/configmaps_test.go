@@ -978,3 +978,274 @@ func TestGenerateSpireServerConfigMapWithKeyTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateFederationConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		federation  *v1alpha1.FederationConfig
+		checkFields map[string]interface{}
+	}{
+		{
+			name: "https_spiffe bundle endpoint",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 300,
+				},
+			},
+			checkFields: map[string]interface{}{
+				"bundle_endpoint_exists": true,
+				"federates_with_exists":  false,
+			},
+		},
+		{
+			name: "https_web bundle endpoint with ACME",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsWebProfile,
+					RefreshHint: 600,
+					HttpsWeb: &v1alpha1.HttpsWebConfig{
+						Acme: &v1alpha1.AcmeConfig{
+							DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+							DomainName:   "federation.example.org",
+							Email:        "admin@example.org",
+							TosAccepted:  "true",
+						},
+					},
+				},
+			},
+			checkFields: map[string]interface{}{
+				"bundle_endpoint_exists": true,
+			},
+		},
+		{
+			name: "Federation with remote trust domains",
+			federation: &v1alpha1.FederationConfig{
+				BundleEndpoint: v1alpha1.BundleEndpointConfig{
+					Profile:     v1alpha1.HttpsSpiffeProfile,
+					RefreshHint: 300,
+				},
+				FederatesWith: []v1alpha1.FederatesWithConfig{
+					{
+						TrustDomain:           "remote1.org",
+						BundleEndpointUrl:     "https://remote1.org:8443",
+						BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+						EndpointSpiffeId:      "spiffe://remote1.org/spire/server",
+					},
+					{
+						TrustDomain:           "remote2.org",
+						BundleEndpointUrl:     "https://remote2.org",
+						BundleEndpointProfile: v1alpha1.HttpsWebProfile,
+					},
+				},
+			},
+			checkFields: map[string]interface{}{
+				"bundle_endpoint_exists": true,
+				"federates_with_exists":  true,
+				"federates_with_count":   2,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			federationConf := generateFederationConfig(tt.federation)
+
+			// Check bundle_endpoint exists
+			if tt.checkFields["bundle_endpoint_exists"].(bool) {
+				if _, exists := federationConf["bundle_endpoint"]; !exists {
+					t.Error("Expected bundle_endpoint to exist in federation config")
+				}
+			}
+
+			// Check federates_with
+			if exists, ok := tt.checkFields["federates_with_exists"].(bool); ok {
+				federatesWith, hasField := federationConf["federates_with"]
+				if exists && !hasField {
+					t.Error("Expected federates_with to exist in federation config")
+				}
+				if !exists && hasField {
+					t.Error("Expected federates_with to not exist in federation config")
+				}
+
+				// Check federates_with count
+				if count, ok := tt.checkFields["federates_with_count"].(int); ok && hasField {
+					federatesWithMap := federatesWith.(map[string]interface{})
+					if len(federatesWithMap) != count {
+						t.Errorf("Expected %d federates_with entries, got %d", count, len(federatesWithMap))
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateBundleEndpointConfig(t *testing.T) {
+	tests := []struct {
+		name             string
+		bundleEndpoint   *v1alpha1.BundleEndpointConfig
+		expectedPort     int
+		expectedProfile  string
+		checkRefreshHint bool
+		expectedRefresh  string
+	}{
+		{
+			name: "https_spiffe profile",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsSpiffeProfile,
+				RefreshHint: 300,
+			},
+			expectedPort:     8443,
+			expectedProfile:  "https_spiffe",
+			checkRefreshHint: true,
+			expectedRefresh:  "300s",
+		},
+		{
+			name: "https_spiffe with custom refresh hint",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsSpiffeProfile,
+				RefreshHint: 600,
+			},
+			expectedPort:     8443,
+			expectedProfile:  "https_spiffe",
+			checkRefreshHint: true,
+			expectedRefresh:  "600s",
+		},
+		{
+			name: "https_web with ACME",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+				HttpsWeb: &v1alpha1.HttpsWebConfig{
+					Acme: &v1alpha1.AcmeConfig{
+						DirectoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+						DomainName:   "federation.example.org",
+						Email:        "admin@example.org",
+						TosAccepted:  "true",
+					},
+				},
+			},
+			expectedPort:     8443,
+			expectedProfile:  "https_web",
+			checkRefreshHint: true,
+			expectedRefresh:  "300s",
+		},
+		{
+			name: "https_web with ServingCert",
+			bundleEndpoint: &v1alpha1.BundleEndpointConfig{
+				Profile:     v1alpha1.HttpsWebProfile,
+				RefreshHint: 300,
+				HttpsWeb: &v1alpha1.HttpsWebConfig{
+					ServingCert: &v1alpha1.ServingCertConfig{
+						FileSyncInterval: 3600,
+					},
+				},
+			},
+			expectedPort:     8443,
+			expectedProfile:  "https_web",
+			checkRefreshHint: true,
+			expectedRefresh:  "300s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			endpointConfig := generateBundleEndpointConfig(tt.bundleEndpoint)
+
+			// Check port
+			if port, ok := endpointConfig["port"].(int); !ok || port != tt.expectedPort {
+				t.Errorf("Expected port %d, got %v", tt.expectedPort, endpointConfig["port"])
+			}
+
+			// Check address
+			if address, ok := endpointConfig["address"].(string); !ok || address != "0.0.0.0" {
+				t.Errorf("Expected address 0.0.0.0, got %v", endpointConfig["address"])
+			}
+
+			// Check refresh hint
+			if tt.checkRefreshHint {
+				if refresh, ok := endpointConfig["refresh_hint"].(string); !ok || refresh != tt.expectedRefresh {
+					t.Errorf("Expected refresh_hint %q, got %v", tt.expectedRefresh, endpointConfig["refresh_hint"])
+				}
+			}
+
+			// Check profile exists
+			if _, exists := endpointConfig["profile"]; !exists {
+				t.Error("Expected profile to exist in endpoint config")
+			}
+		})
+	}
+}
+
+func TestGenerateFederationConfigWithFederatesWith(t *testing.T) {
+	federation := &v1alpha1.FederationConfig{
+		BundleEndpoint: v1alpha1.BundleEndpointConfig{
+			Profile:     v1alpha1.HttpsSpiffeProfile,
+			RefreshHint: 300,
+		},
+		FederatesWith: []v1alpha1.FederatesWithConfig{
+			{
+				TrustDomain:           "remote1.org",
+				BundleEndpointUrl:     "https://remote1.org:8443",
+				BundleEndpointProfile: v1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      "spiffe://remote1.org/spire/server",
+			},
+			{
+				TrustDomain:           "remote2.org",
+				BundleEndpointUrl:     "https://remote2.org",
+				BundleEndpointProfile: v1alpha1.HttpsWebProfile,
+			},
+		},
+	}
+
+	federationConf := generateFederationConfig(federation)
+
+	// Check federates_with exists and has correct entries
+	federatesWith, exists := federationConf["federates_with"]
+	if !exists {
+		t.Fatal("Expected federates_with to exist")
+	}
+
+	federatesWithMap, ok := federatesWith.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected federates_with to be a map")
+	}
+
+	// Check remote1.org
+	remote1, exists := federatesWithMap["remote1.org"]
+	if !exists {
+		t.Error("Expected remote1.org to exist in federates_with")
+	} else {
+		remote1Map := remote1.(map[string]interface{})
+		if remote1Map["bundle_endpoint_url"] != "https://remote1.org:8443" {
+			t.Errorf("Expected bundle_endpoint_url https://remote1.org:8443, got %v", remote1Map["bundle_endpoint_url"])
+		}
+
+		// Check https_spiffe profile
+		if profile, exists := remote1Map["bundle_endpoint_profile"]; exists {
+			profileMap := profile.(map[string]interface{})
+			if _, exists := profileMap["https_spiffe"]; !exists {
+				t.Error("Expected https_spiffe profile for remote1.org")
+			}
+		}
+	}
+
+	// Check remote2.org
+	remote2, exists := federatesWithMap["remote2.org"]
+	if !exists {
+		t.Error("Expected remote2.org to exist in federates_with")
+	} else {
+		remote2Map := remote2.(map[string]interface{})
+		if remote2Map["bundle_endpoint_url"] != "https://remote2.org" {
+			t.Errorf("Expected bundle_endpoint_url https://remote2.org, got %v", remote2Map["bundle_endpoint_url"])
+		}
+
+		// Check https_web profile
+		if profile, exists := remote2Map["bundle_endpoint_profile"]; exists {
+			profileMap := profile.(map[string]interface{})
+			if _, exists := profileMap["https_web"]; !exists {
+				t.Error("Expected https_web profile for remote2.org")
+			}
+		}
+	}
+}

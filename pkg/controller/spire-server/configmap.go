@@ -249,7 +249,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 		serverConfig["jwt_key_type"] = config.JWTKeyType
 	}
 
-	return map[string]interface{}{
+	configMap := map[string]interface{}{
 		"health_checks": map[string]interface{}{
 			"bind_address":     "0.0.0.0",
 			"bind_port":        "8080",
@@ -319,6 +319,110 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 			},
 		},
 	}
+
+	// Add federation configuration if present (inside server section)
+	if config.Federation != nil {
+		serverSection := configMap["server"].(map[string]interface{})
+		serverSection["federation"] = generateFederationConfig(config.Federation)
+	}
+
+	return configMap
+}
+
+// generateFederationConfig generates the federation configuration for SPIRE server
+func generateFederationConfig(federation *v1alpha1.FederationConfig) map[string]interface{} {
+	federationConf := map[string]interface{}{
+		"bundle_endpoint": generateBundleEndpointConfig(&federation.BundleEndpoint),
+	}
+
+	// Add federates_with configuration if present
+	if len(federation.FederatesWith) > 0 {
+		federatesWith := make(map[string]interface{})
+		for _, fedTrust := range federation.FederatesWith {
+			trustConfig := map[string]interface{}{
+				"bundle_endpoint_url": fedTrust.BundleEndpointUrl,
+			}
+
+			// Add bundle endpoint profile configuration
+			switch fedTrust.BundleEndpointProfile {
+			case v1alpha1.HttpsSpiffeProfile:
+				trustConfig["bundle_endpoint_profile"] = map[string]interface{}{
+					"https_spiffe": map[string]interface{}{
+						"endpoint_spiffe_id": fedTrust.EndpointSpiffeId,
+					},
+				}
+			case v1alpha1.HttpsWebProfile:
+				trustConfig["bundle_endpoint_profile"] = map[string]interface{}{
+					"https_web": map[string]interface{}{},
+				}
+			}
+
+			federatesWith[fedTrust.TrustDomain] = trustConfig
+		}
+		federationConf["federates_with"] = federatesWith
+	}
+
+	return federationConf
+}
+
+// generateBundleEndpointConfig generates the bundle endpoint configuration
+func generateBundleEndpointConfig(bundleEndpoint *v1alpha1.BundleEndpointConfig) map[string]interface{} {
+	endpointConfig := map[string]interface{}{
+		"address": "0.0.0.0",
+		"port":    8443,
+	}
+
+	// Add refresh hint (default to 300 seconds if not specified)
+	refreshHint := bundleEndpoint.RefreshHint
+	if refreshHint == 0 {
+		refreshHint = 300
+	}
+	endpointConfig["refresh_hint"] = fmt.Sprintf("%ds", refreshHint)
+
+	// Configure profile-specific settings
+	// According to SPIRE docs, profile-specific config should be nested under profile blocks
+	switch bundleEndpoint.Profile {
+	case v1alpha1.HttpsSpiffeProfile:
+		// For https_spiffe, SPIRE uses its own SVID for TLS authentication
+		// profile "https_spiffe" { }
+		endpointConfig["profile"] = map[string]interface{}{
+			"https_spiffe": map[string]interface{}{},
+		}
+	case v1alpha1.HttpsWebProfile:
+		// Configure https_web profile
+		// profile "https_web" { acme { ... } or serving_cert_file { ... } }
+		httpsWebProfile := map[string]interface{}{}
+
+		if bundleEndpoint.HttpsWeb != nil {
+			if bundleEndpoint.HttpsWeb.Acme != nil {
+				httpsWebProfile["acme"] = map[string]interface{}{
+					"directory_url": bundleEndpoint.HttpsWeb.Acme.DirectoryUrl,
+					"domain_name":   bundleEndpoint.HttpsWeb.Acme.DomainName,
+					"email":         bundleEndpoint.HttpsWeb.Acme.Email,
+					"tos_accepted":  utils.StringToBool(bundleEndpoint.HttpsWeb.Acme.TosAccepted),
+				}
+			} else if bundleEndpoint.HttpsWeb.ServingCert != nil {
+				// Default fileSyncInterval to 3600 seconds if not specified
+				fileSyncInterval := bundleEndpoint.HttpsWeb.ServingCert.FileSyncInterval
+				if fileSyncInterval == 0 {
+					fileSyncInterval = 3600
+				}
+
+				servingCertFile := map[string]interface{}{
+					"cert_file_path":     "/run/spire/server-tls/tls.crt",
+					"key_file_path":      "/run/spire/server-tls/tls.key",
+					"file_sync_interval": fmt.Sprintf("%ds", fileSyncInterval),
+				}
+				httpsWebProfile["serving_cert_file"] = servingCertFile
+			}
+		}
+
+		endpointConfig["profile"] = map[string]interface{}{
+			"https_web": httpsWebProfile,
+		}
+	}
+
+	return endpointConfig
 }
 
 // marshalToJSON marshals a map to JSON with indentation

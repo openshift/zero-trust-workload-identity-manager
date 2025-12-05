@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -44,6 +45,7 @@ const (
 	ServiceAvailable                 = "ServiceAvailable"
 	RBACAvailable                    = "RBACAvailable"
 	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
+	RouteAvailable                   = "RouteAvailable"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
@@ -64,6 +66,7 @@ type SpireServerReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
@@ -141,7 +144,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	createOnlyMode := r.handleCreateOnlyMode(&server, statusMgr)
 
 	// Validate configuration
-	if err := r.validateConfiguration(ctx, &server, statusMgr); err != nil {
+	if err := r.validateConfiguration(ctx, &server, statusMgr, &ztwim); err != nil {
 		return ctrl.Result{}, nil
 	}
 
@@ -192,6 +195,11 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	// reconcile Route if enabled
+	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -223,6 +231,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&admissionregistrationv1.ValidatingWebhookConfiguration{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
+		Watches(&routev1.Route{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err
@@ -250,7 +259,7 @@ func (r *SpireServerReconciler) handleCreateOnlyMode(server *v1alpha1.SpireServe
 }
 
 // validateConfiguration validates the SpireServer configuration
-func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) error {
 	// Validate common configuration (affinity, tolerations, node selector, resources, labels)
 	if err := r.validateCommonConfig(server, statusMgr); err != nil {
 		return err
@@ -268,6 +277,16 @@ func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, serve
 			fmt.Sprintf("JWT issuer URL validation failed: %v", err),
 			metav1.ConditionFalse)
 		return err
+	}
+
+	if server.Spec.Federation != nil {
+		if err := validateFederationConfig(server.Spec.Federation, ztwim.Spec.TrustDomain); err != nil {
+			r.log.Error(err, "Invalid federation configuration", "trustDomain", ztwim.Spec.TrustDomain)
+			statusMgr.AddCondition(ConfigurationValid, "InvalidFederationConfiguration",
+				fmt.Sprintf("Federation configuration validation failed: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
 	}
 
 	// Only set to true if the condition previously existed as false
