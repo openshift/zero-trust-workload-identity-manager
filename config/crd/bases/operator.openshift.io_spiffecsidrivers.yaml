@@ -965,9 +965,11 @@ spec:
                     type: object
                 type: object
               agentSocketPath:
-                default: /run/spire/agent-sockets/spire-agent.sock
+                default: /run/spire/agent-sockets
                 description: |-
-                  agentSocketPath is the path to spiffe csi driver the agent socket.
+                  agentSocketPath is the path to the directory containing the SPIRE agent's Workload API socket.
+                  This directory will be bind-mounted into workload containers by the CSI driver.
+                  The directory is shared between the SPIRE agent and CSI driver via a hostPath volume.
                   Must be an absolute path without traversal attempts or null bytes.
                 maxLength: 256
                 pattern: ^/[a-zA-Z0-9._/\-]*$

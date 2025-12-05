@@ -76,8 +76,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
 			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				AgentSocketName: "custom-agent.sock",
-				JwtIssuer:       "https://custom-jwt-issuer.example.com",
+				JwtIssuer: "https://custom-jwt-issuer.example.com",
 				CommonConfig: v1alpha1.CommonConfig{
 					Labels: customLabels,
 				},
@@ -121,40 +120,11 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 			assert.Equal(t, expectedDomains[i], domain.(string))
 		}
 
-		// Check workload_api with custom values
+		// Check workload_api - socket filename is always hardcoded to match SPIRE Agent
 		workloadAPI, ok := oidcConfig["workload_api"].(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "/spiffe-workload-api/custom-agent.sock", workloadAPI["socket_path"])
-		assert.Equal(t, "custom.domain.com", workloadAPI["trust_domain"])
-	})
-
-	t.Run("should handle empty AgentSocketName with default", func(t *testing.T) {
-		// Arrange
-		cr := &v1alpha1.SpireOIDCDiscoveryProvider{
-			Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-				AgentSocketName: "", // Empty should use default
-			},
-		}
-
-		ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
-			Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
-				TrustDomain:     "test.domain",
-				BundleConfigMap: "spire-bundle",
-			},
-		}
-
-		// Act
-		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
-
-		// Assert
-		require.NoError(t, err)
-
-		var oidcConfig map[string]interface{}
-		err = json.Unmarshal([]byte(result.Data["oidc-discovery-provider.conf"]), &oidcConfig)
-		require.NoError(t, err)
-
-		workloadAPI := oidcConfig["workload_api"].(map[string]interface{})
 		assert.Equal(t, "/spiffe-workload-api/spire-agent.sock", workloadAPI["socket_path"])
+		assert.Equal(t, "custom.domain.com", workloadAPI["trust_domain"])
 	})
 
 	t.Run("should generate valid OIDC config structure", func(t *testing.T) {

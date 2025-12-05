@@ -84,11 +84,10 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim 
 	if dp == nil {
 		return nil, errors.New("spire OIDC Discovery Provider Config is nil")
 	}
-	// Default to "spire-agent.sock" if not provided
-	agentSocketName := dp.Spec.AgentSocketName
-	if agentSocketName == "" {
-		agentSocketName = "spire-agent.sock"
-	}
+
+	// Socket filename is hardcoded to match SPIRE Agent configuration
+	// The SPIRE Agent creates the socket with filename "spire-agent.sock" (hardcoded in agent config)
+	const agentSocketName = "spire-agent.sock"
 
 	// Determine trust domain
 	trustDomain := ztwim.Spec.TrustDomain

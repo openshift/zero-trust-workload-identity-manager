@@ -15,7 +15,10 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 	// Mock the utility functions that are called in the main function
 	// These would need to be properly mocked in a real test environment
 
-	config := v1alpha1.SpiffeCSIDriverSpec{}
+	config := v1alpha1.SpiffeCSIDriverSpec{
+		AgentSocketPath: "/run/spire/agent-sockets",
+		PluginName:      "csi.spiffe.io",
+	}
 
 	daemonSet := generateSpiffeCsiDriverDaemonSet(config)
 
@@ -98,6 +101,52 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 	}
 
 	testVolumes(t, daemonSet.Spec.Template.Spec.Volumes)
+}
+
+func TestGenerateSpiffeCsiDriverDaemonSetWithCustomConfig(t *testing.T) {
+	// Test with custom plugin name and agent socket path
+	config := v1alpha1.SpiffeCSIDriverSpec{
+		AgentSocketPath: "/custom/agent/socket",
+		PluginName:      "csi.custom.io",
+	}
+
+	daemonSet := generateSpiffeCsiDriverDaemonSet(config)
+
+	// Verify plugin name is used in container args
+	spiffeContainer := daemonSet.Spec.Template.Spec.Containers[0]
+	expectedArgs := []string{
+		"-workload-api-socket-dir", "/spire-agent-socket",
+		"-plugin-name", "csi.custom.io",
+		"-csi-socket-path", "/spiffe-csi/csi.sock",
+	}
+	if !reflect.DeepEqual(spiffeContainer.Args, expectedArgs) {
+		t.Errorf("Expected spiffe container args %v, got %v", expectedArgs, spiffeContainer.Args)
+	}
+
+	// Verify plugin name is used in node-driver-registrar args
+	registrarContainer := daemonSet.Spec.Template.Spec.Containers[1]
+	expectedRegistrarArgs := []string{
+		"-csi-address", "/spiffe-csi/csi.sock",
+		"-kubelet-registration-path", "/var/lib/kubelet/plugins/csi.custom.io/csi.sock",
+		"-health-port", "9809",
+	}
+	if !reflect.DeepEqual(registrarContainer.Args, expectedRegistrarArgs) {
+		t.Errorf("Expected registrar container args %v, got %v", expectedRegistrarArgs, registrarContainer.Args)
+	}
+
+	// Verify custom agent socket path is used in volumes
+	volumes := daemonSet.Spec.Template.Spec.Volumes
+	agentSocketVolume := volumes[0] // spire-agent-socket-dir
+	if agentSocketVolume.HostPath.Path != "/custom/agent/socket" {
+		t.Errorf("Expected agent socket hostPath '/custom/agent/socket', got '%s'", agentSocketVolume.HostPath.Path)
+	}
+
+	// Verify plugin name is used in CSI socket directory path
+	csiSocketVolume := volumes[1] // spiffe-csi-socket-dir
+	expectedCSIPath := "/var/lib/kubelet/plugins/csi.custom.io"
+	if csiSocketVolume.HostPath.Path != expectedCSIPath {
+		t.Errorf("Expected CSI socket hostPath '%s', got '%s'", expectedCSIPath, csiSocketVolume.HostPath.Path)
+	}
 }
 
 func testInitContainer(t *testing.T, container corev1.Container) {

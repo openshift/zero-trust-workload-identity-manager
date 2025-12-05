@@ -204,6 +204,53 @@ func TestBuildDeployment(t *testing.T) {
 				assert.Equal(t, "spire-spiffe-oidc-discovery-provider", deployment.Name)
 			},
 		},
+		{
+			name: "deployment with custom CSI driver name",
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+					CSIDriverName: "csi.example.com",
+				},
+			},
+			hash: "test-hash-csi",
+			expected: func(deployment *appsv1.Deployment) {
+				// Find the spiffe-workload-api volume
+				var csiVolume *corev1.Volume
+				for i := range deployment.Spec.Template.Spec.Volumes {
+					if deployment.Spec.Template.Spec.Volumes[i].Name == "spiffe-workload-api" {
+						csiVolume = &deployment.Spec.Template.Spec.Volumes[i]
+						break
+					}
+				}
+				require.NotNil(t, csiVolume, "spiffe-workload-api volume should exist")
+				require.NotNil(t, csiVolume.CSI, "Volume should use CSI")
+				assert.Equal(t, "csi.example.com", csiVolume.CSI.Driver, "CSI driver name should match config")
+				assert.True(t, *csiVolume.CSI.ReadOnly, "CSI volume should be read-only")
+			},
+		},
+		{
+			name: "deployment uses default CSI driver name when not specified",
+			config: &v1alpha1.SpireOIDCDiscoveryProvider{
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+					// CSIDriverName not specified, should use default
+				},
+			},
+			hash: "test-hash-default-csi",
+			expected: func(deployment *appsv1.Deployment) {
+				// Find the spiffe-workload-api volume
+				var csiVolume *corev1.Volume
+				for i := range deployment.Spec.Template.Spec.Volumes {
+					if deployment.Spec.Template.Spec.Volumes[i].Name == "spiffe-workload-api" {
+						csiVolume = &deployment.Spec.Template.Spec.Volumes[i]
+						break
+					}
+				}
+				require.NotNil(t, csiVolume, "spiffe-workload-api volume should exist")
+				require.NotNil(t, csiVolume.CSI, "Volume should use CSI")
+				// When CSIDriverName is not set, it should default to "csi.spiffe.io"
+				assert.Equal(t, "csi.spiffe.io", csiVolume.CSI.Driver, "CSI driver name should default to csi.spiffe.io")
+				assert.True(t, *csiVolume.CSI.ReadOnly, "CSI volume should be read-only")
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -87,6 +87,12 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 		replicas = int32(config.Spec.ReplicaCount)
 	}
 
+	// Apply default CSI driver name if not specified
+	csiDriverName := config.Spec.CSIDriverName
+	if csiDriverName == "" {
+		csiDriverName = "csi.spiffe.io"
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-spiffe-oidc-discovery-provider",
@@ -112,7 +118,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 							Name: "spiffe-workload-api",
 							VolumeSource: corev1.VolumeSource{
 								CSI: &corev1.CSIVolumeSource{
-									Driver:   "csi.spiffe.io",
+									Driver:   csiDriverName,
 									ReadOnly: ptr.To(true),
 								},
 							},
