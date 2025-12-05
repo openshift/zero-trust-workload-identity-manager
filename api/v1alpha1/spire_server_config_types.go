@@ -293,17 +293,20 @@ type DataStore struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=100
+	// +kubebuilder:validation:Optional
 	MaxOpenConns int `json:"maxOpenConns"`
 
 	// maxIdleConns specifies the maximum idle connection to be configured.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=10000
 	// +kubebuilder:default:=2
+	// +kubebuilder:validation:Optional
 	MaxIdleConns int `json:"maxIdleConns"`
 
 	// connMaxLifetime will specify maximum lifetime connections.
 	// Max time (in seconds) a connection may live.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Optional
 	ConnMaxLifetime int `json:"connMaxLifetime"`
 
 	// disableMigration specifies the migration state

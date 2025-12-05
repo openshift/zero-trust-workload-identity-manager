@@ -1067,11 +1067,8 @@ spec:
                       "sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt sslcert=/run/spire/db/certs/tls.crt sslkey=/run/spire/db/certs/tls.key"
                     type: string
                 required:
-                - connMaxLifetime
                 - connectionString
                 - databaseType
-                - maxIdleConns
-                - maxOpenConns
                 type: object
               defaultJWTValidity:
                 default: 5m

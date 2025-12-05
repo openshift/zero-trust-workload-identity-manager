@@ -454,12 +454,19 @@ func buildDataStorePluginData(datastore v1alpha1.DataStore) map[string]interface
 	pluginData := map[string]interface{}{
 		"connection_string": datastore.ConnectionString,
 		"database_type":     datastore.DatabaseType,
-		"disable_migration": utils.StringToBool(datastore.DisableMigration),
-		"max_idle_conns":    datastore.MaxIdleConns,
-		"max_open_conns":    datastore.MaxOpenConns,
 	}
 
-	// Add conn_max_lifetime if set (value > 0)
+	if datastore.MaxOpenConns > 0 {
+		pluginData["max_open_conns"] = datastore.MaxOpenConns
+	}
+
+	if datastore.MaxIdleConns > 0 {
+		pluginData["max_idle_conns"] = datastore.MaxIdleConns
+	}
+	if datastore.DisableMigration != "" {
+		pluginData["disable_migration"] = utils.StringToBool(datastore.DisableMigration)
+	}
+
 	if datastore.ConnMaxLifetime > 0 {
 		pluginData["conn_max_lifetime"] = fmt.Sprintf("%ds", datastore.ConnMaxLifetime)
 	}
