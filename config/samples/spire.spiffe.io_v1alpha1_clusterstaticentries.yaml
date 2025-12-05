@@ -1,13 +1,19 @@
-apiVersion: operator.openshift.io/v1alpha1
-kind: ZeroTrustWorkloadIdentityManager
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterStaticEntry
 metadata:
   labels:
     app.kubernetes.io/name: zero-trust-workload-identity-manager
     app.kubernetes.io/created-by: zero-trust-workload-identity-manager
     app.kubernetes.io/part-of: zero-trust-workload-identity-manager
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
-  name: cluster
+  name: example-static-entry
+  namespace: default
 spec:
-  trustDomain: example.com
-  clusterName: prod-cluster
-  bundleConfigMap: spire-bundle
+  parentID: "spiffe://example.com/spire/server"
+  spiffeID: "spiffe://example.com/example-workload"
+  selectors:
+  - type: unix
+    value: uid:1000
+  ttl: 3600
+
+

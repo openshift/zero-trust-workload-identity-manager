@@ -1,5 +1,5 @@
 apiVersion: operator.openshift.io/v1alpha1
-kind: ZeroTrustWorkloadIdentityManager
+kind: SpireAgent
 metadata:
   labels:
     app.kubernetes.io/name: zero-trust-workload-identity-manager
@@ -8,6 +8,13 @@ metadata:
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
   name: cluster
 spec:
-  trustDomain: example.com
-  clusterName: prod-cluster
-  bundleConfigMap: spire-bundle
+  logLevel: info
+  logFormat: text
+  nodeAttestor:
+    k8sPSATEnabled: "true"
+  workloadAttestors:
+    k8sEnabled: "true"
+    workloadAttestorsVerification:
+      type: auto
+
+

@@ -1,0 +1,62 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+  name: cluster
+spec:
+  logLevel: info
+  logFormat: text
+  jwtIssuer: "https://oidc-discovery.example.com"
+  caValidity: 24h
+  defaultX509Validity: 1h
+  defaultJWTValidity: 5m
+  caKeyType: rsa-2048
+  caSubject:
+    commonName: "SPIRE Server CA"
+    organization: "Example Corp"
+    country: "US"
+  datastore:
+    databaseType: sqlite3
+    connectionString: "/run/spire/data/datastore.sqlite3"
+    maxOpenConns: 100
+    maxIdleConns: 2
+  persistence:
+    size: "2Gi"
+    accessMode: ReadWriteOnce
+    storageClass: ""
+  # Federation configuration (optional)
+  # This example shows how to configure SPIRE Server for federation
+  federation:
+    # BundleEndpoint configures how this cluster exposes its federation bundle
+    bundleEndpoint:
+      # Profile can be 'https_spiffe' (default) or 'https_web'
+      # https_spiffe: uses SPIFFE authentication (mTLS)
+      # https_web: uses Web PKI with certificates from public CA (via ACME or manual cert)
+      profile: https_spiffe
+      # RefreshHint in seconds (60-3600, default 300)
+      refreshHint: 300
+      # httpsWeb is required only when profile is 'https_web'
+      # httpsWeb:
+      #   acme:
+      #     directoryUrl: "https://acme-v02.api.letsencrypt.org/directory"
+      #     domainName: "federation.example.com"
+      #     email: "admin@example.com"
+      #     tosAccepted: "true"
+      # OR use manual certificate:
+      #   servingCert:
+      #     externalSecretRef: "federation-tls-cert"
+      #     fileSyncInterval: 86400
+    # FederatesWith lists other trust domains to federate with (optional)
+    federatesWith:
+      - trustDomain: "partner.example.com"
+        bundleEndpointUrl: "https://federation.partner.example.com:8443"
+        bundleEndpointProfile: https_spiffe
+        endpointSpiffeId: "spiffe://partner.example.com/federation/endpoint"
+    # ManagedRoute enables automatic Route creation for federation endpoint
+    # "true": automatic OpenShift Route (default)
+    # "false": manual configuration via custom routes/ingress
+    managedRoute: "true"

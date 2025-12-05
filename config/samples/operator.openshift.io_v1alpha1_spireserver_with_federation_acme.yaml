@@ -1,0 +1,58 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+  name: cluster
+spec:
+  logLevel: info
+  logFormat: text
+  jwtIssuer: "https://oidc-discovery.example.com"
+  caValidity: 24h
+  defaultX509Validity: 1h
+  defaultJWTValidity: 5m
+  caKeyType: rsa-2048
+  caSubject:
+    commonName: "SPIRE Server CA"
+    organization: "Example Corp"
+    country: "US"
+  datastore:
+    databaseType: sqlite3
+    connectionString: "/run/spire/data/datastore.sqlite3"
+    maxOpenConns: 100
+    maxIdleConns: 2
+  persistence:
+    size: "2Gi"
+    accessMode: ReadWriteOnce
+    storageClass: ""
+  # Federation with ACME certificate management
+  federation:
+    bundleEndpoint:
+      # Use https_web profile for Web PKI certificates (public CA)
+      profile: https_web
+      refreshHint: 300
+      # ACME configuration for automatic certificate management (Let's Encrypt)
+      httpsWeb:
+        acme:
+          # Let's Encrypt staging environment (for testing)
+          # Production: https://acme-v02.api.letsencrypt.org/directory
+          directoryUrl: "https://acme-staging-v02.api.letsencrypt.org/directory"
+          domainName: "federation.example.com"
+          email: "admin@example.com"
+          tosAccepted: "true"
+    # Configure federation relationships with other trust domains
+    federatesWith:
+      - trustDomain: "partner-east.example.com"
+        bundleEndpointUrl: "https://federation-east.partner.example.com:8443"
+        bundleEndpointProfile: https_spiffe
+        endpointSpiffeId: "spiffe://partner-east.example.com/federation/endpoint"
+      - trustDomain: "partner-west.example.com"
+        bundleEndpointUrl: "https://federation-west.partner.example.com:8443"
+        bundleEndpointProfile: https_web
+        # No endpointSpiffeId needed for https_web profile
+    # Enable automatic OpenShift Route creation
+    managedRoute: "true"
+

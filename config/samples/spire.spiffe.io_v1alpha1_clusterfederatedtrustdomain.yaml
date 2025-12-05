@@ -1,13 +1,14 @@
-apiVersion: operator.openshift.io/v1alpha1
-kind: ZeroTrustWorkloadIdentityManager
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterFederatedTrustDomain
 metadata:
   labels:
     app.kubernetes.io/name: zero-trust-workload-identity-manager
     app.kubernetes.io/created-by: zero-trust-workload-identity-manager
     app.kubernetes.io/part-of: zero-trust-workload-identity-manager
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
-  name: cluster
+  name: example.com
 spec:
   trustDomain: example.com
-  clusterName: prod-cluster
-  bundleConfigMap: spire-bundle
+  bundleEndpointProfile: https_web
+
+
