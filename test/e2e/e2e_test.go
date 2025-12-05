@@ -213,7 +213,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					WorkloadAttestors: &operatorv1alpha1.WorkloadAttestors{
 						K8sEnabled: "true",
 						WorkloadAttestorsVerification: &operatorv1alpha1.WorkloadAttestorsVerification{
-							Type: "skip",
+							Type: "auto",
 						},
 					},
 				},
