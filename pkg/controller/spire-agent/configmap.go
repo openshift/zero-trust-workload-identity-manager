@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -129,8 +130,10 @@ func generateAgentConfig(cfg *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWork
 			"node_name_env":                  "MY_NODE_NAME",
 			"use_new_container_locator":      utils.StringToBool(cfg.Spec.WorkloadAttestors.UseNewContainerLocator),
 			"verbose_container_locator_logs": false,
-			"skip_kubelet_verification":      true,
 		}
+
+		// Configure kubelet verification based on WorkloadAttestorsVerification settings
+		configureKubeletVerification(plugin, cfg.Spec.WorkloadAttestors.WorkloadAttestorsVerification)
 
 		agentConf["plugins"].(map[string]interface{})["WorkloadAttestor"] = []map[string]interface{}{
 			{"k8s": map[string]interface{}{"plugin_data": plugin}},
@@ -138,6 +141,52 @@ func generateAgentConfig(cfg *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWork
 	}
 
 	return agentConf
+}
+
+// configureKubeletVerification configures the kubelet TLS verification settings
+// based on the WorkloadAttestorsVerification configuration.
+// This maps to SPIRE's skip_kubelet_verification and kubelet_ca_path options.
+func configureKubeletVerification(plugin map[string]interface{}, verification *v1alpha1.WorkloadAttestorsVerification) {
+	// Default to skip if no verification config is provided
+	if verification == nil || verification.Type == "" || verification.Type == utils.WorkloadAttestorVerificationTypeSkip {
+		plugin["skip_kubelet_verification"] = true
+		return
+	}
+
+	switch verification.Type {
+	case utils.WorkloadAttestorVerificationTypeHostCert:
+		// hostCert: hostCertPath is required by CEL validation
+		plugin["skip_kubelet_verification"] = false
+		plugin["kubelet_ca_path"] = buildHostCertPath(verification)
+
+	case utils.WorkloadAttestorVerificationTypeAuto:
+		// auto: if hostCertPath is specified use it, otherwise use OpenShift defaults
+		plugin["skip_kubelet_verification"] = false
+		if hostCertPath := buildHostCertPath(verification); hostCertPath != "" {
+			plugin["kubelet_ca_path"] = hostCertPath
+		} else {
+			plugin["kubelet_ca_path"] = path.Join(utils.DefaultKubeletCABasePath, utils.DefaultKubeletCAFileName)
+		}
+
+	default:
+		// Unknown type, default to skip
+		plugin["skip_kubelet_verification"] = true
+	}
+}
+
+// buildHostCertPath constructs the full path to the kubelet CA certificate.
+// Returns empty string if either hostCertBasePath or hostCertFileName is not specified.
+func buildHostCertPath(verification *v1alpha1.WorkloadAttestorsVerification) string {
+	if verification == nil {
+		return ""
+	}
+
+	// Both basePath and fileName are required
+	if verification.HostCertBasePath == "" || verification.HostCertFileName == "" {
+		return ""
+	}
+
+	return path.Join(verification.HostCertBasePath, verification.HostCertFileName)
 }
 
 func generateSpireAgentConfigMap(spireAgentConfig *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, string, error) {

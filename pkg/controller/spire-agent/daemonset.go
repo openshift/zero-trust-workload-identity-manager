@@ -81,6 +81,74 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 		"app.kubernetes.io/component": labels["app.kubernetes.io/component"],
 	}
 
+	volumeMounts := []corev1.VolumeMount{
+		{Name: "spire-config", MountPath: "/opt/spire/conf/agent", ReadOnly: true},
+		{Name: "spire-agent-persistence", MountPath: "/var/lib/spire"},
+		{Name: "spire-bundle", MountPath: "/run/spire/bundle", ReadOnly: true},
+		{Name: "spire-agent-socket-dir", MountPath: "/tmp/spire-agent/public"},
+		{Name: "spire-token", MountPath: "/var/run/secrets/tokens"},
+	}
+
+	volumes := []corev1.Volume{
+		{
+			Name: "spire-config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-agent"}},
+			},
+		},
+		{Name: "spire-agent-admin-socket-dir", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "spire-agent-persistence", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{
+			Name: "spire-bundle",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: ztwim.Spec.BundleConfigMap}},
+			},
+		},
+		{
+			Name: "spire-token",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Path:              "spire-agent",
+								ExpirationSeconds: ptr.To(int64(7200)),
+								Audience:          "spire-server",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "spire-agent-socket-dir",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/run/spire/agent-sockets",
+					Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
+				},
+			},
+		},
+	}
+
+	// Conditionally add kubelet CA hostPath mount for hostCert verification mode
+	if hostCertPath := getHostCertMountPath(config.WorkloadAttestors); hostCertPath != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "kubelet-ca",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: hostCertPath,
+					Type: hostPathTypePtr(corev1.HostPathDirectory),
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "kubelet-ca",
+			MountPath: hostCertPath,
+			ReadOnly:  true,
+		})
+	}
+
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "spire-agent",
@@ -148,14 +216,8 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 									},
 								},
 							},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "spire-config", MountPath: "/opt/spire/conf/agent", ReadOnly: true},
-								{Name: "spire-agent-persistence", MountPath: "/var/lib/spire"},
-								{Name: "spire-bundle", MountPath: "/run/spire/bundle", ReadOnly: true},
-								{Name: "spire-agent-socket-dir", MountPath: "/tmp/spire-agent/public"},
-								{Name: "spire-token", MountPath: "/var/run/secrets/tokens"},
-							},
-							Resources: utils.DerefResourceRequirements(config.Resources),
+							VolumeMounts: volumeMounts,
+							Resources:    utils.DerefResourceRequirements(config.Resources),
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: ptr.To(true),
 							},
@@ -164,47 +226,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
-					Volumes: []corev1.Volume{
-						{
-							Name: "spire-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-agent"}},
-							},
-						},
-						{Name: "spire-agent-admin-socket-dir", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "spire-agent-persistence", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{
-							Name: "spire-bundle",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: ztwim.Spec.BundleConfigMap}},
-							},
-						},
-						{
-							Name: "spire-token",
-							VolumeSource: corev1.VolumeSource{
-								Projected: &corev1.ProjectedVolumeSource{
-									Sources: []corev1.VolumeProjection{
-										{
-											ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-												Path:              "spire-agent",
-												ExpirationSeconds: ptr.To(int64(7200)),
-												Audience:          "spire-server",
-											},
-										},
-									},
-								},
-							},
-						},
-						{
-							Name: "spire-agent-socket-dir",
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/run/spire/agent-sockets",
-									Type: hostPathTypePtr(corev1.HostPathDirectoryOrCreate),
-								},
-							},
-						},
-					},
+					Volumes:      volumes,
 				},
 			},
 		},
@@ -217,6 +239,35 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 	utils.AddProxyConfigToPodWithInternalNoProxy(&ds.Spec.Template.Spec)
 
 	return ds
+}
+
+// getHostCertMountPath returns the host path to mount for kubelet CA verification.
+// Returns empty string if no host mount is needed (skip mode).
+// For auto mode without explicit paths, returns the OpenShift default path.
+func getHostCertMountPath(workloadAttestors *v1alpha1.WorkloadAttestors) string {
+	if workloadAttestors == nil || workloadAttestors.WorkloadAttestorsVerification == nil {
+		return ""
+	}
+
+	verification := workloadAttestors.WorkloadAttestorsVerification
+
+	switch verification.Type {
+	case utils.WorkloadAttestorVerificationTypeHostCert:
+		// hostCert: paths are required by CEL validation
+		return verification.HostCertBasePath
+
+	case utils.WorkloadAttestorVerificationTypeAuto:
+		// auto: use specified path or fall back to OpenShift defaults
+		if verification.HostCertBasePath != "" && verification.HostCertFileName != "" {
+			return verification.HostCertBasePath
+		}
+		// Use OpenShift default path for seamless operation
+		return utils.DefaultKubeletCABasePath
+
+	default:
+		// skip or unknown - no host mount needed
+		return ""
+	}
 }
 
 func hostPathTypePtr(t corev1.HostPathType) *corev1.HostPathType {
