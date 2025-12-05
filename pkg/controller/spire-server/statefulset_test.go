@@ -690,6 +690,11 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &v1alpha1.SpireServerSpec{
+				Persistence: v1alpha1.Persistence{
+					Size:         "1Gi",
+					AccessMode:   "ReadWriteOnce",
+					StorageClass: "",
+				},
 				Federation: tt.federation,
 			}
 
