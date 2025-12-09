@@ -110,7 +110,7 @@ type ZeroTrustWorkloadIdentityManagerList struct {
 	Items           []ZeroTrustWorkloadIdentityManager `json:"items"`
 }
 
-// ZeroTrustWorkloadIdentityManagerSpec defines the desired state of ZeroTrustWorkloadIdentityManager
+// ZeroTrustWorkloadIdentityManagerSpec defines the desired state of the ZeroTrustWorkloadIdentityManager
 type ZeroTrustWorkloadIdentityManagerSpec struct {
 	// trustDomain to be used for the SPIFFE identifiers.
 	// This field is immutable.
@@ -122,7 +122,7 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="trustDomain is immutable and cannot be changed"
 	TrustDomain string `json:"trustDomain,omitempty"`
 
-	// clusterName will have the cluster name required to configure spire agent.
+	// clusterName identifies this cluster within the trust domain.
 	// This field is immutable.
 	// Must be a valid DNS-1123 subdomain.
 	// +kubebuilder:validation:Required
@@ -132,7 +132,9 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="clusterName is immutable and cannot be changed"
 	ClusterName string `json:"clusterName,omitempty"`
 
-	// bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers.
+	// bundleConfigMap is the name of the ConfigMap that stores the SPIRE trust bundle.
+	// This ConfigMap contains the root certificates for the trust domain specified in trustDomain.
+	// The operator will create and maintain this ConfigMap.
 	// This field is immutable.
 	// Must be a valid Kubernetes name.
 	// +kubebuilder:validation:Optional
@@ -144,7 +146,7 @@ type ZeroTrustWorkloadIdentityManagerSpec struct {
 	BundleConfigMap string `json:"bundleConfigMap"`
 }
 
-// CommonConfig will have similar config required for all other APIs
+// CommonConfig has similar config required for all other APIs
 type CommonConfig struct {
 
 	// labels to apply to all resources managed by the API.
@@ -154,17 +156,17 @@ type CommonConfig struct {
 	// +kubebuilder:validation:MaxProperties=64
 	Labels map[string]string `json:"labels,omitempty"`
 
-	// resources are for defining the resource requirements.
+	// resources define the resource requirements.
 	// ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 	// +kubebuilder:validation:Optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// affinity is for setting scheduling affinity rules.
+	// affinity defines scheduling affinity rules.
 	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
 	// +kubebuilder:validation:Optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 
-	// tolerations are for setting the pod tolerations.
+	// tolerations define the pod tolerations.
 	// Maximum 50 tolerations allowed.
 	// ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
 	// +kubebuilder:validation:Optional
@@ -172,7 +174,7 @@ type CommonConfig struct {
 	// +listType=atomic
 	Tolerations []*corev1.Toleration `json:"tolerations,omitempty"`
 
-	// nodeSelector is for defining the scheduling criteria using node labels.
+	// nodeSelector defines the scheduling criteria using node labels.
 	// Maximum 50 node selectors allowed.
 	// ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
 	// +kubebuilder:validation:Optional

@@ -21,7 +21,7 @@ type SpiffeCSIDriver struct {
 	Status            SpiffeCSIDriverStatus `json:"status,omitempty"`
 }
 
-// SpiffeCSIDriverSpec will have specifications for configuration related to the spiffe-csi driver.
+// SpiffeCSIDriverSpec defines the specifications for configuration related to the SPIFFE CSI driver.
 type SpiffeCSIDriverSpec struct {
 
 	// agentSocketPath is the path to the directory containing the SPIRE agent's Workload API socket.
@@ -33,7 +33,9 @@ type SpiffeCSIDriverSpec struct {
 	// +kubebuilder:default:="/run/spire/agent-sockets"
 	AgentSocketPath string `json:"agentSocketPath,omitempty"`
 
-	// pluginName defines the name of the CSI plugin, Sets the csi driver name deployed to the cluster.
+	// pluginName specifies the name of the CSI plugin.
+	// This sets the CSI driver name that will be deployed to the cluster and used in
+	// VolumeMount configurations. Must match the driver name referenced in workload pods.
 	// Must be a valid domain name format (e.g., csi.spiffe.io).
 	// +kubebuilder:validation:MaxLength=127
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
@@ -43,9 +45,9 @@ type SpiffeCSIDriverSpec struct {
 	CommonConfig `json:",inline"`
 }
 
-// SpiffeCSIDriverStatus defines the observed state of spiffe csi driver related reconciliation  made by operator
+// SpiffeCSIDriverStatus defines the observed state of the SPIFFE CSI driver reconciliation performed by the operator
 type SpiffeCSIDriverStatus struct {
-	// conditions holds information of the states of spiffe csi driver related changes.
+	// conditions holds information about the current state of the SPIFFE CSI driver deployment.
 	ConditionalStatus `json:",inline,omitempty"`
 }
 
@@ -57,7 +59,7 @@ func (s *SpiffeCSIDriver) GetConditionalStatus() ConditionalStatus {
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// SpiffeCSIDriverList contain the list of SpiffeCSIDriver
+// SpiffeCSIDriverList contains a list of SpiffeCSIDriver
 type SpiffeCSIDriverList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
