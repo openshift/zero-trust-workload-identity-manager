@@ -40,12 +40,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpireServerSpec will have specifications for configuration
-              related to the spire server.
+            description: SpireServerSpec defines the specifications for configuring
+              the SPIRE server.
             properties:
               affinity:
                 description: |-
-                  affinity is for setting scheduling affinity rules.
+                  affinity defines scheduling affinity rules.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
                 properties:
                   nodeAffinity:
@@ -977,7 +977,7 @@ spec:
                 - ec-p384
                 type: string
               caSubject:
-                description: caSubject contains subject information for the Spire
+                description: caSubject contains subject information for the SPIRE
                   CA.
                 properties:
                   commonName:
@@ -1003,19 +1003,18 @@ spec:
                 format: duration
                 type: string
               datastore:
-                description: spireSQLConfig has the config required for the spire
-                  server SQL DataStore.
+                description: datastore configures the SPIRE server SQL datastore backend.
                 properties:
                   connMaxLifetime:
                     description: |-
-                      connMaxLifetime will specify maximum lifetime connections.
-                      Max time (in seconds) a connection may live.
+                      connMaxLifetime specifies the maximum lifetime of a database connection in seconds.
+                      A value of 0 means connections are not closed due to age.
                     minimum: 0
                     type: integer
                   connectionString:
                     default: /run/spire/data/datastore.sqlite3
                     description: |-
-                      connectionString contain connection credentials required for spire server Datastore.
+                      connectionString contains connection credentials required for the SPIRE server datastore.
                       Must not be empty and should contain valid connection parameters for the specified database type.
                       For PostgreSQL with SSL, include sslmode and certificate paths in the connection string.
                       Example: "dbname=spire user=spire host=postgres.example.com sslmode=verify-full sslrootcert=/run/spire/db/certs/ca.crt"
@@ -1044,8 +1043,9 @@ spec:
                     type: string
                   maxIdleConns:
                     default: 2
-                    description: maxIdleConns specifies the maximum idle connection
-                      to be configured.
+                    description: |-
+                      maxIdleConns specifies the maximum number of idle database connections.
+                      Must be between 0 and 10000.
                     maximum: 10000
                     minimum: 0
                     type: integer
@@ -1053,7 +1053,7 @@ spec:
                     default: 100
                     description: |-
                       DB pool config
-                      maxOpenConns will specify the maximum connections for the DB pool.
+                      maxOpenConns specifies the maximum number of open database connections.
                       Must be between 1 and 10000.
                     maximum: 10000
                     minimum: 1
@@ -1085,38 +1085,38 @@ spec:
                 format: duration
                 type: string
               federation:
-                description: Federation configures SPIRE federation endpoints and
+                description: federation configures SPIRE federation endpoints and
                   relationships
                 properties:
                   bundleEndpoint:
-                    description: BundleEndpoint configures this cluster's federation
+                    description: bundleEndpoint configures this cluster's federation
                       bundle endpoint
                     properties:
                       httpsWeb:
-                        description: HttpsWeb configures the https_web profile (required
+                        description: httpsWeb configures the https_web profile (required
                           if profile is https_web)
                         properties:
                           acme:
                             description: |-
-                              Acme configures automatic certificate management using ACME protocol
-                              Mutually exclusive with ServingCert
+                              acme configures automatic certificate management using ACME protocol
+                              Mutually exclusive with servingCert
                             properties:
                               directoryUrl:
-                                description: DirectoryUrl is the ACME directory URL
+                                description: directoryUrl is the ACME directory URL
                                   (e.g., Let's Encrypt)
                                 pattern: ^https://.*
                                 type: string
                               domainName:
-                                description: DomainName is the domain name for the
+                                description: domainName is the domain name for the
                                   certificate
                                 type: string
                               email:
-                                description: Email for ACME account registration
+                                description: email for ACME account registration
                                 pattern: ^[a-zA-Z0-9][a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$
                                 type: string
                               tosAccepted:
                                 default: "false"
-                                description: TosAccepted indicates acceptance of Terms
+                                description: tosAccepted indicates acceptance of Terms
                                   of Service
                                 enum:
                                 - "true"
@@ -1129,12 +1129,12 @@ spec:
                             type: object
                           servingCert:
                             description: |-
-                              ServingCert configures certificate from a Kubernetes Secret
-                              Mutually exclusive with Acme
+                              servingCert configures certificate from a Kubernetes Secret
+                              Mutually exclusive with acme
                             properties:
                               externalSecretRef:
                                 description: |-
-                                  ExternalSecretRef is a reference to an externally managed secret that contains
+                                  externalSecretRef is a reference to an externally managed secret that contains
                                   the TLS certificate for the SPIRE server federation Route host. The secret must
                                   be in the same namespace where the operator and operands are deployed and must
                                   contain tls.crt and tls.key fields. The OpenShift Ingress Operator will read
@@ -1142,7 +1142,7 @@ spec:
                                 type: string
                               fileSyncInterval:
                                 default: 86400
-                                description: FileSyncInterval is how often to check
+                                description: fileSyncInterval is how often to check
                                   for certificate updates (seconds)
                                 format: int32
                                 maximum: 7776000
@@ -1163,12 +1163,12 @@ spec:
                           - https_spiffe
                           - https_web
                         default: https_spiffe
-                        description: Profile is the bundle endpoint authentication
+                        description: profile is the bundle endpoint authentication
                           profile
                         type: string
                       refreshHint:
                         default: 300
-                        description: RefreshHint is the hint for bundle refresh interval
+                        description: refreshHint is the hint for bundle refresh interval
                           in seconds
                         format: int32
                         maximum: 3600
@@ -1182,7 +1182,7 @@ spec:
                       rule: 'self.profile == ''https_web'' ? has(self.httpsWeb) :
                         true'
                   federatesWith:
-                    description: FederatesWith lists trust domains this cluster federates
+                    description: federatesWith lists trust domains this cluster federates
                       with
                     items:
                       description: FederatesWithConfig represents a remote trust domain
@@ -1196,21 +1196,21 @@ spec:
                           - enum:
                             - https_spiffe
                             - https_web
-                          description: BundleEndpointProfile is the authentication
-                            profile of remote endpoint
+                          description: bundleEndpointProfile is the authentication
+                            profile of the remote endpoint
                           type: string
                         bundleEndpointUrl:
-                          description: BundleEndpointUrl is the URL of the remote
+                          description: bundleEndpointUrl is the URL of the remote
                             federation endpoint
                           pattern: ^https://.*
                           type: string
                         endpointSpiffeId:
-                          description: EndpointSpiffeId is required for https_spiffe
+                          description: endpointSpiffeId is required for https_spiffe
                             profile
                           pattern: ^spiffe://.*
                           type: string
                         trustDomain:
-                          description: TrustDomain is the federated trust domain name
+                          description: trustDomain is the federated trust domain name
                           pattern: ^[a-z0-9._-]{1,255}$
                           type: string
                       required:
@@ -1229,7 +1229,7 @@ spec:
                   managedRoute:
                     default: "true"
                     description: |-
-                      ManagedRoute enables or disables automatic Route creation for federation endpoint
+                      managedRoute enables or disables automatic Route creation for the federation endpoint
                       "true": Allows automatic exposure of federation endpoint through a managed OpenShift Route.
                       "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress, offering more control over routing behavior.
                     enum:
@@ -1258,18 +1258,18 @@ spec:
                 - ec-p384
                 type: string
               keyManager:
-                description: keyManager has configs for the spire server key manager.
+                description: keyManager configures the SPIRE server key manager.
                 properties:
                   diskEnabled:
                     default: "true"
-                    description: diskEnabled is a flag to enable keyManager on disk.
+                    description: diskEnabled enables the disk-based key manager.
                     enum:
                     - "true"
                     - "false"
                     type: string
                   memoryEnabled:
                     default: "false"
-                    description: memoryEnabled is a flag to enable keyManager on memory
+                    description: memoryEnabled enables the memory-based key manager
                     enum:
                     - "true"
                     - "false"
@@ -1308,7 +1308,7 @@ spec:
                 additionalProperties:
                   type: string
                 description: |-
-                  nodeSelector is for defining the scheduling criteria using node labels.
+                  nodeSelector defines the scheduling criteria using node labels.
                   Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 maxProperties: 50
@@ -1316,7 +1316,7 @@ spec:
                 x-kubernetes-map-type: atomic
               persistence:
                 description: |-
-                  persistence has config for spire server volume related configs.
+                  persistence configures storage for the SPIRE server.
                   This field is required and immutable once set.
                 properties:
                   accessMode:
@@ -1342,7 +1342,7 @@ spec:
                 type: object
               resources:
                 description: |-
-                  resources are for defining the resource requirements.
+                  resources define the resource requirements.
                   ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                 properties:
                   claims:
@@ -1403,7 +1403,7 @@ spec:
                 type: object
               tolerations:
                 description: |-
-                  tolerations are for setting the pod tolerations.
+                  tolerations define the pod tolerations.
                   Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
@@ -1452,12 +1452,12 @@ spec:
             - persistence
             type: object
           status:
-            description: SpireServerStatus defines the observed state of spire-server
-              related reconciliation made by operator
+            description: SpireServerStatus defines the observed state of the SPIRE
+              server reconciliation performed by the operator.
             properties:
               conditions:
-                description: conditions holds information of the current state of
-                  the spire-resources deployment.
+                description: conditions holds information about the current state
+                  of the SPIRE resources deployment.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

@@ -46,12 +46,14 @@ spec:
             type: object
           spec:
             description: ZeroTrustWorkloadIdentityManagerSpec defines the desired
-              state of ZeroTrustWorkloadIdentityManager
+              state of the ZeroTrustWorkloadIdentityManager
             properties:
               bundleConfigMap:
                 default: spire-bundle
                 description: |-
-                  bundleConfigMap is Configmap name for Spire bundle, it sets the trust domain to be used for the SPIFFE identifiers.
+                  bundleConfigMap is the name of the ConfigMap that stores the SPIRE trust bundle.
+                  This ConfigMap contains the root certificates for the trust domain specified in trustDomain.
+                  The operator will create and maintain this ConfigMap.
                   This field is immutable.
                   Must be a valid Kubernetes name.
                 maxLength: 253
@@ -63,7 +65,7 @@ spec:
                   rule: self == oldSelf
               clusterName:
                 description: |-
-                  clusterName will have the cluster name required to configure spire agent.
+                  clusterName identifies this cluster within the trust domain.
                   This field is immutable.
                   Must be a valid DNS-1123 subdomain.
                 maxLength: 63
@@ -95,8 +97,8 @@ spec:
               It aggregates the status from all managed operand CRs and provides an overall health view.
             properties:
               conditions:
-                description: conditions holds information of the current state of
-                  the spire-resources deployment.
+                description: conditions holds information about the current state
+                  of the SPIRE resources deployment.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

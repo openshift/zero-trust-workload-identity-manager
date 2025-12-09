@@ -40,12 +40,12 @@ spec:
             type: object
           spec:
             description: |-
-              SpireOIDCDiscoveryProviderSpec will have specifications for configuration related to the spire oidc
+              SpireOIDCDiscoveryProviderSpec defines the specifications for configuration related to the SPIRE OIDC
               discovery provider
             properties:
               affinity:
                 description: |-
-                  affinity is for setting scheduling affinity rules.
+                  affinity defines scheduling affinity rules.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
                 properties:
                   nodeAffinity:
@@ -969,7 +969,7 @@ spec:
                 default: csi.spiffe.io
                 description: |-
                   csiDriverName is the name of the CSI driver to use for mounting the Workload API socket.
-                  This must match the SpiffeCSIDriver.spec.pluginName for the OIDC provider to access SPIFFE identities.
+                  This must match SpiffeCSIDriver.spec.pluginName for the OIDC provider to access SPIFFE identities.
                   Must be a valid DNS subdomain format (e.g., csi.spiffe.io).
                 maxLength: 127
                 pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
@@ -1021,10 +1021,10 @@ spec:
               managedRoute:
                 default: "true"
                 description: |-
-                  managedRoute is for enabling routes for oidc-discovery-provider, which can be indicated
-                  by setting `true` or `false`
-                  "true": Allows automatic exposure of OIDC discovery endpoints through a managed OpenShift Route (*.apps.).
-                  "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress, offering more control over routing behavior.
+                  managedRoute controls whether the operator automatically creates an OpenShift Route
+                  for the OIDC discovery provider endpoints.
+                  "true": The operator creates and maintains an OpenShift Route automatically for OIDC discovery endpoints (*.apps.).
+                  "false": Administrators manually configure Routes or ingress, offering more control over routing behavior.
                 enum:
                 - "true"
                 - "false"
@@ -1033,7 +1033,7 @@ spec:
                 additionalProperties:
                   type: string
                 description: |-
-                  nodeSelector is for defining the scheduling criteria using node labels.
+                  nodeSelector defines the scheduling criteria using node labels.
                   Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 maxProperties: 50
@@ -1049,7 +1049,7 @@ spec:
                 type: integer
               resources:
                 description: |-
-                  resources are for defining the resource requirements.
+                  resources define the resource requirements.
                   ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                 properties:
                   claims:
@@ -1110,7 +1110,7 @@ spec:
                 type: object
               tolerations:
                 description: |-
-                  tolerations are for setting the pod tolerations.
+                  tolerations define the pod tolerations.
                   Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
@@ -1157,12 +1157,12 @@ spec:
             type: object
           status:
             description: |-
-              SpireOIDCDiscoveryProviderStatus defines the observed state of spire-oidc discovery provider
-              related reconciliation made by operator
+              SpireOIDCDiscoveryProviderStatus defines the observed state of the SPIRE OIDC discovery provider
+              reconciliation performed by the operator
             properties:
               conditions:
-                description: conditions holds information of the current state of
-                  the spire-resources deployment.
+                description: conditions holds information about the current state
+                  of the SPIRE resources deployment.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

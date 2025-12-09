@@ -17,7 +17,7 @@ metadata:
             "name": "cluster"
           },
           "spec": {
-            "agentSocketPath": "/run/spire/agent-sockets/spire-agent.sock",
+            "agentSocketPath": "/run/spire/agent-sockets",
             "pluginName": "csi.spiffe.io"
           }
         },
@@ -60,11 +60,11 @@ metadata:
             "name": "cluster"
           },
           "spec": {
-            "agentSocketName": "spire-agent.sock",
+            "csiDriverName": "csi.spiffe.io",
             "jwtIssuer": "https://oidc-discovery.example.com",
             "logFormat": "text",
             "logLevel": "info",
-            "managedRoute": true,
+            "managedRoute": "true",
             "replicaCount": 1
           }
         },
@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-12-05T09:29:07Z"
+    createdAt: "2025-12-09T12:17:30Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
