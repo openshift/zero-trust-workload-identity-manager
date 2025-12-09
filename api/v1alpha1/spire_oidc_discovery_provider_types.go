@@ -21,7 +21,7 @@ type SpireOIDCDiscoveryProvider struct {
 	Status            SpireOIDCDiscoveryProviderStatus `json:"status,omitempty"`
 }
 
-// SpireOIDCDiscoveryProviderSpec will have specifications for configuration related to the spire oidc
+// SpireOIDCDiscoveryProviderSpec defines the specifications for configuration related to the SPIRE OIDC
 // discovery provider
 type SpireOIDCDiscoveryProviderSpec struct {
 
@@ -40,7 +40,7 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	LogFormat string `json:"logFormat,omitempty"`
 
 	// csiDriverName is the name of the CSI driver to use for mounting the Workload API socket.
-	// This must match the SpiffeCSIDriver.spec.pluginName for the OIDC provider to access SPIFFE identities.
+	// This must match SpiffeCSIDriver.spec.pluginName for the OIDC provider to access SPIFFE identities.
 	// Must be a valid DNS subdomain format (e.g., csi.spiffe.io).
 	// +kubebuilder:validation:MaxLength=127
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
@@ -62,10 +62,10 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:=1
 	ReplicaCount int `json:"replicaCount,omitempty"`
 
-	// managedRoute is for enabling routes for oidc-discovery-provider, which can be indicated
-	// by setting `true` or `false`
-	// "true": Allows automatic exposure of OIDC discovery endpoints through a managed OpenShift Route (*.apps.).
-	// "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress, offering more control over routing behavior.
+	// managedRoute controls whether the operator automatically creates an OpenShift Route
+	// for the OIDC discovery provider endpoints.
+	// "true": The operator creates and maintains an OpenShift Route automatically for OIDC discovery endpoints (*.apps.).
+	// "false": Administrators manually configure Routes or ingress, offering more control over routing behavior.
 	// +kubebuilder:default:="true"
 	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
@@ -82,10 +82,10 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	CommonConfig `json:",inline"`
 }
 
-// SpireOIDCDiscoveryProviderStatus defines the observed state of spire-oidc discovery provider
-// related reconciliation made by operator
+// SpireOIDCDiscoveryProviderStatus defines the observed state of the SPIRE OIDC discovery provider
+// reconciliation performed by the operator
 type SpireOIDCDiscoveryProviderStatus struct {
-	// conditions holds information of the current state of the spire-oidc resources.
+	// conditions holds information about the current state of the SPIRE OIDC discovery provider deployment.
 	ConditionalStatus `json:",inline,omitempty"`
 }
 
@@ -97,7 +97,7 @@ func (s *SpireOIDCDiscoveryProvider) GetConditionalStatus() ConditionalStatus {
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// SpireOIDCDiscoveryProviderList contain the list of SpireOIDCDiscoveryProvider
+// SpireOIDCDiscoveryProviderList contains a list of SpireOIDCDiscoveryProvider
 type SpireOIDCDiscoveryProviderList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

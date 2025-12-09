@@ -39,12 +39,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpiffeCSIDriverSpec will have specifications for configuration
-              related to the spiffe-csi driver.
+            description: SpiffeCSIDriverSpec defines the specifications for configuration
+              related to the SPIFFE CSI driver.
             properties:
               affinity:
                 description: |-
-                  affinity is for setting scheduling affinity rules.
+                  affinity defines scheduling affinity rules.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
                 properties:
                   nodeAffinity:
@@ -987,7 +987,7 @@ spec:
                 additionalProperties:
                   type: string
                 description: |-
-                  nodeSelector is for defining the scheduling criteria using node labels.
+                  nodeSelector defines the scheduling criteria using node labels.
                   Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 maxProperties: 50
@@ -996,14 +996,16 @@ spec:
               pluginName:
                 default: csi.spiffe.io
                 description: |-
-                  pluginName defines the name of the CSI plugin, Sets the csi driver name deployed to the cluster.
+                  pluginName specifies the name of the CSI plugin.
+                  This sets the CSI driver name that will be deployed to the cluster and used in
+                  VolumeMount configurations. Must match the driver name referenced in workload pods.
                   Must be a valid domain name format (e.g., csi.spiffe.io).
                 maxLength: 127
                 pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
                 type: string
               resources:
                 description: |-
-                  resources are for defining the resource requirements.
+                  resources define the resource requirements.
                   ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                 properties:
                   claims:
@@ -1064,7 +1066,7 @@ spec:
                 type: object
               tolerations:
                 description: |-
-                  tolerations are for setting the pod tolerations.
+                  tolerations define the pod tolerations.
                   Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
@@ -1108,12 +1110,12 @@ spec:
                 x-kubernetes-list-type: atomic
             type: object
           status:
-            description: SpiffeCSIDriverStatus defines the observed state of spiffe
-              csi driver related reconciliation  made by operator
+            description: SpiffeCSIDriverStatus defines the observed state of the SPIFFE
+              CSI driver reconciliation performed by the operator
             properties:
               conditions:
-                description: conditions holds information of the current state of
-                  the spire-resources deployment.
+                description: conditions holds information about the current state
+                  of the SPIRE resources deployment.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
   name: cluster
 spec:
-  agentSocketPath: "/run/spire/agent-sockets/spire-agent.sock"
+  agentSocketPath: "/run/spire/agent-sockets"
   pluginName: "csi.spiffe.io"
 
 

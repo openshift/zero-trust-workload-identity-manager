@@ -22,12 +22,12 @@ type SpireAgent struct {
 	Status            SpireAgentStatus `json:"status,omitempty"`
 }
 
-// SpireAgentSpec will have specifications for configuration related to the spire agents.
+// SpireAgentSpec defines the specifications for configuring the SPIRE agent.
 type SpireAgentSpec struct {
 
 	// socketPath is the directory on the host where the SPIRE agent socket will be created.
 	// This directory is shared with the SPIFFE CSI driver via hostPath volume.
-	// Must match SpiffeCSIDriver.Spec.AgentSocketPath for workloads to access the socket.
+	// Must match SpiffeCSIDriver.spec.agentSocketPath for workloads to access the socket.
 	// Must be an absolute path without traversal attempts or null bytes.
 	// +kubebuilder:validation:MaxLength=256
 	// +kubebuilder:validation:Pattern=`^/[a-zA-Z0-9._/\-]*$`
@@ -61,7 +61,9 @@ type SpireAgentSpec struct {
 
 // NodeAttestor defines the configuration for the Node Attestor.
 type NodeAttestor struct {
-	// k8sPSATEnabled tells if k8sPSAT configuration is enabled
+	// k8sPSATEnabled specifies whether Kubernetes Projected Service Account Token (PSAT)
+	// node attestation is enabled. When enabled, the SPIRE agent uses K8s PSATs to prove
+	// its identity to the SPIRE server during node attestation.
 	// +kubebuilder:default:="true"
 	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
@@ -72,7 +74,9 @@ type NodeAttestor struct {
 // +kubebuilder:validation:Optional
 type WorkloadAttestors struct {
 
-	// k8sEnabled explains if the configuration is enabled for k8s.
+	// k8sEnabled specifies whether the Kubernetes workload attestor is enabled.
+	// When enabled, the SPIRE agent can verify workload identities using Kubernetes
+	// pod information and service account tokens.
 	// +kubebuilder:default:="true"
 	// +kubebuilder:validation:Enum:="true";"false"
 	// +kubebuilder:validation:Optional
@@ -129,9 +133,9 @@ type WorkloadAttestorsVerification struct {
 	HostCertFileName string `json:"hostCertFileName,omitempty"`
 }
 
-// SpireAgentStatus defines the observed state of spire agents related reconciliation made by operator
+// SpireAgentStatus defines the observed state of the SPIRE agent reconciliation performed by the operator.
 type SpireAgentStatus struct {
-	// conditions holds information of the current state of the spire agents deployment.
+	// conditions holds information about the current state of the SPIRE agent deployment.
 	ConditionalStatus `json:",inline,omitempty"`
 }
 
@@ -143,7 +147,7 @@ func (s *SpireAgent) GetConditionalStatus() ConditionalStatus {
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// SpireAgentList contain the list of SpireAgent
+// SpireAgentList contains a list of SpireAgent
 type SpireAgentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

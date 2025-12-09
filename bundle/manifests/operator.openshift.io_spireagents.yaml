@@ -40,12 +40,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpireAgentSpec will have specifications for configuration
-              related to the spire agents.
+            description: SpireAgentSpec defines the specifications for configuring
+              the SPIRE agent.
             properties:
               affinity:
                 description: |-
-                  affinity is for setting scheduling affinity rules.
+                  affinity defines scheduling affinity rules.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
                 properties:
                   nodeAffinity:
@@ -1000,8 +1000,10 @@ spec:
                 properties:
                   k8sPSATEnabled:
                     default: "true"
-                    description: k8sPSATEnabled tells if k8sPSAT configuration is
-                      enabled
+                    description: |-
+                      k8sPSATEnabled specifies whether Kubernetes Projected Service Account Token (PSAT)
+                      node attestation is enabled. When enabled, the SPIRE agent uses K8s PSATs to prove
+                      its identity to the SPIRE server during node attestation.
                     enum:
                     - "true"
                     - "false"
@@ -1011,7 +1013,7 @@ spec:
                 additionalProperties:
                   type: string
                 description: |-
-                  nodeSelector is for defining the scheduling criteria using node labels.
+                  nodeSelector defines the scheduling criteria using node labels.
                   Maximum 50 node selectors allowed.
                   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
                 maxProperties: 50
@@ -1019,7 +1021,7 @@ spec:
                 x-kubernetes-map-type: atomic
               resources:
                 description: |-
-                  resources are for defining the resource requirements.
+                  resources define the resource requirements.
                   ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                 properties:
                   claims:
@@ -1083,14 +1085,14 @@ spec:
                 description: |-
                   socketPath is the directory on the host where the SPIRE agent socket will be created.
                   This directory is shared with the SPIFFE CSI driver via hostPath volume.
-                  Must match SpiffeCSIDriver.Spec.AgentSocketPath for workloads to access the socket.
+                  Must match SpiffeCSIDriver.spec.agentSocketPath for workloads to access the socket.
                   Must be an absolute path without traversal attempts or null bytes.
                 maxLength: 256
                 pattern: ^/[a-zA-Z0-9._/\-]*$
                 type: string
               tolerations:
                 description: |-
-                  tolerations are for setting the pod tolerations.
+                  tolerations define the pod tolerations.
                   Maximum 50 tolerations allowed.
                   ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
                 items:
@@ -1147,8 +1149,10 @@ spec:
                     type: string
                   k8sEnabled:
                     default: "true"
-                    description: k8sEnabled explains if the configuration is enabled
-                      for k8s.
+                    description: |-
+                      k8sEnabled specifies whether the Kubernetes workload attestor is enabled.
+                      When enabled, the SPIRE agent can verify workload identities using Kubernetes
+                      pod information and service account tokens.
                     enum:
                     - "true"
                     - "false"
@@ -1206,12 +1210,12 @@ spec:
                 type: object
             type: object
           status:
-            description: SpireAgentStatus defines the observed state of spire agents
-              related reconciliation made by operator
+            description: SpireAgentStatus defines the observed state of the SPIRE
+              agent reconciliation performed by the operator.
             properties:
               conditions:
-                description: conditions holds information of the current state of
-                  the spire-resources deployment.
+                description: conditions holds information about the current state
+                  of the SPIRE resources deployment.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

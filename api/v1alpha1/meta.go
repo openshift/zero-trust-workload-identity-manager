@@ -5,7 +5,7 @@ import (
 )
 
 type ConditionalStatus struct {
-	// conditions holds information of the current state of the spire-resources deployment.
+	// conditions holds information about the current state of the SPIRE resources deployment.
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

@@ -11,8 +11,8 @@ spec:
   logLevel: info
   logFormat: text
   jwtIssuer: "https://oidc-discovery.example.com"
-  agentSocketName: "spire-agent.sock"
+  csiDriverName: "csi.spiffe.io"
   replicaCount: 1
-  managedRoute: true
+  managedRoute: "true"
 
 
