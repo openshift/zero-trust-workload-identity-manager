@@ -9,7 +9,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:validation:XValidation:rule="oldSelf == null || !has(oldSelf.spec.federation) || (has(self.spec.federation) && oldSelf.spec.federation.bundleEndpoint == self.spec.federation.bundleEndpoint)",message="Federation BundleEndpoint configuration is immutable and cannot be removed once set."
+// +kubebuilder:validation:XValidation:rule="oldSelf == null || !has(oldSelf.spec.federation) || has(self.spec.federation)",message="Federation configuration cannot be removed once set."
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="SpireServer is a singleton, .metadata.name must be 'cluster'"
 // +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.size == self.spec.persistence.size",message="spec.persistence.size is immutable"
 // +kubebuilder:validation:XValidation:rule="oldSelf.spec.persistence.accessMode == self.spec.persistence.accessMode",message="spec.persistence.accessMode is immutable"
@@ -135,6 +135,7 @@ type FederationConfig struct {
 // BundleEndpointConfig configures how this cluster exposes its federation bundle
 // The federation endpoint is exposed on 0.0.0.0:8443
 // +kubebuilder:validation:XValidation:rule="self.profile == 'https_web' ? has(self.httpsWeb) : true",message="httpsWeb is required when profile is https_web"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.profile) || oldSelf.profile == self.profile",message="profile is immutable and cannot be changed once set"
 type BundleEndpointConfig struct {
 	// Profile is the bundle endpoint authentication profile
 	// +kubebuilder:validation:Enum=https_spiffe;https_web
@@ -166,6 +167,8 @@ const (
 
 // HttpsWebConfig configures https_web profile authentication
 // +kubebuilder:validation:XValidation:rule="(has(self.acme) && !has(self.servingCert)) || (!has(self.acme) && has(self.servingCert))",message="exactly one of acme or servingCert must be set"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.acme) || has(self.acme)",message="cannot switch from acme to servingCert configuration"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.servingCert) || has(self.servingCert)",message="cannot switch from servingCert to acme configuration"
 type HttpsWebConfig struct {
 	// Acme configures automatic certificate management using ACME protocol
 	// Mutually exclusive with ServingCert
