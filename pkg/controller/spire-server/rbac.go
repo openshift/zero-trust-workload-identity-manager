@@ -55,6 +55,11 @@ func (r *SpireServerReconciler) reconcileRBAC(ctx context.Context, server *v1alp
 		return err
 	}
 
+	// External cert RBAC (for federation route with externalSecretRef)
+	if err := r.reconcileExternalCertRBAC(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
 	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
 		"All RBAC resources available",
 		metav1.ConditionTrue)
@@ -649,5 +654,232 @@ func getSpireControllerManagerLeaderElectionRoleBinding(customLabels map[string]
 	for i := range rb.Subjects {
 		rb.Subjects[i].Namespace = utils.GetOperatorNamespace()
 	}
+	return rb
+}
+
+// reconcileExternalCertRBAC reconciles RBAC resources for router access to external certificate secret
+func (r *SpireServerReconciler) reconcileExternalCertRBAC(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	// Only create RBAC if federation is enabled with https_web profile and externalSecretRef is configured
+	externalSecretRef := getExternalSecretRefFromServer(server)
+	if externalSecretRef == "" {
+		// Clean up RBAC resources if they exist
+		return r.cleanupExternalCertRBAC(ctx)
+	}
+
+	// Reconcile Role
+	if err := r.reconcileExternalCertRole(ctx, server, statusMgr, createOnlyMode, externalSecretRef); err != nil {
+		return err
+	}
+
+	// Reconcile RoleBinding
+	if err := r.reconcileExternalCertRoleBinding(ctx, server, statusMgr, createOnlyMode); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// reconcileExternalCertRole reconciles the Role for router to read external certificate secret
+func (r *SpireServerReconciler) reconcileExternalCertRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, externalSecretRef string) error {
+	desired := getSpireServerExternalCertRole(server.Spec.Labels)
+
+	// Set the specific secret name in resourceNames
+	desired.Rules[0].ResourceNames = []string{externalSecretRef}
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on external cert role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on external cert Role: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.Role{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get external cert role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get external cert Role: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create external cert role")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create external cert Role: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created external cert Role", "name", desired.Name, "namespace", desired.Namespace)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("External cert Role exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("External cert Role is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update external cert role")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update external cert Role: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated external cert Role", "name", desired.Name, "namespace", desired.Namespace)
+	return nil
+}
+
+// reconcileExternalCertRoleBinding reconciles the RoleBinding for router to read external certificate secret
+func (r *SpireServerReconciler) reconcileExternalCertRoleBinding(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+	desired := getSpireServerExternalCertRoleBinding(server.Spec.Labels)
+
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		r.log.Error(err, "failed to set controller reference on external cert role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to set owner reference on external cert RoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	// Get existing resource (from cache)
+	existing := &rbacv1.RoleBinding{}
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			// Unexpected error
+			r.log.Error(err, "failed to get external cert role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to get external cert RoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		// Resource doesn't exist, create it
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			r.log.Error(err, "failed to create external cert role binding")
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+				fmt.Sprintf("Failed to create external cert RoleBinding: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Created external cert RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
+		return nil
+	}
+
+	// Resource exists, check if we need to update
+	if createOnlyMode {
+		r.log.V(1).Info("External cert RoleBinding exists, skipping update due to create-only mode", "name", desired.Name)
+		return nil
+	}
+
+	// Check if update is needed
+	if !utils.ResourceNeedsUpdate(existing, desired) {
+		r.log.V(1).Info("External cert RoleBinding is up to date", "name", desired.Name)
+		return nil
+	}
+
+	// Update the resource
+	desired.ResourceVersion = existing.ResourceVersion
+	if err := r.ctrlClient.Update(ctx, desired); err != nil {
+		r.log.Error(err, "failed to update external cert role binding")
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			fmt.Sprintf("Failed to update external cert RoleBinding: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	r.log.Info("Updated external cert RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
+	return nil
+}
+
+// cleanupExternalCertRBAC deletes the external cert RBAC resources if they exist
+func (r *SpireServerReconciler) cleanupExternalCertRBAC(ctx context.Context) error {
+	// Delete RoleBinding
+	roleBinding := &rbacv1.RoleBinding{}
+	roleBindingName := types.NamespacedName{
+		Name:      utils.SpireServerExternalCertRoleBindingName,
+		Namespace: utils.GetOperatorNamespace(),
+	}
+	err := r.ctrlClient.Get(ctx, roleBindingName, roleBinding)
+	if err == nil {
+		// RoleBinding exists, delete it
+		if err := r.ctrlClient.Delete(ctx, roleBinding); err != nil && !kerrors.IsNotFound(err) {
+			r.log.Error(err, "failed to delete external cert role binding")
+			return err
+		}
+		r.log.Info("Deleted external cert RoleBinding", "name", roleBindingName.Name, "namespace", roleBindingName.Namespace)
+	} else if !kerrors.IsNotFound(err) {
+		return err
+	}
+
+	// Delete Role
+	role := &rbacv1.Role{}
+	roleName := types.NamespacedName{
+		Name:      utils.SpireServerExternalCertRoleName,
+		Namespace: utils.GetOperatorNamespace(),
+	}
+	err = r.ctrlClient.Get(ctx, roleName, role)
+	if err == nil {
+		// Role exists, delete it
+		if err := r.ctrlClient.Delete(ctx, role); err != nil && !kerrors.IsNotFound(err) {
+			r.log.Error(err, "failed to delete external cert role")
+			return err
+		}
+		r.log.Info("Deleted external cert Role", "name", roleName.Name, "namespace", roleName.Namespace)
+	} else if !kerrors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
+}
+
+// getExternalSecretRefFromServer extracts the externalSecretRef from SpireServer spec
+func getExternalSecretRefFromServer(server *v1alpha1.SpireServer) string {
+	if server.Spec.Federation == nil {
+		return ""
+	}
+	if server.Spec.Federation.BundleEndpoint.HttpsWeb == nil {
+		return ""
+	}
+	if server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert == nil {
+		return ""
+	}
+	return server.Spec.Federation.BundleEndpoint.HttpsWeb.ServingCert.ExternalSecretRef
+}
+
+// Resource getter functions for external cert RBAC
+
+func getSpireServerExternalCertRole(customLabels map[string]string) *rbacv1.Role {
+	role := utils.DecodeRoleObjBytes(assets.MustAsset(utils.SpireServerExternalCertRoleAssetName))
+	role.Labels = utils.SpireServerLabels(customLabels)
+	role.Namespace = utils.GetOperatorNamespace()
+	return role
+}
+
+func getSpireServerExternalCertRoleBinding(customLabels map[string]string) *rbacv1.RoleBinding {
+	rb := utils.DecodeRoleBindingObjBytes(assets.MustAsset(utils.SpireServerExternalCertRoleBindingAssetName))
+	rb.Labels = utils.SpireServerLabels(customLabels)
+	rb.Namespace = utils.GetOperatorNamespace()
+	// Note: subjects namespace (openshift-ingress) is already set in the template
 	return rb
 }
