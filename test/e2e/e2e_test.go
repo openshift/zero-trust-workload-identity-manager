@@ -1450,6 +1450,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Getting current operator log level from deployment")
 			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred(), "failed to get operator deployment")
+			Expect(deployment.Spec.Template.Spec.Containers).NotTo(BeEmpty(), "operator deployment has no containers")
 
 			// Find current OPERATOR_LOG_LEVEL value
 			var initialLogLevel string
@@ -1518,7 +1519,11 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 						},
 					},
 				}
-				revertPatchBytes, _ := json.Marshal(revertPatchData)
+				revertPatchBytes, err := json.Marshal(revertPatchData)
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "warning: failed to marshal revert patch data: %v\n", err)
+					return
+				}
 				clientset.CoreV1().RESTClient().
 					Patch(types.MergePatchType).
 					AbsPath("/apis/operators.coreos.com/v1alpha1").
@@ -1543,6 +1548,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					return false
 				}
 
+				// Check if deployment has containers
+				if len(updatedDeployment.Spec.Template.Spec.Containers) == 0 {
+					fmt.Fprintf(GinkgoWriter, "deployment has no containers yet\n")
+					return false
+				}
+
 				// Check if the new log level is set
 				for _, env := range updatedDeployment.Spec.Template.Spec.Containers[0].Env {
 					if env.Name == "OPERATOR_LOG_LEVEL" && env.Value == newLogLevel {
@@ -1562,6 +1573,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Verifying the deployment has the updated log level")
 			finalDeployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(finalDeployment.Spec.Template.Spec.Containers).NotTo(BeEmpty(), "operator deployment has no containers")
 
 			var actualLogLevel string
 			for _, env := range finalDeployment.Spec.Template.Spec.Containers[0].Env {
