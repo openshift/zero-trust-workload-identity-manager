@@ -1397,6 +1397,20 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		)
 
 		It("Operator log level can be configured through Subscription", func() {
+			By("Checking if Subscription exists (operator installed via OLM)")
+			// Check if the subscription exists - skip test if not (e.g., in CI where operator is installed via manifests)
+			checkResult := clientset.CoreV1().RESTClient().
+				Get().
+				AbsPath("/apis/operators.coreos.com/v1alpha1").
+				Namespace(utils.OperatorNamespace).
+				Resource("subscriptions").
+				Name(subscriptionName).
+				Do(testCtx)
+			if checkResult.Error() != nil {
+				Skip(fmt.Sprintf("Subscription '%s' not found - operator may not be installed via OLM, skipping test", subscriptionName))
+			}
+			fmt.Fprintf(GinkgoWriter, "found subscription '%s'\n", subscriptionName)
+
 			By("Getting current operator log level from deployment")
 			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred(), "failed to get operator deployment")
