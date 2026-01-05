@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -45,7 +46,23 @@ func GetTestDir() string {
 		return os.Getenv("ARTIFACT_DIR")
 	}
 
-	return "/tmp"
+	// For local runs, create a test-results directory in the current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		// Fallback to /tmp if we can't get the current working directory
+		return "/tmp"
+	}
+
+	// Create test-results directory path
+	testResultsDir := filepath.Join(cwd, "test-results")
+
+	// Create the directory if it doesn't exist
+	if err := os.MkdirAll(testResultsDir, 0755); err != nil {
+		// Fallback to /tmp if we can't create the directory
+		return "/tmp"
+	}
+
+	return testResultsDir
 }
 
 // GetKubeConfig returns the Kubernetes configuration

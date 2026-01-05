@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -1170,6 +1171,385 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(newPods.Items).NotTo(BeEmpty())
 			Expect(newPods.Items[0].Spec.NodeName).To(Equal(targetNodeName), "pod should be rescheduled to the target node")
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, targetNodeName)
+		})
+
+		It("SPIRE Agent log level can be configured through CR", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			initialLogLevel := spireAgent.Spec.LogLevel
+			if initialLogLevel == "" {
+				initialLogLevel = "info"
+			}
+			fmt.Fprintf(GinkgoWriter, "initial log level: %s\n", initialLogLevel)
+
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with debug log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent log level")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying the CR has the updated log level")
+			updatedAgent := &operatorv1alpha1.SpireAgent{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, updatedAgent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedAgent.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
+
+			By("Verifying pod logs contain debug level messages")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+				LabelSelector: utils.SpireAgentPodLabel,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+
+			// Wait for pod to emit some logs, then verify log level
+			Eventually(func() bool {
+				podLogs, err := clientset.CoreV1().Pods(utils.OperatorNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{}).Do(testCtx).Raw()
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get pod logs: %v\n", err)
+					return false
+				}
+				logsStr := string(podLogs)
+				if strings.Contains(logsStr, "level=debug") {
+					fmt.Fprintf(GinkgoWriter, "found debug level log entries in pod '%s' logs\n", pods.Items[0].Name)
+					return true
+				}
+				fmt.Fprintf(GinkgoWriter, "waiting for debug level log entries in pod '%s'...\n", pods.Items[0].Name)
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"pod logs should contain debug level messages after log level change")
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireAgent\n", initialLogLevel, newLogLevel)
+		})
+
+		It("SPIRE Server log level can be configured through CR", func() {
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			// Record the initial log level (default is "info")
+			initialLogLevel := spireServer.Spec.LogLevel
+			if initialLogLevel == "" {
+				initialLogLevel = "info"
+			}
+			fmt.Fprintf(GinkgoWriter, "initial log level: %s\n", initialLogLevel)
+
+			// Record the initial generation of the StatefulSet before updating the SpireServer object
+			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := statefulset.Generation
+
+			By("Patching SpireServer object with debug log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireServer log level")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Waiting for SPIRE Server StatefulSet rolling update to start")
+			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying the CR has the updated log level")
+			updatedServer := &operatorv1alpha1.SpireServer{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, updatedServer)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedServer.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
+
+			By("Verifying pod logs contain debug level messages")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+				LabelSelector: utils.SpireServerPodLabel,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+
+			// Wait for the pod to emit some logs, then verify the log level
+			// Note: spire-server pod has multiple containers, so we need to specify the container name
+			Eventually(func() bool {
+				podLogs, err := clientset.CoreV1().Pods(utils.OperatorNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{
+					Container: "spire-server",
+				}).Do(testCtx).Raw()
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get pod logs: %v\n", err)
+					return false
+				}
+				logsStr := string(podLogs)
+				if strings.Contains(logsStr, "level=debug") {
+					fmt.Fprintf(GinkgoWriter, "found debug level log entries in pod '%s' container 'spire-server' logs\n", pods.Items[0].Name)
+					return true
+				}
+				fmt.Fprintf(GinkgoWriter, "waiting for debug level log entries in pod '%s' container 'spire-server'...\n", pods.Items[0].Name)
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"pod logs should contain debug level messages after log level change")
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireServer\n", initialLogLevel, newLogLevel)
+		})
+
+		It("SPIRE OIDC Discovery Provider log level can be configured through CR", func() {
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			// Record the initial log level (default is "info")
+			initialLogLevel := spireOIDCDiscoveryProvider.Spec.LogLevel
+			if initialLogLevel == "" {
+				initialLogLevel = "info"
+			}
+			fmt.Fprintf(GinkgoWriter, "initial log level: %s\n", initialLogLevel)
+
+			// Record the initial generation of the Deployment before updating SpireOIDCDiscoveryProvider object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := deployment.Generation
+
+			By("Patching SpireOIDCDiscoveryProvider object with debug log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireOIDCDiscoveryProvider log level")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying the CR has the updated log level")
+			updatedProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, updatedProvider)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedProvider.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
+
+			By("Verifying pod logs contain debug level messages")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+				LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+
+			// Wait for pod to emit some logs, then verify log level
+			Eventually(func() bool {
+				podLogs, err := clientset.CoreV1().Pods(utils.OperatorNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{}).Do(testCtx).Raw()
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get pod logs: %v\n", err)
+					return false
+				}
+				logsStr := string(podLogs)
+				if strings.Contains(logsStr, "level=debug") {
+					fmt.Fprintf(GinkgoWriter, "found debug level log entries in pod '%s' logs\n", pods.Items[0].Name)
+					return true
+				}
+				fmt.Fprintf(GinkgoWriter, "waiting for debug level log entries in pod '%s'...\n", pods.Items[0].Name)
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"pod logs should contain debug level messages after log level change")
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireOIDCDiscoveryProvider\n", initialLogLevel, newLogLevel)
+		})
+	})
+
+	Context("Operator configurations", func() {
+		const (
+			subscriptionName = "openshift-zero-trust-workload-identity-manager"
+		)
+
+		It("Operator log level can be configured through Subscription", func() {
+			By("Getting current operator log level from deployment")
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get operator deployment")
+
+			// Find current OPERATOR_LOG_LEVEL value
+			var initialLogLevel string
+			for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == "OPERATOR_LOG_LEVEL" {
+					initialLogLevel = env.Value
+					break
+				}
+			}
+			if initialLogLevel == "" {
+				initialLogLevel = "0" // default if not set
+			}
+			fmt.Fprintf(GinkgoWriter, "initial operator log level: %s\n", initialLogLevel)
+
+			// Record initial generation
+			initialGen := deployment.Generation
+
+			By("Patching Subscription to change operator log level")
+			newLogLevel := "4"
+			if initialLogLevel == "4" {
+				newLogLevel = "2" // if already at 4, change to 2
+			}
+
+			// Create patch for subscription config.env
+			patchData := map[string]interface{}{
+				"spec": map[string]interface{}{
+					"config": map[string]interface{}{
+						"env": []map[string]interface{}{
+							{
+								"name":  "OPERATOR_LOG_LEVEL",
+								"value": newLogLevel,
+							},
+						},
+					},
+				},
+			}
+			patchBytes, err := json.Marshal(patchData)
+			Expect(err).NotTo(HaveOccurred(), "failed to marshal patch data")
+
+			// Patch the subscription using the REST client
+			result := clientset.CoreV1().RESTClient().
+				Patch(types.MergePatchType).
+				AbsPath("/apis/operators.coreos.com/v1alpha1").
+				Namespace(utils.OperatorNamespace).
+				Resource("subscriptions").
+				Name(subscriptionName).
+				Body(patchBytes).
+				Do(testCtx)
+			Expect(result.Error()).NotTo(HaveOccurred(), "failed to patch subscription")
+			fmt.Fprintf(GinkgoWriter, "patched subscription to set OPERATOR_LOG_LEVEL=%s\n", newLogLevel)
+
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting operator log level in Subscription")
+				revertPatchData := map[string]interface{}{
+					"spec": map[string]interface{}{
+						"config": map[string]interface{}{
+							"env": []map[string]interface{}{
+								{
+									"name":  "OPERATOR_LOG_LEVEL",
+									"value": initialLogLevel,
+								},
+							},
+						},
+					},
+				}
+				revertPatchBytes, _ := json.Marshal(revertPatchData)
+				clientset.CoreV1().RESTClient().
+					Patch(types.MergePatchType).
+					AbsPath("/apis/operators.coreos.com/v1alpha1").
+					Namespace(utils.OperatorNamespace).
+					Resource("subscriptions").
+					Name(subscriptionName).
+					Body(revertPatchBytes).
+					Do(ctx)
+			})
+
+			By("Waiting for operator Deployment to be updated by OLM")
+			Eventually(func() bool {
+				updatedDeployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get deployment: %v\n", err)
+					return false
+				}
+
+				// Check if generation has changed
+				if updatedDeployment.Generation <= initialGen {
+					fmt.Fprintf(GinkgoWriter, "deployment generation not updated yet (current=%d, initial=%d)\n", updatedDeployment.Generation, initialGen)
+					return false
+				}
+
+				// Check if the new log level is set
+				for _, env := range updatedDeployment.Spec.Template.Spec.Containers[0].Env {
+					if env.Name == "OPERATOR_LOG_LEVEL" && env.Value == newLogLevel {
+						fmt.Fprintf(GinkgoWriter, "deployment updated with OPERATOR_LOG_LEVEL=%s\n", newLogLevel)
+						return true
+					}
+				}
+
+				fmt.Fprintf(GinkgoWriter, "waiting for OPERATOR_LOG_LEVEL to be updated in deployment...\n")
+				return false
+			}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.DefaultInterval).Should(BeTrue(),
+				"operator deployment should be updated with new log level")
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying the deployment has the updated log level")
+			finalDeployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			var actualLogLevel string
+			for _, env := range finalDeployment.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == "OPERATOR_LOG_LEVEL" {
+					actualLogLevel = env.Value
+					break
+				}
+			}
+			Expect(actualLogLevel).To(Equal(newLogLevel), "OPERATOR_LOG_LEVEL should be updated to %s", newLogLevel)
+
+			By("Verifying operator pod is running with new configuration")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+				LabelSelector: utils.OperatorLabelSelector,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+
+			// Wait for pods to be running and ready
+			Eventually(func() bool {
+				pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+					LabelSelector: utils.OperatorLabelSelector,
+				})
+				if err != nil || len(pods.Items) == 0 {
+					return false
+				}
+				for _, pod := range pods.Items {
+					if pod.Status.Phase != corev1.PodRunning {
+						return false
+					}
+					for _, cond := range pod.Status.Conditions {
+						if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+							fmt.Fprintf(GinkgoWriter, "operator pod '%s' is running and ready\n", pod.Name)
+							return true
+						}
+					}
+				}
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"operator pod should be running and ready")
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated operator log level change from %s to %s\n", initialLogLevel, newLogLevel)
 		})
 	})
 })
