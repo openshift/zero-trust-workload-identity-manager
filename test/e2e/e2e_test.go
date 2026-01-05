@@ -1392,23 +1392,70 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	})
 
 	Context("Operator configurations", func() {
-		const (
-			subscriptionName = "openshift-zero-trust-workload-identity-manager"
-		)
-
 		It("Operator log level can be configured through Subscription", func() {
-			By("Checking if Subscription exists (operator installed via OLM)")
-			// Check if the subscription exists - skip test if not (e.g., in CI where operator is installed via manifests)
-			checkResult := clientset.CoreV1().RESTClient().
+			By("Finding Subscription for the operator dynamically")
+			// List all subscriptions in the namespace and find the one for our operator
+			listResult := clientset.CoreV1().RESTClient().
 				Get().
 				AbsPath("/apis/operators.coreos.com/v1alpha1").
 				Namespace(utils.OperatorNamespace).
 				Resource("subscriptions").
-				Name(subscriptionName).
 				Do(testCtx)
-			if checkResult.Error() != nil {
-				Skip(fmt.Sprintf("Subscription '%s' not found - operator may not be installed via OLM, skipping test", subscriptionName))
+
+			if listResult.Error() != nil {
+				Skip(fmt.Sprintf("Failed to list Subscriptions in namespace '%s': %v - skipping test", utils.OperatorNamespace, listResult.Error()))
 			}
+
+			rawData, err := listResult.Raw()
+			Expect(err).NotTo(HaveOccurred(), "failed to get raw subscription list")
+
+			// Parse the subscription list to find the operator's subscription
+			var subscriptionList map[string]interface{}
+			err = json.Unmarshal(rawData, &subscriptionList)
+			Expect(err).NotTo(HaveOccurred(), "failed to unmarshal subscription list")
+
+			items, ok := subscriptionList["items"].([]interface{})
+			if !ok || len(items) == 0 {
+				Skip(fmt.Sprintf("No Subscriptions found in namespace '%s' - operator may not be installed via OLM, skipping test", utils.OperatorNamespace))
+			}
+
+			// Find subscription that matches our operator (by name containing "zero-trust-workload-identity-manager")
+			var subscriptionName string
+			for _, item := range items {
+				sub, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				metadata, ok := sub["metadata"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				name, ok := metadata["name"].(string)
+				if !ok {
+					continue
+				}
+				// Check if subscription name contains our operator name
+				if strings.Contains(name, "zero-trust-workload-identity-manager") {
+					subscriptionName = name
+					break
+				}
+			}
+
+			if subscriptionName == "" {
+				// Log all found subscriptions for debugging
+				var foundNames []string
+				for _, item := range items {
+					if sub, ok := item.(map[string]interface{}); ok {
+						if metadata, ok := sub["metadata"].(map[string]interface{}); ok {
+							if name, ok := metadata["name"].(string); ok {
+								foundNames = append(foundNames, name)
+							}
+						}
+					}
+				}
+				Skip(fmt.Sprintf("No Subscription matching 'zero-trust-workload-identity-manager' found. Available subscriptions: %v - skipping test", foundNames))
+			}
+
 			fmt.Fprintf(GinkgoWriter, "found subscription '%s'\n", subscriptionName)
 
 			By("Getting current operator log level from deployment")
@@ -1465,6 +1512,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(result.Error()).NotTo(HaveOccurred(), "failed to patch subscription")
 			fmt.Fprintf(GinkgoWriter, "patched subscription to set OPERATOR_LOG_LEVEL=%s\n", newLogLevel)
 
+			// Capture subscriptionName for DeferCleanup closure
+			subName := subscriptionName
+
 			DeferCleanup(func(ctx context.Context) {
 				By("Resetting operator log level in Subscription")
 				revertPatchData := map[string]interface{}{
@@ -1485,7 +1535,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					AbsPath("/apis/operators.coreos.com/v1alpha1").
 					Namespace(utils.OperatorNamespace).
 					Resource("subscriptions").
-					Name(subscriptionName).
+					Name(subName).
 					Body(revertPatchBytes).
 					Do(ctx)
 			})
