@@ -1402,9 +1402,8 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Resource("subscriptions").
 				Do(testCtx)
 
-			if listResult.Error() != nil {
-				Skip(fmt.Sprintf("Failed to list Subscriptions in namespace '%s': %v - skipping test", utils.OperatorNamespace, listResult.Error()))
-			}
+			Expect(listResult.Error()).NotTo(HaveOccurred(),
+				"failed to list Subscriptions in namespace '%s' - the Subscription API may not be available", utils.OperatorNamespace)
 
 			rawData, err := listResult.Raw()
 			Expect(err).NotTo(HaveOccurred(), "failed to get raw subscription list")
@@ -1415,12 +1414,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to unmarshal subscription list")
 
 			items, ok := subscriptionList["items"].([]interface{})
-			if !ok || len(items) == 0 {
-				Skip(fmt.Sprintf("No Subscriptions found in namespace '%s' - operator may not be installed via OLM, skipping test", utils.OperatorNamespace))
-			}
+			Expect(ok && len(items) > 0).To(BeTrue(),
+				"no Subscriptions found in namespace '%s' - operator must be installed via OLM", utils.OperatorNamespace)
 
 			// Find subscription that matches our operator (by name containing "zero-trust-workload-identity-manager")
 			var subscriptionName string
+			var foundNames []string
 			for _, item := range items {
 				sub, ok := item.(map[string]interface{})
 				if !ok {
@@ -1434,6 +1433,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				if !ok {
 					continue
 				}
+				foundNames = append(foundNames, name)
 				// Check if subscription name contains our operator name
 				if strings.Contains(name, "zero-trust-workload-identity-manager") {
 					subscriptionName = name
@@ -1441,20 +1441,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				}
 			}
 
-			if subscriptionName == "" {
-				// Log all found subscriptions for debugging
-				var foundNames []string
-				for _, item := range items {
-					if sub, ok := item.(map[string]interface{}); ok {
-						if metadata, ok := sub["metadata"].(map[string]interface{}); ok {
-							if name, ok := metadata["name"].(string); ok {
-								foundNames = append(foundNames, name)
-							}
-						}
-					}
-				}
-				Skip(fmt.Sprintf("No Subscription matching 'zero-trust-workload-identity-manager' found. Available subscriptions: %v - skipping test", foundNames))
-			}
+			Expect(subscriptionName).NotTo(BeEmpty(),
+				"no Subscription matching 'zero-trust-workload-identity-manager' found in namespace '%s'. Available subscriptions: %v",
+				utils.OperatorNamespace, foundNames)
 
 			fmt.Fprintf(GinkgoWriter, "found subscription '%s'\n", subscriptionName)
 
