@@ -1,14 +1,25 @@
 package spiffe_csi_driver
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
@@ -513,5 +524,186 @@ func TestMountPropagationPtr(t *testing.T) {
 				t.Errorf("Expected %v, got %v", tt.expected, *result)
 			}
 		})
+	}
+}
+
+// TestReconcileDaemonSet tests the reconcileDaemonSet function
+func TestReconcileDaemonSet(t *testing.T) {
+	tests := []struct {
+		name           string
+		notFound       bool
+		getError       error
+		createError    error
+		updateError    error
+		createOnlyMode bool
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+	}{
+		{
+			name:         "create success",
+			notFound:     true,
+			expectError:  false,
+			expectCreate: true,
+		},
+		{
+			name:        "create error",
+			notFound:    true,
+			createError: errors.New("create failed"),
+			expectError: true,
+		},
+		{
+			name:        "get error",
+			getError:    errors.New("connection refused"),
+			expectError: true,
+		},
+		{
+			name:         "update success",
+			expectError:  false,
+			expectUpdate: true,
+		},
+		{
+			name:        "update error",
+			updateError: errors.New("update conflict"),
+			expectError: true,
+		},
+		{
+			name:           "create only mode skips update",
+			createOnlyMode: true,
+			expectError:    false,
+			expectUpdate:   false,
+		},
+		{
+			name:           "set controller reference error",
+			useEmptyScheme: true,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpiffeCsiReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpiffeCsiReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newDaemonSetTestReconciler(fakeClient)
+			}
+
+			driver := createDaemonSetTestDriver()
+			driver.Spec.Labels = map[string]string{"new": "label"}
+			statusMgr := status.NewManager(fakeClient)
+
+			if tt.notFound {
+				fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spiffe-csi-driver"))
+			} else if tt.getError != nil {
+				fakeClient.GetReturns(tt.getError)
+			} else {
+				existingDS := &appsv1.DaemonSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spiffe-csi-driver",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old": "label"},
+					},
+				}
+				fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if ds, ok := obj.(*appsv1.DaemonSet); ok {
+						*ds = *existingDS
+					}
+					return nil
+				}
+			}
+			fakeClient.CreateReturns(tt.createError)
+			fakeClient.UpdateReturns(tt.updateError)
+
+			err := reconciler.reconcileDaemonSet(context.Background(), driver, statusMgr, tt.createOnlyMode)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, got %d", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update to be called once, got %d", fakeClient.UpdateCallCount())
+			}
+			if tt.createOnlyMode && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not to be called in create-only mode")
+			}
+		})
+	}
+}
+
+// TestNeedsUpdate tests the needsUpdate function
+func TestNeedsUpdate(t *testing.T) {
+	t.Run("same daemonsets do not need update", func(t *testing.T) {
+		ds := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "test",
+				Labels: map[string]string{"app": "test"},
+			},
+		}
+
+		if needsUpdate(ds, ds) {
+			t.Error("Expected same daemonsets not to need update")
+		}
+	})
+
+	t.Run("different labels need update", func(t *testing.T) {
+		current := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "test",
+				Labels: map[string]string{"old": "label"},
+			},
+		}
+		desired := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "test",
+				Labels: map[string]string{"new": "label"},
+			},
+		}
+
+		if !needsUpdate(current, desired) {
+			t.Error("Expected different labels to need update")
+		}
+	})
+}
+
+// newDaemonSetTestReconciler creates a reconciler for DaemonSet tests
+func newDaemonSetTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpiffeCsiReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	return &SpiffeCsiReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// createDaemonSetTestDriver creates a test SpiffeCSIDriver for DaemonSet tests
+func createDaemonSetTestDriver() *v1alpha1.SpiffeCSIDriver {
+	return &v1alpha1.SpiffeCSIDriver{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpiffeCSIDriverSpec{
+			AgentSocketPath: "/run/spire/agent-sockets",
+			PluginName:      "csi.spiffe.io",
+		},
 	}
 }

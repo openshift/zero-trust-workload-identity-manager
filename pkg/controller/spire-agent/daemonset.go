@@ -226,7 +226,7 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 					Affinity:     config.Affinity,
 					NodeSelector: utils.DerefNodeSelector(config.NodeSelector),
 					Tolerations:  utils.DerefTolerations(config.Tolerations),
-					Volumes: volumes,
+					Volumes:      volumes,
 				},
 			},
 		},

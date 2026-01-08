@@ -3,8 +3,13 @@ package utils
 import (
 	"testing"
 
+	securityv1 "github.com/openshift/api/security/v1"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1490,4 +1495,1180 @@ func TestEdgeCases(t *testing.T) {
 			t.Error("Expected true when desired NodeSelector is empty but fetched has values")
 		}
 	})
+}
+
+// TestResourceNeedsUpdate tests the ResourceNeedsUpdate function
+func TestResourceNeedsUpdate(t *testing.T) {
+	t.Run("same labels no update needed", func(t *testing.T) {
+		current := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+		}
+		desired := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+		}
+		if ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected false when labels are the same")
+		}
+	})
+
+	t.Run("different labels need update", func(t *testing.T) {
+		current := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "old"},
+			},
+		}
+		desired := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "new"},
+			},
+		}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true when labels differ")
+		}
+	})
+
+	t.Run("different annotations need update", func(t *testing.T) {
+		current := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{"note": "old"},
+			},
+		}
+		desired := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{"note": "new"},
+			},
+		}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true when annotations differ")
+		}
+	})
+}
+
+// TestLabelsMatch tests the LabelsMatch function
+func TestLabelsMatch(t *testing.T) {
+	t.Run("both nil", func(t *testing.T) {
+		if !LabelsMatch(nil, nil) {
+			t.Error("Expected true when both are nil")
+		}
+	})
+
+	t.Run("same labels", func(t *testing.T) {
+		current := map[string]string{"app": "test", "env": "prod"}
+		desired := map[string]string{"app": "test", "env": "prod"}
+		if !LabelsMatch(current, desired) {
+			t.Error("Expected true when labels match")
+		}
+	})
+
+	t.Run("current has extra labels", func(t *testing.T) {
+		current := map[string]string{"app": "test", "env": "prod", "extra": "value"}
+		desired := map[string]string{"app": "test", "env": "prod"}
+		// Current can have extra labels, just needs to contain desired
+		if !LabelsMatch(current, desired) {
+			t.Error("Expected true when current contains all desired labels")
+		}
+	})
+
+	t.Run("desired has extra labels", func(t *testing.T) {
+		current := map[string]string{"app": "test"}
+		desired := map[string]string{"app": "test", "env": "prod"}
+		if LabelsMatch(current, desired) {
+			t.Error("Expected false when current is missing desired labels")
+		}
+	})
+}
+
+// TestAnnotationsMatch tests the AnnotationsMatch function
+func TestAnnotationsMatch(t *testing.T) {
+	t.Run("both nil", func(t *testing.T) {
+		if !AnnotationsMatch(nil, nil) {
+			t.Error("Expected true when both are nil")
+		}
+	})
+
+	t.Run("same annotations", func(t *testing.T) {
+		current := map[string]string{"note": "test"}
+		desired := map[string]string{"note": "test"}
+		if !AnnotationsMatch(current, desired) {
+			t.Error("Expected true when annotations match")
+		}
+	})
+
+	t.Run("current has extra annotations", func(t *testing.T) {
+		current := map[string]string{"note": "test", "extra": "value"}
+		desired := map[string]string{"note": "test"}
+		if !AnnotationsMatch(current, desired) {
+			t.Error("Expected true when current contains all desired annotations")
+		}
+	})
+}
+
+// TestServiceNeedsUpdate tests the ServiceNeedsUpdate function
+func TestServiceNeedsUpdate(t *testing.T) {
+	t.Run("same service no update", func(t *testing.T) {
+		current := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{{Port: 80}},
+			},
+		}
+		desired := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{{Port: 80}},
+			},
+		}
+		if ServiceNeedsUpdate(current, desired) {
+			t.Error("Expected false when services are the same")
+		}
+	})
+
+	t.Run("different ports needs update", func(t *testing.T) {
+		current := &corev1.Service{
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{{Port: 80}},
+			},
+		}
+		desired := &corev1.Service{
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{{Port: 443}},
+			},
+		}
+		if !ServiceNeedsUpdate(current, desired) {
+			t.Error("Expected true when ports differ")
+		}
+	})
+}
+
+// TestServiceAccountNeedsUpdate tests the ServiceAccountNeedsUpdate function
+func TestServiceAccountNeedsUpdate(t *testing.T) {
+	t.Run("same service account no update", func(t *testing.T) {
+		current := &corev1.ServiceAccount{}
+		desired := &corev1.ServiceAccount{}
+		if ServiceAccountNeedsUpdate(current, desired) {
+			t.Error("Expected false when service accounts are the same")
+		}
+	})
+
+	t.Run("different automountServiceAccountToken", func(t *testing.T) {
+		trueVal := true
+		falseVal := false
+		current := &corev1.ServiceAccount{
+			AutomountServiceAccountToken: &trueVal,
+		}
+		desired := &corev1.ServiceAccount{
+			AutomountServiceAccountToken: &falseVal,
+		}
+		if !ServiceAccountNeedsUpdate(current, desired) {
+			t.Error("Expected true when AutomountServiceAccountToken differs")
+		}
+	})
+
+	t.Run("different ImagePullSecrets", func(t *testing.T) {
+		current := &corev1.ServiceAccount{
+			ImagePullSecrets: []corev1.LocalObjectReference{{Name: "old-secret"}},
+		}
+		desired := &corev1.ServiceAccount{
+			ImagePullSecrets: []corev1.LocalObjectReference{{Name: "new-secret"}},
+		}
+		if !ServiceAccountNeedsUpdate(current, desired) {
+			t.Error("Expected true when ImagePullSecrets differ")
+		}
+	})
+}
+
+// TestClusterRoleNeedsUpdate tests the ClusterRoleNeedsUpdate function
+func TestClusterRoleNeedsUpdate(t *testing.T) {
+	t.Run("same cluster role no update", func(t *testing.T) {
+		current := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Rules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
+			}},
+		}
+		desired := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Rules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
+			}},
+		}
+		if ClusterRoleNeedsUpdate(current, desired) {
+			t.Error("Expected false when cluster roles are the same")
+		}
+	})
+
+	t.Run("different rules needs update", func(t *testing.T) {
+		current := &rbacv1.ClusterRole{
+			Rules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get"},
+			}},
+		}
+		desired := &rbacv1.ClusterRole{
+			Rules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list", "watch"},
+			}},
+		}
+		if !ClusterRoleNeedsUpdate(current, desired) {
+			t.Error("Expected true when rules differ")
+		}
+	})
+}
+
+// TestClusterRoleBindingNeedsUpdate tests the ClusterRoleBindingNeedsUpdate function
+func TestClusterRoleBindingNeedsUpdate(t *testing.T) {
+	t.Run("same cluster role binding no update", func(t *testing.T) {
+		current := &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "ClusterRole",
+				Name:     "test-role",
+			},
+			Subjects: []rbacv1.Subject{{
+				Kind:      "ServiceAccount",
+				Name:      "test-sa",
+				Namespace: "default",
+			}},
+		}
+		desired := &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "ClusterRole",
+				Name:     "test-role",
+			},
+			Subjects: []rbacv1.Subject{{
+				Kind:      "ServiceAccount",
+				Name:      "test-sa",
+				Namespace: "default",
+			}},
+		}
+		if ClusterRoleBindingNeedsUpdate(current, desired) {
+			t.Error("Expected false when cluster role bindings are the same")
+		}
+	})
+
+	t.Run("different subjects needs update", func(t *testing.T) {
+		current := &rbacv1.ClusterRoleBinding{
+			Subjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount",
+				Name: "old-sa",
+			}},
+		}
+		desired := &rbacv1.ClusterRoleBinding{
+			Subjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount",
+				Name: "new-sa",
+			}},
+		}
+		if !ClusterRoleBindingNeedsUpdate(current, desired) {
+			t.Error("Expected true when subjects differ")
+		}
+	})
+}
+
+// TestRoleNeedsUpdate tests the RoleNeedsUpdate function
+func TestRoleNeedsUpdate(t *testing.T) {
+	t.Run("same role no update", func(t *testing.T) {
+		current := &rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Rules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get"},
+			}},
+		}
+		desired := &rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Rules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get"},
+			}},
+		}
+		if RoleNeedsUpdate(current, desired) {
+			t.Error("Expected false when roles are the same")
+		}
+	})
+}
+
+// TestRoleBindingNeedsUpdate tests the RoleBindingNeedsUpdate function
+func TestRoleBindingNeedsUpdate(t *testing.T) {
+	t.Run("same role binding no update", func(t *testing.T) {
+		current := &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role",
+				Name:     "test-role",
+			},
+		}
+		desired := &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role",
+				Name:     "test-role",
+			},
+		}
+		if RoleBindingNeedsUpdate(current, desired) {
+			t.Error("Expected false when role bindings are the same")
+		}
+	})
+}
+
+// TestCSIDriverNeedsUpdate tests the CSIDriverNeedsUpdate function
+func TestCSIDriverNeedsUpdate(t *testing.T) {
+	t.Run("same CSI driver no update", func(t *testing.T) {
+		attachRequired := false
+		current := &storagev1.CSIDriver{
+			Spec: storagev1.CSIDriverSpec{
+				AttachRequired: &attachRequired,
+			},
+		}
+		desired := &storagev1.CSIDriver{
+			Spec: storagev1.CSIDriverSpec{
+				AttachRequired: &attachRequired,
+			},
+		}
+		if CSIDriverNeedsUpdate(current, desired) {
+			t.Error("Expected false when CSI drivers are the same")
+		}
+	})
+
+	t.Run("different AttachRequired needs update", func(t *testing.T) {
+		trueVal := true
+		falseVal := false
+		current := &storagev1.CSIDriver{
+			Spec: storagev1.CSIDriverSpec{
+				AttachRequired: &trueVal,
+			},
+		}
+		desired := &storagev1.CSIDriver{
+			Spec: storagev1.CSIDriverSpec{
+				AttachRequired: &falseVal,
+			},
+		}
+		if !CSIDriverNeedsUpdate(current, desired) {
+			t.Error("Expected true when AttachRequired differs")
+		}
+	})
+
+	t.Run("different PodInfoOnMount needs update", func(t *testing.T) {
+		trueVal := true
+		falseVal := false
+		current := &storagev1.CSIDriver{
+			Spec: storagev1.CSIDriverSpec{
+				PodInfoOnMount: &trueVal,
+			},
+		}
+		desired := &storagev1.CSIDriver{
+			Spec: storagev1.CSIDriverSpec{
+				PodInfoOnMount: &falseVal,
+			},
+		}
+		if !CSIDriverNeedsUpdate(current, desired) {
+			t.Error("Expected true when PodInfoOnMount differs")
+		}
+	})
+}
+
+// TestValidatingWebhookConfigurationNeedsUpdate tests the ValidatingWebhookConfigurationNeedsUpdate function
+func TestValidatingWebhookConfigurationNeedsUpdate(t *testing.T) {
+	t.Run("same webhook config no update", func(t *testing.T) {
+		current := &admissionregistrationv1.ValidatingWebhookConfiguration{
+			Webhooks: []admissionregistrationv1.ValidatingWebhook{},
+		}
+		desired := &admissionregistrationv1.ValidatingWebhookConfiguration{
+			Webhooks: []admissionregistrationv1.ValidatingWebhook{},
+		}
+		if ValidatingWebhookConfigurationNeedsUpdate(current, desired) {
+			t.Error("Expected false when webhook configs are the same")
+		}
+	})
+
+	t.Run("different webhooks needs update", func(t *testing.T) {
+		sideEffects := admissionregistrationv1.SideEffectClassNone
+		current := &admissionregistrationv1.ValidatingWebhookConfiguration{
+			Webhooks: []admissionregistrationv1.ValidatingWebhook{{
+				Name:        "old.webhook.example.com",
+				SideEffects: &sideEffects,
+			}},
+		}
+		desired := &admissionregistrationv1.ValidatingWebhookConfiguration{
+			Webhooks: []admissionregistrationv1.ValidatingWebhook{{
+				Name:        "new.webhook.example.com",
+				SideEffects: &sideEffects,
+			}},
+		}
+		if !ValidatingWebhookConfigurationNeedsUpdate(current, desired) {
+			t.Error("Expected true when webhooks differ")
+		}
+	})
+}
+
+// TestSecurityContextConstraintsNeedsUpdate tests the SecurityContextConstraintsNeedsUpdate function
+func TestSecurityContextConstraintsNeedsUpdate(t *testing.T) {
+	t.Run("same SCC no update", func(t *testing.T) {
+		current := &securityv1.SecurityContextConstraints{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			AllowPrivilegedContainer: true,
+			AllowHostNetwork:         false,
+		}
+		desired := &securityv1.SecurityContextConstraints{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			AllowPrivilegedContainer: true,
+			AllowHostNetwork:         false,
+		}
+		if SecurityContextConstraintsNeedsUpdate(current, desired) {
+			t.Error("Expected false when SCCs are the same")
+		}
+	})
+
+	t.Run("different AllowPrivilegedContainer needs update", func(t *testing.T) {
+		current := &securityv1.SecurityContextConstraints{
+			AllowPrivilegedContainer: false,
+		}
+		desired := &securityv1.SecurityContextConstraints{
+			AllowPrivilegedContainer: true,
+		}
+		if !SecurityContextConstraintsNeedsUpdate(current, desired) {
+			t.Error("Expected true when AllowPrivilegedContainer differs")
+		}
+	})
+}
+
+// TestClusterSPIFFEIDNeedsUpdate tests the ClusterSPIFFEIDNeedsUpdate function
+func TestClusterSPIFFEIDNeedsUpdate(t *testing.T) {
+	t.Run("same ClusterSPIFFEID no update", func(t *testing.T) {
+		current := &spiffev1alpha1.ClusterSPIFFEID{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
+				SPIFFEIDTemplate: "spiffe://example.org/ns/{{.PodMeta.Namespace}}/sa/{{.PodSpec.ServiceAccountName}}",
+			},
+		}
+		desired := &spiffev1alpha1.ClusterSPIFFEID{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{"app": "test"},
+			},
+			Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
+				SPIFFEIDTemplate: "spiffe://example.org/ns/{{.PodMeta.Namespace}}/sa/{{.PodSpec.ServiceAccountName}}",
+			},
+		}
+		if ClusterSPIFFEIDNeedsUpdate(current, desired) {
+			t.Error("Expected false when ClusterSPIFFEIDs are the same")
+		}
+	})
+
+	t.Run("different SPIFFEIDTemplate needs update", func(t *testing.T) {
+		current := &spiffev1alpha1.ClusterSPIFFEID{
+			Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
+				SPIFFEIDTemplate: "spiffe://old.org/test",
+			},
+		}
+		desired := &spiffev1alpha1.ClusterSPIFFEID{
+			Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
+				SPIFFEIDTemplate: "spiffe://new.org/test",
+			},
+		}
+		if !ClusterSPIFFEIDNeedsUpdate(current, desired) {
+			t.Error("Expected true when SPIFFEIDTemplate differs")
+		}
+	})
+}
+
+// TestResourceNeedsUpdate_AllScenarios tests ResourceNeedsUpdate with table-driven tests
+func TestResourceNeedsUpdate_AllScenarios(t *testing.T) {
+	tests := []struct {
+		name           string
+		currentLabels  map[string]string
+		desiredLabels  map[string]string
+		currentAnnots  map[string]string
+		desiredAnnots  map[string]string
+		expectedResult bool
+	}{
+		{
+			name:           "same labels and annotations",
+			currentLabels:  map[string]string{"app": "test"},
+			desiredLabels:  map[string]string{"app": "test"},
+			currentAnnots:  map[string]string{"note": "test"},
+			desiredAnnots:  map[string]string{"note": "test"},
+			expectedResult: false,
+		},
+		{
+			name:           "different labels",
+			currentLabels:  map[string]string{"app": "old"},
+			desiredLabels:  map[string]string{"app": "new"},
+			currentAnnots:  nil,
+			desiredAnnots:  nil,
+			expectedResult: true,
+		},
+		{
+			name:           "different annotations",
+			currentLabels:  nil,
+			desiredLabels:  nil,
+			currentAnnots:  map[string]string{"note": "old"},
+			desiredAnnots:  map[string]string{"note": "new"},
+			expectedResult: true,
+		},
+		{
+			name:           "missing label in current",
+			currentLabels:  map[string]string{"app": "test"},
+			desiredLabels:  map[string]string{"app": "test", "env": "prod"},
+			currentAnnots:  nil,
+			desiredAnnots:  nil,
+			expectedResult: true,
+		},
+		{
+			name:           "extra label in current is ok",
+			currentLabels:  map[string]string{"app": "test", "extra": "value"},
+			desiredLabels:  map[string]string{"app": "test"},
+			currentAnnots:  nil,
+			desiredAnnots:  nil,
+			expectedResult: false,
+		},
+		{
+			name:           "nil vs empty labels",
+			currentLabels:  nil,
+			desiredLabels:  map[string]string{},
+			currentAnnots:  nil,
+			desiredAnnots:  nil,
+			expectedResult: false,
+		},
+		{
+			name:           "nil vs non-empty labels",
+			currentLabels:  nil,
+			desiredLabels:  map[string]string{"app": "test"},
+			currentAnnots:  nil,
+			desiredAnnots:  nil,
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      tt.currentLabels,
+					Annotations: tt.currentAnnots,
+				},
+			}
+			desired := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      tt.desiredLabels,
+					Annotations: tt.desiredAnnots,
+				},
+			}
+			result := ResourceNeedsUpdate(current, desired)
+			if result != tt.expectedResult {
+				t.Errorf("ResourceNeedsUpdate() = %v, expected %v", result, tt.expectedResult)
+			}
+		})
+	}
+}
+
+// TestResourceNeedsUpdate_TypeSwitch tests ResourceNeedsUpdate for various resource types
+func TestResourceNeedsUpdate_TypeSwitch(t *testing.T) {
+	t.Run("StatefulSet different replicas", func(t *testing.T) {
+		current := &appsv1.StatefulSet{Spec: appsv1.StatefulSetSpec{Replicas: ptr.To(int32(1))}}
+		desired := &appsv1.StatefulSet{Spec: appsv1.StatefulSetSpec{Replicas: ptr.To(int32(2))}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different replicas")
+		}
+	})
+
+	t.Run("Deployment different replicas", func(t *testing.T) {
+		current := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Replicas: ptr.To(int32(1))}}
+		desired := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Replicas: ptr.To(int32(2))}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different replicas")
+		}
+	})
+
+	t.Run("DaemonSet different selector", func(t *testing.T) {
+		current := &appsv1.DaemonSet{
+			Spec: appsv1.DaemonSetSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{NodeSelector: map[string]string{"key": "old"}},
+				},
+			},
+		}
+		desired := &appsv1.DaemonSet{
+			Spec: appsv1.DaemonSetSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{NodeSelector: map[string]string{"key": "new"}},
+				},
+			},
+		}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different selector")
+		}
+	})
+
+	t.Run("Service different type", func(t *testing.T) {
+		current := &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP}}
+		desired := &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different service type")
+		}
+	})
+
+	t.Run("ServiceAccount identical", func(t *testing.T) {
+		current := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
+		desired := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
+		if ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected false for identical ServiceAccounts")
+		}
+	})
+
+	t.Run("ClusterRole different rules", func(t *testing.T) {
+		current := &rbacv1.ClusterRole{Rules: []rbacv1.PolicyRule{{Verbs: []string{"get"}}}}
+		desired := &rbacv1.ClusterRole{Rules: []rbacv1.PolicyRule{{Verbs: []string{"get", "list"}}}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different rules")
+		}
+	})
+
+	t.Run("ClusterRoleBinding different role ref", func(t *testing.T) {
+		current := &rbacv1.ClusterRoleBinding{RoleRef: rbacv1.RoleRef{Name: "old"}}
+		desired := &rbacv1.ClusterRoleBinding{RoleRef: rbacv1.RoleRef{Name: "new"}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different role ref")
+		}
+	})
+
+	t.Run("Role different rules", func(t *testing.T) {
+		current := &rbacv1.Role{Rules: []rbacv1.PolicyRule{{Verbs: []string{"get"}}}}
+		desired := &rbacv1.Role{Rules: []rbacv1.PolicyRule{{Verbs: []string{"get", "list"}}}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different rules")
+		}
+	})
+
+	t.Run("RoleBinding different role ref", func(t *testing.T) {
+		current := &rbacv1.RoleBinding{RoleRef: rbacv1.RoleRef{Name: "old"}}
+		desired := &rbacv1.RoleBinding{RoleRef: rbacv1.RoleRef{Name: "new"}}
+		if !ResourceNeedsUpdate(current, desired) {
+			t.Error("Expected true for different role ref")
+		}
+	})
+}
+
+// TestServiceNeedsUpdate_AllScenarios tests ServiceNeedsUpdate with table-driven tests
+func TestServiceNeedsUpdate_AllScenarios(t *testing.T) {
+	tests := []struct {
+		name           string
+		currentPorts   []corev1.ServicePort
+		desiredPorts   []corev1.ServicePort
+		currentType    corev1.ServiceType
+		desiredType    corev1.ServiceType
+		expectedResult bool
+	}{
+		{
+			name:           "same ports",
+			currentPorts:   []corev1.ServicePort{{Port: 80, Protocol: corev1.ProtocolTCP}},
+			desiredPorts:   []corev1.ServicePort{{Port: 80, Protocol: corev1.ProtocolTCP}},
+			expectedResult: false,
+		},
+		{
+			name:           "different ports",
+			currentPorts:   []corev1.ServicePort{{Port: 80}},
+			desiredPorts:   []corev1.ServicePort{{Port: 443}},
+			expectedResult: true,
+		},
+		{
+			name:           "different port count",
+			currentPorts:   []corev1.ServicePort{{Port: 80}},
+			desiredPorts:   []corev1.ServicePort{{Port: 80}, {Port: 443}},
+			expectedResult: true,
+		},
+		{
+			name:           "different service type",
+			currentPorts:   []corev1.ServicePort{{Port: 80}},
+			desiredPorts:   []corev1.ServicePort{{Port: 80}},
+			currentType:    corev1.ServiceTypeClusterIP,
+			desiredType:    corev1.ServiceTypeLoadBalancer,
+			expectedResult: true,
+		},
+		{
+			name:           "different target port",
+			currentPorts:   []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(8080)}},
+			desiredPorts:   []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(9090)}},
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := &corev1.Service{
+				Spec: corev1.ServiceSpec{
+					Ports: tt.currentPorts,
+					Type:  tt.currentType,
+				},
+			}
+			desired := &corev1.Service{
+				Spec: corev1.ServiceSpec{
+					Ports: tt.desiredPorts,
+					Type:  tt.desiredType,
+				},
+			}
+			result := ServiceNeedsUpdate(current, desired)
+			if result != tt.expectedResult {
+				t.Errorf("ServiceNeedsUpdate() = %v, expected %v", result, tt.expectedResult)
+			}
+		})
+	}
+}
+
+// TestClusterRoleNeedsUpdate_AllScenarios tests ClusterRoleNeedsUpdate with table-driven tests
+func TestClusterRoleNeedsUpdate_AllScenarios(t *testing.T) {
+	tests := []struct {
+		name            string
+		currentRules    []rbacv1.PolicyRule
+		desiredRules    []rbacv1.PolicyRule
+		currentAggRules *rbacv1.AggregationRule
+		desiredAggRules *rbacv1.AggregationRule
+		expectedResult  bool
+	}{
+		{
+			name: "same rules",
+			currentRules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
+			}},
+			desiredRules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
+			}},
+			expectedResult: false,
+		},
+		{
+			name: "different verbs",
+			currentRules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get"},
+			}},
+			desiredRules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list", "watch"},
+			}},
+			expectedResult: true,
+		},
+		{
+			name: "different rule count",
+			currentRules: []rbacv1.PolicyRule{{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get"},
+			}},
+			desiredRules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get"}},
+				{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get"}},
+			},
+			expectedResult: true,
+		},
+		{
+			name:         "nil vs non-nil aggregation rules",
+			currentRules: []rbacv1.PolicyRule{},
+			desiredRules: []rbacv1.PolicyRule{},
+			currentAggRules: &rbacv1.AggregationRule{
+				ClusterRoleSelectors: []metav1.LabelSelector{{
+					MatchLabels: map[string]string{"test": "value"},
+				}},
+			},
+			desiredAggRules: nil,
+			expectedResult:  true,
+		},
+		{
+			name:         "different aggregation rules",
+			currentRules: []rbacv1.PolicyRule{},
+			desiredRules: []rbacv1.PolicyRule{},
+			currentAggRules: &rbacv1.AggregationRule{
+				ClusterRoleSelectors: []metav1.LabelSelector{{
+					MatchLabels: map[string]string{"test": "old"},
+				}},
+			},
+			desiredAggRules: &rbacv1.AggregationRule{
+				ClusterRoleSelectors: []metav1.LabelSelector{{
+					MatchLabels: map[string]string{"test": "new"},
+				}},
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := &rbacv1.ClusterRole{
+				Rules:           tt.currentRules,
+				AggregationRule: tt.currentAggRules,
+			}
+			desired := &rbacv1.ClusterRole{
+				Rules:           tt.desiredRules,
+				AggregationRule: tt.desiredAggRules,
+			}
+			result := ClusterRoleNeedsUpdate(current, desired)
+			if result != tt.expectedResult {
+				t.Errorf("ClusterRoleNeedsUpdate() = %v, expected %v", result, tt.expectedResult)
+			}
+		})
+	}
+}
+
+// TestRoleBindingNeedsUpdate_AllScenarios tests RoleBindingNeedsUpdate with table-driven tests
+func TestRoleBindingNeedsUpdate_AllScenarios(t *testing.T) {
+	tests := []struct {
+		name            string
+		currentSubjects []rbacv1.Subject
+		desiredSubjects []rbacv1.Subject
+		currentRoleRef  rbacv1.RoleRef
+		desiredRoleRef  rbacv1.RoleRef
+		expectedResult  bool
+	}{
+		{
+			name: "same role binding",
+			currentSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "test-sa", Namespace: "default",
+			}},
+			desiredSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "test-sa", Namespace: "default",
+			}},
+			currentRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "test-role"},
+			desiredRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "test-role"},
+			expectedResult: false,
+		},
+		{
+			name: "different subjects",
+			currentSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "old-sa", Namespace: "default",
+			}},
+			desiredSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "new-sa", Namespace: "default",
+			}},
+			currentRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "test-role"},
+			desiredRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "test-role"},
+			expectedResult: true,
+		},
+		{
+			name: "different role ref",
+			currentSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "test-sa", Namespace: "default",
+			}},
+			desiredSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "test-sa", Namespace: "default",
+			}},
+			currentRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "old-role"},
+			desiredRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "new-role"},
+			expectedResult: true,
+		},
+		{
+			name: "different subject count",
+			currentSubjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "test-sa", Namespace: "default",
+			}},
+			desiredSubjects: []rbacv1.Subject{
+				{Kind: "ServiceAccount", Name: "test-sa", Namespace: "default"},
+				{Kind: "ServiceAccount", Name: "test-sa-2", Namespace: "default"},
+			},
+			currentRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "test-role"},
+			desiredRoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "test-role"},
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := &rbacv1.RoleBinding{
+				Subjects: tt.currentSubjects,
+				RoleRef:  tt.currentRoleRef,
+			}
+			desired := &rbacv1.RoleBinding{
+				Subjects: tt.desiredSubjects,
+				RoleRef:  tt.desiredRoleRef,
+			}
+			result := RoleBindingNeedsUpdate(current, desired)
+			if result != tt.expectedResult {
+				t.Errorf("RoleBindingNeedsUpdate() = %v, expected %v", result, tt.expectedResult)
+			}
+		})
+	}
+}
+
+// TestCSIDriverNeedsUpdate_AllScenarios tests CSIDriverNeedsUpdate with table-driven tests
+func TestCSIDriverNeedsUpdate_AllScenarios(t *testing.T) {
+	trueVal := true
+	falseVal := false
+	filePolicy := storagev1.FileFSGroupPolicy
+	nonePolicy := storagev1.NoneFSGroupPolicy
+
+	tests := []struct {
+		name           string
+		current        *storagev1.CSIDriver
+		desired        *storagev1.CSIDriver
+		expectedResult bool
+	}{
+		{
+			name: "same csi driver",
+			current: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					AttachRequired: &falseVal,
+					PodInfoOnMount: &trueVal,
+				},
+			},
+			desired: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					AttachRequired: &falseVal,
+					PodInfoOnMount: &trueVal,
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "different AttachRequired",
+			current: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					AttachRequired: &trueVal,
+				},
+			},
+			desired: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					AttachRequired: &falseVal,
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different FSGroupPolicy",
+			current: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					FSGroupPolicy: &filePolicy,
+				},
+			},
+			desired: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					FSGroupPolicy: &nonePolicy,
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "nil vs non-nil FSGroupPolicy",
+			current: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					FSGroupPolicy: nil,
+				},
+			},
+			desired: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					FSGroupPolicy: &filePolicy,
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different volume lifecycle modes",
+			current: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					VolumeLifecycleModes: []storagev1.VolumeLifecycleMode{storagev1.VolumeLifecyclePersistent},
+				},
+			},
+			desired: &storagev1.CSIDriver{
+				Spec: storagev1.CSIDriverSpec{
+					VolumeLifecycleModes: []storagev1.VolumeLifecycleMode{storagev1.VolumeLifecycleEphemeral},
+				},
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CSIDriverNeedsUpdate(tt.current, tt.desired)
+			if result != tt.expectedResult {
+				t.Errorf("CSIDriverNeedsUpdate() = %v, expected %v", result, tt.expectedResult)
+			}
+		})
+	}
+}
+
+// TestSecurityContextConstraintsNeedsUpdate_AllScenarios tests SecurityContextConstraintsNeedsUpdate
+func TestSecurityContextConstraintsNeedsUpdate_AllScenarios(t *testing.T) {
+	tests := []struct {
+		name           string
+		current        *securityv1.SecurityContextConstraints
+		desired        *securityv1.SecurityContextConstraints
+		expectedResult bool
+	}{
+		{
+			name: "same SCC",
+			current: &securityv1.SecurityContextConstraints{
+				AllowPrivilegedContainer: true,
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				ReadOnlyRootFilesystem:   false,
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				AllowPrivilegedContainer: true,
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				ReadOnlyRootFilesystem:   false,
+			},
+			expectedResult: false,
+		},
+		{
+			name: "different AllowHostNetwork",
+			current: &securityv1.SecurityContextConstraints{
+				AllowHostNetwork: false,
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				AllowHostNetwork: true,
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different AllowHostPorts",
+			current: &securityv1.SecurityContextConstraints{
+				AllowHostPorts: false,
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				AllowHostPorts: true,
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different AllowHostPID",
+			current: &securityv1.SecurityContextConstraints{
+				AllowHostPID: false,
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				AllowHostPID: true,
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different AllowHostIPC",
+			current: &securityv1.SecurityContextConstraints{
+				AllowHostIPC: false,
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				AllowHostIPC: true,
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different ReadOnlyRootFilesystem",
+			current: &securityv1.SecurityContextConstraints{
+				ReadOnlyRootFilesystem: false,
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				ReadOnlyRootFilesystem: true,
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different Volumes",
+			current: &securityv1.SecurityContextConstraints{
+				Volumes: []securityv1.FSType{securityv1.FSTypeConfigMap},
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				Volumes: []securityv1.FSType{securityv1.FSTypeSecret},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different Users",
+			current: &securityv1.SecurityContextConstraints{
+				Users: []string{"system:serviceaccount:ns1:sa1"},
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				Users: []string{"system:serviceaccount:ns2:sa2"},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different RequiredDropCapabilities",
+			current: &securityv1.SecurityContextConstraints{
+				RequiredDropCapabilities: []corev1.Capability{"CAP_NET_ADMIN"},
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				RequiredDropCapabilities: []corev1.Capability{"CAP_SYS_ADMIN"},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different AllowedCapabilities",
+			current: &securityv1.SecurityContextConstraints{
+				AllowedCapabilities: []corev1.Capability{"CAP_NET_ADMIN"},
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				AllowedCapabilities: []corev1.Capability{"CAP_SYS_ADMIN"},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "different DefaultAddCapabilities",
+			current: &securityv1.SecurityContextConstraints{
+				DefaultAddCapabilities: []corev1.Capability{"CAP_NET_ADMIN"},
+			},
+			desired: &securityv1.SecurityContextConstraints{
+				DefaultAddCapabilities: []corev1.Capability{"CAP_SYS_ADMIN"},
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SecurityContextConstraintsNeedsUpdate(tt.current, tt.desired)
+			if result != tt.expectedResult {
+				t.Errorf("SecurityContextConstraintsNeedsUpdate() = %v, expected %v", result, tt.expectedResult)
+			}
+		})
+	}
 }

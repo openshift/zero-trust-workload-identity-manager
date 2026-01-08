@@ -1,17 +1,27 @@
 package spire_server
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGenerateSpireServerStatefulSet(t *testing.T) {
@@ -851,6 +861,110 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 
 			if tt.expectFederationPort != federationPortFound {
 				t.Errorf("Expected federation port presence: %v, got: %v", tt.expectFederationPort, federationPortFound)
+			}
+		})
+	}
+}
+
+// newStatefulSetTestReconciler creates a reconciler for StatefulSet tests
+func newStatefulSetTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireServerReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	return &SpireServerReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// TestReconcileStatefulSet tests all StatefulSet reconciliation scenarios
+func TestReconcileStatefulSet(t *testing.T) {
+	tests := []struct {
+		name           string
+		notFound       bool
+		getError       error
+		createError    error
+		updateError    error
+		createOnlyMode bool
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+	}{
+		{name: "create success", notFound: true, expectCreate: true},
+		{name: "create error", notFound: true, createError: errors.New("create failed"), expectError: true},
+		{name: "get error", getError: errors.New("connection refused"), expectError: true},
+		{name: "update success", expectUpdate: true},
+		{name: "create only mode skips update", createOnlyMode: true},
+		{name: "set controller ref error", useEmptyScheme: true, expectError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpireServerReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpireServerReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newStatefulSetTestReconciler(fakeClient)
+			}
+
+			server := &v1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireServerSpec{
+					Persistence:  v1alpha1.Persistence{Size: "1Gi", AccessMode: "ReadWriteOnce"},
+					CommonConfig: v1alpha1.CommonConfig{Labels: map[string]string{"new": "label"}},
+				},
+			}
+
+			if tt.notFound {
+				fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-server"))
+			} else if tt.getError != nil {
+				fakeClient.GetReturns(tt.getError)
+			} else {
+				existingSts := &appsv1.StatefulSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "spire-server", Namespace: utils.GetOperatorNamespace(),
+						ResourceVersion: "123", Labels: map[string]string{"old": "label"},
+					},
+					Spec: appsv1.StatefulSetSpec{Replicas: ptr.To(int32(1))},
+				}
+				fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if sts, ok := obj.(*appsv1.StatefulSet); ok {
+						*sts = *existingSts
+					}
+					return nil
+				}
+			}
+			fakeClient.CreateReturns(tt.createError)
+			fakeClient.UpdateReturns(tt.updateError)
+
+			statusMgr := status.NewManager(fakeClient)
+			err := reconciler.reconcileStatefulSet(context.Background(), server, statusMgr, tt.createOnlyMode, "server-hash", "controller-hash")
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create called once, got %d", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update called once, got %d", fakeClient.UpdateCallCount())
+			}
+			if tt.createOnlyMode && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not called in create-only mode")
 			}
 		})
 	}

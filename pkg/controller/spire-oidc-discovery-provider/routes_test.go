@@ -1,16 +1,26 @@
 package spire_oidc_discovery_provider
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
-
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGenerateOIDCDiscoveryProviderRoute(t *testing.T) {
@@ -776,5 +786,310 @@ func TestCheckRouteConflict_TableDriven(t *testing.T) {
 			// Assert
 			assert.Equal(t, tc.expectedConflict, result, tc.description)
 		})
+	}
+}
+
+// newRouteTestReconciler creates a reconciler for Route tests
+func newRouteTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireOidcDiscoveryProviderReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = routev1.AddToScheme(scheme)
+	return &SpireOidcDiscoveryProviderReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// TestReconcileRoute_ManagedRouteDisabled tests reconcileRoute when ManagedRoute is disabled
+func TestReconcileRoute_ManagedRouteDisabled(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "false", // Disabled
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	// No create/update should be called when disabled
+	if fakeClient.CreateCallCount() != 0 {
+		t.Error("Expected no Create call when ManagedRoute is disabled")
+	}
+}
+
+// TestReconcileRoute_CreateSuccess tests successful Route creation
+func TestReconcileRoute_CreateSuccess(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "true",
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-oidc-discovery-provider"))
+	fakeClient.CreateReturns(nil)
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if fakeClient.CreateCallCount() != 1 {
+		t.Errorf("Expected Create to be called once, called %d times", fakeClient.CreateCallCount())
+	}
+}
+
+// TestReconcileRoute_CreateError tests error during Route creation
+func TestReconcileRoute_CreateError(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "true",
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-oidc-discovery-provider"))
+	createErr := errors.New("create failed")
+	fakeClient.CreateReturns(createErr)
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err == nil {
+		t.Error("Expected error when Create fails, got nil")
+	}
+}
+
+// TestReconcileRoute_GetError tests error during Route Get
+func TestReconcileRoute_GetError(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "true",
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	getErr := errors.New("connection refused")
+	fakeClient.GetReturns(getErr)
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err == nil {
+		t.Error("Expected error when Get fails, got nil")
+	}
+}
+
+// TestReconcileRoute_UpdateSuccess tests successful Route update
+func TestReconcileRoute_UpdateSuccess(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "true",
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	existingRoute := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "spire-oidc-discovery-provider",
+			Namespace:       utils.GetOperatorNamespace(),
+			ResourceVersion: "123",
+		},
+		Spec: routev1.RouteSpec{
+			Host: "old.example.com", // Different host to trigger update
+		},
+	}
+
+	fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		if route, ok := obj.(*routev1.Route); ok {
+			*route = *existingRoute
+		}
+		return nil
+	}
+	fakeClient.UpdateReturns(nil)
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if fakeClient.UpdateCallCount() != 1 {
+		t.Errorf("Expected Update to be called once, called %d times", fakeClient.UpdateCallCount())
+	}
+}
+
+// TestReconcileRoute_UpdateError tests error during Route update
+func TestReconcileRoute_UpdateError(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "true",
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	existingRoute := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "spire-oidc-discovery-provider",
+			Namespace:       utils.GetOperatorNamespace(),
+			ResourceVersion: "123",
+		},
+		Spec: routev1.RouteSpec{
+			Host: "old.example.com", // Different host to trigger update
+		},
+	}
+
+	fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		if route, ok := obj.(*routev1.Route); ok {
+			*route = *existingRoute
+		}
+		return nil
+	}
+	updateErr := errors.New("update conflict")
+	fakeClient.UpdateReturns(updateErr)
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err == nil {
+		t.Error("Expected error when Update fails, got nil")
+	}
+}
+
+// TestReconcileRoute_CreateOnlyMode tests create-only mode for Route
+func TestReconcileRoute_CreateOnlyMode(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute: "true",
+			JwtIssuer:    "https://test.example.com",
+		},
+	}
+
+	existingRoute := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "spire-oidc-discovery-provider",
+			Namespace:       utils.GetOperatorNamespace(),
+			ResourceVersion: "123",
+		},
+		Spec: routev1.RouteSpec{
+			Host: "old.example.com", // Different host to trigger update
+		},
+	}
+
+	fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		if route, ok := obj.(*routev1.Route); ok {
+			*route = *existingRoute
+		}
+		return nil
+	}
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, true) // createOnlyMode = true
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if fakeClient.UpdateCallCount() != 0 {
+		t.Error("Expected Update to not be called in create-only mode")
+	}
+}
+
+// TestReconcileRoute_ExternalSecretRef tests Route with ExternalSecretRef
+func TestReconcileRoute_ExternalSecretRef(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newRouteTestReconciler(fakeClient)
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedRoute:      "true",
+			JwtIssuer:         "https://test.example.com",
+			ExternalSecretRef: "custom-tls-secret",
+		},
+	}
+
+	fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-oidc-discovery-provider"))
+	fakeClient.CreateReturns(nil)
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileRoute(context.Background(), oidc, statusMgr, false)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if fakeClient.CreateCallCount() != 1 {
+		t.Error("Expected Create to be called once")
+	}
+
+	// Verify the ExternalCertificate is set on the created route
+	_, createdObj, _ := fakeClient.CreateArgsForCall(0)
+	createdRoute, ok := createdObj.(*routev1.Route)
+	if !ok {
+		t.Fatal("Created object is not a Route")
+	}
+	if createdRoute.Spec.TLS == nil || createdRoute.Spec.TLS.ExternalCertificate == nil {
+		t.Error("Expected TLS.ExternalCertificate to be set")
+	} else if createdRoute.Spec.TLS.ExternalCertificate.Name != "custom-tls-secret" {
+		t.Errorf("Expected ExternalCertificate.Name 'custom-tls-secret', got %s", createdRoute.Spec.TLS.ExternalCertificate.Name)
 	}
 }

@@ -1,13 +1,24 @@
 package spire_agent
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGenerateSpireAgentSCC(t *testing.T) {
@@ -102,5 +113,244 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	}
 	if len(scc.Groups) != 0 {
 		t.Errorf("expected Groups to be empty")
+	}
+}
+
+// newSCCTestReconciler creates a reconciler for SCC tests
+func newSCCTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireAgentReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = securityv1.AddToScheme(scheme)
+	return &SpireAgentReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// TestReconcileSCC tests the reconcileSCC function
+func TestReconcileSCC(t *testing.T) {
+	tests := []struct {
+		name           string
+		agent          *v1alpha1.SpireAgent
+		setupClient    func(*fakes.FakeCustomCtrlClient, *v1alpha1.SpireAgent)
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+	}{
+		{
+			name: "create success",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient, _ *v1alpha1.SpireAgent) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-agent"))
+				fc.CreateReturns(nil)
+			},
+			expectCreate: true,
+		},
+		{
+			name: "create error",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient, _ *v1alpha1.SpireAgent) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-agent"))
+				fc.CreateReturns(errors.New("create failed"))
+			},
+			expectError: true,
+		},
+		{
+			name: "get error",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient, _ *v1alpha1.SpireAgent) {
+				fc.GetReturns(errors.New("connection refused"))
+			},
+			expectError: true,
+		},
+		{
+			name: "no update needed",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient, agent *v1alpha1.SpireAgent) {
+				desiredSCC := generateSpireAgentSCC(agent)
+				desiredSCC.ResourceVersion = "123"
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if scc, ok := obj.(*securityv1.SecurityContextConstraints); ok {
+						*scc = *desiredSCC
+					}
+					return nil
+				}
+			},
+		},
+		{
+			name: "update success",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireAgentSpec{
+					CommonConfig: v1alpha1.CommonConfig{
+						Labels: map[string]string{"new-label": "new-value"},
+					},
+				},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient, _ *v1alpha1.SpireAgent) {
+				existingSCC := &securityv1.SecurityContextConstraints{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-agent",
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old-label": "old-value"},
+					},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if scc, ok := obj.(*securityv1.SecurityContextConstraints); ok {
+						*scc = *existingSCC
+					}
+					return nil
+				}
+				fc.UpdateReturns(nil)
+			},
+			expectUpdate: true,
+		},
+		{
+			name: "update error",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireAgentSpec{
+					CommonConfig: v1alpha1.CommonConfig{
+						Labels: map[string]string{"new-label": "new-value"},
+					},
+				},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient, _ *v1alpha1.SpireAgent) {
+				existingSCC := &securityv1.SecurityContextConstraints{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-agent",
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old-label": "old-value"},
+					},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if scc, ok := obj.(*securityv1.SecurityContextConstraints); ok {
+						*scc = *existingSCC
+					}
+					return nil
+				}
+				fc.UpdateReturns(errors.New("update conflict"))
+			},
+			expectError:  true,
+			expectUpdate: true,
+		},
+		{
+			name: "set controller ref error",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient:    func(fc *fakes.FakeCustomCtrlClient, _ *v1alpha1.SpireAgent) {},
+			useEmptyScheme: true,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpireAgentReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpireAgentReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newSCCTestReconciler(fakeClient)
+			}
+			tt.setupClient(fakeClient, tt.agent)
+
+			statusMgr := status.NewManager(fakeClient)
+			err := reconciler.reconcileSCC(context.Background(), tt.agent, statusMgr)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, called %d times", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update to be called once, called %d times", fakeClient.UpdateCallCount())
+			}
+			if !tt.expectUpdate && !tt.expectError && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not to be called")
+			}
+		})
+	}
+}
+
+// TestReconcileSCC_PreservesExistingFields tests that reconcileSCC preserves OpenShift-managed fields
+func TestReconcileSCC_PreservesExistingFields(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	reconciler := newSCCTestReconciler(fakeClient)
+
+	agent := &v1alpha1.SpireAgent{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireAgentSpec{
+			CommonConfig: v1alpha1.CommonConfig{
+				Labels: map[string]string{"new-label": "new-value"},
+			},
+		},
+	}
+
+	existingSCC := &securityv1.SecurityContextConstraints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "spire-agent",
+			ResourceVersion: "123",
+			Labels:          map[string]string{"old-label": "old-value"},
+		},
+		Priority:           func() *int32 { p := int32(10); return &p }(),
+		UserNamespaceLevel: "pod",
+	}
+
+	var capturedSCC *securityv1.SecurityContextConstraints
+	fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		if scc, ok := obj.(*securityv1.SecurityContextConstraints); ok {
+			*scc = *existingSCC
+		}
+		return nil
+	}
+	fakeClient.UpdateStub = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		if scc, ok := obj.(*securityv1.SecurityContextConstraints); ok {
+			capturedSCC = scc
+		}
+		return nil
+	}
+
+	statusMgr := status.NewManager(fakeClient)
+	err := reconciler.reconcileSCC(context.Background(), agent, statusMgr)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	// Check that preserved fields are intact
+	if capturedSCC != nil {
+		if capturedSCC.Priority == nil || *capturedSCC.Priority != 10 {
+			t.Error("Expected Priority to be preserved")
+		}
+		if capturedSCC.UserNamespaceLevel != "pod" {
+			t.Errorf("Expected UserNamespaceLevel to be preserved, got: %s", capturedSCC.UserNamespaceLevel)
+		}
 	}
 }
