@@ -1173,70 +1173,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, targetNodeName)
 		})
 
-		It("SPIRE Agent log level can be configured through CR", func() {
-			By("Getting SpireAgent object")
-			spireAgent := &operatorv1alpha1.SpireAgent{}
-			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
-			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
-
-			initialLogLevel := spireAgent.Spec.LogLevel
-			if initialLogLevel == "" {
-				initialLogLevel = "info"
-			}
-			fmt.Fprintf(GinkgoWriter, "initial log level: %s\n", initialLogLevel)
-
-			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen := daemonset.Generation
-
-			By("Patching SpireAgent object with debug log level")
-			newLogLevel := "debug"
-			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
-				spireAgent.Spec.LogLevel = newLogLevel
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent log level")
-			DeferCleanup(func(ctx context.Context) {
-				By("Resetting SpireAgent log level")
-				agent := &operatorv1alpha1.SpireAgent{}
-				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
-					agent.Spec.LogLevel = initialLogLevel
-					k8sClient.Update(ctx, agent)
-				}
-			})
-
-			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
-			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
-
-			By("Waiting for SPIRE Agent DaemonSet to become Available")
-			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying the CR has the updated log level")
-			updatedAgent := &operatorv1alpha1.SpireAgent{}
-			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, updatedAgent)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedAgent.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
-
-			By("Verifying the ConfigMap has the updated log level")
-			cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, "spire-agent", metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get spire-agent ConfigMap")
-
-			agentConf, ok := cm.Data["agent.conf"]
-			Expect(ok).To(BeTrue(), "agent.conf key should exist in ConfigMap")
-
-			var configData map[string]interface{}
-			err = json.Unmarshal([]byte(agentConf), &configData)
-			Expect(err).NotTo(HaveOccurred(), "failed to parse agent.conf JSON")
-
-			agentSection, ok := configData["agent"].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "agent section should exist in config")
-
-			logLevel, ok := agentSection["log_level"].(string)
-			Expect(ok).To(BeTrue(), "log_level should be a string")
-			Expect(logLevel).To(Equal(newLogLevel), "ConfigMap log_level should be updated to %s", newLogLevel)
-
-			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireAgent in ConfigMap\n", initialLogLevel, newLogLevel)
-		})
-
 		It("SPIRE Server log level can be configured through CR", func() {
 			By("Getting SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{}
@@ -1301,6 +1237,70 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(logLevel).To(Equal(newLogLevel), "ConfigMap log_level should be updated to %s", newLogLevel)
 
 			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireServer in ConfigMap\n", initialLogLevel, newLogLevel)
+		})
+
+		It("SPIRE Agent log level can be configured through CR", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			initialLogLevel := spireAgent.Spec.LogLevel
+			if initialLogLevel == "" {
+				initialLogLevel = "info"
+			}
+			fmt.Fprintf(GinkgoWriter, "initial log level: %s\n", initialLogLevel)
+
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with debug log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent log level")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying the CR has the updated log level")
+			updatedAgent := &operatorv1alpha1.SpireAgent{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, updatedAgent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedAgent.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
+
+			By("Verifying the ConfigMap has the updated log level")
+			cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, "spire-agent", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get spire-agent ConfigMap")
+
+			agentConf, ok := cm.Data["agent.conf"]
+			Expect(ok).To(BeTrue(), "agent.conf key should exist in ConfigMap")
+
+			var configData map[string]interface{}
+			err = json.Unmarshal([]byte(agentConf), &configData)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse agent.conf JSON")
+
+			agentSection, ok := configData["agent"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "agent section should exist in config")
+
+			logLevel, ok := agentSection["log_level"].(string)
+			Expect(ok).To(BeTrue(), "log_level should be a string")
+			Expect(logLevel).To(Equal(newLogLevel), "ConfigMap log_level should be updated to %s", newLogLevel)
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireAgent in ConfigMap\n", initialLogLevel, newLogLevel)
 		})
 
 		It("SPIRE OIDC Discovery Provider log level can be configured through CR", func() {
