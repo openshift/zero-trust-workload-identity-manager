@@ -1216,31 +1216,25 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedAgent.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
 
-			By("Verifying pod logs contain debug level messages")
-			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
-				LabelSelector: utils.SpireAgentPodLabel,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(pods.Items).NotTo(BeEmpty())
+			By("Verifying the ConfigMap has the updated log level")
+			cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, "spire-agent", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get spire-agent ConfigMap")
 
-			// Wait for pod to emit some logs, then verify log level
-			Eventually(func() bool {
-				podLogs, err := clientset.CoreV1().Pods(utils.OperatorNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{}).Do(testCtx).Raw()
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "failed to get pod logs: %v\n", err)
-					return false
-				}
-				logsStr := string(podLogs)
-				if strings.Contains(logsStr, "level=debug") {
-					fmt.Fprintf(GinkgoWriter, "found debug level log entries in pod '%s' logs\n", pods.Items[0].Name)
-					return true
-				}
-				fmt.Fprintf(GinkgoWriter, "waiting for debug level log entries in pod '%s'...\n", pods.Items[0].Name)
-				return false
-			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
-				"pod logs should contain debug level messages after log level change")
+			agentConf, ok := cm.Data["agent.conf"]
+			Expect(ok).To(BeTrue(), "agent.conf key should exist in ConfigMap")
 
-			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireAgent\n", initialLogLevel, newLogLevel)
+			var configData map[string]interface{}
+			err = json.Unmarshal([]byte(agentConf), &configData)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse agent.conf JSON")
+
+			agentSection, ok := configData["agent"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "agent section should exist in config")
+
+			logLevel, ok := agentSection["log_level"].(string)
+			Expect(ok).To(BeTrue(), "log_level should be a string")
+			Expect(logLevel).To(Equal(newLogLevel), "ConfigMap log_level should be updated to %s", newLogLevel)
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireAgent in ConfigMap\n", initialLogLevel, newLogLevel)
 		})
 
 		It("SPIRE Server log level can be configured through CR", func() {
@@ -1288,34 +1282,25 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedServer.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
 
-			By("Verifying pod logs contain debug level messages")
-			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
-				LabelSelector: utils.SpireServerPodLabel,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(pods.Items).NotTo(BeEmpty())
+			By("Verifying the ConfigMap has the updated log level")
+			cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, "spire-server", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get spire-server ConfigMap")
 
-			// Wait for the pod to emit some logs, then verify the log level
-			// Note: spire-server pod has multiple containers, so we need to specify the container name
-			Eventually(func() bool {
-				podLogs, err := clientset.CoreV1().Pods(utils.OperatorNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{
-					Container: "spire-server",
-				}).Do(testCtx).Raw()
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "failed to get pod logs: %v\n", err)
-					return false
-				}
-				logsStr := string(podLogs)
-				if strings.Contains(logsStr, "level=debug") {
-					fmt.Fprintf(GinkgoWriter, "found debug level log entries in pod '%s' container 'spire-server' logs\n", pods.Items[0].Name)
-					return true
-				}
-				fmt.Fprintf(GinkgoWriter, "waiting for debug level log entries in pod '%s' container 'spire-server'...\n", pods.Items[0].Name)
-				return false
-			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
-				"pod logs should contain debug level messages after log level change")
+			serverConf, ok := cm.Data["server.conf"]
+			Expect(ok).To(BeTrue(), "server.conf key should exist in ConfigMap")
 
-			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireServer\n", initialLogLevel, newLogLevel)
+			var configData map[string]interface{}
+			err = json.Unmarshal([]byte(serverConf), &configData)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse server.conf JSON")
+
+			serverSection, ok := configData["server"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "server section should exist in config")
+
+			logLevel, ok := serverSection["log_level"].(string)
+			Expect(ok).To(BeTrue(), "log_level should be a string")
+			Expect(logLevel).To(Equal(newLogLevel), "ConfigMap log_level should be updated to %s", newLogLevel)
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireServer in ConfigMap\n", initialLogLevel, newLogLevel)
 		})
 
 		It("SPIRE OIDC Discovery Provider log level can be configured through CR", func() {
@@ -1363,31 +1348,22 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedProvider.Spec.LogLevel).To(Equal(newLogLevel), "log level should be updated to %s", newLogLevel)
 
-			By("Verifying pod logs contain debug level messages")
-			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
-				LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(pods.Items).NotTo(BeEmpty())
+			By("Verifying the ConfigMap has the updated log level")
+			cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, "spire-spiffe-oidc-discovery-provider", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get spire-spiffe-oidc-discovery-provider ConfigMap")
 
-			// Wait for pod to emit some logs, then verify log level
-			Eventually(func() bool {
-				podLogs, err := clientset.CoreV1().Pods(utils.OperatorNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{}).Do(testCtx).Raw()
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "failed to get pod logs: %v\n", err)
-					return false
-				}
-				logsStr := string(podLogs)
-				if strings.Contains(logsStr, "level=debug") {
-					fmt.Fprintf(GinkgoWriter, "found debug level log entries in pod '%s' logs\n", pods.Items[0].Name)
-					return true
-				}
-				fmt.Fprintf(GinkgoWriter, "waiting for debug level log entries in pod '%s'...\n", pods.Items[0].Name)
-				return false
-			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
-				"pod logs should contain debug level messages after log level change")
+			oidcConf, ok := cm.Data["oidc-discovery-provider.conf"]
+			Expect(ok).To(BeTrue(), "oidc-discovery-provider.conf key should exist in ConfigMap")
 
-			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireOIDCDiscoveryProvider\n", initialLogLevel, newLogLevel)
+			var configData map[string]interface{}
+			err = json.Unmarshal([]byte(oidcConf), &configData)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse oidc-discovery-provider.conf JSON")
+
+			logLevel, ok := configData["log_level"].(string)
+			Expect(ok).To(BeTrue(), "log_level should be a string")
+			Expect(logLevel).To(Equal(newLogLevel), "ConfigMap log_level should be updated to %s", newLogLevel)
+
+			fmt.Fprintf(GinkgoWriter, "successfully validated log level change from %s to %s for SpireOIDCDiscoveryProvider in ConfigMap\n", initialLogLevel, newLogLevel)
 		})
 	})
 
