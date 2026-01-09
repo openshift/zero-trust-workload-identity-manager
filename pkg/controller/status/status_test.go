@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -666,7 +667,7 @@ func TestGetDaemonSetStatusMessage_AllScenarios(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := GetDaemonSetStatusMessage(tt.ds)
-			if !contains(msg, tt.expectedContain) {
+			if !strings.Contains(msg, tt.expectedContain) {
 				t.Errorf("Expected message to contain '%s', got '%s'", tt.expectedContain, msg)
 			}
 		})
@@ -747,7 +748,7 @@ func TestGetDeploymentStatusMessage_AllScenarios(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := GetDeploymentStatusMessage(tt.deploy)
-			if !contains(msg, tt.expectedContain) {
+			if !strings.Contains(msg, tt.expectedContain) {
 				t.Errorf("Expected message to contain '%s', got '%s'", tt.expectedContain, msg)
 			}
 		})
@@ -814,23 +815,9 @@ func TestGetStatefulSetStatusMessage_AllScenarios(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := GetStatefulSetStatusMessage(tt.sts)
-			if !contains(msg, tt.expectedContain) {
+			if !strings.Contains(msg, tt.expectedContain) {
 				t.Errorf("Expected message to contain '%s', got '%s'", tt.expectedContain, msg)
 			}
 		})
 	}
-}
-
-// contains is a helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && s != "" && substr != "" && findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

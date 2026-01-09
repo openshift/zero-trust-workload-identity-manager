@@ -464,6 +464,35 @@ func TestReconcileClusterRoleBinding(t *testing.T) {
 			expectUpdate:   false,
 		},
 		{
+			name: "update success",
+			agent: &v1alpha1.SpireAgent{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireAgentSpec{
+					CommonConfig: v1alpha1.CommonConfig{
+						Labels: map[string]string{"new-label": "new-value"},
+					},
+				},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingCRB := &rbacv1.ClusterRoleBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-agent",
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old-label": "old-value"},
+					},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if crb, ok := obj.(*rbacv1.ClusterRoleBinding); ok {
+						*crb = *existingCRB
+					}
+					return nil
+				}
+				fc.UpdateReturns(nil)
+			},
+			expectError:  false,
+			expectUpdate: true,
+		},
+		{
 			name: "update error",
 			agent: &v1alpha1.SpireAgent{
 				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},

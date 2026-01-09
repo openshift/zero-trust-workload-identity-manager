@@ -948,23 +948,26 @@ func TestNeedsOwnerReferenceUpdate(t *testing.T) {
 				Name: "test",
 				OwnerReferences: []metav1.OwnerReference{{
 					APIVersion: "v1",
-					Kind:       "", // Empty kind - owner GetObjectKind returns empty for plain objects
+					Kind:       "ConfigMap",
 					Name:       "owner",
 					UID:        "owner-uid",
 				}},
 			},
 		}
 		owner := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "owner",
 				UID:  "owner-uid",
 			},
 		}
-		// This will return true because the Kind won't match (empty vs empty doesn't match via function logic)
-		// The function checks UID, Name, AND Kind
 		result := NeedsOwnerReferenceUpdate(current, owner)
-		// We just test it doesn't panic and returns a result
-		_ = result
+		if result {
+			t.Error("Expected false when owner reference matches")
+		}
 	})
 
 	t.Run("wrong owner UID needs update", func(t *testing.T) {

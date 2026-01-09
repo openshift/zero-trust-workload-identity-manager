@@ -161,6 +161,7 @@ func TestGenerateSpiffeCsiDriverDaemonSetWithCustomConfig(t *testing.T) {
 }
 
 func testInitContainer(t *testing.T, container corev1.Container) {
+	t.Helper()
 	if container.Name != "set-context" {
 		t.Errorf("Expected init container name 'set-context', got '%s'", container.Name)
 	}
@@ -215,6 +216,7 @@ func testInitContainer(t *testing.T, container corev1.Container) {
 }
 
 func testSpiffeContainer(t *testing.T, container corev1.Container) {
+	t.Helper()
 	if container.Name != "spiffe-csi-driver" {
 		t.Errorf("Expected container name 'spiffe-csi-driver', got '%s'", container.Name)
 	}
@@ -301,6 +303,7 @@ func testSpiffeContainer(t *testing.T, container corev1.Container) {
 }
 
 func testNodeDriverRegistrarContainer(t *testing.T, container corev1.Container) {
+	t.Helper()
 	if container.Name != "node-driver-registrar" {
 		t.Errorf("Expected container name 'node-driver-registrar', got '%s'", container.Name)
 	}
@@ -407,6 +410,7 @@ func testNodeDriverRegistrarContainer(t *testing.T, container corev1.Container) 
 }
 
 func testVolumes(t *testing.T, volumes []corev1.Volume) {
+	t.Helper()
 	expectedVolumes := []corev1.Volume{
 		{
 			Name: "spire-agent-socket-dir",
