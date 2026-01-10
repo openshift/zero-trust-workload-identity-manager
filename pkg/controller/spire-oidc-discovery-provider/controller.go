@@ -40,6 +40,7 @@ const (
 	ConfigMapAvailable       = "ConfigMapAvailable"
 	ClusterSPIFFEIDAvailable = "ClusterSPIFFEIDAvailable"
 	RouteAvailable           = "RouteAvailable"
+	RBACAvailable            = "RBACAvailable"
 	ConfigurationValid       = "ConfigurationValid"
 	ServiceAccountAvailable  = "ServiceAccountAvailable"
 	ServiceAvailable         = "ServiceAvailable"

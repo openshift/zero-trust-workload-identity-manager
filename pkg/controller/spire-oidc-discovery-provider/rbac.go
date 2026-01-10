@@ -16,10 +16,6 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
 )
 
-const (
-	ExternalCertRBACAvailable = "ExternalCertRBACAvailable"
-)
-
 // reconcileExternalCertRBAC reconciles RBAC resources for router access to external certificate secret
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRBAC(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
 	// Only create RBAC if externalSecretRef is configured
@@ -38,8 +34,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRBAC(ctx con
 		return err
 	}
 
-	statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonReady,
-		"External certificate RBAC resources available",
+	statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonReady,
+		"RBAC resources available",
 		metav1.ConditionTrue)
 
 	return nil
@@ -54,7 +50,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRole(ctx con
 
 	if err := controllerutil.SetControllerReference(oidc, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on external cert role")
-		statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to set owner reference on external cert Role: %v", err),
 			metav1.ConditionFalse)
 		return err
@@ -68,7 +64,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRole(ctx con
 		if !kerrors.IsNotFound(err) {
 			// Unexpected error
 			r.log.Error(err, "failed to get external cert role")
-			statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 				fmt.Sprintf("Failed to get external cert Role: %v", err),
 				metav1.ConditionFalse)
 			return err
@@ -77,7 +73,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRole(ctx con
 		// Resource doesn't exist, create it
 		if err := r.ctrlClient.Create(ctx, desired); err != nil {
 			r.log.Error(err, "failed to create external cert role")
-			statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 				fmt.Sprintf("Failed to create external cert Role: %v", err),
 				metav1.ConditionFalse)
 			return err
@@ -103,7 +99,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRole(ctx con
 	desired.ResourceVersion = existing.ResourceVersion
 	if err := r.ctrlClient.Update(ctx, desired); err != nil {
 		r.log.Error(err, "failed to update external cert role")
-		statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to update external cert Role: %v", err),
 			metav1.ConditionFalse)
 		return err
@@ -119,7 +115,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRoleBinding(
 
 	if err := controllerutil.SetControllerReference(oidc, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on external cert role binding")
-		statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to set owner reference on external cert RoleBinding: %v", err),
 			metav1.ConditionFalse)
 		return err
@@ -133,7 +129,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRoleBinding(
 		if !kerrors.IsNotFound(err) {
 			// Unexpected error
 			r.log.Error(err, "failed to get external cert role binding")
-			statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 				fmt.Sprintf("Failed to get external cert RoleBinding: %v", err),
 				metav1.ConditionFalse)
 			return err
@@ -142,7 +138,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRoleBinding(
 		// Resource doesn't exist, create it
 		if err := r.ctrlClient.Create(ctx, desired); err != nil {
 			r.log.Error(err, "failed to create external cert role binding")
-			statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+			statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 				fmt.Sprintf("Failed to create external cert RoleBinding: %v", err),
 				metav1.ConditionFalse)
 			return err
@@ -168,7 +164,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRoleBinding(
 	desired.ResourceVersion = existing.ResourceVersion
 	if err := r.ctrlClient.Update(ctx, desired); err != nil {
 		r.log.Error(err, "failed to update external cert role binding")
-		statusMgr.AddCondition(ExternalCertRBACAvailable, v1alpha1.ReasonFailed,
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
 			fmt.Sprintf("Failed to update external cert RoleBinding: %v", err),
 			metav1.ConditionFalse)
 		return err
