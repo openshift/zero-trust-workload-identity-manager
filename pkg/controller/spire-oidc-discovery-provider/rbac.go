@@ -20,8 +20,7 @@ import (
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRBAC(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
 	// Only create RBAC if externalSecretRef is configured
 	if oidc.Spec.ExternalSecretRef == "" {
-		// Clean up RBAC resources if they exist
-		return r.cleanupExternalCertRBAC(ctx)
+		return nil
 	}
 
 	// Reconcile Role
@@ -174,46 +173,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRoleBinding(
 	return nil
 }
 
-// cleanupExternalCertRBAC deletes the external cert RBAC resources if they exist
-func (r *SpireOidcDiscoveryProviderReconciler) cleanupExternalCertRBAC(ctx context.Context) error {
-	// Delete RoleBinding
-	roleBinding := &rbacv1.RoleBinding{}
-	roleBindingName := types.NamespacedName{
-		Name:      utils.SpireOIDCExternalCertRoleBindingName,
-		Namespace: utils.GetOperatorNamespace(),
-	}
-	err := r.ctrlClient.Get(ctx, roleBindingName, roleBinding)
-	if err == nil {
-		// RoleBinding exists, delete it
-		if err := r.ctrlClient.Delete(ctx, roleBinding); err != nil && !kerrors.IsNotFound(err) {
-			r.log.Error(err, "failed to delete external cert role binding")
-			return err
-		}
-		r.log.Info("Deleted external cert RoleBinding", "name", roleBindingName.Name, "namespace", roleBindingName.Namespace)
-	} else if !kerrors.IsNotFound(err) {
-		return err
-	}
-
-	// Delete Role
-	role := &rbacv1.Role{}
-	roleName := types.NamespacedName{
-		Name:      utils.SpireOIDCExternalCertRoleName,
-		Namespace: utils.GetOperatorNamespace(),
-	}
-	err = r.ctrlClient.Get(ctx, roleName, role)
-	if err == nil {
-		// Role exists, delete it
-		if err := r.ctrlClient.Delete(ctx, role); err != nil && !kerrors.IsNotFound(err) {
-			r.log.Error(err, "failed to delete external cert role")
-			return err
-		}
-		r.log.Info("Deleted external cert Role", "name", roleName.Name, "namespace", roleName.Namespace)
-	} else if !kerrors.IsNotFound(err) {
-		return err
-	}
-
-	return nil
-}
 
 // Resource getter functions
 

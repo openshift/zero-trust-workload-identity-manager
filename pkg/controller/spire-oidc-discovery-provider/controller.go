@@ -57,7 +57,7 @@ type SpireOidcDiscoveryProviderReconciler struct {
 
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*SpireOidcDiscoveryProviderReconciler, error) {

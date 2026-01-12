@@ -911,7 +911,31 @@ func TestReconcileExternalCertRBAC(t *testing.T) {
 			},
 		},
 		{
-			name: "cleans up RBAC when externalSecretRef is empty",
+			name:           "does not create RBAC when externalSecretRef is empty from start",
+			setupObjects:   func() []client.Object { return []client.Object{} },
+			externalSecret: "", // Empty from start
+			setupClient: func(store *testStore) customClient.CustomCtrlClient {
+				return newFakeClient(store)
+			},
+			expectError: false,
+			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {
+				role := &rbacv1.Role{}
+				err := client.Get(ctx, types.NamespacedName{
+					Name:      utils.SpireOIDCExternalCertRoleName,
+					Namespace: utils.GetOperatorNamespace(),
+				}, role)
+				assert.True(t, kerrors.IsNotFound(err), "Expected role to not be created when externalSecretRef is empty")
+
+				rb := &rbacv1.RoleBinding{}
+				err = client.Get(ctx, types.NamespacedName{
+					Name:      utils.SpireOIDCExternalCertRoleBindingName,
+					Namespace: utils.GetOperatorNamespace(),
+				}, rb)
+				assert.True(t, kerrors.IsNotFound(err), "Expected rolebinding to not be created when externalSecretRef is empty")
+			},
+		},
+		{
+			name: "does not delete RBAC when externalSecretRef is unset after being set",
 			setupObjects: func() []client.Object {
 				return []client.Object{
 					&rbacv1.Role{
@@ -928,7 +952,7 @@ func TestReconcileExternalCertRBAC(t *testing.T) {
 					},
 				}
 			},
-			externalSecret: "", // Empty
+			externalSecret: "", // Unset (was previously set)
 			setupClient: func(store *testStore) customClient.CustomCtrlClient {
 				return newFakeClient(store)
 			},
@@ -939,14 +963,14 @@ func TestReconcileExternalCertRBAC(t *testing.T) {
 					Name:      utils.SpireOIDCExternalCertRoleName,
 					Namespace: utils.GetOperatorNamespace(),
 				}, role)
-				assert.True(t, kerrors.IsNotFound(err))
+				require.NoError(t, err, "Expected role to still exist")
 
 				rb := &rbacv1.RoleBinding{}
 				err = client.Get(ctx, types.NamespacedName{
 					Name:      utils.SpireOIDCExternalCertRoleBindingName,
 					Namespace: utils.GetOperatorNamespace(),
 				}, rb)
-				assert.True(t, kerrors.IsNotFound(err))
+				require.NoError(t, err, "Expected rolebinding to still exist")
 			},
 		},
 		{
@@ -1024,250 +1048,6 @@ func TestReconcileExternalCertRBAC(t *testing.T) {
 
 			// Execute
 			err := r.reconcileExternalCertRBAC(ctx, oidc, statusMgr, false)
-
-			// Assert
-			if tt.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-
-			// Post-test checks
-			tt.postTestChecks(t, client)
-		})
-	}
-}
-
-// TestCleanupExternalCertRBAC tests the cleanupExternalCertRBAC function
-func TestCleanupExternalCertRBAC(t *testing.T) {
-	ctx := context.Background()
-
-	tests := []struct {
-		name           string
-		setupObjects   func() []client.Object
-		setupClient    func(store *testStore) customClient.CustomCtrlClient
-		expectError    bool
-		postTestChecks func(t *testing.T, client customClient.CustomCtrlClient)
-	}{
-		{
-			name: "deletes role and rolebinding when they exist",
-			setupObjects: func() []client.Object {
-				return []client.Object{
-					&rbacv1.Role{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      utils.SpireOIDCExternalCertRoleName,
-							Namespace: utils.GetOperatorNamespace(),
-						},
-					},
-					&rbacv1.RoleBinding{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      utils.SpireOIDCExternalCertRoleBindingName,
-							Namespace: utils.GetOperatorNamespace(),
-						},
-					},
-				}
-			},
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				return newFakeClient(store)
-			},
-			expectError: false,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {
-				role := &rbacv1.Role{}
-				err := client.Get(ctx, types.NamespacedName{
-					Name:      utils.SpireOIDCExternalCertRoleName,
-					Namespace: utils.GetOperatorNamespace(),
-				}, role)
-				assert.True(t, kerrors.IsNotFound(err))
-
-				rb := &rbacv1.RoleBinding{}
-				err = client.Get(ctx, types.NamespacedName{
-					Name:      utils.SpireOIDCExternalCertRoleBindingName,
-					Namespace: utils.GetOperatorNamespace(),
-				}, rb)
-				assert.True(t, kerrors.IsNotFound(err))
-			},
-		},
-		{
-			name:         "succeeds when resources don't exist",
-			setupObjects: func() []client.Object { return []client.Object{} },
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				return newFakeClient(store)
-			},
-			expectError:    false,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {},
-		},
-		{
-			name: "deletes only rolebinding when role doesn't exist",
-			setupObjects: func() []client.Object {
-				return []client.Object{
-					&rbacv1.RoleBinding{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      utils.SpireOIDCExternalCertRoleBindingName,
-							Namespace: utils.GetOperatorNamespace(),
-						},
-					},
-				}
-			},
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				return newFakeClient(store)
-			},
-			expectError: false,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {
-				rb := &rbacv1.RoleBinding{}
-				err := client.Get(ctx, types.NamespacedName{
-					Name:      utils.SpireOIDCExternalCertRoleBindingName,
-					Namespace: utils.GetOperatorNamespace(),
-				}, rb)
-				assert.True(t, kerrors.IsNotFound(err))
-			},
-		},
-		{
-			name: "deletes only role when rolebinding doesn't exist",
-			setupObjects: func() []client.Object {
-				return []client.Object{
-					&rbacv1.Role{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      utils.SpireOIDCExternalCertRoleName,
-							Namespace: utils.GetOperatorNamespace(),
-						},
-					},
-				}
-			},
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				return newFakeClient(store)
-			},
-			expectError: false,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {
-				role := &rbacv1.Role{}
-				err := client.Get(ctx, types.NamespacedName{
-					Name:      utils.SpireOIDCExternalCertRoleName,
-					Namespace: utils.GetOperatorNamespace(),
-				}, role)
-				assert.True(t, kerrors.IsNotFound(err))
-			},
-		},
-		{
-			name:         "fails when Get RoleBinding returns unexpected error",
-			setupObjects: func() []client.Object { return []client.Object{} },
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				fake := &fakes.FakeCustomCtrlClient{}
-				fake.GetReturns(testError)
-				return fake
-			},
-			expectError:    true,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {},
-		},
-		{
-			name: "fails when Delete RoleBinding returns error",
-			setupObjects: func() []client.Object {
-				return []client.Object{
-					&rbacv1.RoleBinding{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      utils.SpireOIDCExternalCertRoleBindingName,
-							Namespace: utils.GetOperatorNamespace(),
-						},
-					},
-				}
-			},
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				fake := &fakes.FakeCustomCtrlClient{}
-				existingRB := &rbacv1.RoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      utils.SpireOIDCExternalCertRoleBindingName,
-						Namespace: utils.GetOperatorNamespace(),
-					},
-				}
-				fake.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					if rb, ok := obj.(*rbacv1.RoleBinding); ok {
-						*rb = *existingRB
-					}
-					return nil
-				}
-				fake.DeleteReturns(testError)
-				return fake
-			},
-			expectError:    true,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {},
-		},
-		{
-			name: "fails when Get Role returns unexpected error",
-			setupObjects: func() []client.Object {
-				return []client.Object{}
-			},
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				fake := &fakes.FakeCustomCtrlClient{}
-				callCount := 0
-				// First call (RoleBinding Get) returns NotFound
-				// Second call (Role Get) returns unexpected error
-				fake.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					callCount++
-					if callCount == 1 {
-						return kerrors.NewNotFound(rbacv1.Resource("rolebindings"), key.Name)
-					}
-					// Return unexpected error for Role Get
-					return testError
-				}
-				return fake
-			},
-			expectError:    true,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {},
-		},
-		{
-			name: "fails when Delete Role returns error",
-			setupObjects: func() []client.Object {
-				return []client.Object{}
-			},
-			setupClient: func(store *testStore) customClient.CustomCtrlClient {
-				fake := &fakes.FakeCustomCtrlClient{}
-				existingRole := &rbacv1.Role{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      utils.SpireOIDCExternalCertRoleName,
-						Namespace: utils.GetOperatorNamespace(),
-					},
-				}
-				callCount := 0
-				// First call (RoleBinding Get) returns NotFound
-				// Second call (Role Get) returns existing role
-				fake.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					callCount++
-					if callCount == 1 {
-						return kerrors.NewNotFound(rbacv1.Resource("rolebindings"), key.Name)
-					}
-					if role, ok := obj.(*rbacv1.Role); ok {
-						*role = *existingRole
-					}
-					return nil
-				}
-				// Delete returns error (not NotFound)
-				fake.DeleteReturns(testError)
-				return fake
-			},
-			expectError:    true,
-			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Setup
-			scheme := runtime.NewScheme()
-			_ = rbacv1.AddToScheme(scheme)
-
-			store := newTestStore()
-			for _, obj := range tt.setupObjects() {
-				_ = store.Create(ctx, obj)
-			}
-
-			client := tt.setupClient(store)
-
-			r := &SpireOidcDiscoveryProviderReconciler{
-				ctrlClient: client,
-				scheme:     scheme,
-				log:        logr.Discard(),
-			}
-
-			// Execute
-			err := r.cleanupExternalCertRBAC(ctx)
 
 			// Assert
 			if tt.expectError {

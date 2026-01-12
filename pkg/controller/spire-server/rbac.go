@@ -662,8 +662,7 @@ func (r *SpireServerReconciler) reconcileExternalCertRBAC(ctx context.Context, s
 	// Only create RBAC if federation is enabled with https_web profile and externalSecretRef is configured
 	externalSecretRef := getExternalSecretRefFromServer(server)
 	if externalSecretRef == "" {
-		// Clean up RBAC resources if they exist
-		return r.cleanupExternalCertRBAC(ctx)
+		return nil
 	}
 
 	// Reconcile Role
@@ -812,46 +811,6 @@ func (r *SpireServerReconciler) reconcileExternalCertRoleBinding(ctx context.Con
 	return nil
 }
 
-// cleanupExternalCertRBAC deletes the external cert RBAC resources if they exist
-func (r *SpireServerReconciler) cleanupExternalCertRBAC(ctx context.Context) error {
-	// Delete RoleBinding
-	roleBinding := &rbacv1.RoleBinding{}
-	roleBindingName := types.NamespacedName{
-		Name:      utils.SpireServerExternalCertRoleBindingName,
-		Namespace: utils.GetOperatorNamespace(),
-	}
-	err := r.ctrlClient.Get(ctx, roleBindingName, roleBinding)
-	if err == nil {
-		// RoleBinding exists, delete it
-		if err := r.ctrlClient.Delete(ctx, roleBinding); err != nil && !kerrors.IsNotFound(err) {
-			r.log.Error(err, "failed to delete external cert role binding")
-			return err
-		}
-		r.log.Info("Deleted external cert RoleBinding", "name", roleBindingName.Name, "namespace", roleBindingName.Namespace)
-	} else if !kerrors.IsNotFound(err) {
-		return err
-	}
-
-	// Delete Role
-	role := &rbacv1.Role{}
-	roleName := types.NamespacedName{
-		Name:      utils.SpireServerExternalCertRoleName,
-		Namespace: utils.GetOperatorNamespace(),
-	}
-	err = r.ctrlClient.Get(ctx, roleName, role)
-	if err == nil {
-		// Role exists, delete it
-		if err := r.ctrlClient.Delete(ctx, role); err != nil && !kerrors.IsNotFound(err) {
-			r.log.Error(err, "failed to delete external cert role")
-			return err
-		}
-		r.log.Info("Deleted external cert Role", "name", roleName.Name, "namespace", roleName.Namespace)
-	} else if !kerrors.IsNotFound(err) {
-		return err
-	}
-
-	return nil
-}
 
 // getExternalSecretRefFromServer extracts the externalSecretRef from SpireServer spec
 func getExternalSecretRefFromServer(server *v1alpha1.SpireServer) string {
