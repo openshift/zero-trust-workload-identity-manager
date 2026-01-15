@@ -18,10 +18,11 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,6 +34,9 @@ import (
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -46,23 +50,7 @@ func GetTestDir() string {
 		return os.Getenv("ARTIFACT_DIR")
 	}
 
-	// For local runs, create a test-results directory in the current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		// Fallback to /tmp if we can't get the current working directory
-		return "/tmp"
-	}
-
-	// Create test-results directory path
-	testResultsDir := filepath.Join(cwd, "test-results")
-
-	// Create the directory if it doesn't exist
-	if err := os.MkdirAll(testResultsDir, 0755); err != nil {
-		// Fallback to /tmp if we can't create the directory
-		return "/tmp"
-	}
-
-	return testResultsDir
+	return "/tmp"
 }
 
 // GetKubeConfig returns the Kubernetes configuration
@@ -505,4 +493,116 @@ func containsAny(s string, substrs []string) bool {
 		}
 	}
 	return false
+}
+
+// FindOperatorSubscription finds an OLM subscription by name fragment in the specified namespace
+func FindOperatorSubscription(ctx context.Context, k8sClient client.Client, namespace, nameFragment string) (string, []string, error) {
+	subscriptionList := &unstructured.UnstructuredList{}
+	subscriptionList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "SubscriptionList",
+	})
+
+	if err := k8sClient.List(ctx, subscriptionList, client.InNamespace(namespace)); err != nil {
+		return "", nil, fmt.Errorf("failed to list Subscriptions in namespace '%s': %w", namespace, err)
+	}
+
+	if len(subscriptionList.Items) == 0 {
+		return "", nil, fmt.Errorf("no Subscriptions found in namespace '%s'", namespace)
+	}
+
+	var foundNames []string
+	for _, sub := range subscriptionList.Items {
+		name := sub.GetName()
+		foundNames = append(foundNames, name)
+		if strings.Contains(name, nameFragment) {
+			return name, foundNames, nil
+		}
+	}
+
+	return "", foundNames, fmt.Errorf("no Subscription matching '%s' found", nameFragment)
+}
+
+// PatchSubscriptionEnv patches a subscription's environment variable using merge patch
+func PatchSubscriptionEnv(ctx context.Context, k8sClient client.Client, namespace, name, envKey, envValue string) error {
+	subscription := &unstructured.Unstructured{}
+	subscription.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "Subscription",
+	})
+	subscription.SetName(name)
+	subscription.SetNamespace(namespace)
+
+	// Create merge patch payload with the environment variable
+	patchPayload := map[string]any{
+		"spec": map[string]any{
+			"config": map[string]any{
+				"env": []map[string]string{
+					{
+						"name":  envKey,
+						"value": envValue,
+					},
+				},
+			},
+		},
+	}
+
+	patchBytes, err := json.Marshal(patchPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch payload: %w", err)
+	}
+
+	if err := k8sClient.Patch(ctx, subscription, client.RawPatch(types.MergePatchType, patchBytes)); err != nil {
+		return fmt.Errorf("failed to patch subscription: %w", err)
+	}
+
+	return nil
+}
+
+// GetDeploymentEnvVar retrieves an environment variable value from a deployment's first container
+func GetDeploymentEnvVar(ctx context.Context, clientset kubernetes.Interface, namespace, deploymentName, envVarName string) (string, error) {
+	deployment, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	if len(deployment.Spec.Template.Spec.Containers) == 0 {
+		return "", fmt.Errorf("deployment has no containers")
+	}
+
+	for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == envVarName {
+			return env.Value, nil
+		}
+	}
+
+	return "", nil // Return empty string if env var not found
+}
+
+
+// GetNestedStringFromConfigMapJSON retrieves a nested string value from a JSON-formatted ConfigMap data field
+func GetNestedStringFromConfigMapJSON(ctx context.Context, clientset kubernetes.Interface, namespace, configMapName, dataKey string, fields ...string) (string, bool, error) {
+	cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(ctx, configMapName, metav1.GetOptions{})
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get ConfigMap: %w", err)
+	}
+
+	data, ok := cm.Data[dataKey]
+	if !ok {
+		return "", false, fmt.Errorf("key %s not found in ConfigMap", dataKey)
+	}
+
+	var configData map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &configData); err != nil {
+		return "", false, fmt.Errorf("failed to parse JSON from ConfigMap data: %w", err)
+	}
+
+	value, found, err := unstructured.NestedString(configData, fields...)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get nested field %v: %w", fields, err)
+	}
+
+	return value, found, nil
 }
