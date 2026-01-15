@@ -19,18 +19,26 @@ package utils
 import "time"
 
 const (
-	OperatorNamespace      = "zero-trust-workload-identity-manager"
-	OperatorDeploymentName = "zero-trust-workload-identity-manager-controller-manager"
-	OperatorLabelSelector  = "name=zero-trust-workload-identity-manager"
+	OperatorNamespace                = "zero-trust-workload-identity-manager"
+	OperatorDeploymentName           = "zero-trust-workload-identity-manager-controller-manager"
+	OperatorLabelSelector            = "name=zero-trust-workload-identity-manager"
+	OperatorSubscriptionNameFragment = "zero-trust-workload-identity-manager"
+	OperatorLogLevelEnvVar           = "OPERATOR_LOG_LEVEL"
 
 	SpireServerStatefulSetName               = "spire-server"
 	SpireServerPodLabel                      = "app.kubernetes.io/name=spire-server"
+	SpireServerConfigMapName                 = "spire-server"
+	SpireServerConfigKey                     = "server.conf"
 	SpireAgentDaemonSetName                  = "spire-agent"
 	SpireAgentPodLabel                       = "app.kubernetes.io/name=spire-agent"
+	SpireAgentConfigMapName                  = "spire-agent"
+	SpireAgentConfigKey                      = "agent.conf"
 	SpiffeCSIDriverDaemonSetName             = "spire-spiffe-csi-driver"
 	SpiffeCSIDriverPodLabel                  = "app.kubernetes.io/name=spiffe-csi-driver"
 	SpireOIDCDiscoveryProviderDeploymentName = "spire-spiffe-oidc-discovery-provider"
 	SpireOIDCDiscoveryProviderPodLabel       = "app.kubernetes.io/name=spiffe-oidc-discovery-provider"
+	SpireOIDCDiscoveryProviderConfigMapName  = "spire-spiffe-oidc-discovery-provider"
+	SpireOIDCDiscoveryProviderConfigKey      = "oidc-discovery-provider.conf"
 
 	DefaultInterval = 10 * time.Second
 	ShortInterval   = 5 * time.Second

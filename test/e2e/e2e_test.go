@@ -369,6 +369,47 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	})
 
 	Context("Common configurations", func() {
+		It("Operator log level can be configured through Subscription", func() {
+			By("Retrieving initial log level from operator Deployment")
+			initialLogLevel, err := utils.GetDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.OperatorLogLevelEnvVar)
+			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment env var")
+			fmt.Fprintf(GinkgoWriter, "initial log level from Deployment: %s\n", initialLogLevel)
+
+			By("Finding Subscription for the operator")
+			subscriptionName, foundNames, err := utils.FindOperatorSubscription(testCtx, k8sClient, utils.OperatorNamespace, utils.OperatorSubscriptionNameFragment)
+			if err != nil {
+				Expect(err).NotTo(HaveOccurred(),
+					"no Subscription matching '%s' found in namespace '%s'. Available subscriptions: %v",
+					utils.OperatorSubscriptionNameFragment, utils.OperatorNamespace, foundNames)
+			}
+			fmt.Fprintf(GinkgoWriter, "found subscription '%s'\n", subscriptionName)
+
+			// record initial generation of the Deployment before patching Subscription
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
+			initialGen := deployment.Generation
+
+			By("Patching Subscription object with verbose log level")
+			newLogLevel := "4"
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.OperatorLogLevelEnvVar, newLogLevel)
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=%s", utils.OperatorLogLevelEnvVar, newLogLevel)
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting operator log level")
+				utils.PatchSubscriptionEnv(ctx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.OperatorLogLevelEnvVar, initialLogLevel)
+			})
+
+			By("Waiting for operator Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if operator Deployment has the expected log level")
+			logLevel, err := utils.GetDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.OperatorLogLevelEnvVar)
+			Expect(err).NotTo(HaveOccurred(), "failed to get env %s from Deployment", utils.OperatorLogLevelEnvVar)
+			Expect(logLevel).To(Equal(newLogLevel), "%s should be updated to %s", utils.OperatorLogLevelEnvVar, newLogLevel)
+		})
+
 		It("SPIRE Server containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{}
@@ -585,6 +626,51 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
 		})
 
+		It("SPIRE Server log level can be configured through CR", func() {
+			By("Retrieving initial log level from SPIRE Server ConfigMap")
+			initialLogLevel, found, err := utils.GetNestedStringFromConfigMapJSON(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerConfigMapName, utils.SpireServerConfigKey, "server", "log_level")
+			Expect(err).NotTo(HaveOccurred(), "failed to get initial server.log_level from ConfigMap")
+			Expect(found).To(BeTrue(), "server.log_level should exist in ConfigMap")
+			fmt.Fprintf(GinkgoWriter, "initial log level from ConfigMap: %s\n", initialLogLevel)
+
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			// record initial generation of the StatefulSet before updating SpireServer object
+			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer StatefulSet")
+			initialGen := statefulset.Generation
+
+			By("Patching SpireServer object with verbose log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer with log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireServer log level")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Waiting for SPIRE Server StatefulSet rolling update to start")
+			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Server ConfigMap has the expected log level")
+			logLevel, found, err := utils.GetNestedStringFromConfigMapJSON(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerConfigMapName, utils.SpireServerConfigKey, "server", "log_level")
+			Expect(err).NotTo(HaveOccurred(), "failed to get server.log_level from ConfigMap")
+			Expect(found).To(BeTrue(), "server.log_level should exist in ConfigMap")
+			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
+		})
+
 		It("SPIRE Agent containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireAgent object")
 			spireAgent := &operatorv1alpha1.SpireAgent{}
@@ -774,6 +860,51 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Expect(pod.Spec.NodeName).NotTo(Equal(targetNodeName), "pod should not be scheduled on the labeled node '%s'", targetNodeName)
 				fmt.Fprintf(GinkgoWriter, "pod '%s' correctly excluded from labeled node '%s', scheduled on '%s'\n", pod.Name, targetNodeName, pod.Spec.NodeName)
 			}
+		})
+
+		It("SPIRE Agent log level can be configured through CR", func() {
+			By("Retrieving initial log level from SPIRE Agent ConfigMap")
+			initialLogLevel, found, err := utils.GetNestedStringFromConfigMapJSON(testCtx, clientset, utils.OperatorNamespace, utils.SpireAgentConfigMapName, utils.SpireAgentConfigKey, "agent", "log_level")
+			Expect(err).NotTo(HaveOccurred(), "failed to get initial agent.log_level from ConfigMap")
+			Expect(found).To(BeTrue(), "agent.log_level should exist in ConfigMap")
+			fmt.Fprintf(GinkgoWriter, "initial log level from ConfigMap: %s\n", initialLogLevel)
+
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			// record initial generation of the DaemonSet before updating SpireAgent object
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent DaemonSet")
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with verbose log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent with log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent log level")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE Agent ConfigMap has the expected log level")
+			logLevel, found, err := utils.GetNestedStringFromConfigMapJSON(testCtx, clientset, utils.OperatorNamespace, utils.SpireAgentConfigMapName, utils.SpireAgentConfigKey, "agent", "log_level")
+			Expect(err).NotTo(HaveOccurred(), "failed to get agent.log_level from ConfigMap")
+			Expect(found).To(BeTrue(), "agent.log_level should exist in ConfigMap")
+			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
 		})
 
 		It("SPIFFE CSI Driver containers resource limits and requests can be configured through CR", func() {
@@ -1170,6 +1301,51 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(newPods.Items).NotTo(BeEmpty())
 			Expect(newPods.Items[0].Spec.NodeName).To(Equal(targetNodeName), "pod should be rescheduled to the target node")
 			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, targetNodeName)
+		})
+
+		It("SPIRE OIDC Discovery Provider log level can be configured through CR", func() {
+			By("Retrieving initial log level from SPIRE OIDC Discovery Provider ConfigMap")
+			initialLogLevel, found, err := utils.GetNestedStringFromConfigMapJSON(testCtx, clientset, utils.OperatorNamespace, utils.SpireOIDCDiscoveryProviderConfigMapName, utils.SpireOIDCDiscoveryProviderConfigKey, "log_level")
+			Expect(err).NotTo(HaveOccurred(), "failed to get initial log_level from ConfigMap")
+			Expect(found).To(BeTrue(), "log_level should exist in ConfigMap")
+			fmt.Fprintf(GinkgoWriter, "initial log level from ConfigMap: %s\n", initialLogLevel)
+
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			// record initial generation of the Deployment before updating SpireOIDCDiscoveryProvider object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider Deployment")
+			initialGen := deployment.Generation
+
+			By("Patching SpireOIDCDiscoveryProvider object with verbose log level")
+			newLogLevel := "debug"
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.LogLevel = newLogLevel
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider with log level")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireOIDCDiscoveryProvider log level")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.LogLevel = initialLogLevel
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying if SPIRE OIDC Discovery Provider ConfigMap has the expected log level")
+			logLevel, found, err := utils.GetNestedStringFromConfigMapJSON(testCtx, clientset, utils.OperatorNamespace, utils.SpireOIDCDiscoveryProviderConfigMapName, utils.SpireOIDCDiscoveryProviderConfigKey, "log_level")
+			Expect(err).NotTo(HaveOccurred(), "failed to get log_level from ConfigMap")
+			Expect(found).To(BeTrue(), "log_level should exist in ConfigMap")
+			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
 		})
 	})
 })
