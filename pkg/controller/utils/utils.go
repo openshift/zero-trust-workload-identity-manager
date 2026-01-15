@@ -6,10 +6,12 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -22,6 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
+
+// logInvalidCreateOnlyModeOnce ensures we only log the warning once
+var logInvalidCreateOnlyModeOnce sync.Once
 
 var (
 	scheme = runtime.NewScheme()
@@ -225,12 +230,28 @@ func GetLogFormatFromString(logFormat string) string {
 	return logFormat
 }
 
-// IsInCreateOnlyMode checks if create-only mode is enabled
-// If the environment variable is set to "true", it returns true
-// Otherwise, it returns false
+// IsInCreateOnlyMode checks if create-only mode is enabled.
+// It accepts case-insensitive values:
+//   - "true", "TRUE", "True" -> returns true (enabled)
+//   - "false", "FALSE", "False", empty, or invalid -> returns false (disabled)
 func IsInCreateOnlyMode() bool {
-	createOnlyEnvValue := os.Getenv(createOnlyEnvName)
-	return createOnlyEnvValue == "true"
+	value := strings.TrimSpace(os.Getenv(createOnlyEnvName))
+	normalized := strings.ToUpper(value)
+
+	switch normalized {
+	case "TRUE":
+		return true
+	case "FALSE", "":
+		return false
+	default:
+		// Log warning once for invalid value
+		logInvalidCreateOnlyModeOnce.Do(func() {
+			ctrl.Log.WithName("create-only-mode").Info("Invalid CREATE_ONLY_MODE value, using default (disabled)",
+				"value", value,
+				"validValues", "true, false (case-insensitive)")
+		})
+		return false
+	}
 }
 
 // ZTWIMSpecChangedPredicate triggers reconciliation when ZTWIM spec is created
