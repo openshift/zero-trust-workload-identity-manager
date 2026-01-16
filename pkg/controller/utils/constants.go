@@ -28,6 +28,10 @@ const (
 	SpireControllerManagerLeaderElectionRoleBindingAssetName = "spire-controller-manager/spire-controller-manager-leader-election-role-binding.yaml"
 	SpireServerClusterRoleAssetName                          = "spire-server/spire-server-cluster-role.yaml"
 	SpireServerClusterRoleBindingAssetName                   = "spire-server/spire-server-cluster-role-binding.yaml"
+	SpireServerExternalCertRoleAssetName                     = "spire-server/spire-server-external-cert-role.yaml"
+	SpireServerExternalCertRoleBindingAssetName              = "spire-server/spire-server-external-cert-role-binding.yaml"
+	SpireOIDCExternalCertRoleAssetName                       = "spire-oidc-discovery-provider/spire-oidc-external-cert-role.yaml"
+	SpireOIDCExternalCertRoleBindingAssetName                = "spire-oidc-discovery-provider/spire-oidc-external-cert-role-binding.yaml"
 
 	// Service Accounts
 	SpiffeCsiDriverServiceAccountAssetName            = "spiffe-csi/spiffe-csi-service-account.yaml"
@@ -83,4 +87,10 @@ const (
 	// These are used as defaults for 'auto' mode when no explicit paths are provided.
 	DefaultKubeletCABasePath = "/etc/kubernetes"
 	DefaultKubeletCAFileName = "kubelet-ca.crt"
+
+	// External Certificate RBAC Resource Names
+	SpireOIDCExternalCertRoleName          = "spire-oidc-external-cert-reader"
+	SpireOIDCExternalCertRoleBindingName   = "spire-oidc-external-cert-reader"
+	SpireServerExternalCertRoleName        = "spire-server-external-cert-reader"
+	SpireServerExternalCertRoleBindingName = "spire-server-external-cert-reader"
 )

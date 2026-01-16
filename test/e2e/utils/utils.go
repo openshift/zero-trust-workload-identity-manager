@@ -581,7 +581,6 @@ func GetDeploymentEnvVar(ctx context.Context, clientset kubernetes.Interface, na
 	return "", nil // Return empty string if env var not found
 }
 
-
 // GetNestedStringFromConfigMapJSON retrieves a nested string value from a JSON-formatted ConfigMap data field
 func GetNestedStringFromConfigMapJSON(ctx context.Context, clientset kubernetes.Interface, namespace, configMapName, dataKey string, fields ...string) (string, bool, error) {
 	cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(ctx, configMapName, metav1.GetOptions{})
