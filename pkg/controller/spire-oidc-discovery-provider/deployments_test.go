@@ -1,16 +1,27 @@
 package spire_oidc_discovery_provider
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestBuildDeployment(t *testing.T) {
@@ -316,5 +327,219 @@ func TestBuildDeployment(t *testing.T) {
 				tt.expected(deployment)
 			}
 		})
+	}
+}
+
+// TestReconcileDeployment tests the reconcileDeployment function
+func TestReconcileDeployment(t *testing.T) {
+	t.Run("create success", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := newDeploymentTestReconciler(fakeClient)
+
+		oidc := createDeploymentTestOIDCCR()
+		statusMgr := status.NewManager(fakeClient)
+
+		fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-spiffe-oidc-discovery-provider"))
+		fakeClient.CreateReturns(nil)
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, false, "test-hash")
+
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+		if fakeClient.CreateCallCount() != 1 {
+			t.Errorf("Expected Create to be called once, got %d", fakeClient.CreateCallCount())
+		}
+	})
+
+	t.Run("create error", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := newDeploymentTestReconciler(fakeClient)
+
+		oidc := createDeploymentTestOIDCCR()
+		statusMgr := status.NewManager(fakeClient)
+
+		fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-spiffe-oidc-discovery-provider"))
+		fakeClient.CreateReturns(errors.New("create failed"))
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, false, "test-hash")
+
+		if err == nil {
+			t.Error("Expected error when Create fails")
+		}
+	})
+
+	t.Run("get error", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := newDeploymentTestReconciler(fakeClient)
+
+		oidc := createDeploymentTestOIDCCR()
+		statusMgr := status.NewManager(fakeClient)
+
+		fakeClient.GetReturns(errors.New("connection refused"))
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, false, "test-hash")
+
+		if err == nil {
+			t.Error("Expected error when Get fails")
+		}
+	})
+
+	t.Run("update success", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := newDeploymentTestReconciler(fakeClient)
+
+		oidc := createDeploymentTestOIDCCR()
+		oidc.Spec.ReplicaCount = 3
+		statusMgr := status.NewManager(fakeClient)
+
+		replicas := int32(1)
+		existingDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "spire-spiffe-oidc-discovery-provider",
+				Namespace:       utils.GetOperatorNamespace(),
+				ResourceVersion: "123",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+		}
+
+		fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			if deploy, ok := obj.(*appsv1.Deployment); ok {
+				*deploy = *existingDeployment
+			}
+			return nil
+		}
+		fakeClient.UpdateReturns(nil)
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, false, "new-hash")
+
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+		if fakeClient.UpdateCallCount() != 1 {
+			t.Errorf("Expected Update to be called once, got %d", fakeClient.UpdateCallCount())
+		}
+	})
+
+	t.Run("update error", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := newDeploymentTestReconciler(fakeClient)
+
+		oidc := createDeploymentTestOIDCCR()
+		oidc.Spec.ReplicaCount = 3
+		statusMgr := status.NewManager(fakeClient)
+
+		replicas := int32(1)
+		existingDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "spire-spiffe-oidc-discovery-provider",
+				Namespace:       utils.GetOperatorNamespace(),
+				ResourceVersion: "123",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+		}
+
+		fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			if deploy, ok := obj.(*appsv1.Deployment); ok {
+				*deploy = *existingDeployment
+			}
+			return nil
+		}
+		fakeClient.UpdateReturns(errors.New("update conflict"))
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, false, "new-hash")
+
+		if err == nil {
+			t.Error("Expected error when Update fails")
+		}
+	})
+
+	t.Run("create only mode skips update", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := newDeploymentTestReconciler(fakeClient)
+
+		oidc := createDeploymentTestOIDCCR()
+		oidc.Spec.ReplicaCount = 3
+		statusMgr := status.NewManager(fakeClient)
+
+		replicas := int32(1)
+		existingDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "spire-spiffe-oidc-discovery-provider",
+				Namespace:       utils.GetOperatorNamespace(),
+				ResourceVersion: "123",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+		}
+
+		fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			if deploy, ok := obj.(*appsv1.Deployment); ok {
+				*deploy = *existingDeployment
+			}
+			return nil
+		}
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, true, "new-hash")
+
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+		if fakeClient.UpdateCallCount() != 0 {
+			t.Error("Expected Update not to be called in create-only mode")
+		}
+	})
+
+	t.Run("set controller reference error", func(t *testing.T) {
+		fakeClient := &fakes.FakeCustomCtrlClient{}
+		reconciler := &SpireOidcDiscoveryProviderReconciler{
+			ctrlClient:    fakeClient,
+			ctx:           context.Background(),
+			log:           logr.Discard(),
+			scheme:        runtime.NewScheme(), // Empty scheme causes error
+			eventRecorder: record.NewFakeRecorder(100),
+		}
+
+		oidc := createDeploymentTestOIDCCR()
+		statusMgr := status.NewManager(fakeClient)
+
+		err := reconciler.reconcileDeployment(context.Background(), oidc, statusMgr, false, "test-hash")
+
+		if err == nil {
+			t.Error("Expected error when SetControllerReference fails")
+		}
+	})
+}
+
+// newDeploymentTestReconciler creates a reconciler for Deployment tests
+func newDeploymentTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireOidcDiscoveryProviderReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	return &SpireOidcDiscoveryProviderReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// createDeploymentTestOIDCCR creates a test SpireOIDCDiscoveryProvider for Deployment tests
+func createDeploymentTestOIDCCR() *v1alpha1.SpireOIDCDiscoveryProvider {
+	return &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			JwtIssuer:    "https://oidc.example.org",
+			ReplicaCount: 1,
+		},
 	}
 }

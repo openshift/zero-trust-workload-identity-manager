@@ -1,9 +1,22 @@
 package spire_oidc_discovery_provider
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/go-logr/logr"
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGetSpireOIDCDiscoveryProviderService(t *testing.T) {
@@ -107,4 +120,195 @@ func TestGetSpireOIDCDiscoveryProviderService(t *testing.T) {
 			t.Errorf("Custom label was not added")
 		}
 	})
+}
+
+// newSvcTestReconciler creates a reconciler for Service tests
+func newSvcTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireOidcDiscoveryProviderReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	return &SpireOidcDiscoveryProviderReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// TestReconcileService tests the reconcileService function
+func TestReconcileService(t *testing.T) {
+	tests := []struct {
+		name           string
+		oidc           *v1alpha1.SpireOIDCDiscoveryProvider
+		setupClient    func(*fakes.FakeCustomCtrlClient)
+		createOnlyMode bool
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+	}{
+		{
+			name: "create success",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-spiffe-oidc-discovery-provider"))
+				fc.CreateReturns(nil)
+			},
+			expectCreate: true,
+		},
+		{
+			name: "create error",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-spiffe-oidc-discovery-provider"))
+				fc.CreateReturns(errors.New("create failed"))
+			},
+			expectError: true,
+		},
+		{
+			name: "get error",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(errors.New("connection refused"))
+			},
+			expectError: true,
+		},
+		{
+			name: "create only mode skips update",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingSvc := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-spiffe-oidc-discovery-provider",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+					},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if svc, ok := obj.(*corev1.Service); ok {
+						*svc = *existingSvc
+					}
+					return nil
+				}
+			},
+			createOnlyMode: true,
+		},
+		{
+			name: "update success",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+					CommonConfig: v1alpha1.CommonConfig{
+						Labels: map[string]string{"new-label": "new-value"},
+					},
+				},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingSvc := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-spiffe-oidc-discovery-provider",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old-label": "old-value"},
+					},
+					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if svc, ok := obj.(*corev1.Service); ok {
+						*svc = *existingSvc
+					}
+					return nil
+				}
+				fc.UpdateReturns(nil)
+			},
+			expectUpdate: true,
+		},
+		{
+			name: "update error",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+					CommonConfig: v1alpha1.CommonConfig{
+						Labels: map[string]string{"new-label": "new-value"},
+					},
+				},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingSvc := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-spiffe-oidc-discovery-provider",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old-label": "old-value"},
+					},
+					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if svc, ok := obj.(*corev1.Service); ok {
+						*svc = *existingSvc
+					}
+					return nil
+				}
+				fc.UpdateReturns(errors.New("update conflict"))
+			},
+			expectError:  true,
+			expectUpdate: true,
+		},
+		{
+			name: "set controller ref error",
+			oidc: &v1alpha1.SpireOIDCDiscoveryProvider{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient:    func(fc *fakes.FakeCustomCtrlClient) {},
+			useEmptyScheme: true,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpireOidcDiscoveryProviderReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpireOidcDiscoveryProviderReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newSvcTestReconciler(fakeClient)
+			}
+			tt.setupClient(fakeClient)
+
+			statusMgr := status.NewManager(fakeClient)
+			err := reconciler.reconcileService(context.Background(), tt.oidc, statusMgr, tt.createOnlyMode)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, called %d times", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update to be called once, called %d times", fakeClient.UpdateCallCount())
+			}
+			if !tt.expectUpdate && !tt.expectError && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not to be called")
+			}
+		})
+	}
 }

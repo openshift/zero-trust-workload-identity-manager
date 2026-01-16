@@ -1,14 +1,25 @@
 package spire_server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGenerateSpireServerConfigMap(t *testing.T) {
@@ -1329,5 +1340,435 @@ func TestGenerateFederationConfigWithFederatesWith(t *testing.T) {
 				t.Error("Expected https_web profile for remote2.org")
 			}
 		}
+	}
+}
+
+// TestReconcileSpireServerConfigMap tests the reconcileSpireServerConfigMap function
+func TestReconcileSpireServerConfigMap(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupClient    func(*fakes.FakeCustomCtrlClient)
+		modifyServer   func(*v1alpha1.SpireServer)
+		modifyZTWIM    func(*v1alpha1.ZeroTrustWorkloadIdentityManager)
+		createOnlyMode bool
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+		expectHash     bool
+	}{
+		{
+			name: "create success",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-server"))
+				fc.CreateReturns(nil)
+			},
+			expectCreate: true,
+			expectHash:   true,
+		},
+		{
+			name: "create error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-server"))
+				fc.CreateReturns(errors.New("create failed"))
+			},
+			expectError: true,
+		},
+		{
+			name: "get error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(errors.New("connection refused"))
+			},
+			expectError: true,
+		},
+		{
+			name: "update success",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-server",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+					},
+					Data: map[string]string{"server.conf": "old-config"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if cm, ok := obj.(*corev1.ConfigMap); ok {
+						*cm = *existingCM
+					}
+					return nil
+				}
+				fc.UpdateReturns(nil)
+			},
+			expectUpdate: true,
+			expectHash:   true,
+		},
+		{
+			name: "update error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-server",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+					},
+					Data: map[string]string{"server.conf": "old-config"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if cm, ok := obj.(*corev1.ConfigMap); ok {
+						*cm = *existingCM
+					}
+					return nil
+				}
+				fc.UpdateReturns(errors.New("update conflict"))
+			},
+			expectError:  true,
+			expectUpdate: true,
+		},
+		{
+			name: "create only mode skips update",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-server",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+					},
+					Data: map[string]string{"server.conf": "old-config"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if cm, ok := obj.(*corev1.ConfigMap); ok {
+						*cm = *existingCM
+					}
+					return nil
+				}
+			},
+			createOnlyMode: true,
+			expectHash:     true,
+		},
+		{
+			name:           "set controller reference error",
+			setupClient:    func(fc *fakes.FakeCustomCtrlClient) {},
+			useEmptyScheme: true,
+			expectError:    true,
+		},
+		{
+			name:        "nil config returns error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {},
+			modifyServer: func(s *v1alpha1.SpireServer) {
+				s.Spec = v1alpha1.SpireServerSpec{}
+			},
+			modifyZTWIM: func(z *v1alpha1.ZeroTrustWorkloadIdentityManager) {
+				z.Spec.TrustDomain = ""
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpireServerReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpireServerReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newConfigMapTestReconciler(fakeClient)
+			}
+			tt.setupClient(fakeClient)
+
+			server := createTestSpireServer()
+			ztwim := createTestZTWIM()
+			if tt.modifyServer != nil {
+				tt.modifyServer(server)
+			}
+			if tt.modifyZTWIM != nil {
+				tt.modifyZTWIM(ztwim)
+			}
+			statusMgr := status.NewManager(fakeClient)
+
+			hash, err := reconciler.reconcileSpireServerConfigMap(context.Background(), server, statusMgr, ztwim, tt.createOnlyMode)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectHash && hash == "" {
+				t.Error("Expected non-empty config hash")
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, got %d", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update to be called once, got %d", fakeClient.UpdateCallCount())
+			}
+			if !tt.expectUpdate && !tt.expectError && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not to be called")
+			}
+		})
+	}
+}
+
+// TestReconcileSpireControllerManagerConfigMap tests the reconcileSpireControllerManagerConfigMap function
+func TestReconcileSpireControllerManagerConfigMap(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupClient    func(*fakes.FakeCustomCtrlClient)
+		createOnlyMode bool
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+		expectHash     bool
+	}{
+		{
+			name: "create success",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-controller-manager-config"))
+				fc.CreateReturns(nil)
+			},
+			expectCreate: true,
+			expectHash:   true,
+		},
+		{
+			name: "create error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-controller-manager-config"))
+				fc.CreateReturns(errors.New("create failed"))
+			},
+			expectError: true,
+		},
+		{
+			name: "get error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(errors.New("connection refused"))
+			},
+			expectError: true,
+		},
+		{
+			name: "update success",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-controller-manager-config",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+					},
+					Data: map[string]string{"spire-controller-manager-config.yaml": "old-config"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if cm, ok := obj.(*corev1.ConfigMap); ok {
+						*cm = *existingCM
+					}
+					return nil
+				}
+				fc.UpdateReturns(nil)
+			},
+			expectUpdate: true,
+			expectHash:   true,
+		},
+		{
+			name: "create only mode skips update",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-controller-manager-config",
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+					},
+					Data: map[string]string{"spire-controller-manager-config.yaml": "old-config"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if cm, ok := obj.(*corev1.ConfigMap); ok {
+						*cm = *existingCM
+					}
+					return nil
+				}
+			},
+			createOnlyMode: true,
+			expectHash:     true,
+		},
+		{
+			name:           "set controller reference error",
+			setupClient:    func(fc *fakes.FakeCustomCtrlClient) {},
+			useEmptyScheme: true,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpireServerReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpireServerReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newConfigMapTestReconciler(fakeClient)
+			}
+			tt.setupClient(fakeClient)
+
+			server := createTestSpireServer()
+			ztwim := createTestZTWIM()
+			statusMgr := status.NewManager(fakeClient)
+
+			hash, err := reconciler.reconcileSpireControllerManagerConfigMap(context.Background(), server, statusMgr, ztwim, tt.createOnlyMode)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectHash && hash == "" {
+				t.Error("Expected non-empty config hash")
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, got %d", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update to be called once, got %d", fakeClient.UpdateCallCount())
+			}
+			if !tt.expectUpdate && !tt.expectError && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not to be called")
+			}
+		})
+	}
+}
+
+// TestReconcileSpireBundleConfigMap tests the reconcileSpireBundleConfigMap function
+func TestReconcileSpireBundleConfigMap(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupClient    func(*fakes.FakeCustomCtrlClient)
+		useEmptyScheme bool
+		expectError    bool
+		expectCreate   bool
+	}{
+		{
+			name: "create success",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.CreateReturns(nil)
+			},
+			expectCreate: true,
+		},
+		{
+			name: "create error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.CreateReturns(errors.New("create failed"))
+			},
+			expectError: true,
+		},
+		{
+			name: "already exists is not error",
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.CreateReturns(kerrors.NewAlreadyExists(schema.GroupResource{}, "spire-bundle"))
+			},
+			expectCreate: true,
+		},
+		{
+			name:           "set controller reference error",
+			setupClient:    func(fc *fakes.FakeCustomCtrlClient) {},
+			useEmptyScheme: true,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			var reconciler *SpireServerReconciler
+			if tt.useEmptyScheme {
+				reconciler = &SpireServerReconciler{
+					ctrlClient:    fakeClient,
+					ctx:           context.Background(),
+					log:           logr.Discard(),
+					scheme:        runtime.NewScheme(),
+					eventRecorder: record.NewFakeRecorder(100),
+				}
+			} else {
+				reconciler = newConfigMapTestReconciler(fakeClient)
+			}
+			tt.setupClient(fakeClient)
+
+			server := createTestSpireServer()
+			ztwim := createTestZTWIM()
+			statusMgr := status.NewManager(fakeClient)
+
+			err := reconciler.reconcileSpireBundleConfigMap(context.Background(), server, statusMgr, ztwim)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, got %d", fakeClient.CreateCallCount())
+			}
+		})
+	}
+}
+
+// newConfigMapTestReconciler creates a reconciler for ConfigMap tests
+func newConfigMapTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireServerReconciler {
+	scheme := runtime.NewScheme()
+	_ = v1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	return &SpireServerReconciler{
+		ctrlClient:    fakeClient,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+}
+
+// createTestSpireServer creates a test SpireServer for ConfigMap tests
+func createTestSpireServer() *v1alpha1.SpireServer {
+	return &v1alpha1.SpireServer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireServerSpec{
+			Datastore: v1alpha1.DataStore{
+				DatabaseType:     "postgres",
+				ConnectionString: "postgresql://postgres:password@postgres:5432/spire",
+			},
+			JwtIssuer: "https://oidc.example.org",
+			CAValidity: metav1.Duration{
+				Duration: 24 * time.Hour,
+			},
+			DefaultX509Validity: metav1.Duration{
+				Duration: 1 * time.Hour,
+			},
+		},
+	}
+}
+
+// createTestZTWIM creates a test ZeroTrustWorkloadIdentityManager for ConfigMap tests
+func createTestZTWIM() *v1alpha1.ZeroTrustWorkloadIdentityManager {
+	return &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
 	}
 }

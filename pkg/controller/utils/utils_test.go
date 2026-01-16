@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Helper function to set environment variable and return cleanup function
@@ -818,4 +819,177 @@ func TestIsInCreateOnlyModeEnvCheck(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSetLabel tests the SetLabel function
+func TestSetLabel(t *testing.T) {
+	t.Run("set label on nil labels", func(t *testing.T) {
+		labels := SetLabel(nil, "key", "value")
+		if labels["key"] != "value" {
+			t.Error("Expected label to be set")
+		}
+	})
+
+	t.Run("set label on existing labels", func(t *testing.T) {
+		existing := map[string]string{"existing": "label"}
+		labels := SetLabel(existing, "new", "value")
+		if labels["existing"] != "label" {
+			t.Error("Expected existing label to be preserved")
+		}
+		if labels["new"] != "value" {
+			t.Error("Expected new label to be set")
+		}
+	})
+
+	t.Run("overwrite existing label", func(t *testing.T) {
+		existing := map[string]string{"key": "old"}
+		labels := SetLabel(existing, "key", "new")
+		if labels["key"] != "new" {
+			t.Errorf("Expected label to be overwritten, got %s", labels["key"])
+		}
+	})
+}
+
+// TestGenerateConfigHashFromString tests the GenerateConfigHashFromString function
+func TestGenerateConfigHashFromString(t *testing.T) {
+	t.Run("same input produces same hash", func(t *testing.T) {
+		hash1 := GenerateConfigHashFromString("test content")
+		hash2 := GenerateConfigHashFromString("test content")
+		if hash1 != hash2 {
+			t.Error("Expected same hash for same input")
+		}
+	})
+
+	t.Run("different input produces different hash", func(t *testing.T) {
+		hash1 := GenerateConfigHashFromString("content1")
+		hash2 := GenerateConfigHashFromString("content2")
+		if hash1 == hash2 {
+			t.Error("Expected different hash for different input")
+		}
+	})
+
+	t.Run("empty string produces hash", func(t *testing.T) {
+		hash := GenerateConfigHashFromString("")
+		if hash == "" {
+			t.Error("Expected non-empty hash")
+		}
+	})
+}
+
+// TestGenerateConfigHash tests the GenerateConfigHash function
+func TestGenerateConfigHash(t *testing.T) {
+	t.Run("same input produces same hash", func(t *testing.T) {
+		hash1 := GenerateConfigHash([]byte("test content"))
+		hash2 := GenerateConfigHash([]byte("test content"))
+		if hash1 != hash2 {
+			t.Error("Expected same hash for same input")
+		}
+	})
+
+	t.Run("different input produces different hash", func(t *testing.T) {
+		hash1 := GenerateConfigHash([]byte("content1"))
+		hash2 := GenerateConfigHash([]byte("content2"))
+		if hash1 == hash2 {
+			t.Error("Expected different hash for different input")
+		}
+	})
+}
+
+// TestGenerateMapHash tests the GenerateMapHash function
+func TestGenerateMapHash(t *testing.T) {
+	t.Run("same map produces same hash", func(t *testing.T) {
+		data := map[string]string{"key": "value"}
+		hash1 := GenerateMapHash(data)
+		hash2 := GenerateMapHash(data)
+		if hash1 != hash2 {
+			t.Error("Expected same hash for same map")
+		}
+	})
+
+	t.Run("different map produces different hash", func(t *testing.T) {
+		hash1 := GenerateMapHash(map[string]string{"key1": "value1"})
+		hash2 := GenerateMapHash(map[string]string{"key2": "value2"})
+		if hash1 == hash2 {
+			t.Error("Expected different hash for different map")
+		}
+	})
+
+	t.Run("nil map produces hash", func(t *testing.T) {
+		hash := GenerateMapHash(nil)
+		if hash == "" {
+			t.Error("Expected non-empty hash")
+		}
+	})
+}
+
+// TestNeedsOwnerReferenceUpdate tests the NeedsOwnerReferenceUpdate function
+func TestNeedsOwnerReferenceUpdate(t *testing.T) {
+	t.Run("missing owner reference needs update", func(t *testing.T) {
+		current := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test",
+				OwnerReferences: []metav1.OwnerReference{},
+			},
+		}
+		owner := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "owner",
+				UID:  "owner-uid",
+			},
+		}
+		if !NeedsOwnerReferenceUpdate(current, owner) {
+			t.Error("Expected true when owner reference is missing")
+		}
+	})
+
+	t.Run("has owner reference with same UID", func(t *testing.T) {
+		current := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test",
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+					Name:       "owner",
+					UID:        "owner-uid",
+				}},
+			},
+		}
+		owner := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "owner",
+				UID:  "owner-uid",
+			},
+		}
+		result := NeedsOwnerReferenceUpdate(current, owner)
+		if result {
+			t.Error("Expected false when owner reference matches")
+		}
+	})
+
+	t.Run("wrong owner UID needs update", func(t *testing.T) {
+		current := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test",
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+					Name:       "other-owner",
+					UID:        "different-uid",
+				}},
+			},
+		}
+		owner := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "owner",
+				UID:  "owner-uid",
+			},
+		}
+		if !NeedsOwnerReferenceUpdate(current, owner) {
+			t.Error("Expected true when owner UID is different")
+		}
+	})
 }
