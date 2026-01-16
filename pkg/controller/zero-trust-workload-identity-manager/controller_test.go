@@ -375,28 +375,42 @@ func TestContains(t *testing.T) {
 // TestSetCreateOnlyModeCondition tests setCreateOnlyModeCondition function
 func TestSetCreateOnlyModeCondition(t *testing.T) {
 	tests := []struct {
-		name                             string
-		anyOperandHasCreateOnlyCondition bool
-		anyCreateOnlyModeEnabled         bool
-		expectConditionAdded             bool
+		name               string
+		existingConditions []metav1.Condition
 	}{
 		{
-			name:                             "No operand has CreateOnlyMode - no condition added",
-			anyOperandHasCreateOnlyCondition: false,
-			anyCreateOnlyModeEnabled:         false,
-			expectConditionAdded:             false,
+			name:               "No existing conditions",
+			existingConditions: nil,
 		},
 		{
-			name:                             "Operand has CreateOnlyMode enabled - condition added as True",
-			anyOperandHasCreateOnlyCondition: true,
-			anyCreateOnlyModeEnabled:         true,
-			expectConditionAdded:             true,
+			name: "Existing CreateOnlyMode condition True",
+			existingConditions: []metav1.Condition{
+				{
+					Type:   CreateOnlyMode,
+					Status: metav1.ConditionTrue,
+					Reason: utils.CreateOnlyModeEnabled,
+				},
+			},
 		},
 		{
-			name:                             "Operand has CreateOnlyMode disabled - condition added as False",
-			anyOperandHasCreateOnlyCondition: true,
-			anyCreateOnlyModeEnabled:         false,
-			expectConditionAdded:             true,
+			name: "Existing CreateOnlyMode condition False",
+			existingConditions: []metav1.Condition{
+				{
+					Type:   CreateOnlyMode,
+					Status: metav1.ConditionFalse,
+					Reason: utils.CreateOnlyModeDisabled,
+				},
+			},
+		},
+		{
+			name: "Other conditions only",
+			existingConditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: metav1.ConditionTrue,
+					Reason: "AllGood",
+				},
+			},
 		},
 	}
 
@@ -405,16 +419,10 @@ func TestSetCreateOnlyModeCondition(t *testing.T) {
 			fakeClient := &fakes.FakeCustomCtrlClient{}
 			// Use real status.Manager
 			mgr := status.NewManager(fakeClient)
-			setCreateOnlyModeCondition(mgr, tt.anyOperandHasCreateOnlyCondition, tt.anyCreateOnlyModeEnabled)
-
-			// The function adds conditions internally - we just verify it doesn't panic
-			// and the behavior is tested by integration with Reconcile
-			if tt.expectConditionAdded {
-				// When condition should be added, verify the function completes without error
-				t.Log("Condition expected to be added - function completed successfully")
-			} else {
-				t.Log("Condition not expected to be added - function completed successfully")
-			}
+			// Call function with correct signature - it checks utils.IsInCreateOnlyMode() internally
+			setCreateOnlyModeCondition(mgr, tt.existingConditions)
+			// The function completes without error - actual behavior depends on environment variable
+			t.Log("Function completed successfully")
 		})
 	}
 }
@@ -483,70 +491,6 @@ func TestProcessOperandStatus(t *testing.T) {
 			}
 			if state.failedCount != tt.expectedFailedCount {
 				t.Errorf("failedCount = %v, expected %v", state.failedCount, tt.expectedFailedCount)
-			}
-		})
-	}
-}
-
-// TestProcessOperandStatus_CreateOnlyMode tests processOperandStatus with CreateOnlyMode
-func TestProcessOperandStatus_CreateOnlyMode(t *testing.T) {
-	tests := []struct {
-		name                                     string
-		operand                                  v1alpha1.OperandStatus
-		expectedAnyOperandHasCreateOnlyCondition bool
-		expectedAnyCreateOnlyModeEnabled         bool
-	}{
-		{
-			name: "Operand with CreateOnlyMode enabled",
-			operand: v1alpha1.OperandStatus{
-				Ready:   "true",
-				Message: "Ready",
-				Conditions: []metav1.Condition{
-					{
-						Type:   utils.CreateOnlyModeStatusType,
-						Status: metav1.ConditionTrue,
-					},
-				},
-			},
-			expectedAnyOperandHasCreateOnlyCondition: true,
-			expectedAnyCreateOnlyModeEnabled:         true,
-		},
-		{
-			name: "Operand with CreateOnlyMode disabled",
-			operand: v1alpha1.OperandStatus{
-				Ready:   "true",
-				Message: "Ready",
-				Conditions: []metav1.Condition{
-					{
-						Type:   utils.CreateOnlyModeStatusType,
-						Status: metav1.ConditionFalse,
-					},
-				},
-			},
-			expectedAnyOperandHasCreateOnlyCondition: true,
-			expectedAnyCreateOnlyModeEnabled:         false,
-		},
-		{
-			name: "Operand without CreateOnlyMode condition",
-			operand: v1alpha1.OperandStatus{
-				Ready:   "true",
-				Message: "Ready",
-			},
-			expectedAnyOperandHasCreateOnlyCondition: false,
-			expectedAnyCreateOnlyModeEnabled:         false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			state := &operandAggregateState{allReady: true}
-			processOperandStatus(tt.operand, state)
-
-			if state.anyOperandHasCreateOnlyCondition != tt.expectedAnyOperandHasCreateOnlyCondition {
-				t.Errorf("anyOperandHasCreateOnlyCondition = %v, expected %v", state.anyOperandHasCreateOnlyCondition, tt.expectedAnyOperandHasCreateOnlyCondition)
-			}
-			if state.anyCreateOnlyModeEnabled != tt.expectedAnyCreateOnlyModeEnabled {
-				t.Errorf("anyCreateOnlyModeEnabled = %v, expected %v", state.anyCreateOnlyModeEnabled, tt.expectedAnyCreateOnlyModeEnabled)
 			}
 		})
 	}
@@ -984,12 +928,10 @@ func TestUpdateOperatorCondition_MutationKillers(t *testing.T) {
 // TestOperandAggregateState tests operandAggregateState fields
 func TestOperandAggregateState(t *testing.T) {
 	state := &operandAggregateState{
-		allReady:                         true,
-		notCreatedCount:                  0,
-		failedCount:                      0,
-		anyCreateOnlyModeEnabled:         false,
-		anyOperandHasCreateOnlyCondition: false,
-		anyOperandExists:                 false,
+		allReady:         true,
+		notCreatedCount:  0,
+		failedCount:      0,
+		anyOperandExists: false,
 	}
 
 	// Test initial state
@@ -1001,8 +943,6 @@ func TestOperandAggregateState(t *testing.T) {
 	state.allReady = false
 	state.notCreatedCount = 1
 	state.failedCount = 2
-	state.anyCreateOnlyModeEnabled = true
-	state.anyOperandHasCreateOnlyCondition = true
 	state.anyOperandExists = true
 
 	// Verify modifications
@@ -1014,12 +954,6 @@ func TestOperandAggregateState(t *testing.T) {
 	}
 	if state.failedCount != 2 {
 		t.Errorf("Expected failedCount to be 2, got %d", state.failedCount)
-	}
-	if !state.anyCreateOnlyModeEnabled {
-		t.Error("Expected anyCreateOnlyModeEnabled to be true")
-	}
-	if !state.anyOperandHasCreateOnlyCondition {
-		t.Error("Expected anyOperandHasCreateOnlyCondition to be true")
 	}
 	if !state.anyOperandExists {
 		t.Error("Expected anyOperandExists to be true")
@@ -1033,13 +967,11 @@ func TestOperandAggregateResult(t *testing.T) {
 	}
 
 	result := operandAggregateResult{
-		operandStatuses:                  operandStatuses,
-		allReady:                         true,
-		notCreatedCount:                  0,
-		failedCount:                      0,
-		anyCreateOnlyModeEnabled:         false,
-		anyOperandHasCreateOnlyCondition: false,
-		anyOperandExists:                 true,
+		operandStatuses:  operandStatuses,
+		allReady:         true,
+		notCreatedCount:  0,
+		failedCount:      0,
+		anyOperandExists: true,
 	}
 
 	if len(result.operandStatuses) != 1 {
@@ -1832,12 +1764,15 @@ func TestAggregateOperandStatus_WithCreateOnlyMode(t *testing.T) {
 
 	result := reconciler.aggregateOperandStatus(context.Background())
 
-	// Should have CreateOnlyMode enabled
-	if !result.anyOperandHasCreateOnlyCondition {
-		t.Error("Expected anyOperandHasCreateOnlyCondition to be true")
+	// All operands are ready and exist
+	if !result.allReady {
+		t.Error("Expected allReady to be true")
 	}
-	if !result.anyCreateOnlyModeEnabled {
-		t.Error("Expected anyCreateOnlyModeEnabled to be true")
+	if !result.anyOperandExists {
+		t.Error("Expected anyOperandExists to be true")
+	}
+	if len(result.operandStatuses) != 4 {
+		t.Errorf("Expected 4 operand statuses, got %d", len(result.operandStatuses))
 	}
 }
 
