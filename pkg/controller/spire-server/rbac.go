@@ -811,7 +811,6 @@ func (r *SpireServerReconciler) reconcileExternalCertRoleBinding(ctx context.Con
 	return nil
 }
 
-
 // getExternalSecretRefFromServer extracts the externalSecretRef from SpireServer spec
 func getExternalSecretRefFromServer(server *v1alpha1.SpireServer) string {
 	if server.Spec.Federation == nil {

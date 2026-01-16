@@ -732,7 +732,10 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: []  # Will be populated dynamically from externalSecretRef
-    verbs: ["get", "list", "watch"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list", "watch"]
 
 `)
 
@@ -874,7 +877,10 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: []  # Will be populated dynamically from externalSecretRef
-    verbs: ["get", "list", "watch"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list", "watch"]
 
 `)
 

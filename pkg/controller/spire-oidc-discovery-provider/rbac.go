@@ -173,7 +173,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileExternalCertRoleBinding(
 	return nil
 }
 
-
 // Resource getter functions
 
 func getExternalCertRole(customLabels map[string]string) *rbacv1.Role {

@@ -169,17 +169,22 @@ func TestGetExternalCertRole(t *testing.T) {
 			customLabels: nil,
 			checkFunc: func(t *testing.T, role *rbacv1.Role) {
 				require.NotEmpty(t, role.Rules)
-				foundSecretsRule := false
+				foundGetRule := false
+				foundWatchRule := false
 				for _, rule := range role.Rules {
 					for _, resource := range rule.Resources {
 						if resource == "secrets" {
-							foundSecretsRule = true
-							assert.Contains(t, rule.Verbs, "get")
-							break
+							if contains(rule.Verbs, "get") {
+								foundGetRule = true
+							}
+							if contains(rule.Verbs, "list") && contains(rule.Verbs, "watch") {
+								foundWatchRule = true
+							}
 						}
 					}
 				}
-				assert.True(t, foundSecretsRule, "Expected role to have rules for 'secrets' resource")
+				assert.True(t, foundGetRule, "Expected role to have a rule for 'get' on secrets")
+				assert.True(t, foundWatchRule, "Expected role to have a rule for 'list' and 'watch' on secrets")
 			},
 		},
 	}
@@ -1060,4 +1065,14 @@ func TestReconcileExternalCertRBAC(t *testing.T) {
 			tt.postTestChecks(t, client)
 		})
 	}
+}
+
+// contains checks if a string is in a slice of strings
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
