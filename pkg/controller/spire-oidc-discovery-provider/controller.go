@@ -165,13 +165,14 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile Route (if enabled)
-	if err := r.reconcileRoute(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
+	// Reconcile RBAC for external certificate access BEFORE Route (if externalSecretRef is configured)
+	// This ensures the router serviceaccount has permissions before the Route is created/updated
+	if err := r.reconcileExternalCertRBAC(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile RBAC for external certificate access (if externalSecretRef is configured)
-	if err := r.reconcileExternalCertRBAC(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
+	// Reconcile Route (if enabled)
+	if err := r.reconcileRoute(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
