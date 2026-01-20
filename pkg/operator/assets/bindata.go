@@ -16,8 +16,12 @@
 // bindata/spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml
 // bindata/spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml
 // bindata/spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml
+// bindata/spire-oidc-discovery-provider/spire-oidc-external-cert-role-binding.yaml
+// bindata/spire-oidc-discovery-provider/spire-oidc-external-cert-role.yaml
 // bindata/spire-server/spire-server-cluster-role-binding.yaml
 // bindata/spire-server/spire-server-cluster-role.yaml
+// bindata/spire-server/spire-server-external-cert-role-binding.yaml
+// bindata/spire-server/spire-server-external-cert-role.yaml
 // bindata/spire-server/spire-server-service-account.yaml
 // bindata/spire-server/spire-server-service.yaml
 package assets
@@ -678,6 +682,78 @@ func spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml() (*asset, 
 	return a, nil
 }
 
+var _spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml = []byte(`kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-oidc-external-cert-reader
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-oidc-discovery-provider
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+subjects:
+  - kind: ServiceAccount
+    name: router
+    namespace: openshift-ingress
+roleRef:
+  kind: Role
+  name: spire-oidc-external-cert-reader
+  apiGroup: rbac.authorization.k8s.io
+
+`)
+
+func spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYamlBytes() ([]byte, error) {
+	return _spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml, nil
+}
+
+func spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml() (*asset, error) {
+	bytes, err := spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-oidc-discovery-provider/spire-oidc-external-cert-role-binding.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml = []byte(`kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-oidc-external-cert-reader
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-oidc-discovery-provider
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: []  # Will be populated dynamically from externalSecretRef
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list", "watch"]
+
+`)
+
+func spireOidcDiscoveryProviderSpireOidcExternalCertRoleYamlBytes() ([]byte, error) {
+	return _spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml, nil
+}
+
+func spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml() (*asset, error) {
+	bytes, err := spireOidcDiscoveryProviderSpireOidcExternalCertRoleYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-oidc-discovery-provider/spire-oidc-external-cert-role.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _spireServerSpireServerClusterRoleBindingYaml = []byte(`kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -747,6 +823,78 @@ func spireServerSpireServerClusterRoleYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "spire-server/spire-server-cluster-role.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireServerSpireServerExternalCertRoleBindingYaml = []byte(`kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-server-external-cert-reader
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+subjects:
+  - kind: ServiceAccount
+    name: router
+    namespace: openshift-ingress
+roleRef:
+  kind: Role
+  name: spire-server-external-cert-reader
+  apiGroup: rbac.authorization.k8s.io
+
+`)
+
+func spireServerSpireServerExternalCertRoleBindingYamlBytes() ([]byte, error) {
+	return _spireServerSpireServerExternalCertRoleBindingYaml, nil
+}
+
+func spireServerSpireServerExternalCertRoleBindingYaml() (*asset, error) {
+	bytes, err := spireServerSpireServerExternalCertRoleBindingYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/spire-server-external-cert-role-binding.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireServerSpireServerExternalCertRoleYaml = []byte(`kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-server-external-cert-reader
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: []  # Will be populated dynamically from externalSecretRef
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list", "watch"]
+
+`)
+
+func spireServerSpireServerExternalCertRoleYamlBytes() ([]byte, error) {
+	return _spireServerSpireServerExternalCertRoleYaml, nil
+}
+
+func spireServerSpireServerExternalCertRoleYaml() (*asset, error) {
+	bytes, err := spireServerSpireServerExternalCertRoleYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/spire-server-external-cert-role.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -887,8 +1035,12 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml":   spireControllerManagerSpireControllerManagerWebhookValidatingWebhookYaml,
 	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml":    spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceAccountYaml,
 	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml":            spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml,
+	"spire-oidc-discovery-provider/spire-oidc-external-cert-role-binding.yaml":            spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml,
+	"spire-oidc-discovery-provider/spire-oidc-external-cert-role.yaml":                    spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml,
 	"spire-server/spire-server-cluster-role-binding.yaml":                                 spireServerSpireServerClusterRoleBindingYaml,
 	"spire-server/spire-server-cluster-role.yaml":                                         spireServerSpireServerClusterRoleYaml,
+	"spire-server/spire-server-external-cert-role-binding.yaml":                           spireServerSpireServerExternalCertRoleBindingYaml,
+	"spire-server/spire-server-external-cert-role.yaml":                                   spireServerSpireServerExternalCertRoleYaml,
 	"spire-server/spire-server-service-account.yaml":                                      spireServerSpireServerServiceAccountYaml,
 	"spire-server/spire-server-service.yaml":                                              spireServerSpireServerServiceYaml,
 }
@@ -961,12 +1113,16 @@ var _bintree = &bintree{nil, map[string]*bintree{
 	"spire-oidc-discovery-provider": {nil, map[string]*bintree{
 		"spire-oidc-discovery-provider-service-account.yaml": {spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceAccountYaml, map[string]*bintree{}},
 		"spire-oidc-discovery-provider-service.yaml":         {spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml, map[string]*bintree{}},
+		"spire-oidc-external-cert-role-binding.yaml":         {spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml, map[string]*bintree{}},
+		"spire-oidc-external-cert-role.yaml":                 {spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml, map[string]*bintree{}},
 	}},
 	"spire-server": {nil, map[string]*bintree{
-		"spire-server-cluster-role-binding.yaml": {spireServerSpireServerClusterRoleBindingYaml, map[string]*bintree{}},
-		"spire-server-cluster-role.yaml":         {spireServerSpireServerClusterRoleYaml, map[string]*bintree{}},
-		"spire-server-service-account.yaml":      {spireServerSpireServerServiceAccountYaml, map[string]*bintree{}},
-		"spire-server-service.yaml":              {spireServerSpireServerServiceYaml, map[string]*bintree{}},
+		"spire-server-cluster-role-binding.yaml":       {spireServerSpireServerClusterRoleBindingYaml, map[string]*bintree{}},
+		"spire-server-cluster-role.yaml":               {spireServerSpireServerClusterRoleYaml, map[string]*bintree{}},
+		"spire-server-external-cert-role-binding.yaml": {spireServerSpireServerExternalCertRoleBindingYaml, map[string]*bintree{}},
+		"spire-server-external-cert-role.yaml":         {spireServerSpireServerExternalCertRoleYaml, map[string]*bintree{}},
+		"spire-server-service-account.yaml":            {spireServerSpireServerServiceAccountYaml, map[string]*bintree{}},
+		"spire-server-service.yaml":                    {spireServerSpireServerServiceYaml, map[string]*bintree{}},
 	}},
 }}
 
