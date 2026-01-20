@@ -688,7 +688,7 @@ metadata:
   name: spire-oidc-external-cert-reader
   namespace: zero-trust-workload-identity-manager
   labels:
-    app.kubernetes.io/name: oidc-discovery-provider
+    app.kubernetes.io/name: spiffe-oidc-discovery-provider
     app.kubernetes.io/instance: spire
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
@@ -724,7 +724,7 @@ metadata:
   name: spire-oidc-external-cert-reader
   namespace: zero-trust-workload-identity-manager
   labels:
-    app.kubernetes.io/name: oidc-discovery-provider
+    app.kubernetes.io/name: spiffe-oidc-discovery-provider
     app.kubernetes.io/instance: spire
     app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
     app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
