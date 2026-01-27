@@ -48,9 +48,6 @@ type SpiffeCsiReconciler struct {
 	scheme        *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=csidrivers,verbs=get;list;watch;create;update;patch;delete
-
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*SpiffeCsiReconciler, error) {
 	c, err := customClient.NewCustomClient(mgr)

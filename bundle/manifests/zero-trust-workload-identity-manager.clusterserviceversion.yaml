@@ -285,14 +285,6 @@ spec:
           - ""
           resources:
           - configmaps
-          - endpoints
-          - events
-          - namespaces
-          - nodes
-          - nodes/proxy
-          - pods
-          - serviceaccounts
-          - services
           verbs:
           - create
           - delete
@@ -304,23 +296,94 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - endpoints
+          - namespaces
+          - nodes
+          - pods
           - secrets
           verbs:
           - get
           - list
           - watch
         - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - nodes/proxy
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resourceNames:
+          - spire-agent
+          - spire-server
+          - spire-spiffe-csi-driver
+          - spire-spiffe-oidc-discovery-provider
+          resources:
+          - serviceaccounts
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - serviceaccounts
+          - services
+          verbs:
+          - create
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resourceNames:
+          - spire-agent
+          - spire-controller-manager-webhook
+          - spire-server
+          - spire-spiffe-oidc-discovery-provider
+          resources:
+          - services
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
           - admissionregistration.k8s.io
           resources:
           - validatingwebhookconfigurations
           verbs:
           - create
-          - delete
           - get
           - list
           - patch
-          - update
           - watch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resourceNames:
+          - spire-controller-manager-webhook
+          resources:
+          - validatingwebhookconfigurations
+          verbs:
+          - delete
+          - update
+        - apiGroups:
+          - apps
+          resourceNames:
+          - spire-agent
+          - spire-spiffe-csi-driver
+          resources:
+          - daemonsets
+          verbs:
+          - delete
+          - get
+          - update
         - apiGroups:
           - apps
           resources:
@@ -329,23 +392,36 @@ spec:
           - statefulsets
           verbs:
           - create
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resourceNames:
+          - spire-spiffe-oidc-discovery-provider
+          resources:
+          - deployments
+          verbs:
           - delete
           - get
-          - list
-          - patch
           - update
-          - watch
+        - apiGroups:
+          - apps
+          resourceNames:
+          - spire-server
+          resources:
+          - statefulsets
+          verbs:
+          - delete
+          - get
+          - update
         - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
           verbs:
           - create
-          - delete
           - get
           - list
-          - patch
-          - update
           - watch
         - apiGroups:
           - coordination.k8s.io
@@ -361,6 +437,19 @@ spec:
           - watch
         - apiGroups:
           - operator.openshift.io
+          resourceNames:
+          - cluster
+          resources:
+          - spiffecsidrivers
+          - spireagents
+          - spireoidcdiscoveryproviders
+          - spireservers
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
+          - operator.openshift.io
           resources:
           - spiffecsidrivers
           - spireagents
@@ -368,34 +457,33 @@ spec:
           - spireservers
           - zerotrustworkloadidentitymanagers
           verbs:
-          - create
-          - delete
-          - get
           - list
-          - patch
-          - update
           - watch
         - apiGroups:
           - operator.openshift.io
+          resourceNames:
+          - cluster
           resources:
           - spiffecsidrivers/finalizers
+          - spiffecsidrivers/status
           - spireagents/finalizers
+          - spireagents/status
           - spireoidcdiscoveryproviders/finalizers
+          - spireoidcdiscoveryproviders/status
           - spireservers/finalizers
+          - spireservers/status
           - zerotrustworkloadidentitymanagers/finalizers
+          - zerotrustworkloadidentitymanagers/status
           verbs:
           - update
         - apiGroups:
           - operator.openshift.io
+          resourceNames:
+          - cluster
           resources:
-          - spiffecsidrivers/status
-          - spireagents/status
-          - spireoidcdiscoveryproviders/status
-          - spireservers/status
-          - zerotrustworkloadidentitymanagers/status
+          - zerotrustworkloadidentitymanagers
           verbs:
           - get
-          - patch
           - update
         - apiGroups:
           - operators.coreos.com
@@ -410,6 +498,18 @@ spec:
           resources:
           - operatorconditions/status
           verbs:
+          - update
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resourceNames:
+          - spire-agent
+          - spire-controller-manager
+          - spire-server
+          resources:
+          - clusterrolebindings
+          - clusterroles
+          verbs:
+          - delete
           - get
           - update
         - apiGroups:
@@ -421,27 +521,73 @@ spec:
           - roles
           verbs:
           - create
-          - get
           - list
-          - update
           - watch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resourceNames:
+          - spire-bundle
+          - spire-controller-manager-leader-election
+          - spire-oidc-external-cert-reader
+          - spire-server-external-cert-reader
+          resources:
+          - rolebindings
+          - roles
+          verbs:
+          - delete
+          - get
+          - update
         - apiGroups:
           - route.openshift.io
           resources:
           - routes
+          verbs:
+          - create
+          - list
+          - watch
+        - apiGroups:
+          - route.openshift.io
+          resourceNames:
+          - spire-oidc-discovery-provider
+          - spire-server-federation
+          resources:
+          - routes
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
+          - route.openshift.io
+          resources:
           - routes/custom-host
           verbs:
           - create
-          - delete
-          - get
-          - list
-          - patch
           - update
-          - watch
         - apiGroups:
           - security.openshift.io
           resources:
           - securitycontextconstraints
+          verbs:
+          - create
+          - list
+          - watch
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - spire-agent
+          - spire-spiffe-csi-driver
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
+          - spire.spiffe.io
+          resources:
+          - clusterfederatedtrustdomains
+          - clusterspiffeids
+          - clusterstaticentries
           verbs:
           - create
           - delete
@@ -453,23 +599,21 @@ spec:
         - apiGroups:
           - spire.spiffe.io
           resources:
-          - clusterfederatedtrustdomains
           - clusterfederatedtrustdomains/finalizers
-          - clusterfederatedtrustdomains/status
-          - clusterspiffeids
           - clusterspiffeids/finalizers
-          - clusterspiffeids/status
-          - clusterstaticentries
           - clusterstaticentries/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - spire.spiffe.io
+          resources:
+          - clusterfederatedtrustdomains/status
+          - clusterspiffeids/status
           - clusterstaticentries/status
           verbs:
-          - create
-          - delete
           - get
-          - list
           - patch
           - update
-          - watch
         - apiGroups:
           - storage.k8s.io
           resources:
@@ -479,7 +623,6 @@ spec:
           - delete
           - get
           - list
-          - patch
           - update
           - watch
         - apiGroups:
