@@ -1349,7 +1349,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		})
 	})
 
-	// TODO: Skipped due to operator bug - condition doesn't transition from True to False when CREATE_ONLY_MODE changes
 	Context("CreateOnlyMode", func() {
 		var subscriptionName string
 
