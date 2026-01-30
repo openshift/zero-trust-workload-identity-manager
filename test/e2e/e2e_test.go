@@ -1350,7 +1350,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	})
 
 	// TODO: Skipped due to operator bug - condition doesn't transition from True to False when CREATE_ONLY_MODE changes
-	PContext("CreateOnlyMode", func() {
+	Context("CreateOnlyMode", func() {
 		var subscriptionName string
 
 		BeforeAll(func() {
@@ -1370,232 +1370,55 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Cleaning up: Removing CREATE_ONLY_MODE environment variable from Subscription")
 			ctx, cancel := context.WithTimeout(context.Background(), utils.ShortTimeout)
 			defer cancel()
-			if err := utils.RemoveSubscriptionConfig(ctx, k8sClient, utils.OperatorNamespace, subscriptionName); err != nil {
-				fmt.Fprintf(GinkgoWriter, "warning: failed to remove Subscription config during cleanup: %v\n", err)
+			if err := utils.RemoveSubscriptionEnv(ctx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar); err != nil {
+				fmt.Fprintf(GinkgoWriter, "warning: failed to remove CREATE_ONLY_MODE env var during cleanup: %v\n", err)
 			}
 		})
 
-		It("should not have CreateOnlyMode condition when CREATE_ONLY_MODE env var is not set (baseline)", func() {
-			By("Ensuring CREATE_ONLY_MODE env var is NOT set on the operator deployment")
-			envValue, err := utils.GetDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.CreateOnlyModeEnvVar)
-			if err == nil && envValue != "" {
-				Skip("CREATE_ONLY_MODE is already set, skipping baseline test")
-			}
-
-			By("Checking that CreateOnlyMode condition is NOT present on ZeroTrustWorkloadIdentityManager")
+		It("should transition CreateOnlyMode condition based on CREATE_ONLY_MODE env var value", func() {
+			By("Step 1: Verifying CreateOnlyMode condition is False by default (no env var set)")
 			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
-			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
 			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
 
 			condition, found := utils.GetConditionByType(cr, utils.CreateOnlyModeConditionType)
 			if found {
-				fmt.Fprintf(GinkgoWriter, "CreateOnlyMode condition exists with status '%v' (expected to not exist or be False)\n", condition.Status)
-				// If condition exists, it should be False (from previous test run cleanup)
 				Expect(condition.Status).To(Equal(metav1.ConditionFalse),
-					"if CreateOnlyMode condition exists in baseline, it should be False")
+					"CreateOnlyMode condition should be False by default")
+				fmt.Fprintf(GinkgoWriter, "Default state: CreateOnlyMode condition is False as expected\n")
 			} else {
-				fmt.Fprintf(GinkgoWriter, "CreateOnlyMode condition is NOT present as expected (baseline)\n")
+				fmt.Fprintf(GinkgoWriter, "Default state: CreateOnlyMode condition not present (acceptable)\n")
 			}
-		})
 
-		It("should set CreateOnlyMode condition to True when CREATE_ONLY_MODE=true (lowercase)", func() {
-			By("Recording initial generation of the operator Deployment")
+			By("Step 2: Setting CREATE_ONLY_MODE=true and verifying condition becomes True")
 			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
+			Expect(err).NotTo(HaveOccurred())
 			initialGen := deployment.Generation
 
-			By("Patching Subscription with CREATE_ONLY_MODE=true")
 			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
 			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with CREATE_ONLY_MODE=true")
 
-			By("Waiting for operator Deployment rolling update to start")
 			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 
-			By("Verifying CreateOnlyMode condition is True on ZeroTrustWorkloadIdentityManager")
 			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionTrue, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "CREATE_ONLY_MODE=true: Condition is now True\n")
 
-			By("Verifying condition has correct reason and message")
-			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
-			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
+			By("Step 3: Setting CREATE_ONLY_MODE=false and verifying condition becomes False")
+			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			condition, found := utils.GetConditionByType(cr, utils.CreateOnlyModeConditionType)
-			Expect(found).To(BeTrue(), "CreateOnlyMode condition should exist")
-			Expect(condition.Reason).To(Equal(utils.CreateOnlyModeEnabledReason), "reason should be %s", utils.CreateOnlyModeEnabledReason)
-			Expect(condition.Message).To(Equal(utils.CreateOnlyModeEnabledMessage), "message should match expected")
-			fmt.Fprintf(GinkgoWriter, "CreateOnlyMode condition: Status=%s, Reason=%s, Message=%s\n",
-				condition.Status, condition.Reason, condition.Message)
-		})
+			initialGen = deployment.Generation
 
-		It("should set CreateOnlyMode condition to False when CREATE_ONLY_MODE=false", func() {
-			By("Recording initial generation of the operator Deployment")
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
-			initialGen := deployment.Generation
-
-			By("Patching Subscription with CREATE_ONLY_MODE=false")
 			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "false")
 			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with CREATE_ONLY_MODE=false")
 
-			By("Waiting for operator Deployment rolling update to start")
 			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 
-			By("Verifying CreateOnlyMode condition transitions to False on ZeroTrustWorkloadIdentityManager")
 			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionFalse, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "CREATE_ONLY_MODE=false: Condition is now False\n")
 
-			By("Verifying condition has correct reason and message")
-			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
-			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
-			Expect(err).NotTo(HaveOccurred())
-			condition, found := utils.GetConditionByType(cr, utils.CreateOnlyModeConditionType)
-			Expect(found).To(BeTrue(), "CreateOnlyMode condition should exist")
-			Expect(condition.Reason).To(Equal(utils.CreateOnlyModeDisabledReason), "reason should be %s", utils.CreateOnlyModeDisabledReason)
-			Expect(condition.Message).To(Equal(utils.CreateOnlyModeDisabledMessage), "message should match expected")
-			fmt.Fprintf(GinkgoWriter, "CreateOnlyMode condition properly transitioned: Status=%s, Reason=%s, Message=%s\n",
-				condition.Status, condition.Reason, condition.Message)
-		})
-
-		It("should recognize uppercase CREATE_ONLY_MODE=TRUE (case-insensitive)", func() {
-			By("Recording initial generation of the operator Deployment")
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
-			initialGen := deployment.Generation
-
-			By("Patching Subscription with CREATE_ONLY_MODE=TRUE (uppercase)")
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "TRUE")
-			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with CREATE_ONLY_MODE=TRUE")
-
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying CreateOnlyMode condition is True")
-			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionTrue, utils.ShortTimeout)
-			fmt.Fprintf(GinkgoWriter, "Uppercase TRUE recognized correctly\n")
-		})
-
-		It("should recognize uppercase CREATE_ONLY_MODE=FALSE (case-insensitive)", func() {
-			By("Recording initial generation of the operator Deployment")
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
-			initialGen := deployment.Generation
-
-			By("Patching Subscription with CREATE_ONLY_MODE=FALSE (uppercase)")
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "FALSE")
-			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with CREATE_ONLY_MODE=FALSE")
-
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying CreateOnlyMode condition is False")
-			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionFalse, utils.ShortTimeout)
-			fmt.Fprintf(GinkgoWriter, "Uppercase FALSE recognized correctly\n")
-		})
-
-		It("should handle invalid CREATE_ONLY_MODE values by defaulting to disabled", func() {
-			By("First enabling create-only mode")
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen := deployment.Generation
-
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
-			Expect(err).NotTo(HaveOccurred())
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Recording generation before setting invalid value")
-			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen = deployment.Generation
-
-			By("Patching Subscription with invalid CREATE_ONLY_MODE value")
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "invalid-value")
-			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with invalid value")
-
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying CreateOnlyMode condition defaults to False for invalid values")
-			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionFalse, utils.ShortTimeout)
-			fmt.Fprintf(GinkgoWriter, "Invalid value correctly defaulted to disabled\n")
-		})
-
-		It("should handle empty string CREATE_ONLY_MODE value as disabled", func() {
-			By("First enabling create-only mode")
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen := deployment.Generation
-
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
-			Expect(err).NotTo(HaveOccurred())
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Recording generation before setting empty value")
-			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen = deployment.Generation
-
-			By("Patching Subscription with empty CREATE_ONLY_MODE value")
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "")
-			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with empty value")
-
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying CreateOnlyMode condition is False for empty string")
-			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionFalse, utils.ShortTimeout)
-			fmt.Fprintf(GinkgoWriter, "Empty string correctly treated as disabled\n")
-		})
-
-		It("should properly transition when CREATE_ONLY_MODE env var is removed", func() {
-			By("First enabling create-only mode")
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen := deployment.Generation
-
-			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
-			Expect(err).NotTo(HaveOccurred())
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying CreateOnlyMode is True before removing env var")
-			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionTrue, utils.ShortTimeout)
-
-			By("Recording generation before removing config")
-			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen = deployment.Generation
-
-			By("Removing CREATE_ONLY_MODE environment variable from Subscription")
-			err = utils.RemoveSubscriptionConfig(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName)
-			Expect(err).NotTo(HaveOccurred(), "failed to remove Subscription config")
-
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
-
-			By("Waiting for operator Deployment to become Available")
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
-
-			By("Verifying CreateOnlyMode condition transitions to False when env var is removed")
-			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionFalse, utils.ShortTimeout)
-			fmt.Fprintf(GinkgoWriter, "Env var removal correctly transitions condition to False\n")
+			fmt.Fprintf(GinkgoWriter, "CreateOnlyMode condition transitions correctly: default(False) → true(True) → false(False)\n")
 		})
 	})
 

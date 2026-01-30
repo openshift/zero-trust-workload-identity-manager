@@ -685,35 +685,66 @@ func WaitForConditionAbsent(ctx context.Context, k8sClient client.Client, condit
 		"condition '%s' should be absent within %v", conditionType, timeout)
 }
 
-// RemoveSubscriptionConfig removes the config section from an OLM subscription
-func RemoveSubscriptionConfig(ctx context.Context, k8sClient client.Client, namespace, name string) error {
+// RemoveSubscriptionEnv removes a specific environment variable from an OLM subscription's config
+func RemoveSubscriptionEnv(ctx context.Context, k8sClient client.Client, namespace, name, envName string) error {
 	subscription := &unstructured.Unstructured{}
 	subscription.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1alpha1",
 		Kind:    "Subscription",
 	})
-	subscription.SetName(name)
-	subscription.SetNamespace(namespace)
 
-	// Create JSON patch to remove /spec/config
-	patchPayload := []map[string]string{
-		{
-			"op":   "remove",
-			"path": "/spec/config",
-		},
+	// Get the current subscription
+	if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, subscription); err != nil {
+		return fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	patchBytes, err := json.Marshal(patchPayload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal patch payload: %w", err)
+	// Get the current env array
+	envVars, found, err := unstructured.NestedSlice(subscription.Object, "spec", "config", "env")
+	if err != nil || !found {
+		// No env vars to remove
+		return nil
 	}
 
-	if err := k8sClient.Patch(ctx, subscription, client.RawPatch(types.JSONPatchType, patchBytes)); err != nil {
-		// Ignore error if config doesn't exist
-		if !strings.Contains(err.Error(), "nonexistent") {
-			return fmt.Errorf("failed to patch subscription: %w", err)
+	// Find and remove the specific env var
+	var newEnvVars []interface{}
+	for _, env := range envVars {
+		envMap, ok := env.(map[string]interface{})
+		if !ok {
+			continue
 		}
+		if envMap["name"] != envName {
+			newEnvVars = append(newEnvVars, env)
+		}
+	}
+
+	// If no env vars left, remove the entire config section
+	if len(newEnvVars) == 0 {
+		patchPayload := []map[string]string{
+			{
+				"op":   "remove",
+				"path": "/spec/config",
+			},
+		}
+		patchBytes, err := json.Marshal(patchPayload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal patch payload: %w", err)
+		}
+		if err := k8sClient.Patch(ctx, subscription, client.RawPatch(types.JSONPatchType, patchBytes)); err != nil {
+			if !strings.Contains(err.Error(), "nonexistent") {
+				return fmt.Errorf("failed to patch subscription: %w", err)
+			}
+		}
+		return nil
+	}
+
+	// Update with remaining env vars
+	if err := unstructured.SetNestedSlice(subscription.Object, newEnvVars, "spec", "config", "env"); err != nil {
+		return fmt.Errorf("failed to set env vars: %w", err)
+	}
+
+	if err := k8sClient.Update(ctx, subscription); err != nil {
+		return fmt.Errorf("failed to update subscription: %w", err)
 	}
 
 	return nil
