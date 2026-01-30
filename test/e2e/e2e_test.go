@@ -1348,4 +1348,517 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
 		})
 	})
+
+	Context("CreateOnlyMode", func() {
+		var subscriptionName string
+
+		BeforeAll(func() {
+			By("Finding Subscription for the operator")
+			var foundNames []string
+			var err error
+			subscriptionName, foundNames, err = utils.FindOperatorSubscription(context.Background(), k8sClient, utils.OperatorNamespace, utils.OperatorSubscriptionNameFragment)
+			if err != nil {
+				Expect(err).NotTo(HaveOccurred(),
+					"no Subscription matching '%s' found in namespace '%s'. Available subscriptions: %v",
+					utils.OperatorSubscriptionNameFragment, utils.OperatorNamespace, foundNames)
+			}
+			fmt.Fprintf(GinkgoWriter, "found subscription '%s' for CreateOnlyMode tests\n", subscriptionName)
+		})
+
+		AfterAll(func() {
+			By("Cleaning up: Removing CREATE_ONLY_MODE environment variable from Subscription")
+			ctx, cancel := context.WithTimeout(context.Background(), utils.ShortTimeout)
+			defer cancel()
+			if err := utils.RemoveSubscriptionEnv(ctx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar); err != nil {
+				fmt.Fprintf(GinkgoWriter, "warning: failed to remove CREATE_ONLY_MODE env var during cleanup: %v\n", err)
+			}
+		})
+
+		It("should transition CreateOnlyMode condition based on CREATE_ONLY_MODE env var value", func() {
+			By("Step 1: Verifying CreateOnlyMode condition is False by default (no env var set)")
+			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
+			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
+
+			condition, found := utils.GetConditionByType(cr, utils.CreateOnlyModeConditionType)
+			if found {
+				Expect(condition.Status).To(Equal(metav1.ConditionFalse),
+					"CreateOnlyMode condition should be False by default")
+				fmt.Fprintf(GinkgoWriter, "Default state: CreateOnlyMode condition is False as expected\n")
+			} else {
+				fmt.Fprintf(GinkgoWriter, "Default state: CreateOnlyMode condition not present (acceptable)\n")
+			}
+
+			By("Step 2: Setting CREATE_ONLY_MODE=true and verifying condition becomes True")
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := deployment.Generation
+
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with CREATE_ONLY_MODE=true")
+
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionTrue, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "CREATE_ONLY_MODE=true: Condition is now True\n")
+
+			By("Step 3: Setting CREATE_ONLY_MODE=false and verifying condition becomes False")
+			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen = deployment.Generation
+
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "false")
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with CREATE_ONLY_MODE=false")
+
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			utils.WaitForConditionStatus(testCtx, k8sClient, utils.CreateOnlyModeConditionType, metav1.ConditionFalse, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "CREATE_ONLY_MODE=false: Condition is now False\n")
+
+			fmt.Fprintf(GinkgoWriter, "CreateOnlyMode condition transitions correctly: default(False) → true(True) → false(False)\n")
+		})
+	})
+
+	Context("UpgradeableCondition", func() {
+		var operatorConditionName string
+
+		BeforeAll(func() {
+			By("Finding OperatorCondition for the operator")
+			var err error
+			operatorConditionName, err = utils.FindOperatorCondition(context.Background(), k8sClient, utils.OperatorNamespace, utils.OperatorSubscriptionNameFragment)
+			Expect(err).NotTo(HaveOccurred(), "failed to find OperatorCondition")
+			fmt.Fprintf(GinkgoWriter, "found OperatorCondition '%s' for Upgradeable tests\n", operatorConditionName)
+		})
+
+		It("should have Upgradeable=True when all operands are ready", func() {
+			By("Verifying all operands are ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Checking Upgradeable condition is True")
+			utils.WaitForOperatorConditionUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+
+			By("Verifying condition has correct reason and message")
+			condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(condition.Reason).To(Equal(utils.UpgradeableReadyReason), "reason should be %s", utils.UpgradeableReadyReason)
+			Expect(condition.Message).To(Equal(utils.UpgradeableReadyMessage), "message should match expected")
+			fmt.Fprintf(GinkgoWriter, "Upgradeable condition: Status=%s, Reason=%s, Message=%s\n",
+				condition.Status, condition.Reason, condition.Message)
+		})
+
+		It("should set Upgradeable=False when SPIRE Server pod is deleted and recover to True", func() {
+			By("Getting SPIRE Server pod")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty(), "no SPIRE Server pods found")
+			spireServerPod := pods.Items[0]
+			fmt.Fprintf(GinkgoWriter, "will delete SPIRE Server pod '%s'\n", spireServerPod.Name)
+
+			By("Deleting SPIRE Server pod")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, spireServerPod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to delete SPIRE Server pod")
+
+			By("Checking Upgradeable condition transitions to False")
+			Eventually(func() bool {
+				condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get Upgradeable condition: %v\n", err)
+					return false
+				}
+				if condition.Status == metav1.ConditionFalse {
+					fmt.Fprintf(GinkgoWriter, "Upgradeable=False detected: Reason=%s, Message=%s\n", condition.Reason, condition.Message)
+					Expect(condition.Reason).To(Equal(utils.UpgradeableOperandsNotReady), "reason should be %s", utils.UpgradeableOperandsNotReady)
+					Expect(condition.Message).To(ContainSubstring(utils.UpgradeableNotReadyMessageStart), "message should indicate not safe to upgrade")
+					Expect(condition.Message).To(ContainSubstring("SpireServer"), "message should mention SpireServer")
+					return true
+				}
+				fmt.Fprintf(GinkgoWriter, "Upgradeable still %v, waiting for False...\n", condition.Status)
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"Upgradeable should become False when SPIRE Server pod is deleted")
+
+			By("Waiting for SPIRE Server to recover")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying Upgradeable condition returns to True after recovery")
+			utils.WaitForOperatorConditionUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+
+			condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(condition.Reason).To(Equal(utils.UpgradeableReadyReason))
+			fmt.Fprintf(GinkgoWriter, "Upgradeable recovered to True: Reason=%s\n", condition.Reason)
+		})
+
+		It("should set Upgradeable=False when SPIRE Agent pod is deleted and recover to True", func() {
+			By("Getting a SPIRE Agent pod")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty(), "no SPIRE Agent pods found")
+			spireAgentPod := pods.Items[0]
+			fmt.Fprintf(GinkgoWriter, "will delete SPIRE Agent pod '%s'\n", spireAgentPod.Name)
+
+			By("Deleting SPIRE Agent pod")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, spireAgentPod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to delete SPIRE Agent pod")
+
+			By("Checking Upgradeable condition transitions to False")
+			Eventually(func() bool {
+				condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get Upgradeable condition: %v\n", err)
+					return false
+				}
+				if condition.Status == metav1.ConditionFalse {
+					fmt.Fprintf(GinkgoWriter, "Upgradeable=False detected: Reason=%s, Message=%s\n", condition.Reason, condition.Message)
+					Expect(condition.Reason).To(Equal(utils.UpgradeableOperandsNotReady))
+					Expect(condition.Message).To(ContainSubstring("SpireAgent"), "message should mention SpireAgent")
+					return true
+				}
+				fmt.Fprintf(GinkgoWriter, "Upgradeable still %v, waiting for False...\n", condition.Status)
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"Upgradeable should become False when SPIRE Agent pod is deleted")
+
+			By("Waiting for SPIRE Agent to recover")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying Upgradeable condition returns to True after recovery")
+			utils.WaitForOperatorConditionUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "Upgradeable recovered to True after SPIRE Agent recovery\n")
+		})
+
+		It("should set Upgradeable=False when OIDC Discovery Provider pod is deleted and recover to True", func() {
+			By("Getting OIDC Discovery Provider pod")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty(), "no OIDC Discovery Provider pods found")
+			oidcPod := pods.Items[0]
+			fmt.Fprintf(GinkgoWriter, "will delete OIDC Discovery Provider pod '%s'\n", oidcPod.Name)
+
+			By("Deleting OIDC Discovery Provider pod")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, oidcPod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to delete OIDC Discovery Provider pod")
+
+			By("Checking Upgradeable condition transitions to False")
+			Eventually(func() bool {
+				condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get Upgradeable condition: %v\n", err)
+					return false
+				}
+				if condition.Status == metav1.ConditionFalse {
+					fmt.Fprintf(GinkgoWriter, "Upgradeable=False detected: Reason=%s, Message=%s\n", condition.Reason, condition.Message)
+					Expect(condition.Reason).To(Equal(utils.UpgradeableOperandsNotReady))
+					Expect(condition.Message).To(ContainSubstring("SpireOIDCDiscoveryProvider"), "message should mention SpireOIDCDiscoveryProvider")
+					return true
+				}
+				fmt.Fprintf(GinkgoWriter, "Upgradeable still %v, waiting for False...\n", condition.Status)
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"Upgradeable should become False when OIDC Discovery Provider pod is deleted")
+
+			By("Waiting for OIDC Discovery Provider to recover")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying Upgradeable condition returns to True after recovery")
+			utils.WaitForOperatorConditionUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "Upgradeable recovered to True after OIDC Discovery Provider recovery\n")
+		})
+
+		It("should handle multiple concurrent pod failures and recover", func() {
+			By("Getting pods from multiple operands")
+			agentPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(agentPods.Items).NotTo(BeEmpty())
+
+			csiPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(csiPods.Items).NotTo(BeEmpty())
+
+			By("Deleting pods from multiple operands simultaneously")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, agentPods.Items[0].Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, csiPods.Items[0].Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			fmt.Fprintf(GinkgoWriter, "deleted pods: %s, %s\n", agentPods.Items[0].Name, csiPods.Items[0].Name)
+
+			By("Checking Upgradeable condition transitions to False")
+			Eventually(func() bool {
+				condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+				if err != nil {
+					return false
+				}
+				if condition.Status == metav1.ConditionFalse {
+					fmt.Fprintf(GinkgoWriter, "Upgradeable=False detected: Message=%s\n", condition.Message)
+					return true
+				}
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"Upgradeable should become False when multiple pods are deleted")
+
+			By("Waiting for all operands to recover")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying Upgradeable condition returns to True after all recover")
+			utils.WaitForOperatorConditionUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+			fmt.Fprintf(GinkgoWriter, "Upgradeable recovered to True after multiple pod failures\n")
+		})
+
+		It("should recover Upgradeable condition after operator pod restart", func() {
+			By("Getting operator pod")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.OperatorLabelSelector})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			operatorPod := pods.Items[0]
+			fmt.Fprintf(GinkgoWriter, "will delete operator pod '%s'\n", operatorPod.Name)
+
+			By("Recording old pod name")
+			oldPodName := operatorPod.Name
+
+			By("Deleting operator pod")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, operatorPod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for new operator pod to be Running")
+			Eventually(func() bool {
+				newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.OperatorLabelSelector})
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to list operator pods: %v\n", err)
+					return false
+				}
+				for _, pod := range newPods.Items {
+					if pod.Name != oldPodName && pod.Status.Phase == corev1.PodRunning {
+						fmt.Fprintf(GinkgoWriter, "new operator pod '%s' is Running\n", pod.Name)
+						return true
+					}
+				}
+				return false
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"new operator pod should be Running")
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Verifying Upgradeable condition is correctly re-established after operator restart")
+			utils.WaitForOperatorConditionUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+
+			condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(condition.Reason).To(Equal(utils.UpgradeableReadyReason))
+			fmt.Fprintf(GinkgoWriter, "Upgradeable condition re-established after operator restart: Status=%s, Reason=%s\n",
+				condition.Status, condition.Reason)
+		})
+
+		It("should have all required fields in Upgradeable condition", func() {
+			By("Getting Upgradeable condition")
+			condition, err := utils.GetOperatorConditionUpgradeable(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying all required fields are present")
+			Expect(condition.Type).To(Equal(utils.UpgradeableConditionType), "type should be %s", utils.UpgradeableConditionType)
+			Expect(condition.Status).To(BeElementOf(metav1.ConditionTrue, metav1.ConditionFalse, metav1.ConditionUnknown), "status should be a valid ConditionStatus")
+			Expect(condition.Reason).NotTo(BeEmpty(), "reason should not be empty")
+			Expect(condition.Message).NotTo(BeEmpty(), "message should not be empty")
+			Expect(condition.LastTransitionTime.IsZero()).To(BeFalse(), "lastTransitionTime should be set")
+
+			fmt.Fprintf(GinkgoWriter, "Upgradeable condition has all required fields:\n")
+			fmt.Fprintf(GinkgoWriter, "  Type: %s\n", condition.Type)
+			fmt.Fprintf(GinkgoWriter, "  Status: %s\n", condition.Status)
+			fmt.Fprintf(GinkgoWriter, "  Reason: %s\n", condition.Reason)
+			fmt.Fprintf(GinkgoWriter, "  Message: %s\n", condition.Message)
+			fmt.Fprintf(GinkgoWriter, "  LastTransitionTime: %s\n", condition.LastTransitionTime)
+		})
+	})
+
+	Context("LabelPropagation", func() {
+		// PR #51: Tests that spec.labels on CRs propagate to workload metadata.labels
+
+		It("SpireServer spec.labels should propagate to StatefulSet metadata.labels", func() {
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			By("Patching SpireServer object with test labels")
+			testLabels := map[string]string{
+				utils.TestLabelKey: utils.TestLabelValue,
+				"component":        "server",
+			}
+
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Removing test labels from SpireServer")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.Labels = nil
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Waiting for StatefulSet to have the propagated label")
+			utils.WaitForStatefulSetLabel(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.TestLabelKey, utils.TestLabelValue, utils.ShortTimeout)
+
+			By("Verifying all test labels are propagated")
+			sts, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(sts.Labels).To(HaveKeyWithValue(utils.TestLabelKey, utils.TestLabelValue))
+			Expect(sts.Labels).To(HaveKeyWithValue("component", "server"))
+			fmt.Fprintf(GinkgoWriter, "SpireServer spec.labels successfully propagated to StatefulSet metadata.labels\n")
+		})
+
+		It("SpireAgent spec.labels should propagate to DaemonSet metadata.labels", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			By("Patching SpireAgent object with test labels")
+			testLabels := map[string]string{
+				utils.TestLabelKey: utils.TestLabelValue,
+				"component":        "agent",
+			}
+
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Removing test labels from SpireAgent")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.Labels = nil
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Waiting for DaemonSet to have the propagated label")
+			utils.WaitForDaemonSetLabel(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.TestLabelKey, utils.TestLabelValue, utils.ShortTimeout)
+
+			By("Verifying all test labels are propagated")
+			ds, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ds.Labels).To(HaveKeyWithValue(utils.TestLabelKey, utils.TestLabelValue))
+			Expect(ds.Labels).To(HaveKeyWithValue("component", "agent"))
+			fmt.Fprintf(GinkgoWriter, "SpireAgent spec.labels successfully propagated to DaemonSet metadata.labels\n")
+		})
+
+		It("SpiffeCSIDriver spec.labels should propagate to DaemonSet metadata.labels", func() {
+			By("Getting SpiffeCSIDriver object")
+			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpiffeCSIDriver object")
+
+			By("Patching SpiffeCSIDriver object with test labels")
+			testLabels := map[string]string{
+				utils.TestLabelKey: utils.TestLabelValue,
+				"component":        "csi",
+			}
+
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spiffeCSIDriver, func() {
+				spiffeCSIDriver.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Removing test labels from SpiffeCSIDriver")
+				driver := &operatorv1alpha1.SpiffeCSIDriver{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, driver); err == nil {
+					driver.Spec.Labels = nil
+					k8sClient.Update(ctx, driver)
+				}
+			})
+
+			By("Waiting for DaemonSet to have the propagated label")
+			utils.WaitForDaemonSetLabel(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.TestLabelKey, utils.TestLabelValue, utils.ShortTimeout)
+
+			By("Verifying all test labels are propagated")
+			ds, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpiffeCSIDriverDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ds.Labels).To(HaveKeyWithValue(utils.TestLabelKey, utils.TestLabelValue))
+			Expect(ds.Labels).To(HaveKeyWithValue("component", "csi"))
+			fmt.Fprintf(GinkgoWriter, "SpiffeCSIDriver spec.labels successfully propagated to DaemonSet metadata.labels\n")
+		})
+
+		It("SpireOIDCDiscoveryProvider spec.labels should propagate to Deployment metadata.labels", func() {
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			By("Patching SpireOIDCDiscoveryProvider object with test labels")
+			testLabels := map[string]string{
+				utils.TestLabelKey: utils.TestLabelValue,
+				"component":        "oidc",
+			}
+
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Removing test labels from SpireOIDCDiscoveryProvider")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.Labels = nil
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Waiting for Deployment to have the propagated label")
+			utils.WaitForDeploymentLabel(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.TestLabelKey, utils.TestLabelValue, utils.ShortTimeout)
+
+			By("Verifying all test labels are propagated")
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deployment.Labels).To(HaveKeyWithValue(utils.TestLabelKey, utils.TestLabelValue))
+			Expect(deployment.Labels).To(HaveKeyWithValue("component", "oidc"))
+			fmt.Fprintf(GinkgoWriter, "SpireOIDCDiscoveryProvider spec.labels successfully propagated to Deployment metadata.labels\n")
+		})
+
+		It("SpireAgent should remove custom labels from DaemonSet when spec.labels is cleared", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			By("Adding test labels to SpireAgent")
+			testLabels := map[string]string{
+				utils.TestLabelKey: utils.TestLabelValue,
+			}
+
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to add labels to SpireAgent")
+
+			By("Waiting for DaemonSet to have the propagated label")
+			utils.WaitForDaemonSetLabel(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.TestLabelKey, utils.TestLabelValue, utils.ShortTimeout)
+
+			By("Removing spec.labels from SpireAgent (setting to nil)")
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.Labels = nil
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to remove labels from SpireAgent")
+
+			By("Waiting for custom label to be removed from DaemonSet")
+			utils.WaitForDaemonSetLabelAbsent(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.TestLabelKey, utils.ShortTimeout)
+
+			By("Verifying DaemonSet only has default labels")
+			ds, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ds.Labels).NotTo(HaveKey(utils.TestLabelKey), "custom test label should not exist")
+			// Verify default labels are still present
+			Expect(ds.Labels).To(HaveKey("app.kubernetes.io/name"), "default label 'app.kubernetes.io/name' should exist")
+			Expect(ds.Labels).To(HaveKey("app.kubernetes.io/managed-by"), "default label 'app.kubernetes.io/managed-by' should exist")
+			fmt.Fprintf(GinkgoWriter, "DaemonSet has only default labels after spec.labels removal: %v\n", ds.Labels)
+		})
+	})
 })
