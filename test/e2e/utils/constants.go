@@ -26,20 +26,6 @@ const (
 	OperatorLogLevelEnvVar           = "OPERATOR_LOG_LEVEL"
 	CreateOnlyModeEnvVar             = "CREATE_ONLY_MODE"
 
-	// CreateOnlyMode condition values
-	CreateOnlyModeConditionType   = "CreateOnlyMode"
-	CreateOnlyModeEnabledReason   = "CreateOnlyModeEnabled"
-	CreateOnlyModeDisabledReason  = "CreateOnlyModeDisabled"
-	CreateOnlyModeEnabledMessage  = "One or more operands have create-only mode enabled"
-	CreateOnlyModeDisabledMessage = "Create-only mode is disabled"
-
-	// OperatorCondition Upgradeable condition values
-	UpgradeableConditionType        = "Upgradeable"
-	UpgradeableReadyReason          = "Ready"
-	UpgradeableOperandsNotReady     = "OperandsNotReady"
-	UpgradeableReadyMessage         = "Operator is Upgradeable"
-	UpgradeableNotReadyMessageStart = "Not safe to upgrade - existing operands are not ready:"
-
 	SpireServerStatefulSetName               = "spire-server"
 	SpireServerPodLabel                      = "app.kubernetes.io/name=spire-server"
 	SpireServerConfigMapName                 = "spire-server"
@@ -59,8 +45,4 @@ const (
 	ShortInterval   = 5 * time.Second
 	DefaultTimeout  = 5 * time.Minute
 	ShortTimeout    = 2 * time.Minute
-
-	// Label propagation test constants
-	TestLabelKey   = "e2e-test-label"
-	TestLabelValue = "working"
 )
