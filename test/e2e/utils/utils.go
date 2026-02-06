@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
+	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
+	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -324,42 +325,98 @@ func WaitForDaemonSetRollingUpdate(ctx context.Context, clientset kubernetes.Int
 		"daemonset '%s/%s' rolling update should be processed within %v", namespace, name, timeout)
 }
 
-// WaitForCRConditionsTrue waits for all required conditions of the operator managed cluster CR object to be True within timeout
-func WaitForCRConditionsTrue(ctx context.Context, k8sClient client.Client, cr client.Object, requiredConditionTypes []string, timeout time.Duration) {
+// checkConditionsMatch checks if all expected conditions match the actual conditions
+func checkConditionsMatch(conditions []metav1.Condition, expectedConditions map[string]metav1.ConditionStatus) bool {
+	conditionMap := make(map[string]metav1.Condition)
+	for _, c := range conditions {
+		conditionMap[c.Type] = c
+	}
+
+	var mismatches []string
+	for condType, expectedStatus := range expectedConditions {
+		c, exists := conditionMap[condType]
+		if !exists {
+			mismatches = append(mismatches, fmt.Sprintf("{Type '%s' missing}", condType))
+		} else if c.Status != expectedStatus {
+			mismatches = append(mismatches, fmt.Sprintf("{Type '%s' status '%v', expected '%v'}", condType, c.Status, expectedStatus))
+		}
+	}
+
+	if len(mismatches) > 0 {
+		fmt.Fprintf(GinkgoWriter, "conditions do not match expected statuses: %v\n", mismatches)
+		return false
+	}
+	return true
+}
+
+// WaitForSpireServerConditions waits for SpireServer conditions to reach expected statuses
+func WaitForSpireServerConditions(ctx context.Context, k8sClient client.Client, name string,
+	expectedConditions map[string]metav1.ConditionStatus, timeout time.Duration) {
 	Eventually(func() bool {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, cr); err != nil {
-			fmt.Fprintf(GinkgoWriter, "failed to get object '%T': %v\n", cr, err)
+		cr := &operatorv1alpha1.SpireServer{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, cr); err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get SpireServer '%s': %v\n", name, err)
 			return false
 		}
-
-		// Use reflection to get .Status.Conditions []metav1.Condition
-		statusField := reflect.ValueOf(cr).Elem().FieldByName("Status")
-		conditionsField := statusField.FieldByName("Conditions")
-		conditions, _ := conditionsField.Interface().([]metav1.Condition)
-
-		conditionMap := make(map[string]metav1.Condition)
-		for _, condition := range conditions {
-			conditionMap[condition.Type] = condition
-		}
-
-		var notTrue []string
-		for _, required := range requiredConditionTypes {
-			if condition, exists := conditionMap[required]; !exists {
-				notTrue = append(notTrue, fmt.Sprintf("{Type '%s' missing}", required))
-			} else if condition.Status != metav1.ConditionTrue {
-				notTrue = append(notTrue, fmt.Sprintf("{%v}", condition))
-			}
-		}
-
-		if len(notTrue) > 0 {
-			fmt.Fprintf(GinkgoWriter, "not all conditions are in true status yet: %v\n", notTrue)
-			return false
-		}
-
-		fmt.Fprintf(GinkgoWriter, "all conditions are true: %v\n", requiredConditionTypes)
-		return true
+		return checkConditionsMatch(cr.Status.Conditions, expectedConditions)
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
-		"all conditions of '%T' object should be true within %v", cr, timeout)
+		"SpireServer '%s' conditions should match expected statuses within %v", name, timeout)
+}
+
+// WaitForSpireAgentConditions waits for SpireAgent conditions to reach expected statuses
+func WaitForSpireAgentConditions(ctx context.Context, k8sClient client.Client, name string,
+	expectedConditions map[string]metav1.ConditionStatus, timeout time.Duration) {
+	Eventually(func() bool {
+		cr := &operatorv1alpha1.SpireAgent{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, cr); err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get SpireAgent '%s': %v\n", name, err)
+			return false
+		}
+		return checkConditionsMatch(cr.Status.Conditions, expectedConditions)
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"SpireAgent '%s' conditions should match expected statuses within %v", name, timeout)
+}
+
+// WaitForSpiffeCSIDriverConditions waits for SpiffeCSIDriver conditions to reach expected statuses
+func WaitForSpiffeCSIDriverConditions(ctx context.Context, k8sClient client.Client, name string,
+	expectedConditions map[string]metav1.ConditionStatus, timeout time.Duration) {
+	Eventually(func() bool {
+		cr := &operatorv1alpha1.SpiffeCSIDriver{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, cr); err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get SpiffeCSIDriver '%s': %v\n", name, err)
+			return false
+		}
+		return checkConditionsMatch(cr.Status.Conditions, expectedConditions)
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"SpiffeCSIDriver '%s' conditions should match expected statuses within %v", name, timeout)
+}
+
+// WaitForSpireOIDCDiscoveryProviderConditions waits for SpireOIDCDiscoveryProvider conditions to reach expected statuses
+func WaitForSpireOIDCDiscoveryProviderConditions(ctx context.Context, k8sClient client.Client, name string,
+	expectedConditions map[string]metav1.ConditionStatus, timeout time.Duration) {
+	Eventually(func() bool {
+		cr := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, cr); err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get SpireOIDCDiscoveryProvider '%s': %v\n", name, err)
+			return false
+		}
+		return checkConditionsMatch(cr.Status.Conditions, expectedConditions)
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"SpireOIDCDiscoveryProvider '%s' conditions should match expected statuses within %v", name, timeout)
+}
+
+// WaitForZeroTrustWorkloadIdentityManagerConditions waits for ZeroTrustWorkloadIdentityManager conditions to reach expected statuses
+func WaitForZeroTrustWorkloadIdentityManagerConditions(ctx context.Context, k8sClient client.Client, name string,
+	expectedConditions map[string]metav1.ConditionStatus, timeout time.Duration) {
+	Eventually(func() bool {
+		cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, cr); err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get ZeroTrustWorkloadIdentityManager '%s': %v\n", name, err)
+			return false
+		}
+		return checkConditionsMatch(cr.Status.Conditions, expectedConditions)
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"ZeroTrustWorkloadIdentityManager '%s' conditions should match expected statuses within %v", name, timeout)
 }
 
 // VerifyContainerResources verifies that all containers in the provided pods have the expected resource limits and requests
@@ -386,6 +443,23 @@ func VerifyContainerResources(pods []corev1.Pod, expectedResources *corev1.Resou
 
 			fmt.Fprintf(GinkgoWriter, "container '%s' in pod '%s' has expected resources\n", container.Name, pod.Name)
 		}
+	}
+}
+
+// VerifyPodLabels verifies that all provided pods have the expected labels.
+func VerifyPodLabels(pods []corev1.Pod, expectedLabels map[string]string) {
+	for _, pod := range pods {
+		// Skip terminating pods
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		podLabels := pod.GetLabels()
+		for key, expectedValue := range expectedLabels {
+			Expect(podLabels).To(HaveKeyWithValue(key, expectedValue),
+				"pod '%s' should have label '%s=%s'", pod.Name, key, expectedValue)
+		}
+
+		fmt.Fprintf(GinkgoWriter, "pod '%s' has expected labels %v\n", pod.Name, expectedLabels)
 	}
 }
 
@@ -484,12 +558,8 @@ func UpdateCRWithRetry(ctx context.Context, k8sClient client.Client, obj client.
 // containsAny checks if s contains any of the substrings
 func containsAny(s string, substrs []string) bool {
 	for _, substr := range substrs {
-		if len(s) >= len(substr) {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
+		if strings.Contains(s, substr) {
+			return true
 		}
 	}
 	return false
@@ -604,4 +674,60 @@ func GetNestedStringFromConfigMapJSON(ctx context.Context, clientset kubernetes.
 	}
 
 	return value, found, nil
+}
+
+// FindOperatorConditionName finds an OLM OperatorCondition by name fragment in the specified namespace
+func FindOperatorConditionName(ctx context.Context, k8sClient client.Client, namespace, nameFragment string) (string, []string, error) {
+	operatorConditionList := &operatorv1.OperatorConditionList{}
+	if err := k8sClient.List(ctx, operatorConditionList, client.InNamespace(namespace)); err != nil {
+		return "", nil, fmt.Errorf("failed to list OperatorConditions in namespace '%s': %w", namespace, err)
+	}
+
+	if len(operatorConditionList.Items) == 0 {
+		return "", nil, fmt.Errorf("no OperatorConditions found in namespace '%s'", namespace)
+	}
+
+	var foundNames []string
+	for i := range operatorConditionList.Items {
+		name := operatorConditionList.Items[i].Name
+		foundNames = append(foundNames, name)
+		if strings.Contains(name, nameFragment) {
+			return name, foundNames, nil
+		}
+	}
+
+	return "", foundNames, fmt.Errorf("no OperatorCondition matching '%s' found", nameFragment)
+}
+
+// GetUpgradeableCondition fetches the current Upgradeable condition from the OperatorCondition.
+func GetUpgradeableCondition(ctx context.Context, k8sClient client.Client, namespace, operatorConditionName string) (*metav1.Condition, error) {
+	operatorCondition := &operatorv1.OperatorCondition{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: operatorConditionName, Namespace: namespace}, operatorCondition); err != nil {
+		return nil, fmt.Errorf("failed to get OperatorCondition '%s': %w", operatorConditionName, err)
+	}
+	for i := range operatorCondition.Status.Conditions {
+		if operatorCondition.Status.Conditions[i].Type == operatorv1.Upgradeable {
+			return &operatorCondition.Status.Conditions[i], nil
+		}
+	}
+	return nil, fmt.Errorf("upgradeable condition not found in OperatorCondition '%s'", operatorConditionName)
+}
+
+// WaitForUpgradeableStatus waits for Upgradeable condition to reach expected status within timeout.
+func WaitForUpgradeableStatus(ctx context.Context, k8sClient client.Client, namespace, operatorConditionName string, expectedStatus metav1.ConditionStatus, timeout time.Duration) {
+	Eventually(func() bool {
+		condition, err := GetUpgradeableCondition(ctx, k8sClient, namespace, operatorConditionName)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "%v\n", err)
+			return false
+		}
+		if condition.Status != expectedStatus {
+			fmt.Fprintf(GinkgoWriter, "Upgradeable status is '%v', expected '%v' (reason: %s)\n",
+				condition.Status, expectedStatus, condition.Reason)
+			return false
+		}
+		fmt.Fprintf(GinkgoWriter, "Upgradeable condition has expected status '%v'\n", expectedStatus)
+		return true
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"Upgradeable condition should have status '%v' within %v", expectedStatus, timeout)
 }

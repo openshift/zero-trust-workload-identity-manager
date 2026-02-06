@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
-	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -41,10 +40,14 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	var clusterName string
 	var bundleConfigMap string
 	var jwtIssuer string
+	var subscriptionName string
+	var operatorConditionName string
 
 	BeforeAll(func() {
+		ctx := context.Background()
+
 		By("Getting cluster base domain")
-		baseDomain, err := utils.GetClusterBaseDomain(context.Background(), configClient)
+		baseDomain, err := utils.GetClusterBaseDomain(ctx, configClient)
 		Expect(err).NotTo(HaveOccurred(), "failed to get cluster base domain")
 
 		// declare shared variables for tests
@@ -52,6 +55,19 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		jwtIssuer = fmt.Sprintf("https://oidc-discovery.%s", appDomain)
 		clusterName = "test01"
 		bundleConfigMap = "spire-bundle"
+
+		By("Finding Subscription for the operator")
+		var foundNames []string
+		subscriptionName, foundNames, err = utils.FindOperatorSubscription(ctx, k8sClient, utils.OperatorNamespace, utils.OperatorSubscriptionNameFragment)
+		Expect(err).NotTo(HaveOccurred(), "no Subscription matching '%s' found in namespace '%s'; found: %v",
+			utils.OperatorSubscriptionNameFragment, utils.OperatorNamespace, foundNames)
+		fmt.Fprintf(GinkgoWriter, "found Subscription '%s'\n", subscriptionName)
+
+		By("Finding OperatorCondition for the operator")
+		operatorConditionName, foundNames, err = utils.FindOperatorConditionName(ctx, k8sClient, utils.OperatorNamespace, utils.OperatorSubscriptionNameFragment)
+		Expect(err).NotTo(HaveOccurred(), "no OperatorCondition matching '%s' found in namespace '%s'; found: %v",
+			utils.OperatorSubscriptionNameFragment, utils.OperatorNamespace, foundNames)
+		fmt.Fprintf(GinkgoWriter, "found OperatorCondition '%s'\n", operatorConditionName)
 	})
 
 	BeforeEach(func() {
@@ -181,20 +197,18 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpireServer object")
 
 			By("Waiting for SpireServer conditions to be True")
-			cr := &operatorv1alpha1.SpireServer{}
-			conditionTypes := []string{
-				"ServiceAccountAvailable",
-				"ServiceAvailable",
-				"RBACAvailable",
-				"ValidatingWebhookAvailable",
-				"ServerConfigMapAvailable",
-				"ControllerManagerConfigAvailable",
-				"BundleConfigAvailable",
-				"StatefulSetAvailable",
-				"TTLConfigurationValid",
-				"Ready",
-			}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
+			utils.WaitForSpireServerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"ServiceAccountAvailable":          metav1.ConditionTrue,
+				"ServiceAvailable":                 metav1.ConditionTrue,
+				"RBACAvailable":                    metav1.ConditionTrue,
+				"ValidatingWebhookAvailable":       metav1.ConditionTrue,
+				"ServerConfigMapAvailable":         metav1.ConditionTrue,
+				"ControllerManagerConfigAvailable": metav1.ConditionTrue,
+				"BundleConfigAvailable":            metav1.ConditionTrue,
+				"StatefulSetAvailable":             metav1.ConditionTrue,
+				"TTLConfigurationValid":            metav1.ConditionTrue,
+				"Ready":                            metav1.ConditionTrue,
+			}, utils.DefaultTimeout)
 
 			By("Waiting for SPIRE Server StatefulSet to become Ready")
 			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -222,17 +236,15 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpireAgent object")
 
 			By("Waiting for SpireAgent conditions to be True")
-			cr := &operatorv1alpha1.SpireAgent{}
-			conditionTypes := []string{
-				"ServiceAccountAvailable",
-				"ServiceAvailable",
-				"RBACAvailable",
-				"ConfigMapAvailable",
-				"SecurityContextConstraintsAvailable",
-				"DaemonSetAvailable",
-				"Ready",
-			}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
+			utils.WaitForSpireAgentConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"ServiceAccountAvailable":             metav1.ConditionTrue,
+				"ServiceAvailable":                    metav1.ConditionTrue,
+				"RBACAvailable":                       metav1.ConditionTrue,
+				"ConfigMapAvailable":                  metav1.ConditionTrue,
+				"SecurityContextConstraintsAvailable": metav1.ConditionTrue,
+				"DaemonSetAvailable":                  metav1.ConditionTrue,
+				"Ready":                               metav1.ConditionTrue,
+			}, utils.DefaultTimeout)
 
 			By("Waiting for SPIRE Agent DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -250,15 +262,13 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpiffeCSIDriver object")
 
 			By("Waiting for SpiffeCSIDriver conditions to be True")
-			cr := &operatorv1alpha1.SpiffeCSIDriver{}
-			conditionTypes := []string{
-				"ServiceAccountAvailable",
-				"CSIDriverAvailable",
-				"SecurityContextConstraintsAvailable",
-				"DaemonSetAvailable",
-				"Ready",
-			}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
+			utils.WaitForSpiffeCSIDriverConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"ServiceAccountAvailable":             metav1.ConditionTrue,
+				"CSIDriverAvailable":                  metav1.ConditionTrue,
+				"SecurityContextConstraintsAvailable": metav1.ConditionTrue,
+				"DaemonSetAvailable":                  metav1.ConditionTrue,
+				"Ready":                               metav1.ConditionTrue,
+			}, utils.DefaultTimeout)
 
 			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
 			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -278,17 +288,15 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create SpireOIDCDiscoveryProvider object")
 
 			By("Waiting for SpireOIDCDiscoveryProvider conditions to be True")
-			conditionTypes := []string{
-				"ServiceAccountAvailable",
-				"ServiceAvailable",
-				"ClusterSPIFFEIDAvailable",
-				"ConfigMapAvailable",
-				"DeploymentAvailable",
-				"RouteAvailable",
-				"Ready",
-			}
-			cr := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
+			utils.WaitForSpireOIDCDiscoveryProviderConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"ServiceAccountAvailable":  metav1.ConditionTrue,
+				"ServiceAvailable":         metav1.ConditionTrue,
+				"ClusterSPIFFEIDAvailable": metav1.ConditionTrue,
+				"ConfigMapAvailable":       metav1.ConditionTrue,
+				"DeploymentAvailable":      metav1.ConditionTrue,
+				"RouteAvailable":           metav1.ConditionTrue,
+				"Ready":                    metav1.ConditionTrue,
+			}, utils.DefaultTimeout)
 
 			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -296,14 +304,13 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 		It("ZeroTrustWorkloadIdentityManager should aggregate status from all operands", func() {
 			By("Waiting for ZeroTrustWorkloadIdentityManager to show all operands available")
-			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
-			conditionTypes := []string{
-				"OperandsAvailable",
-				"Ready",
-			}
-			utils.WaitForCRConditionsTrue(testCtx, k8sClient, cr, conditionTypes, utils.DefaultTimeout)
+			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"OperandsAvailable": metav1.ConditionTrue,
+				"Ready":             metav1.ConditionTrue,
+			}, utils.DefaultTimeout)
 
 			By("Verifying ZeroTrustWorkloadIdentityManager operand status")
+			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
 			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
 			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
 
@@ -321,50 +328,70 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				operand, exists := operandMap[kind]
 				Expect(exists).To(BeTrue(), "%s operand should exist in status", kind)
 				Expect(operand.Ready).To(Equal("true"), "%s should be ready", kind)
-				Expect(operand.Message).To(Equal("Ready"), "%s message should be 'Ready'", kind)
+				Expect(operand.Message).To(Equal(operatorv1alpha1.ReasonReady), "%s message should be 'Ready'", kind)
 				fmt.Fprintf(GinkgoWriter, "Operand %s is ready\n", kind)
 			}
 		})
+	})
 
-		It("OperatorCondition should have Upgradeable condition set correctly", func() {
-			By("Finding OperatorCondition resource dynamically")
-			operatorConditionList := &operatorv1.OperatorConditionList{}
-			err := k8sClient.List(testCtx, operatorConditionList, client.InNamespace(utils.OperatorNamespace))
-			Expect(err).NotTo(HaveOccurred(), "failed to list OperatorConditions")
-			Expect(operatorConditionList.Items).NotTo(BeEmpty(), "no OperatorCondition found in namespace")
+	Context("OperatorCondition", func() {
+		It("Upgradeable should be True when all operands are ready", func() {
+			By("Verifying Upgradeable condition details")
+			condition, err := utils.GetUpgradeableCondition(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(condition.Status).To(Equal(metav1.ConditionTrue), "Upgradeable should be %s", metav1.ConditionTrue)
+			Expect(condition.Reason).To(Equal(operatorv1alpha1.ReasonReady), "Upgradeable reason should be %s", operatorv1alpha1.ReasonReady)
+			fmt.Fprintf(GinkgoWriter, "Upgradeable condition is correctly set: Status=%s, Reason=%s\n", condition.Status, condition.Reason)
+		})
 
-			// Find the OperatorCondition for this operator (name contains operator name prefix)
-			var operatorCondition *operatorv1.OperatorCondition
-			for i := range operatorConditionList.Items {
-				if operatorConditionList.Items[i].Name == "zero-trust-workload-identity-manager" ||
-					strings.HasPrefix(operatorConditionList.Items[i].Name, "zero-trust-workload-identity-manager.v") {
-					operatorCondition = &operatorConditionList.Items[i]
-					break
-				}
-			}
-			Expect(operatorCondition).NotTo(BeNil(), "OperatorCondition for zero-trust-workload-identity-manager not found")
-			fmt.Fprintf(GinkgoWriter, "Found OperatorCondition: %s\n", operatorCondition.Name)
+		It("Upgradeable should be False when SPIRE Server pod is deleted and recover to True after recovery", func() {
+			By("Getting SPIRE Server pod")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty(), "no SPIRE Server pods found")
+			spireServerPod := pods.Items[0]
+			fmt.Fprintf(GinkgoWriter, "will delete SPIRE Server pod '%s'\n", spireServerPod.Name)
 
-			By("Verifying OperatorCondition Upgradeable condition")
-			// Find Upgradeable condition in OperatorCondition
-			var operatorCondUpgradeable *metav1.Condition
-			for i := range operatorCondition.Status.Conditions {
-				if operatorCondition.Status.Conditions[i].Type == "Upgradeable" {
-					operatorCondUpgradeable = &operatorCondition.Status.Conditions[i]
-					break
-				}
-			}
-			Expect(operatorCondUpgradeable).NotTo(BeNil(), "Upgradeable condition should exist in OperatorCondition")
-			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable: Status=%s, Reason=%s, Message=%s\n",
-				operatorCondUpgradeable.Status, operatorCondUpgradeable.Reason, operatorCondUpgradeable.Message)
+			By("Deleting SPIRE Server pod")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, spireServerPod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to delete SPIRE Server pod")
 
-			// Verify expected values when all operands are ready
-			Expect(operatorCondUpgradeable.Status).To(Equal(metav1.ConditionTrue),
-				"Upgradeable should be True when all operands are ready")
-			Expect(operatorCondUpgradeable.Reason).To(Equal("Ready"),
-				"Upgradeable reason should be Ready")
+			By("Waiting for Upgradeable condition to transition to False")
+			utils.WaitForUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionFalse, utils.ShortTimeout)
 
-			fmt.Fprintf(GinkgoWriter, "OperatorCondition Upgradeable set correctly\n")
+			By("Waiting for SPIRE Server to recover")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying Upgradeable condition returns to True after recovery")
+			utils.WaitForUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
+		})
+
+		It("Upgradeable should be False when multiple concurrent pod failures and recover to True after recovery", func() {
+			By("Getting random SPIRE Agent and SPIFFE CSI Driver pods")
+			agentPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(agentPods.Items).NotTo(BeEmpty(), "no SPIRE Agent pods found")
+
+			csiPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(csiPods.Items).NotTo(BeEmpty(), "no SPIFFE CSI Driver pods found")
+
+			By("Deleting selected SPIRE Agent and SPIFFE CSI Driver pods simultaneously")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, agentPods.Items[0].Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, csiPods.Items[0].Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			fmt.Fprintf(GinkgoWriter, "deleted pods: %s, %s\n", agentPods.Items[0].Name, csiPods.Items[0].Name)
+
+			By("Waiting for Upgradeable condition to transition to False")
+			utils.WaitForUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionFalse, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent and SPIFFE CSI Driver to recover")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying Upgradeable condition returns to True after recovery")
+			utils.WaitForUpgradeableStatus(testCtx, k8sClient, utils.OperatorNamespace, operatorConditionName, metav1.ConditionTrue, utils.ShortTimeout)
 		})
 	})
 
@@ -374,15 +401,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			initialLogLevel, err := utils.GetDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.OperatorLogLevelEnvVar)
 			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment env var")
 			fmt.Fprintf(GinkgoWriter, "initial log level from Deployment: %s\n", initialLogLevel)
-
-			By("Finding Subscription for the operator")
-			subscriptionName, foundNames, err := utils.FindOperatorSubscription(testCtx, k8sClient, utils.OperatorNamespace, utils.OperatorSubscriptionNameFragment)
-			if err != nil {
-				Expect(err).NotTo(HaveOccurred(),
-					"no Subscription matching '%s' found in namespace '%s'. Available subscriptions: %v",
-					utils.OperatorSubscriptionNameFragment, utils.OperatorNamespace, foundNames)
-			}
-			fmt.Fprintf(GinkgoWriter, "found subscription '%s'\n", subscriptionName)
 
 			// record initial generation of the Deployment before patching Subscription
 			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
@@ -671,6 +689,48 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
 		})
 
+		It("SPIRE Server custom labels can be configured through CR and propagated to pod", func() {
+			By("Getting SpireServer object")
+			spireServer := &operatorv1alpha1.SpireServer{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
+
+			// Record initial generation of the StatefulSet before updating SpireServer
+			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get StatefulSet")
+			initialGen := statefulset.Generation
+
+			By("Patching SpireServer object with test labels")
+			testLabels := map[string]string{
+				"e2e-test-label": "test-value",
+				"component":      "server",
+			}
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
+				spireServer.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireServer labels modification")
+				server := &operatorv1alpha1.SpireServer{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, server); err == nil {
+					server.Spec.Labels = nil
+					k8sClient.Update(ctx, server)
+				}
+			})
+
+			By("Waiting for SPIRE Server StatefulSet rolling update to start")
+			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to become Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Verifying if SPIRE Server Pods have the expected labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodLabels(pods.Items, testLabels)
+		})
+
 		It("SPIRE Agent containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpireAgent object")
 			spireAgent := &operatorv1alpha1.SpireAgent{}
@@ -907,6 +967,48 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
 		})
 
+		It("SPIRE Agent custom labels can be configured through CR and propagated to pod", func() {
+			By("Getting SpireAgent object")
+			spireAgent := &operatorv1alpha1.SpireAgent{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireAgent)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireAgent object")
+
+			// Record initial generation of the DaemonSet before updating SpireAgent
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get DaemonSet")
+			initialGen := daemonset.Generation
+
+			By("Patching SpireAgent object with test labels")
+			testLabels := map[string]string{
+				"e2e-test-label": "test-value",
+				"component":      "agent",
+			}
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
+				spireAgent.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireAgent with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireAgent labels modification")
+				agent := &operatorv1alpha1.SpireAgent{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
+					agent.Spec.Labels = nil
+					k8sClient.Update(ctx, agent)
+				}
+			})
+
+			By("Waiting for SPIRE Agent DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE Agent DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Verifying if SPIRE Agent Pods have the expected labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodLabels(pods.Items, testLabels)
+		})
+
 		It("SPIFFE CSI Driver containers resource limits and requests can be configured through CR", func() {
 			By("Getting SpiffeCSIDriver object")
 			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{}
@@ -1087,6 +1189,48 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Expect(pod.Spec.NodeName).NotTo(Equal(targetNodeName), "pod should not be scheduled on the labeled node '%s'", targetNodeName)
 				fmt.Fprintf(GinkgoWriter, "pod '%s' correctly excluded from labeled node '%s', scheduled on '%s'\n", pod.Name, targetNodeName, pod.Spec.NodeName)
 			}
+		})
+
+		It("SPIFFE CSI Driver custom labels can be configured through CR and propagated to pod", func() {
+			By("Getting SpiffeCSIDriver object")
+			spiffeCSIDriver := &operatorv1alpha1.SpiffeCSIDriver{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spiffeCSIDriver)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpiffeCSIDriver object")
+
+			// Record initial generation of the DaemonSet before updating SpiffeCSIDriver
+			daemonset, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpiffeCSIDriverDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get DaemonSet")
+			initialGen := daemonset.Generation
+
+			By("Patching SpiffeCSIDriver object with test labels")
+			testLabels := map[string]string{
+				"e2e-test-label": "test-value",
+				"component":      "csi",
+			}
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spiffeCSIDriver, func() {
+				spiffeCSIDriver.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpiffeCSIDriver with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpiffeCSIDriver labels modification")
+				driver := &operatorv1alpha1.SpiffeCSIDriver{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, driver); err == nil {
+					driver.Spec.Labels = nil
+					k8sClient.Update(ctx, driver)
+				}
+			})
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet rolling update to start")
+			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Verifying if SPIFFE CSI Driver Pods have the expected labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodLabels(pods.Items, testLabels)
 		})
 
 		It("SPIRE OIDC Discovery Provider containers resource limits and requests can be configured through CR", func() {
@@ -1346,6 +1490,180 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to get log_level from ConfigMap")
 			Expect(found).To(BeTrue(), "log_level should exist in ConfigMap")
 			Expect(logLevel).To(Equal(newLogLevel), "log_level should be updated to %s", newLogLevel)
+		})
+
+		It("SPIRE OIDC Discovery Provider custom labels can be configured through CR and propagated to pod", func() {
+			By("Getting SpireOIDCDiscoveryProvider object")
+			spireOIDCDiscoveryProvider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireOIDCDiscoveryProvider)
+			Expect(err).NotTo(HaveOccurred(), "failed to get SpireOIDCDiscoveryProvider object")
+
+			// Record initial generation of the Deployment before updating SpireOIDCDiscoveryProvider
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.SpireOIDCDiscoveryProviderDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get Deployment")
+			initialGen := deployment.Generation
+
+			By("Patching SpireOIDCDiscoveryProvider object with test labels")
+			testLabels := map[string]string{
+				"e2e-test-label": "test-value",
+				"component":      "oidc",
+			}
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireOIDCDiscoveryProvider, func() {
+				spireOIDCDiscoveryProvider.Spec.Labels = testLabels
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireOIDCDiscoveryProvider with labels")
+			DeferCleanup(func(ctx context.Context) {
+				By("Resetting SpireOIDCDiscoveryProvider labels modification")
+				provider := &operatorv1alpha1.SpireOIDCDiscoveryProvider{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, provider); err == nil {
+					provider.Spec.Labels = nil
+					k8sClient.Update(ctx, provider)
+				}
+			})
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
+
+			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
+
+			By("Verifying if SPIRE OIDC Discovery Provider Pods have the expected labels")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).NotTo(BeEmpty())
+			utils.VerifyPodLabels(pods.Items, testLabels)
+		})
+	})
+
+	Context("CreateOnlyMode", func() {
+		It("should transition based on CREATE_ONLY_MODE env var value", func() {
+			By("Verifying CreateOnlyMode condition is not set by default")
+			cr := &operatorv1alpha1.ZeroTrustWorkloadIdentityManager{}
+			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, cr)
+			Expect(err).NotTo(HaveOccurred(), "failed to get ZeroTrustWorkloadIdentityManager")
+			for _, cond := range cr.Status.Conditions {
+				Expect(cond.Type).NotTo(Equal("CreateOnlyMode"), "CreateOnlyMode condition should not exist by default")
+			}
+
+			// record initial generation of the Deployment before updating Subscription object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			initialGen := deployment.Generation
+
+			By("Patching Subscription object to enable CreateOnlyMode")
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=true", utils.CreateOnlyModeEnvVar)
+
+			By("Waiting for operator Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying CreateOnlyMode condition is True")
+			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"CreateOnlyMode": metav1.ConditionTrue,
+			}, utils.ShortTimeout)
+
+			// record new generation of the Deployment before updating Subscription object
+			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			newGen := deployment.Generation
+
+			By("Patching Subscription object to disable CreateOnlyMode")
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "false")
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=false", utils.CreateOnlyModeEnvVar)
+
+			By("Waiting for operator Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, newGen, utils.DefaultTimeout)
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Verifying CreateOnlyMode condition is False")
+			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"CreateOnlyMode": metav1.ConditionFalse,
+			}, utils.ShortTimeout)
+		})
+
+		It("should pause ConfigMap reconciliation when CreateOnlyMode is True and resume when CreateOnlyMode is False", func() {
+			By("Getting original ConfigMap content")
+			originalCM, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireServerConfigMapName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get ConfigMap")
+			originalServerConf := originalCM.Data[utils.SpireServerConfigKey]
+			Expect(originalServerConf).NotTo(BeEmpty(), "%s should exist in ConfigMap", utils.SpireServerConfigKey)
+			fmt.Fprintf(GinkgoWriter, "original ConfigMap resourceVersion: %s\n", originalCM.ResourceVersion)
+
+			// record initial generation of the Deployment before updating Subscription object
+			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
+			initialGen := deployment.Generation
+
+			By("Patching Subscription object to enable CreateOnlyMode")
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=true", utils.CreateOnlyModeEnvVar)
+
+			By("Waiting for operator Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Waiting for CreateOnlyMode condition to become True")
+			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"CreateOnlyMode": metav1.ConditionTrue,
+			}, utils.ShortTimeout)
+
+			By("Patching ConfigMap to introduce drift")
+			driftMarker := "# e2e-test-marker: drift-detection"
+			modifiedConf := originalServerConf + "\n" + driftMarker
+			cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireServerConfigMapName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get ConfigMap")
+			cm.Data[utils.SpireServerConfigKey] = modifiedConf
+			_, err = clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Update(testCtx, cm, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to update ConfigMap with drift")
+
+			By("Verifying ConfigMap drift is NOT corrected with CreateOnlyMode is True")
+			Consistently(func() bool {
+				cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireServerConfigMapName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get ConfigMap: %v\n", err)
+					return false
+				}
+				return strings.Contains(cm.Data[utils.SpireServerConfigKey], driftMarker)
+			}).WithPolling(utils.ShortInterval).WithTimeout(30*time.Second).Should(BeTrue(),
+				"ConfigMap drift should NOT be corrected when CreateOnlyMode is True")
+
+			// record new generation of the Deployment before updating Subscription object
+			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
+			newGen := deployment.Generation
+
+			By("Patching Subscription object to disable CreateOnlyMode")
+			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "false")
+			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=false", utils.CreateOnlyModeEnvVar)
+
+			By("Waiting for operator Deployment rolling update to start")
+			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, newGen, utils.DefaultTimeout)
+
+			By("Waiting for operator Deployment to become Available")
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
+
+			By("Waiting for CreateOnlyMode condition is False")
+			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"CreateOnlyMode": metav1.ConditionFalse,
+			}, utils.ShortTimeout)
+
+			By("Verifying ConfigMap drift is corrected with CreateOnlyMode is False")
+			Eventually(func() bool {
+				cm, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireServerConfigMapName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get ConfigMap: %v\n", err)
+					return false
+				}
+				return !strings.Contains(cm.Data[utils.SpireServerConfigKey], driftMarker)
+			}).WithPolling(utils.ShortInterval).WithTimeout(utils.ShortTimeout).Should(BeTrue(),
+				"ConfigMap drift should be corrected when CreateOnlyMode is False")
 		})
 	})
 })

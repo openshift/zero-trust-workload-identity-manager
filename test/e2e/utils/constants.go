@@ -24,6 +24,7 @@ const (
 	OperatorLabelSelector            = "name=zero-trust-workload-identity-manager"
 	OperatorSubscriptionNameFragment = "zero-trust-workload-identity-manager"
 	OperatorLogLevelEnvVar           = "OPERATOR_LOG_LEVEL"
+	CreateOnlyModeEnvVar             = "CREATE_ONLY_MODE"
 
 	SpireServerStatefulSetName               = "spire-server"
 	SpireServerPodLabel                      = "app.kubernetes.io/name=spire-server"
