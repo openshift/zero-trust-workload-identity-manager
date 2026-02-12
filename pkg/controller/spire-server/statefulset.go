@@ -24,8 +24,8 @@ import (
 
 const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
 const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
-const healthAndReadinessProbePortNameForSpireServer = "spire-server-healthz"
-const healthAndReadinessProbePortNameForSpireControllerManager = "spire-ctrl-mgr-healthz"
+const healthAndReadinessProbePortNameForSpireServer = "server-healthz"
+const healthAndReadinessProbePortNameForSpireControllerManager = "ctrlmgr-healthz"
 
 // reconcileStatefulSet reconciles the Spire Server StatefulSet
 func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, spireServerConfigMapHash, spireControllerManagerConfigMapHash string) error {
