@@ -557,17 +557,17 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 							},
 							Ports: []corev1.ContainerPort{
 								{Name: "grpc", ContainerPort: 8081, Protocol: corev1.ProtocolTCP},
-								{Name: "healthz", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: healthAndReadinessProbePortNameForSpireServer, ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString("healthz")}},
+								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromString(healthAndReadinessProbePortNameForSpireServer)}},
 								InitialDelaySeconds: 15,
 								PeriodSeconds:       60,
 								TimeoutSeconds:      3,
 								FailureThreshold:    2,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/ready", Port: intstr.FromString("healthz")}},
+								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/ready", Port: intstr.FromString(healthAndReadinessProbePortNameForSpireServer)}},
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
 							},
@@ -588,13 +588,13 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 							},
 							Ports: []corev1.ContainerPort{
 								{Name: "https", ContainerPort: 9443},
-								{Name: "healthz", ContainerPort: 8083},
+								{Name: healthAndReadinessProbePortNameForSpireControllerManager, ContainerPort: 8083},
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("healthz")}},
+								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString(healthAndReadinessProbePortNameForSpireControllerManager)}},
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromString("healthz")}},
+								ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromString(healthAndReadinessProbePortNameForSpireControllerManager)}},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "spire-server-socket", MountPath: "/tmp/spire-server/private", ReadOnly: true},
