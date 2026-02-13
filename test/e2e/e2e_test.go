@@ -494,7 +494,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      "node-role.kubernetes.io/master", // Old clusters
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "node-role.kubernetes.io/control-plane", // New clusters
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
