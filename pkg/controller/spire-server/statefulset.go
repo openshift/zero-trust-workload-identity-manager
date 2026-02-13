@@ -22,10 +22,12 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 )
 
-const spireServerStatefulSetSpireServerConfigHashAnnotationKey = "ztwim.openshift.io/spire-server-config-hash"
-const spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
-const healthAndReadinessProbePortNameForSpireServer = "server-healthz"
-const healthAndReadinessProbePortNameForSpireControllerManager = "ctrlmgr-healthz"
+const (
+	spireServerStatefulSetSpireServerConfigHashAnnotationKey           = "ztwim.openshift.io/spire-server-config-hash"
+	spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
+	healthAndReadinessProbePortNameForSpireServer                      = "server-healthz"
+	healthAndReadinessProbePortNameForSpireControllerManager           = "ctrlmgr-healthz"
+)
 
 // reconcileStatefulSet reconciles the Spire Server StatefulSet
 func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, spireServerConfigMapHash, spireControllerManagerConfigMapHash string) error {
