@@ -329,7 +329,7 @@ func (r *SpireServerReconciler) validateProxyConfiguration(statusMgr *status.Man
 func needsUpdate(current, desired appsv1.StatefulSet) bool {
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true
-	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey] {
+	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey] {
 		return true
 	}
 	return utils.ResourceNeedsUpdate(&current, &desired)

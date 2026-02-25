@@ -446,8 +446,8 @@ func createStatefulSetWithConfigHashes(serverHash, ctrlMgrHash string) appsv1.St
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						spireServerStatefulSetSpireServerConfigHashAnnotationKey:           serverHash,
-						spireServerStatefulSetSpireControllerMangerConfigHashAnnotationKey: ctrlMgrHash,
+						spireServerStatefulSetSpireServerConfigHashAnnotationKey:            serverHash,
+						spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey: ctrlMgrHash,
 					},
 				},
 			},

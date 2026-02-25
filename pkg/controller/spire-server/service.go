@@ -248,7 +248,7 @@ func getSpireServerService(config *v1alpha1.SpireServerSpec) *corev1.Service {
 
 // getSpireControllerManagerWebhookService returns the Controller Manager Service with proper labels and selectors
 func getSpireControllerManagerWebhookService(customLabels map[string]string) *corev1.Service {
-	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireControllerMangerWebhookServiceAssetName))
+	svc := utils.DecodeServiceObjBytes(assets.MustAsset(utils.SpireControllerManagerWebhookServiceAssetName))
 	svc.Labels = utils.SpireControllerManagerLabels(customLabels)
 	svc.Namespace = utils.GetOperatorNamespace()
 	svc.Spec.Selector = map[string]string{
