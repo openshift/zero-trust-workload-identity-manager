@@ -498,6 +498,11 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
+				{
+					Key:      "node-role.kubernetes.io/control-plane",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
 			}
 
 			err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireServer, func() {
