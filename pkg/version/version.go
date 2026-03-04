@@ -16,4 +16,5 @@ var (
 	SpireControllerManagerVersion     string = "0.6.3"
 	SpireOIDCDiscoveryProviderVersion string = "1.13.3"
 	SpireServerVersion                string = "1.13.3"
+	SpiffeHelperVersion               string = "0.11.0"
 )

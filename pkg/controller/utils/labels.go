@@ -17,10 +17,11 @@ const (
 	AppComponentLabelKey = "app.kubernetes.io/component"
 
 	// Component values
-	ComponentCSI          = "csi"
-	ComponentControlPlane = "control-plane"
-	ComponentNodeAgent    = "node-agent"
-	ComponentDiscovery    = "discovery"
+	ComponentCSI             = "csi"
+	ComponentControlPlane    = "control-plane"
+	ComponentNodeAgent       = "node-agent"
+	ComponentDiscovery       = "discovery"
+	ComponentSidecarInjector = "sidecar-injector"
 )
 
 // StandardizedLabels generates the new standardized label set for Kubernetes resources
@@ -62,6 +63,10 @@ func SpiffeCSIDriverLabels(customLabels map[string]string) map[string]string {
 
 func SpireControllerManagerLabels(customLabels map[string]string) map[string]string {
 	return StandardizedLabels("spire-controller-manager", ComponentControlPlane, version.SpireControllerManagerVersion, customLabels)
+}
+
+func SpiffeHelperLabels(customLabels map[string]string) map[string]string {
+	return StandardizedLabels("spiffe-helper", ComponentSidecarInjector, version.SpiffeHelperVersion, customLabels)
 }
 
 // hasControllerManagedLabelWithComponent checks if an object has both the managed-by label

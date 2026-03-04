@@ -155,8 +155,10 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;update;delete,resourceNames=spire-bundle;spire-controller-manager-leader-election;spire-server-external-cert-reader;spire-oidc-external-cert-reader
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=update;delete,resourceNames=spire-controller-manager-webhook
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=patch;update;delete,resourceNames=spiffe-helper-sidecar-injector
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;watch;create
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;update;delete,resourceNames=spire-server;spire-controller-manager-webhook;spire-agent;spire-spiffe-oidc-discovery-provider
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;update;delete,resourceNames=spiffe-helper-webhook;spire-server;spire-controller-manager-webhook;spire-agent;spire-spiffe-oidc-discovery-provider
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=list;watch;create
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;update;delete,resourceNames=spire-server;spire-agent;spire-spiffe-csi-driver;spire-spiffe-oidc-discovery-provider
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -180,7 +182,7 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=list;watch;create
 // +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;update;delete,resourceNames=spire-agent;spire-spiffe-csi-driver
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=list;watch;create
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;delete,resourceNames=spire-spiffe-oidc-discovery-provider
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;delete,resourceNames=spiffe-helper-webhook;spire-spiffe-oidc-discovery-provider
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=list;watch;create
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;update;delete,resourceNames=spire-server
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;watch;create

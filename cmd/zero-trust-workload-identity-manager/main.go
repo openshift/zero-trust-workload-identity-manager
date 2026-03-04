@@ -43,6 +43,7 @@ import (
 	operatoropenshiftiov1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	spiffeCsiDriverController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spiffe-csi-driver"
+	spiffeHelperController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spiffe-helper"
 	spireAgentController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-agent"
 	spireOIDCDiscoveryProviderController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-oidc-discovery-provider"
 	spireServerController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/spire-server"
@@ -88,6 +89,8 @@ func main() {
 		enableHTTP2          bool
 		logLevel             int
 		metricsCerts         string
+		serveWebhook         bool
+		webhookCertDir       string
 		metricsTLSOpts       []func(*tls.Config)
 		webhookTLSOpts       []func(*tls.Config)
 	)
@@ -105,6 +108,10 @@ func main() {
 	flag.StringVar(&metricsCerts, "metrics-cert-dir", "",
 		"Secret name containing the certificates for the metrics server which should be present in operator namespace. "+
 			"If not provided self-signed certificates will be used")
+	flag.BoolVar(&serveWebhook, "serve-webhook", false,
+		"Run in webhook server mode: only serve admission webhooks, skip controllers")
+	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs",
+		"Directory containing TLS certificates for the webhook server")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -121,6 +128,12 @@ func main() {
 		os.Exit(1)
 	}
 	setupLog.Info("Operator namespace configured", "namespace", operatorNamespace)
+
+	// Webhook-only mode: serve admission webhooks without controllers
+	if serveWebhook {
+		runWebhookServer(webhookCertDir, probeAddr, enableHTTP2, logLevel)
+		return
+	}
 
 	if !enableHTTP2 {
 		// if the enable-http2 flag is false (the default), http/2 should be disabled
@@ -270,6 +283,14 @@ func main() {
 		exitOnError(err, "unable to setup spire OIDC discovery provider controller manager")
 	}
 
+	spiffeHelperControllerManager, err := spiffeHelperController.New(mgr)
+	if err != nil {
+		exitOnError(err, "unable to set up spiffe helper controller manager")
+	}
+	if err = spiffeHelperControllerManager.SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to setup spiffe helper controller manager")
+	}
+
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		exitOnError(err, "unable to set up health check")
 	}
@@ -289,4 +310,44 @@ func exitOnError(err error, logMessage string) {
 		setupLog.Error(err, logMessage)
 		os.Exit(1)
 	}
+}
+
+// runWebhookServer starts a minimal manager that only serves admission webhooks
+func runWebhookServer(certDir, probeAddr string, enableHTTP2 bool, logLevel int) {
+	setupLog.Info("starting in webhook server mode")
+
+	var webhookTLSOpts []func(*tls.Config)
+	if !enableHTTP2 {
+		webhookTLSOpts = append(webhookTLSOpts, func(c *tls.Config) {
+			c.NextProtos = []string{"http/1.1"}
+		})
+	}
+
+	webhookServer := webhook.NewServer(webhook.Options{
+		TLSOpts: webhookTLSOpts,
+		CertDir: certDir,
+	})
+
+	config := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:                 scheme,
+		WebhookServer:          webhookServer,
+		HealthProbeBindAddress: probeAddr,
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+	})
+	exitOnError(err, "unable to start webhook manager")
+
+	spiffeHelperInjector := spiffeHelperController.NewSpiffeHelperInjector()
+	mgr.GetWebhookServer().Register("/mutate-pods-spiffe-helper", &webhook.Admission{Handler: spiffeHelperInjector})
+
+	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		exitOnError(err, "unable to set up health check")
+	}
+	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		exitOnError(err, "unable to set up ready check")
+	}
+
+	setupLog.Info("starting webhook server")
+	err = mgr.Start(ctrl.SetupSignalHandler())
+	exitOnError(err, "problem running webhook server")
 }

@@ -67,6 +67,7 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
+  - spiffe-helper-webhook
   - spire-agent
   - spire-controller-manager-webhook
   - spire-server
@@ -76,6 +77,25 @@ rules:
   verbs:
   - delete
   - get
+  - update
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - spiffe-helper-sidecar-injector
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - delete
+  - patch
   - update
 - apiGroups:
   - admissionregistration.k8s.io
@@ -120,6 +140,7 @@ rules:
 - apiGroups:
   - apps
   resourceNames:
+  - spiffe-helper-webhook
   - spire-spiffe-oidc-discovery-provider
   resources:
   - deployments
