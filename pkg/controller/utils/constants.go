@@ -8,6 +8,7 @@ const (
 	ZeroTrustWorkloadIdentityManagerSpireAgentControllerName                 = "zero-trust-workload-identity-manager-spire-agent-controller"
 	ZeroTrustWorkloadIdentityManagerSpiffeCsiDriverControllerName            = "zero-trust-workload-identity-manager-spiffe-csi-driver-controller"
 	ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName = "zero-trust-workload-identity-manager-spire-oidc-discovery-provider-controller"
+	ZeroTrustWorkloadIdentityManagerSpiffeHelperControllerName               = "zero-trust-workload-identity-manager-spiffe-helper-controller"
 
 	OperatorNamespace = "zero-trust-workload-identity-manager"
 
@@ -48,6 +49,13 @@ const (
 	// Validating Webhook Configurations
 	SpireControllerManagerValidatingWebhookConfigurationAssetName = "spire-controller-manager/spire-controller-manager-webhook-validating-webhook.yaml"
 
+	// Mutating Webhook Configurations
+	SpiffeHelperMutatingWebhookConfigurationAssetName = "spiffe-helper/spiffe-helper-mutating-webhook.yaml"
+
+	// Spiffe Helper Service and Deployment
+	SpiffeHelperWebhookServiceAssetName    = "spiffe-helper/spiffe-helper-webhook-service.yaml"
+	SpiffeHelperWebhookDeploymentAssetName = "spiffe-helper/spiffe-helper-webhook-deployment.yaml"
+
 	// Service CA Certificate
 	ServiceCAAnnotationKey     = "service.beta.openshift.io/serving-cert-secret-name"
 	SpireServerServingCertName = "spire-server-serving-cert"
@@ -60,6 +68,8 @@ const (
 	SpireControllerManagerImageEnv     = "RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER"
 	NodeDriverRegistrarImageEnv        = "RELATED_IMAGE_NODE_DRIVER_REGISTRAR"
 	SpiffeCSIInitContainerImageEnv     = "RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER"
+	SpiffeHelperImageEnv               = "RELATED_IMAGE_SPIFFE_HELPER"
+	SpiffeHelperWebhookImageEnv        = "RELATED_IMAGE_SPIFFE_HELPER_WEBHOOK"
 
 	// Resource Kinds - used for validation and logging
 	ResourceKindSpireServer                = "SpireServer"

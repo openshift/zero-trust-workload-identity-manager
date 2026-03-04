@@ -1,0 +1,26 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: spiffe-helper-sidecar-injector
+  labels:
+    app.kubernetes.io/name: spiffe-helper
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+webhooks:
+  - admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        name: spiffe-helper-webhook
+        namespace: zero-trust-workload-identity-manager
+        path: /mutate-pods-spiffe-helper
+    failurePolicy: Ignore
+    name: spiffe-helper.spiffe.openshift.io
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+    sideEffects: None

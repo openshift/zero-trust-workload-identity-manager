@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-02-23T10:55:35Z"
+    createdAt: "2026-03-04T19:58:03Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -344,6 +344,7 @@ spec:
         - apiGroups:
           - ""
           resourceNames:
+          - spiffe-helper-webhook
           - spire-agent
           - spire-controller-manager-webhook
           - spire-server
@@ -353,6 +354,25 @@ spec:
           verbs:
           - delete
           - get
+          - update
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - mutatingwebhookconfigurations
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resourceNames:
+          - spiffe-helper-sidecar-injector
+          resources:
+          - mutatingwebhookconfigurations
+          verbs:
+          - delete
+          - patch
           - update
         - apiGroups:
           - admissionregistration.k8s.io
@@ -397,6 +417,7 @@ spec:
         - apiGroups:
           - apps
           resourceNames:
+          - spiffe-helper-webhook
           - spire-spiffe-oidc-discovery-provider
           resources:
           - deployments
@@ -707,6 +728,10 @@ spec:
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
                   value: registry.access.redhat.com/ubi9:latest
+                - name: RELATED_IMAGE_SPIFFE_HELPER
+                  value: ghcr.io/spiffe/spiffe-helper:0.11.0
+                - name: RELATED_IMAGE_SPIFFE_HELPER_WEBHOOK
+                  value: controller:latest
                 - name: OPERATOR_LOG_LEVEL
                   value: "2"
                 - name: METRICS_BIND_ADDRESS
@@ -799,4 +824,8 @@ spec:
     name: node-driver-registrar
   - image: registry.access.redhat.com/ubi9:latest
     name: spiffe-csi-init-container
+  - image: ghcr.io/spiffe/spiffe-helper:0.11.0
+    name: spiffe-helper
+  - image: controller:latest
+    name: spiffe-helper-webhook
   version: 1.0.0

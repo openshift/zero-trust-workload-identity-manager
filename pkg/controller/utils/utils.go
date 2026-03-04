@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -41,8 +42,9 @@ const (
 )
 
 func init() {
-	// Register core, storage and rbac schemes
+	// Register core, apps, storage and rbac schemes
 	_ = corev1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
 	_ = rbacv1.AddToScheme(scheme)
 	_ = storagev1.AddToScheme(scheme)
 	_ = admissionregistrationv1.AddToScheme(scheme)
@@ -128,6 +130,22 @@ func DecodeValidatingWebhookConfigurationByBytes(objBytes []byte) *admissionregi
 		panic(err)
 	}
 	return obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
+}
+
+func DecodeDeploymentObjBytes(objBytes []byte) *appsv1.Deployment {
+	obj, err := runtime.Decode(codecs.UniversalDecoder(appsv1.SchemeGroupVersion), objBytes)
+	if err != nil {
+		panic(err)
+	}
+	return obj.(*appsv1.Deployment)
+}
+
+func DecodeMutatingWebhookConfigurationByBytes(objBytes []byte) *admissionregistrationv1.MutatingWebhookConfiguration {
+	obj, err := runtime.Decode(codecs.UniversalDecoder(admissionregistrationv1.SchemeGroupVersion), objBytes)
+	if err != nil {
+		panic(err)
+	}
+	return obj.(*admissionregistrationv1.MutatingWebhookConfiguration)
 }
 
 // SetLabel sets a label key/value on the given object metadata labels map.
