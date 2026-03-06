@@ -27,6 +27,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +58,7 @@ var _ = BeforeSuite(func() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(operatorv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.AddToScheme(scheme))
+	utilruntime.Must(spiffev1alpha1.AddToScheme(scheme))
 
 	// Create controller-runtime client
 	k8sClient, err = client.New(cfg, client.Options{

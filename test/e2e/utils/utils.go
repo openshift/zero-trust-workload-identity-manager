@@ -17,10 +17,12 @@ limitations under the License.
 package utils
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -150,6 +152,50 @@ func WaitForPodRunning(ctx context.Context, clientset kubernetes.Interface, name
 		return true
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
 		"pod '%s/%s' should become running within %v", namespace, name, timeout)
+}
+
+// WaitForPodReady waits for a specific pod to have Ready condition set to True within timeout
+func WaitForPodReady(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
+	Eventually(func() bool {
+		pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get pod '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		if !IsPodReady(pod) {
+			fmt.Fprintf(GinkgoWriter, "pod '%s/%s' not ready yet (phase=%s)\n", namespace, name, pod.Status.Phase)
+			return false
+		}
+
+		fmt.Fprintf(GinkgoWriter, "pod '%s/%s' is ready\n", namespace, name)
+		return true
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"pod '%s/%s' should become ready within %v", namespace, name, timeout)
+}
+
+// ExecInPod runs a command in a pod container and returns stdout, stderr, and error.
+// Uses oc exec when available (OpenShift) or kubectl as fallback.
+func ExecInPod(ctx context.Context, namespace, podName, containerName string, command []string) (stdout, stderr string, err error) {
+	cli := "oc"
+	if _, lookupErr := exec.LookPath("oc"); lookupErr != nil {
+		cli = "kubectl"
+	}
+
+	args := []string{"exec", podName, "-n", namespace, "-c", containerName, "--"}
+	args = append(args, command...)
+
+	cmd := exec.CommandContext(ctx, cli, args...)
+	cmd.Env = os.Environ()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	if err = cmd.Run(); err != nil {
+		return stdoutBuf.String(), stderrBuf.String(), fmt.Errorf("exec %s %v: %w", cli, args, err)
+	}
+	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
 // IsDeploymentAvailable checks if a Deployment has the Available condition set to True
