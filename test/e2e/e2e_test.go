@@ -31,8 +31,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -493,6 +493,7 @@ svid_bundle_file_name = "bundle.pem"
 								AllowPrivilegeEscalation: ptr.To(false),
 								Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 								RunAsNonRoot:             ptr.To(true),
+								RunAsUser:                ptr.To(int64(1000)),
 								SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 							},
 						},
@@ -507,6 +508,7 @@ svid_bundle_file_name = "bundle.pem"
 								AllowPrivilegeEscalation: ptr.To(false),
 								Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 								RunAsNonRoot:             ptr.To(true),
+								RunAsUser:                ptr.To(int64(1000)),
 								SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 							},
 						},
