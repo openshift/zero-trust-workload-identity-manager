@@ -839,7 +839,6 @@ func TestStatefulSetNeedsUpdate(t *testing.T) {
 					},
 					Spec: corev1.PodSpec{
 						ServiceAccountName:    "test-sa",
-						ShareProcessNamespace: ptr.To(false),
 						DNSPolicy:             corev1.DNSClusterFirst,
 						NodeSelector:          map[string]string{"zone": "east"},
 						Affinity: &corev1.Affinity{
