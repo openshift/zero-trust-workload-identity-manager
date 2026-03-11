@@ -116,6 +116,22 @@ func IsPodRunning(pod *corev1.Pod) bool {
 	return pod.Status.Phase == corev1.PodRunning
 }
 
+// FilterActivePods returns only pods that are Running and not marked for deletion.
+// Use after a rolling update to exclude terminating or old ReplicaSet pods from verification.
+func FilterActivePods(pods []corev1.Pod) []corev1.Pod {
+	var active []corev1.Pod
+	for i := range pods {
+		p := &pods[i]
+		if p.DeletionTimestamp != nil {
+			continue
+		}
+		if IsPodRunning(p) {
+			active = append(active, pods[i])
+		}
+	}
+	return active
+}
+
 // IsPodReady checks if a pod has the Ready condition set to True
 func IsPodReady(pod *corev1.Pod) bool {
 	// Exclude the pod being terminated
