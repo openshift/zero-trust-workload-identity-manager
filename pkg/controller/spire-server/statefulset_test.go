@@ -106,10 +106,6 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			t.Errorf("Expected service account name 'spire-server', got %q", podSpec.ServiceAccountName)
 		}
 
-		if *podSpec.ShareProcessNamespace != true {
-			t.Errorf("Expected share process namespace to be true")
-		}
-
 		// Check volume count
 		expectedVolumeCount := 5
 		if len(podSpec.Volumes) != expectedVolumeCount {
@@ -545,7 +541,6 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:    "spire-server",
-					ShareProcessNamespace: ptr.To(true),
 					Containers: []corev1.Container{
 						{
 							Name:            "spire-server",

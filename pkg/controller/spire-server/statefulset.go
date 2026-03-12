@@ -164,7 +164,6 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:    "spire-server",
-					ShareProcessNamespace: ptr.To(true),
 					Containers: []corev1.Container{
 						{
 							SecurityContext: &corev1.SecurityContext{
