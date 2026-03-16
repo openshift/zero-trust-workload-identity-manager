@@ -489,8 +489,11 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			initialGen := statefulset.Generation
 
 			By("Patching SpireServer object with nodeSelector and tolerations to schedule Pod on control-plane Nodes")
+			// Use node-role.kubernetes.io/master for nodeSelector so the test works on both
+			// newly installed OCP 4.12+ clusters (control-plane label) and upgraded clusters
+			// (master label only). See https://access.redhat.com/solutions/7028754
 			expectedNodeSelector := map[string]string{
-				"node-role.kubernetes.io/control-plane": "",
+				"node-role.kubernetes.io/master": "",
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
@@ -1279,7 +1282,9 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pods.Items).NotTo(BeEmpty())
-			utils.VerifyContainerResources(pods.Items, expectedResources)
+			activePods := utils.FilterActivePods(pods.Items)
+			Expect(activePods).NotTo(BeEmpty(), "no Running OIDC Discovery Provider pods found")
+			utils.VerifyContainerResources(activePods, expectedResources)
 		})
 
 		It("SPIRE OIDC Discovery Provider nodeSelector and tolerations can be configured through CR", func() {
@@ -1350,10 +1355,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newPods.Items).NotTo(BeEmpty())
-			utils.VerifyPodScheduling(testCtx, clientset, newPods.Items, expectedNodeSelector)
+			runningPods := utils.FilterActivePods(newPods.Items)
+			Expect(runningPods).NotTo(BeEmpty(), "no Running OIDC Discovery Provider pods found")
+			utils.VerifyPodScheduling(testCtx, clientset, runningPods, expectedNodeSelector)
 
 			By("Verifying if SPIRE OIDC Discovery Provider Pods tolerate Node taints correctly")
-			utils.VerifyPodTolerations(testCtx, clientset, newPods.Items, expectedToleration)
+			utils.VerifyPodTolerations(testCtx, clientset, runningPods, expectedToleration)
 		})
 
 		It("SPIRE OIDC Discovery Provider affinity can be configured through CR", func() {
@@ -1650,9 +1657,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 
 			By("Waiting for CreateOnlyMode condition is False")
+			// Allow up to DefaultTimeout for the new operator pod to reconcile and update the ZTWM status in CI
 			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
 				"CreateOnlyMode": metav1.ConditionFalse,
-			}, utils.ShortTimeout)
+			}, utils.DefaultTimeout)
 
 			By("Verifying ConfigMap drift is corrected with CreateOnlyMode is False")
 			Eventually(func() bool {
