@@ -41,7 +41,6 @@ const (
 	SpireOIDCDiscoveryProviderConfigMapName  = "spire-spiffe-oidc-discovery-provider"
 	SpireOIDCDiscoveryProviderConfigKey      = "oidc-discovery-provider.conf"
 
-	// Spiffe-helper constants (reusable across tests)
 	SpiffeHelperConfigMapName = "spiffe-helper-config"
 	SpiffeHelperContainerName = "spiffe-helper"
 	SpiffeHelperImage         = "ghcr.io/spiffe/spiffe-helper:0.11.0"
