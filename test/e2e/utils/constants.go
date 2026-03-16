@@ -47,6 +47,7 @@ const (
 	AttestationTestSA           = "attestation-test-sa"
 	SpiffeHelperConfigMapName   = "spiffe-helper-config"
 	SpiffeHelperContainerName   = "spiffe-helper"
+	SpiffeHelperImage           = "ghcr.io/spiffe/spiffe-helper:0.11.0"
 	AttestationTestAppContainer = "app"
 
 	DefaultInterval = 10 * time.Second

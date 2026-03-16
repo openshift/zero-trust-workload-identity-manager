@@ -451,12 +451,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create ServiceAccount")
 
 			By("Creating spiffe-helper ConfigMap")
-			helperConf := `agent_address = "/spiffe-workload-api/spire-agent.sock"
-cert_dir = "/certs"
-svid_file_name = "svid.pem"
-svid_key_file_name = "svid_key.pem"
-svid_bundle_file_name = "bundle.pem"
-`
+			helperConf := utils.DefaultAttestationSpiffeHelperConfig().String()
 			cm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      utils.SpiffeHelperConfigMapName,
@@ -482,7 +477,7 @@ svid_bundle_file_name = "bundle.pem"
 					Containers: []corev1.Container{
 						{
 							Name:  utils.SpiffeHelperContainerName,
-							Image: "ghcr.io/spiffe/spiffe-helper:0.8.0",
+							Image: utils.SpiffeHelperImage,
 							Args:  []string{"-config", "/run/spiffe-helper/helper.conf"},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "spiffe-workload-api", MountPath: "/spiffe-workload-api", ReadOnly: true},

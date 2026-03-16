@@ -46,6 +46,36 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// SpiffeHelperConfig holds configuration for the spiffe-helper sidecar (helper.conf format).
+type SpiffeHelperConfig struct {
+	AgentAddress       string
+	CertDir            string
+	SvidFileName       string
+	SvidKeyFileName    string
+	SvidBundleFileName string
+}
+
+// DefaultAttestationSpiffeHelperConfig returns the default config for E2E attestation tests.
+func DefaultAttestationSpiffeHelperConfig() SpiffeHelperConfig {
+	return SpiffeHelperConfig{
+		AgentAddress:       "/spiffe-workload-api/spire-agent.sock",
+		CertDir:            "/certs",
+		SvidFileName:       "svid.pem",
+		SvidKeyFileName:    "svid_key.pem",
+		SvidBundleFileName: "bundle.pem",
+	}
+}
+
+// String returns the config as a TOML-like string for helper.conf.
+func (c SpiffeHelperConfig) String() string {
+	return fmt.Sprintf(`agent_address = %q
+cert_dir = %q
+svid_file_name = %q
+svid_key_file_name = %q
+svid_bundle_file_name = %q
+`, c.AgentAddress, c.CertDir, c.SvidFileName, c.SvidKeyFileName, c.SvidBundleFileName)
+}
+
 // GetTestDir returns the directory to write test results to
 func GetTestDir() string {
 	// Test is running in the Prow CI, use ARTIFACT_DIR environment variable
