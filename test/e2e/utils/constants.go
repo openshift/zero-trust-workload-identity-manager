@@ -41,14 +41,10 @@ const (
 	SpireOIDCDiscoveryProviderConfigMapName  = "spire-spiffe-oidc-discovery-provider"
 	SpireOIDCDiscoveryProviderConfigKey      = "oidc-discovery-provider.conf"
 
-	// Attestation test namespace and workload identifiers
-	AttestationTestNamespace    = "e2e-attestation-test"
-	AttestationTestPodName      = "attestation-test-pod"
-	AttestationTestSA           = "attestation-test-sa"
-	SpiffeHelperConfigMapName   = "spiffe-helper-config"
-	SpiffeHelperContainerName   = "spiffe-helper"
-	SpiffeHelperImage           = "ghcr.io/spiffe/spiffe-helper:0.11.0"
-	AttestationTestAppContainer = "app"
+	// Spiffe-helper constants (reusable across tests)
+	SpiffeHelperConfigMapName = "spiffe-helper-config"
+	SpiffeHelperContainerName = "spiffe-helper"
+	SpiffeHelperImage         = "ghcr.io/spiffe/spiffe-helper:0.11.0"
 
 	DefaultInterval = 10 * time.Second
 	ShortInterval   = 5 * time.Second

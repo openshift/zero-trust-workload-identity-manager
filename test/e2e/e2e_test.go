@@ -399,11 +399,16 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 	Context("SpireAgent attestation", func() {
 		It("Workload attestation should succeed and workload receives SVID", func() {
+			attestationTestNamespace := "e2e-attestation-test"
+			attestationTestPodName := "attestation-test-pod"
+			attestationTestSA := "attestation-test-sa"
+			attestationTestAppContainer := "app"
+
 			attestationNS := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: utils.AttestationTestNamespace,
+					Name: attestationTestNamespace,
 					Labels: map[string]string{
-						"kubernetes.io/metadata.name": utils.AttestationTestNamespace,
+						"kubernetes.io/metadata.name": attestationTestNamespace,
 					},
 				},
 			}
@@ -418,7 +423,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					},
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": utils.AttestationTestNamespace,
+							"kubernetes.io/metadata.name": attestationTestNamespace,
 						},
 					},
 					ClassName: "zero-trust-workload-identity-manager-spire",
@@ -443,8 +448,8 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Creating ServiceAccount")
 			sa := &corev1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      utils.AttestationTestSA,
-					Namespace: utils.AttestationTestNamespace,
+					Name:      attestationTestSA,
+					Namespace: attestationTestNamespace,
 				},
 			}
 			err = k8sClient.Create(testCtx, sa)
@@ -455,7 +460,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			cm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      utils.SpiffeHelperConfigMapName,
-					Namespace: utils.AttestationTestNamespace,
+					Namespace: attestationTestNamespace,
 				},
 				Data: map[string]string{
 					"helper.conf": helperConf,
@@ -468,12 +473,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			readOnlyTrue := true
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      utils.AttestationTestPodName,
-					Namespace: utils.AttestationTestNamespace,
+					Name:      attestationTestPodName,
+					Namespace: attestationTestNamespace,
 					Labels:    map[string]string{"app": "attestation-test"},
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: utils.AttestationTestSA,
+					ServiceAccountName: attestationTestSA,
 					Containers: []corev1.Container{
 						{
 							Name:  utils.SpiffeHelperContainerName,
@@ -493,7 +498,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 							},
 						},
 						{
-							Name:    utils.AttestationTestAppContainer,
+							Name:    attestationTestAppContainer,
 							Image:   "busybox",
 							Command: []string{"sleep", "3600"},
 							VolumeMounts: []corev1.VolumeMount{
@@ -532,11 +537,11 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create attestation test pod")
 
 			By("Waiting for attestation test pod to become ready")
-			utils.WaitForPodReady(testCtx, clientset, utils.AttestationTestPodName, utils.AttestationTestNamespace, 3*utils.ShortTimeout)
+			utils.WaitForPodReady(testCtx, clientset, attestationTestPodName, attestationTestNamespace, 3*utils.ShortTimeout)
 
 			By("Verifying SVID files exist in /certs/")
 			Eventually(func() string {
-				stdout, _, err := utils.ExecInPod(testCtx, utils.AttestationTestNamespace, utils.AttestationTestPodName, utils.AttestationTestAppContainer, []string{"ls", "/certs/"})
+				stdout, _, err := utils.ExecInPod(testCtx, attestationTestNamespace, attestationTestPodName, attestationTestAppContainer, []string{"ls", "/certs/"})
 				if err != nil {
 					fmt.Fprintf(GinkgoWriter, "exec ls /certs/ failed: %v\n", err)
 					return ""
