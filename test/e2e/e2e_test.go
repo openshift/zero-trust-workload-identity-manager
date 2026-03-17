@@ -547,7 +547,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					return ""
 				}
 				return stdout
-			}).WithTimeout(3 * time.Minute).WithPolling(10 * time.Second).Should(
+			}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.DefaultInterval).Should(
 				And(
 					ContainSubstring("svid.pem"),
 					ContainSubstring("svid_key.pem"),
