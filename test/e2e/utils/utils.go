@@ -17,10 +17,12 @@ limitations under the License.
 package utils
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -43,6 +45,36 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// SpiffeHelperConfig holds configuration for the spiffe-helper sidecar (helper.conf format).
+type SpiffeHelperConfig struct {
+	AgentAddress       string
+	CertDir            string
+	SvidFileName       string
+	SvidKeyFileName    string
+	SvidBundleFileName string
+}
+
+// DefaultAttestationSpiffeHelperConfig returns the default config for E2E attestation tests.
+func DefaultAttestationSpiffeHelperConfig() SpiffeHelperConfig {
+	return SpiffeHelperConfig{
+		AgentAddress:       "/spiffe-workload-api/spire-agent.sock",
+		CertDir:            "/certs",
+		SvidFileName:       "svid.pem",
+		SvidKeyFileName:    "svid_key.pem",
+		SvidBundleFileName: "bundle.pem",
+	}
+}
+
+// String returns the config as a TOML-like string for helper.conf.
+func (c SpiffeHelperConfig) String() string {
+	return fmt.Sprintf(`agent_address = %q
+cert_dir = %q
+svid_file_name = %q
+svid_key_file_name = %q
+svid_bundle_file_name = %q
+`, c.AgentAddress, c.CertDir, c.SvidFileName, c.SvidKeyFileName, c.SvidBundleFileName)
+}
 
 // GetTestDir returns the directory to write test results to
 func GetTestDir() string {
@@ -166,6 +198,50 @@ func WaitForPodRunning(ctx context.Context, clientset kubernetes.Interface, name
 		return true
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
 		"pod '%s/%s' should become running within %v", namespace, name, timeout)
+}
+
+// WaitForPodReady waits for a specific pod to have Ready condition set to True within timeout
+func WaitForPodReady(ctx context.Context, clientset kubernetes.Interface, name, namespace string, timeout time.Duration) {
+	Eventually(func() bool {
+		pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get pod '%s/%s': %v\n", namespace, name, err)
+			return false
+		}
+
+		if !IsPodReady(pod) {
+			fmt.Fprintf(GinkgoWriter, "pod '%s/%s' not ready yet (phase=%s)\n", namespace, name, pod.Status.Phase)
+			return false
+		}
+
+		fmt.Fprintf(GinkgoWriter, "pod '%s/%s' is ready\n", namespace, name)
+		return true
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"pod '%s/%s' should become ready within %v", namespace, name, timeout)
+}
+
+// ExecInPod runs a command in a pod container and returns stdout, stderr, and error.
+// Uses oc exec when available (OpenShift) or kubectl as fallback.
+func ExecInPod(ctx context.Context, namespace, podName, containerName string, command []string) (stdout, stderr string, err error) {
+	cli := "oc"
+	if _, lookupErr := exec.LookPath("oc"); lookupErr != nil {
+		cli = "kubectl"
+	}
+
+	args := []string{"exec", podName, "-n", namespace, "-c", containerName, "--"}
+	args = append(args, command...)
+
+	cmd := exec.CommandContext(ctx, cli, args...)
+	cmd.Env = os.Environ()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	if err = cmd.Run(); err != nil {
+		return stdoutBuf.String(), stderrBuf.String(), fmt.Errorf("exec %s %v: %w", cli, args, err)
+	}
+	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
 // IsDeploymentAvailable checks if a Deployment has the Available condition set to True

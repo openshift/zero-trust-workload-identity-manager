@@ -41,6 +41,10 @@ const (
 	SpireOIDCDiscoveryProviderConfigMapName  = "spire-spiffe-oidc-discovery-provider"
 	SpireOIDCDiscoveryProviderConfigKey      = "oidc-discovery-provider.conf"
 
+	SpiffeHelperConfigMapName = "spiffe-helper-config"
+	SpiffeHelperContainerName = "spiffe-helper"
+	SpiffeHelperImage         = "ghcr.io/spiffe/spiffe-helper:0.11.0"
+
 	DefaultInterval = 10 * time.Second
 	ShortInterval   = 5 * time.Second
 	DefaultTimeout  = 5 * time.Minute
