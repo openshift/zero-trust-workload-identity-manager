@@ -74,7 +74,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 	BeforeEach(func() {
 		var cancel context.CancelFunc
-		testCtx, cancel = context.WithTimeout(context.Background(), utils.DefaultTimeout)
+		testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
 		DeferCleanup(cancel)
 	})
 
@@ -639,9 +639,17 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		})
 
 		It("SPIRE Server nodeSelector and tolerations can be configured through CR", func() {
+			By("Getting current SPIRE Server Pod and its Node")
+			currentPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(currentPods.Items).NotTo(BeEmpty(), "no SPIRE Server pods found")
+			currentNodeName := currentPods.Items[0].Spec.NodeName
+			Expect(currentNodeName).NotTo(BeEmpty(), "SPIRE Server pod should be scheduled to a node")
+			fmt.Fprintf(GinkgoWriter, "SPIRE Server pod '%s' is on node '%s'\n", currentPods.Items[0].Name, currentNodeName)
+
 			By("Getting SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{}
-			err := k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
+			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
 			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
 
 			// record initial generation of the StatefulSet before updating SpireServer object
@@ -649,16 +657,16 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			initialGen := statefulset.Generation
 
-			By("Patching SpireServer object with nodeSelector and tolerations to schedule Pod on control-plane Nodes")
-			// Use node-role.kubernetes.io/master for nodeSelector so the test works on both
-			// newly installed OCP 4.12+ clusters (control-plane label) and upgraded clusters
-			// (master label only). See https://access.redhat.com/solutions/7028754
+			By("Patching SpireServer object with nodeSelector and tolerations targeting the current Node")
+			// Target the current node by hostname to avoid cross-AZ PVC re-attachment issues
+			// (SPIRE Server uses ReadWriteOncePod PVC that is bound to a specific AZ).
+			controlPlaneRoleKey := utils.InferControlPlaneRoleKey(testCtx, clientset)
 			expectedNodeSelector := map[string]string{
-				"node-role.kubernetes.io/master": "",
+				"kubernetes.io/hostname": currentNodeName,
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      controlPlaneRoleKey,
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -696,84 +704,47 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		})
 
 		It("SPIRE Server affinity can be configured through CR", func() {
-			By("Retrieving any SPIRE Server Pod and its Node for affinity testing")
+			By("Getting current SPIRE Server Pod and its Node")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pods.Items).NotTo(BeEmpty())
-			spireServerPod := pods.Items[0]
-			originalNodeName := spireServerPod.Spec.NodeName
-			fmt.Fprintf(GinkgoWriter, "pod '%s' is currently on node '%s'\n", spireServerPod.Name, originalNodeName)
-
-			By("Creating test Pod on the same Node as SPIRE Server Pod to simulate PodAntiAffinity")
-			testPodName := fmt.Sprintf("test-spire-server-%d", time.Now().Unix())
-			testPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      testPodName,
-					Namespace: utils.OperatorNamespace,
-					Labels: map[string]string{
-						"statefulset.kubernetes.io/pod-name": spireServerPod.Name,
-					},
-				},
-				Spec: corev1.PodSpec{
-					NodeName: originalNodeName,
-					Containers: []corev1.Container{
-						{
-							Name:    "dummy",
-							Image:   "docker.io/library/busybox:latest",
-							Command: []string{"sleep", "600"},
-							SecurityContext: &corev1.SecurityContext{
-								AllowPrivilegeEscalation: &[]bool{false}[0],
-								RunAsNonRoot:             &[]bool{true}[0],
-								RunAsUser:                &[]int64{1000}[0],
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-								SeccompProfile: &corev1.SeccompProfile{
-									Type: corev1.SeccompProfileTypeRuntimeDefault,
-								},
-							},
-						},
-					},
-				},
-			}
-			_, err = clientset.CoreV1().Pods(utils.OperatorNamespace).Create(testCtx, testPod, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to create test Pod")
-			DeferCleanup(func(ctx context.Context) {
-				By("Deleting test Pod")
-				clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(ctx, testPodName, metav1.DeleteOptions{})
-			})
-
-			By("Waiting for test Pod to become Running")
-			utils.WaitForPodRunning(testCtx, clientset, testPodName, utils.OperatorNamespace, utils.ShortTimeout)
+			currentNodeName := pods.Items[0].Spec.NodeName
+			Expect(currentNodeName).NotTo(BeEmpty(), "SPIRE Server pod should be scheduled to a node")
+			fmt.Fprintf(GinkgoWriter, "pod '%s' is currently on node '%s'\n", pods.Items[0].Name, currentNodeName)
 
 			By("Getting SpireServer object")
 			spireServer := &operatorv1alpha1.SpireServer{}
 			err = k8sClient.Get(testCtx, client.ObjectKey{Name: "cluster"}, spireServer)
 			Expect(err).NotTo(HaveOccurred(), "failed to get SpireServer object")
 
-			// record initial generation of the StatefulSet before updating SpireServer object
 			statefulset, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			initialGen := statefulset.Generation
 
-			By("Patching SpireServer object with PodAntiAffinity configuration")
+			By("Patching SpireServer object with NodeAffinity targeting the current Node")
+			// Target the current node to avoid EBS PVC detach/re-attach delays.
+			// SPIRE Server uses ReadWriteOncePod PVC; moving to any other node triggers
+			// an EBS volume detach/attach cycle that can take unpredictable time.
 			expectedAffinity := &corev1.Affinity{
-				PodAntiAffinity: &corev1.PodAntiAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"statefulset.kubernetes.io/pod-name": spireServerPod.Name,
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "kubernetes.io/hostname",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{currentNodeName},
+									},
 								},
 							},
-							TopologyKey: "kubernetes.io/hostname",
 						},
 					},
 				},
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      utils.InferControlPlaneRoleKey(testCtx, clientset),
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -800,12 +771,28 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Waiting for SPIRE Server StatefulSet to become Ready")
 			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 
-			By("Verifying if SPIRE Server Pod has been rescheduled to a different Node")
+			By("Verifying the StatefulSet pod template has the expected affinity")
+			updatedSts, err := clientset.AppsV1().StatefulSets(utils.OperatorNamespace).Get(testCtx, utils.SpireServerStatefulSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedSts.Spec.Template.Spec.Affinity).NotTo(BeNil(), "StatefulSet pod template should have affinity set")
+			Expect(updatedSts.Spec.Template.Spec.Affinity.NodeAffinity).NotTo(BeNil(), "StatefulSet pod template should have NodeAffinity set")
+			terms := updatedSts.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+			Expect(terms).NotTo(BeNil(), "NodeAffinity should have RequiredDuringSchedulingIgnoredDuringExecution")
+			Expect(terms.NodeSelectorTerms).NotTo(BeEmpty())
+			Expect(terms.NodeSelectorTerms[0].MatchExpressions).NotTo(BeEmpty())
+			Expect(terms.NodeSelectorTerms[0].MatchExpressions[0].Key).To(Equal("kubernetes.io/hostname"))
+			Expect(terms.NodeSelectorTerms[0].MatchExpressions[0].Values).To(ContainElement(currentNodeName))
+			fmt.Fprintf(GinkgoWriter, "StatefulSet pod template has expected NodeAffinity targeting node '%s'\n", currentNodeName)
+
+			By("Verifying the StatefulSet pod template has the expected tolerations")
+			Expect(updatedSts.Spec.Template.Spec.Tolerations).NotTo(BeEmpty(), "StatefulSet pod template should have tolerations set")
+
+			By("Verifying if SPIRE Server Pod is on the expected Node")
 			newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newPods.Items).NotTo(BeEmpty())
-			Expect(newPods.Items[0].Spec.NodeName).NotTo(Equal(originalNodeName), "pod should be rescheduled to a different node")
-			fmt.Fprintf(GinkgoWriter, "pod '%s' has been rescheduled to node '%s'\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
+			Expect(newPods.Items[0].Spec.NodeName).To(Equal(currentNodeName), "pod should remain on the node matching the affinity rule")
+			fmt.Fprintf(GinkgoWriter, "pod '%s' is on node '%s' matching the affinity rule\n", newPods.Items[0].Name, newPods.Items[0].Spec.NodeName)
 		})
 
 		It("SPIRE Server log level can be configured through CR", func() {
@@ -886,7 +873,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForStatefulSetRollingUpdate(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
 			By("Waiting for SPIRE Server StatefulSet to become Ready")
-			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 
 			By("Verifying if SPIRE Server Pods have the expected labels")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireServerPodLabel})
@@ -961,7 +948,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      utils.InferControlPlaneRoleKey(testCtx, clientset),
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1050,7 +1037,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      utils.InferControlPlaneRoleKey(testCtx, clientset),
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1164,7 +1151,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
 			By("Waiting for SPIRE Agent DaemonSet to become Available")
-			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 
 			By("Verifying if SPIRE Agent Pods have the expected labels")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
@@ -1239,7 +1226,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      utils.InferControlPlaneRoleKey(testCtx, clientset),
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1388,7 +1375,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
 			By("Waiting for SPIFFE CSI Driver DaemonSet to become Available")
-			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
 
 			By("Verifying if SPIFFE CSI Driver Pods have the expected labels")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpiffeCSIDriverPodLabel})
@@ -1485,7 +1472,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      utils.InferControlPlaneRoleKey(testCtx, clientset),
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1580,7 +1567,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 			expectedToleration := []*corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
+					Key:      utils.InferControlPlaneRoleKey(testCtx, clientset),
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1693,7 +1680,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
 
 			By("Waiting for SPIRE OIDC Discovery Provider Deployment to become Available")
-			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.ShortTimeout)
+			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.SpireOIDCDiscoveryProviderDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 
 			By("Verifying if SPIRE OIDC Discovery Provider Pods have the expected labels")
 			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireOIDCDiscoveryProviderPodLabel})
@@ -1713,17 +1700,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Expect(cond.Type).NotTo(Equal("CreateOnlyMode"), "CreateOnlyMode condition should not exist by default")
 			}
 
-			// record initial generation of the Deployment before updating Subscription object
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			initialGen := deployment.Generation
-
 			By("Patching Subscription object to enable CreateOnlyMode")
 			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
 			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=true", utils.CreateOnlyModeEnvVar)
 
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+			By("Waiting for OLM to propagate CREATE_ONLY_MODE=true to the operator Deployment")
+			utils.WaitForDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.CreateOnlyModeEnvVar, "true", utils.DefaultTimeout)
 
 			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -1731,19 +1713,14 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Verifying CreateOnlyMode condition is True")
 			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
 				"CreateOnlyMode": metav1.ConditionTrue,
-			}, utils.ShortTimeout)
-
-			// record new generation of the Deployment before updating Subscription object
-			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			newGen := deployment.Generation
+			}, utils.DefaultTimeout)
 
 			By("Patching Subscription object to disable CreateOnlyMode")
 			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "false")
 			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=false", utils.CreateOnlyModeEnvVar)
 
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, newGen, utils.DefaultTimeout)
+			By("Waiting for OLM to propagate CREATE_ONLY_MODE=false to the operator Deployment")
+			utils.WaitForDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.CreateOnlyModeEnvVar, "false", utils.DefaultTimeout)
 
 			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -1751,7 +1728,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Verifying CreateOnlyMode condition is False")
 			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
 				"CreateOnlyMode": metav1.ConditionFalse,
-			}, utils.ShortTimeout)
+			}, utils.DefaultTimeout)
 		})
 
 		It("should pause ConfigMap reconciliation when CreateOnlyMode is True and resume when CreateOnlyMode is False", func() {
@@ -1762,17 +1739,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(originalServerConf).NotTo(BeEmpty(), "%s should exist in ConfigMap", utils.SpireServerConfigKey)
 			fmt.Fprintf(GinkgoWriter, "original ConfigMap resourceVersion: %s\n", originalCM.ResourceVersion)
 
-			// record initial generation of the Deployment before updating Subscription object
-			deployment, err := clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
-			initialGen := deployment.Generation
-
 			By("Patching Subscription object to enable CreateOnlyMode")
 			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "true")
 			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=true", utils.CreateOnlyModeEnvVar)
 
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, initialGen, utils.DefaultTimeout)
+			By("Waiting for OLM to propagate CREATE_ONLY_MODE=true to the operator Deployment")
+			utils.WaitForDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.CreateOnlyModeEnvVar, "true", utils.DefaultTimeout)
 
 			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
@@ -1780,7 +1752,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			By("Waiting for CreateOnlyMode condition to become True")
 			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
 				"CreateOnlyMode": metav1.ConditionTrue,
-			}, utils.ShortTimeout)
+			}, utils.DefaultTimeout)
 
 			By("Patching ConfigMap to introduce drift")
 			driftMarker := "# e2e-test-marker: drift-detection"
@@ -1802,23 +1774,17 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}).WithPolling(utils.ShortInterval).WithTimeout(30*time.Second).Should(BeTrue(),
 				"ConfigMap drift should NOT be corrected when CreateOnlyMode is True")
 
-			// record new generation of the Deployment before updating Subscription object
-			deployment, err = clientset.AppsV1().Deployments(utils.OperatorNamespace).Get(testCtx, utils.OperatorDeploymentName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), "failed to get operator Deployment")
-			newGen := deployment.Generation
-
 			By("Patching Subscription object to disable CreateOnlyMode")
 			err = utils.PatchSubscriptionEnv(testCtx, k8sClient, utils.OperatorNamespace, subscriptionName, utils.CreateOnlyModeEnvVar, "false")
 			Expect(err).NotTo(HaveOccurred(), "failed to patch Subscription with env %s=false", utils.CreateOnlyModeEnvVar)
 
-			By("Waiting for operator Deployment rolling update to start")
-			utils.WaitForDeploymentRollingUpdate(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, newGen, utils.DefaultTimeout)
+			By("Waiting for OLM to propagate CREATE_ONLY_MODE=false to the operator Deployment")
+			utils.WaitForDeploymentEnvVar(testCtx, clientset, utils.OperatorNamespace, utils.OperatorDeploymentName, utils.CreateOnlyModeEnvVar, "false", utils.DefaultTimeout)
 
 			By("Waiting for operator Deployment to become Available")
 			utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 
-			By("Waiting for CreateOnlyMode condition is False")
-			// Allow up to DefaultTimeout for the new operator pod to reconcile and update the ZTWM status in CI
+			By("Waiting for CreateOnlyMode condition to become False")
 			utils.WaitForZeroTrustWorkloadIdentityManagerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
 				"CreateOnlyMode": metav1.ConditionFalse,
 			}, utils.DefaultTimeout)
