@@ -53,7 +53,7 @@ func GetNodeDriverRegistrarImage() string {
 func GetSpiffeCsiInitContainerImage() string {
 	containerImage := os.Getenv(SpiffeCSIInitContainerImageEnv)
 	if containerImage == "" {
-		return "registry.access.redhat.com/ubi9:latest"
+		return "registry.redhat.io/ubi10/ubi:10.1"
 	}
 	return containerImage
 }

@@ -43,7 +43,7 @@ const (
 
 	SpiffeHelperConfigMapName = "spiffe-helper-config"
 	SpiffeHelperContainerName = "spiffe-helper"
-	SpiffeHelperImage         = "ghcr.io/spiffe/spiffe-helper:0.11.0"
+	SpiffeHelperImage         = "quay.io/rh-ee-rausingh/zero-trust-workload-identity-manager-spiffe-spiffe-helper:v0.10.0"
 
 	DefaultInterval = 10 * time.Second
 	ShortInterval   = 5 * time.Second
