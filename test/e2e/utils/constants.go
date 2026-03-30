@@ -49,4 +49,5 @@ const (
 	ShortInterval   = 5 * time.Second
 	DefaultTimeout  = 5 * time.Minute
 	ShortTimeout    = 2 * time.Minute
+	TestContextTimeout = 10 * time.Minute
 )

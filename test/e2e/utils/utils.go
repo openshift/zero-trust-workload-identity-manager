@@ -111,6 +111,24 @@ func GetClusterBaseDomain(ctx context.Context, configClient configv1.ConfigV1Int
 	return dns.Spec.BaseDomain, nil
 }
 
+// InferControlPlaneRoleKey returns the node-role label key used for control-plane nodes.
+// CI clusters may use either "node-role.kubernetes.io/control-plane" (OCP 4.12+ fresh installs)
+// or "node-role.kubernetes.io/master" (upgraded clusters). This helper lists nodes once and
+// returns whichever key is actually present.
+func InferControlPlaneRoleKey(ctx context.Context, clientset kubernetes.Interface) string {
+	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Fprintf(GinkgoWriter, "failed to list nodes for role detection, defaulting to master: %v\n", err)
+		return "node-role.kubernetes.io/master"
+	}
+	for _, n := range nodes.Items {
+		if _, ok := n.Labels["node-role.kubernetes.io/control-plane"]; ok {
+			return "node-role.kubernetes.io/control-plane"
+		}
+	}
+	return "node-role.kubernetes.io/master"
+}
+
 // IsCRDEstablished checks if a CRD is Established
 func IsCRDEstablished(crd *apiextv1.CustomResourceDefinition) bool {
 	// Check if the CRD has the Established condition set to True
@@ -721,6 +739,26 @@ func PatchSubscriptionEnv(ctx context.Context, k8sClient client.Client, namespac
 	}
 
 	return nil
+}
+
+// WaitForDeploymentEnvVar waits until a Deployment's first container has the expected env var value.
+// This is needed when patching a Subscription env because OLM may take time to propagate the
+// change to the Deployment, and generation bumps may come from unrelated OLM reconciliations.
+func WaitForDeploymentEnvVar(ctx context.Context, clientset kubernetes.Interface, namespace, deploymentName, envKey, expectedValue string, timeout time.Duration) {
+	Eventually(func() bool {
+		val, err := GetDeploymentEnvVar(ctx, clientset, namespace, deploymentName, envKey)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "failed to get env var '%s' from deployment '%s/%s': %v\n", envKey, namespace, deploymentName, err)
+			return false
+		}
+		if val != expectedValue {
+			fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' env var '%s' is '%s', expected '%s'\n", namespace, deploymentName, envKey, val, expectedValue)
+			return false
+		}
+		fmt.Fprintf(GinkgoWriter, "deployment '%s/%s' has expected env var '%s=%s'\n", namespace, deploymentName, envKey, expectedValue)
+		return true
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
+		"deployment '%s/%s' should have env var '%s=%s' within %v", namespace, deploymentName, envKey, expectedValue, timeout)
 }
 
 // GetDeploymentEnvVar retrieves an environment variable value from a deployment's first container
