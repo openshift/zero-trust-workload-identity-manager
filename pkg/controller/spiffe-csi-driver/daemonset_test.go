@@ -166,8 +166,8 @@ func testInitContainer(t *testing.T, container corev1.Container) {
 		t.Errorf("Expected init container name 'set-context', got '%s'", container.Name)
 	}
 
-	if container.Image != "registry.access.redhat.com/ubi9:latest" {
-		t.Errorf("Expected init container image 'registry.access.redhat.com/ubi9:latest', got '%s'", container.Image)
+	if container.Image != "registry.redhat.io/ubi10/ubi:10.1" {
+		t.Errorf("Expected init container image 'registry.redhat.io/ubi10/ubi:10.1', got '%s'", container.Image)
 	}
 
 	expectedCommand := []string{"chcon", "-Rvt", "container_file_t", "spire-agent-socket/"}
