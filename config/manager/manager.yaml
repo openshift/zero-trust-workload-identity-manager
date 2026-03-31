@@ -92,6 +92,10 @@ spec:
           value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
         - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
           value: registry.access.redhat.com/ubi9:latest
+        - name: RELATED_IMAGE_SPIFFE_HELPER
+          value: ghcr.io/spiffe/spiffe-helper:0.11.0
+        - name: RELATED_IMAGE_SPIFFE_HELPER_WEBHOOK
+          value: controller:latest
         - name: OPERATOR_LOG_LEVEL
           value: "2"
         - name: METRICS_BIND_ADDRESS

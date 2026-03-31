@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: spiffe-helper-webhook
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-helper
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: spiffe-helper-webhook-certs
+spec:
+  type: ClusterIP
+  ports:
+    - name: https
+      port: 443
+      targetPort: 9443
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: spiffe-helper-webhook

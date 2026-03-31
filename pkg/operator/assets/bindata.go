@@ -2,6 +2,9 @@
 // sources:
 // bindata/spiffe-csi/spiffe-csi-csi-driver.yaml
 // bindata/spiffe-csi/spiffe-csi-service-account.yaml
+// bindata/spiffe-helper/spiffe-helper-mutating-webhook.yaml
+// bindata/spiffe-helper/spiffe-helper-webhook-deployment.yaml
+// bindata/spiffe-helper/spiffe-helper-webhook-service.yaml
 // bindata/spire-agent/spire-agent-cluster-role-binding.yaml
 // bindata/spire-agent/spire-agent-cluster-role.yaml
 // bindata/spire-agent/spire-agent-service-account.yaml
@@ -144,6 +147,186 @@ func spiffeCsiSpiffeCsiServiceAccountYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "spiffe-csi/spiffe-csi-service-account.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spiffeHelperSpiffeHelperMutatingWebhookYaml = []byte(`apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: spiffe-helper-sidecar-injector
+  labels:
+    app.kubernetes.io/name: spiffe-helper
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+webhooks:
+  - admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        name: spiffe-helper-webhook
+        namespace: zero-trust-workload-identity-manager
+        path: /mutate-pods-spiffe-helper
+    failurePolicy: Ignore
+    name: spiffe-helper.spiffe.openshift.io
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+    sideEffects: None
+`)
+
+func spiffeHelperSpiffeHelperMutatingWebhookYamlBytes() ([]byte, error) {
+	return _spiffeHelperSpiffeHelperMutatingWebhookYaml, nil
+}
+
+func spiffeHelperSpiffeHelperMutatingWebhookYaml() (*asset, error) {
+	bytes, err := spiffeHelperSpiffeHelperMutatingWebhookYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spiffe-helper/spiffe-helper-mutating-webhook.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spiffeHelperSpiffeHelperWebhookDeploymentYaml = []byte(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spiffe-helper-webhook
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-helper
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spiffe-helper-webhook
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: spiffe-helper-webhook
+        app.kubernetes.io/instance: spire
+        app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+        app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+    spec:
+      serviceAccountName: controller-manager
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: webhook
+        image: controller:latest
+        command:
+        - /usr/bin/zero-trust-workload-identity-manager
+        args:
+        - --serve-webhook
+        - --webhook-cert-dir=/tmp/k8s-webhook-server/serving-certs
+        - --health-probe-bind-address=:8082
+        ports:
+        - containerPort: 9443
+          name: webhook
+          protocol: TCP
+        - containerPort: 8082
+          name: health
+          protocol: TCP
+        env:
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: RELATED_IMAGE_SPIFFE_HELPER
+          value: ghcr.io/spiffe/spiffe-helper:0.11.0
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - "ALL"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8082
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: spiffe-helper-webhook-certs
+      terminationGracePeriodSeconds: 10
+`)
+
+func spiffeHelperSpiffeHelperWebhookDeploymentYamlBytes() ([]byte, error) {
+	return _spiffeHelperSpiffeHelperWebhookDeploymentYaml, nil
+}
+
+func spiffeHelperSpiffeHelperWebhookDeploymentYaml() (*asset, error) {
+	bytes, err := spiffeHelperSpiffeHelperWebhookDeploymentYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spiffe-helper/spiffe-helper-webhook-deployment.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spiffeHelperSpiffeHelperWebhookServiceYaml = []byte(`apiVersion: v1
+kind: Service
+metadata:
+  name: spiffe-helper-webhook
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-helper
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: spiffe-helper-webhook-certs
+spec:
+  type: ClusterIP
+  ports:
+    - name: https
+      port: 443
+      targetPort: 9443
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: spiffe-helper-webhook
+`)
+
+func spiffeHelperSpiffeHelperWebhookServiceYamlBytes() ([]byte, error) {
+	return _spiffeHelperSpiffeHelperWebhookServiceYaml, nil
+}
+
+func spiffeHelperSpiffeHelperWebhookServiceYaml() (*asset, error) {
+	bytes, err := spiffeHelperSpiffeHelperWebhookServiceYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spiffe-helper/spiffe-helper-webhook-service.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -1021,6 +1204,9 @@ func AssetNames() []string {
 var _bindata = map[string]func() (*asset, error){
 	"spiffe-csi/spiffe-csi-csi-driver.yaml":                                               spiffeCsiSpiffeCsiCsiDriverYaml,
 	"spiffe-csi/spiffe-csi-service-account.yaml":                                          spiffeCsiSpiffeCsiServiceAccountYaml,
+	"spiffe-helper/spiffe-helper-mutating-webhook.yaml":                                   spiffeHelperSpiffeHelperMutatingWebhookYaml,
+	"spiffe-helper/spiffe-helper-webhook-deployment.yaml":                                 spiffeHelperSpiffeHelperWebhookDeploymentYaml,
+	"spiffe-helper/spiffe-helper-webhook-service.yaml":                                    spiffeHelperSpiffeHelperWebhookServiceYaml,
 	"spire-agent/spire-agent-cluster-role-binding.yaml":                                   spireAgentSpireAgentClusterRoleBindingYaml,
 	"spire-agent/spire-agent-cluster-role.yaml":                                           spireAgentSpireAgentClusterRoleYaml,
 	"spire-agent/spire-agent-service-account.yaml":                                        spireAgentSpireAgentServiceAccountYaml,
@@ -1091,6 +1277,11 @@ var _bintree = &bintree{nil, map[string]*bintree{
 	"spiffe-csi": {nil, map[string]*bintree{
 		"spiffe-csi-csi-driver.yaml":      {spiffeCsiSpiffeCsiCsiDriverYaml, map[string]*bintree{}},
 		"spiffe-csi-service-account.yaml": {spiffeCsiSpiffeCsiServiceAccountYaml, map[string]*bintree{}},
+	}},
+	"spiffe-helper": {nil, map[string]*bintree{
+		"spiffe-helper-mutating-webhook.yaml":   {spiffeHelperSpiffeHelperMutatingWebhookYaml, map[string]*bintree{}},
+		"spiffe-helper-webhook-deployment.yaml": {spiffeHelperSpiffeHelperWebhookDeploymentYaml, map[string]*bintree{}},
+		"spiffe-helper-webhook-service.yaml":    {spiffeHelperSpiffeHelperWebhookServiceYaml, map[string]*bintree{}},
 	}},
 	"spire-agent": {nil, map[string]*bintree{
 		"spire-agent-cluster-role-binding.yaml": {spireAgentSpireAgentClusterRoleBindingYaml, map[string]*bintree{}},

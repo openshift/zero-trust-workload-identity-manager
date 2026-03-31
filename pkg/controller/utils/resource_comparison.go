@@ -54,6 +54,8 @@ func ResourceNeedsUpdate(existing, desired client.Object) bool {
 		typeSpecificResult = CSIDriverNeedsUpdate(existingTyped, desired.(*storagev1.CSIDriver))
 	case *admissionregistrationv1.ValidatingWebhookConfiguration:
 		typeSpecificResult = ValidatingWebhookConfigurationNeedsUpdate(existingTyped, desired.(*admissionregistrationv1.ValidatingWebhookConfiguration))
+	case *admissionregistrationv1.MutatingWebhookConfiguration:
+		typeSpecificResult = MutatingWebhookConfigurationNeedsUpdate(existingTyped, desired.(*admissionregistrationv1.MutatingWebhookConfiguration))
 	case *securityv1.SecurityContextConstraints:
 		typeSpecificResult = SecurityContextConstraintsNeedsUpdate(existingTyped, desired.(*securityv1.SecurityContextConstraints))
 	case *spiffev1alpha1.ClusterSPIFFEID:
@@ -280,10 +282,19 @@ func fsGroupPolicyPtrsEqual(a, b *storagev1.FSGroupPolicy) bool {
 	return *a == *b
 }
 
-// ValidatingWebhookConfigurationNeedsUpdate checks if a ValidatingWebhookConfiguration needs updating
+// MutatingWebhookConfigurationNeedsUpdate checks if a MutatingWebhookConfiguration needs updating.
+// Uses DeepDerivative so that server-side defaulted fields in existing don't cause unnecessary updates.
+func MutatingWebhookConfigurationNeedsUpdate(existing, desired *admissionregistrationv1.MutatingWebhookConfiguration) bool {
+	if !equality.Semantic.DeepDerivative(desired.Webhooks, existing.Webhooks) {
+		return true
+	}
+	return false
+}
+
+// ValidatingWebhookConfigurationNeedsUpdate checks if a ValidatingWebhookConfiguration needs updating.
+// Uses DeepDerivative so that server-side defaulted fields in existing don't cause unnecessary updates.
 func ValidatingWebhookConfigurationNeedsUpdate(existing, desired *admissionregistrationv1.ValidatingWebhookConfiguration) bool {
-	// Compare webhooks - the main content of the configuration
-	if !equality.Semantic.DeepEqual(existing.Webhooks, desired.Webhooks) {
+	if !equality.Semantic.DeepDerivative(desired.Webhooks, existing.Webhooks) {
 		return true
 	}
 	return false
