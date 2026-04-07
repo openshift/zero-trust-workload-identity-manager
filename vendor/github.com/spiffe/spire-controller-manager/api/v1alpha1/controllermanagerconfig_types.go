@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"time"
 
+	"github.com/spiffe/spire-controller-manager/pkg/spireapi"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
 )
@@ -59,6 +60,12 @@ type ControllerManagerConfig struct {
 
 	// LogLevel is the log level for the controller manager
 	LogLevel string `json:"logLevel"`
+
+	// LogEncoding is the log encoding for the controller manager
+	LogEncoding string `json:"logEncoding"`
+
+	// Grpc is the grpc configuration for the controller manager communication with SPIRE Server API
+	Grpc *spireapi.GrpcConfig `json:"grpc,omitempty"`
 }
 
 // ControllerManagerConfigurationSpec defines the desired state of GenericControllerManagerConfiguration.
@@ -79,6 +86,7 @@ type ControllerManagerConfigurationSpec struct {
 
 	// CacheNamespace if specified restricts the manager's cache to watch objects in
 	// the desired namespace. Defaults to all namespaces.
+	//
 	// Deprecated: use cacheNamespaces instead
 	//
 	// Note: If a namespace is specified, controllers can still Watch for a
@@ -105,15 +113,15 @@ type ControllerManagerConfigurationSpec struct {
 
 	// Metrics contains the controller metrics configuration
 	// +optional
-	Metrics ControllerMetrics `json:"metrics,omitempty"`
+	Metrics ControllerMetrics `json:"metrics"`
 
 	// Health contains the controller health configuration
 	// +optional
-	Health ControllerHealth `json:"health,omitempty"`
+	Health ControllerHealth `json:"health"`
 
 	// Webhook contains the controllers webhook configuration
 	// +optional
-	Webhook ControllerWebhook `json:"webhook,omitempty"`
+	Webhook ControllerWebhook `json:"webhook"`
 
 	// ClassName contains the name of a class to watch CRs for. Others will be ignored.
 	// If unset all will be watched.
@@ -145,6 +153,20 @@ type ControllerManagerConfigurationSpec struct {
 
 	// When configured, read yaml objects from the specified path rather then from Kubernetes.
 	StaticManifestPath *string `json:"staticManifestPath,omitempty"`
+
+	// When true, any static manifest parsed will first have environment variables expanded.
+	ExpandEnvStaticManifests bool `json:"expandEnvStaticManifests"`
+
+	// EnableEntryRenderCache enables the LRU cache for rendered pod entries.
+	// Defaults to false.
+	// +optional
+	EnableEntryRenderCache bool `json:"enableEntryRenderCache,omitempty"`
+
+	// EntryRenderCacheSize is the maximum number of entries in the LRU cache for
+	// rendered pod entries. Only used when enableEntryRenderCache is true.
+	// Defaults to 300000 if unset or zero.
+	// +optional
+	EntryRenderCacheSize int `json:"entryRenderCacheSize,omitempty"`
 }
 
 // ReconcileConfig configuration used to enable/disable syncing various types

@@ -78,10 +78,11 @@ type ClusterFederatedTrustDomainStatus struct {
 // ClusterFederatedTrustDomain is the Schema for the clusterfederatedtrustdomains API
 type ClusterFederatedTrustDomain struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata"`
 
-	Spec   ClusterFederatedTrustDomainSpec   `json:"spec,omitempty"`
-	Status ClusterFederatedTrustDomainStatus `json:"status,omitempty"`
+	Spec ClusterFederatedTrustDomainSpec `json:"spec"`
+	// +optional
+	Status ClusterFederatedTrustDomainStatus `json:"status"`
 }
 
 //+kubebuilder:object:root=true
@@ -89,7 +90,7 @@ type ClusterFederatedTrustDomain struct {
 // ClusterFederatedTrustDomainList contains a list of ClusterFederatedTrustDomain
 type ClusterFederatedTrustDomainList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata"`
 	Items           []ClusterFederatedTrustDomain `json:"items"`
 }
 

@@ -22,7 +22,6 @@ import (
 
 	entryv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/entry/v1"
 	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
-	apitypes "github.com/spiffe/spire-api-sdk/proto/spire/api/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -58,12 +57,12 @@ type entryClient struct {
 }
 
 func (c entryClient) ListEntries(ctx context.Context) ([]Entry, error) {
-	var entries []*apitypes.Entry
+	var entries []*types.Entry
 	var pageToken string
 	for {
 		resp, err := c.api.ListEntries(ctx, &entryv1.ListEntriesRequest{
 			PageToken: pageToken,
-			PageSize:  int32(entryListPageSize),
+			PageSize:  entryListPageSize,
 		})
 		if err != nil {
 			return nil, err
@@ -79,7 +78,7 @@ func (c entryClient) ListEntries(ctx context.Context) ([]Entry, error) {
 
 func (c entryClient) GetUnsupportedFields(ctx context.Context, td string) (map[Field]struct{}, error) {
 	resp, err := c.api.BatchCreateEntry(ctx, &entryv1.BatchCreateEntryRequest{
-		Entries: []*apitypes.Entry{
+		Entries: []*types.Entry{
 			{
 				ParentId: &types.SPIFFEID{
 					TrustDomain: td,
@@ -111,7 +110,7 @@ func (c entryClient) GetUnsupportedFields(ctx context.Context, td string) (map[F
 	}
 
 	result := resp.Results[0]
-	if result.Status.Code != int32(codes.OK) {
+	if result.Status.Code != int32(codes.OK) && result.Status.Code != int32(codes.AlreadyExists) {
 		return nil, fmt.Errorf("failed to create entry: %v", result.Status.Message)
 	}
 
