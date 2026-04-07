@@ -152,7 +152,7 @@ func ValidateCommonConfigTolerations(tolerations []*corev1.Toleration) error {
 	}
 
 	fldPath := field.NewPath("tolerations")
-	errs := corevalidation.ValidateTolerations(internalTolerations, fldPath)
+	errs := corevalidation.ValidateTolerations(internalTolerations, fldPath, corevalidation.PodValidationOptions{})
 
 	if len(errs) > 0 {
 		return fieldErrorListToError(errs)

@@ -32,8 +32,9 @@ const (
 	SpireOIDCDiscoveryProviderDeploymentName = "spire-spiffe-oidc-discovery-provider"
 	SpireOIDCDiscoveryProviderPodLabel       = "app.kubernetes.io/name=spiffe-oidc-discovery-provider"
 
-	DefaultInterval = 10 * time.Second
-	ShortInterval   = 5 * time.Second
-	DefaultTimeout  = 5 * time.Minute
-	ShortTimeout    = 2 * time.Minute
+	DefaultInterval    = 10 * time.Second
+	ShortInterval      = 5 * time.Second
+	DefaultTimeout     = 5 * time.Minute
+	ShortTimeout       = 2 * time.Minute
+	TestContextTimeout = 10 * time.Minute
 )

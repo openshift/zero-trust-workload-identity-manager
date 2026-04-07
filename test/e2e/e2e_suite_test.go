@@ -85,10 +85,11 @@ func TestE2E(t *testing.T) {
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 
 	// Suite-level configuration
-	suiteConfig.Timeout = 20 * time.Minute // Global timeout per individual test
-	suiteConfig.FailFast = false           // Continue after first failure to see all issues
-	suiteConfig.FlakeAttempts = 0          // Retry on flaky tests (helpful when deflaking tests)
-	suiteConfig.MustPassRepeatedly = 1     // Must pass repeatedly times (helpful when deflaking tests)
+	// Suite timeout must allow all test specs to complete; go test -timeout is 45m
+	suiteConfig.Timeout = 40 * time.Minute
+	suiteConfig.FailFast = false       // Continue after first failure to see all issues
+	suiteConfig.FlakeAttempts = 0      // Retry on flaky tests (helpful when deflaking tests)
+	suiteConfig.MustPassRepeatedly = 1 // Must pass repeatedly times (helpful when deflaking tests)
 
 	// Reporter configuration
 	reporterConfig.Verbose = true                                               // Show verbose outputs
