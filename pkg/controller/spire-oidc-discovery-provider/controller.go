@@ -2,6 +2,7 @@ package spire_oidc_discovery_provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -264,7 +265,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateProxyConfiguration(status
 	result := utils.ValidateProxyConfiguration()
 
 	if !result.Valid {
-		r.log.Error(fmt.Errorf(result.Reason), result.Message)
+		r.log.Error(errors.New(result.Reason), result.Message)
 		statusMgr.AddCondition(ConfigurationValid, result.Reason, result.Message, metav1.ConditionFalse)
 		return fmt.Errorf("proxy configuration invalid: %s", result.Message)
 	}

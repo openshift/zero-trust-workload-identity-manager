@@ -2,6 +2,7 @@ package spire_server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -307,7 +308,7 @@ func (r *SpireServerReconciler) validateCommonConfig(server *v1alpha1.SpireServe
 func (r *SpireServerReconciler) validateProxyConfiguration(statusMgr *status.Manager) error {
 	result := utils.ValidateProxyConfiguration()
 	if !result.Valid {
-		r.log.Error(fmt.Errorf(result.Reason), result.Message)
+		r.log.Error(errors.New(result.Reason), result.Message)
 		statusMgr.AddCondition(ConfigurationValid, result.Reason, result.Message, metav1.ConditionFalse)
 		return fmt.Errorf("proxy configuration invalid: %s", result.Message)
 	}
