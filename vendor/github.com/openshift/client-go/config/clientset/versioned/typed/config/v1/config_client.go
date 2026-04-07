@@ -28,6 +28,7 @@ type ConfigV1Interface interface {
 	ImageTagMirrorSetsGetter
 	InfrastructuresGetter
 	IngressesGetter
+	InsightsDataGathersGetter
 	NetworksGetter
 	NodesGetter
 	OAuthsGetter
@@ -106,6 +107,10 @@ func (c *ConfigV1Client) Ingresses() IngressInterface {
 	return newIngresses(c)
 }
 
+func (c *ConfigV1Client) InsightsDataGathers() InsightsDataGatherInterface {
+	return newInsightsDataGathers(c)
+}
+
 func (c *ConfigV1Client) Networks() NetworkInterface {
 	return newNetworks(c)
 }
@@ -139,9 +144,7 @@ func (c *ConfigV1Client) Schedulers() SchedulerInterface {
 // where httpClient was generated with rest.HTTPClientFor(c).
 func NewForConfig(c *rest.Config) (*ConfigV1Client, error) {
 	config := *c
-	if err := setConfigDefaults(&config); err != nil {
-		return nil, err
-	}
+	setConfigDefaults(&config)
 	httpClient, err := rest.HTTPClientFor(&config)
 	if err != nil {
 		return nil, err
@@ -153,9 +156,7 @@ func NewForConfig(c *rest.Config) (*ConfigV1Client, error) {
 // Note the http client provided takes precedence over the configured transport values.
 func NewForConfigAndClient(c *rest.Config, h *http.Client) (*ConfigV1Client, error) {
 	config := *c
-	if err := setConfigDefaults(&config); err != nil {
-		return nil, err
-	}
+	setConfigDefaults(&config)
 	client, err := rest.RESTClientForConfigAndClient(&config, h)
 	if err != nil {
 		return nil, err
@@ -178,7 +179,7 @@ func New(c rest.Interface) *ConfigV1Client {
 	return &ConfigV1Client{c}
 }
 
-func setConfigDefaults(config *rest.Config) error {
+func setConfigDefaults(config *rest.Config) {
 	gv := configv1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
@@ -187,8 +188,6 @@ func setConfigDefaults(config *rest.Config) error {
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
-
-	return nil
 }
 
 // RESTClient returns a RESTClient that is used to communicate

@@ -33,15 +33,21 @@ type Client interface {
 	io.Closer
 }
 
-func DialSocket(path string) (Client, error) {
+type GrpcConfig struct {
+	// MaxCallRecvMsgSize is the maximum message size the controller manager will receive.
+	MaxCallRecvMsgSize int `json:"maxCallRecvMsgSize,omitempty"`
+}
+
+func DialSocket(path string, grpcConfig *GrpcConfig) (Client, error) {
 	var target string
 	if filepath.IsAbs(path) {
 		target = "unix://" + path
 	} else {
 		target = "unix:" + path
 	}
+	grpcOptions := append(getGrpcConfig(grpcConfig), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 
-	grpcClient, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	grpcClient, err := grpc.NewClient(target, grpcOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial API socket: %w", err)
 	}
@@ -59,4 +65,22 @@ func DialSocket(path string) (Client, error) {
 		BundleClient:      NewBundleClient(grpcClient),
 		Closer:            grpcClient,
 	}, nil
+}
+
+func getGrpcConfig(grpcConfig *GrpcConfig) []grpc.DialOption {
+	grpcOptions := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	if grpcConfig != nil {
+		callOptions := []grpc.CallOption{}
+		if grpcConfig.MaxCallRecvMsgSize > 0 {
+			callOptions = append(callOptions, grpc.MaxCallRecvMsgSize(grpcConfig.MaxCallRecvMsgSize))
+		}
+		if len(callOptions) > 0 {
+			grpcOptions = append(grpcOptions, grpc.WithDefaultCallOptions(callOptions...))
+		}
+	}
+
+	return grpcOptions
 }
