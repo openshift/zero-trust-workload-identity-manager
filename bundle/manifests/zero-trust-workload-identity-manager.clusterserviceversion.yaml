@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-04-14T06:09:38Z"
+    createdAt: "2026-04-14T06:45:14Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
