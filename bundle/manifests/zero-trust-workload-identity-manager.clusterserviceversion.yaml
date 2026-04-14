@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-02-23T10:55:35Z"
+    createdAt: "2026-04-14T06:09:38Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -793,7 +793,7 @@ spec:
     name: spiffe-csi-driver
   - image: ghcr.io/spiffe/oidc-discovery-provider:1.13.3
     name: spire-oidc-discovery-provider
-  - image: ghcr.io/spiffe/spire-controller-manager:0.6.3
+  - image: ghcr.io/spiffe/spire-controller-manager:0.6.4
     name: spire-controller-manager
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
     name: node-driver-registrar
