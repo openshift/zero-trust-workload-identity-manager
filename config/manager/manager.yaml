@@ -77,7 +77,7 @@ spec:
         - name: OPERATOR_NAME
           value: zero-trust-workload-identity-manager
         - name: OPERATOR_VERSION
-          value: 1.0.0
+          value: 1.0.1
         - name: RELATED_IMAGE_SPIRE_SERVER
           value: ghcr.io/spiffe/spire-server:1.13.3
         - name: RELATED_IMAGE_SPIRE_AGENT
