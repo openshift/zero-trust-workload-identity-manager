@@ -26,7 +26,7 @@ func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityCont
 		},
 		ReadOnlyRootFilesystem: true,
 		RunAsUser: securityv1.RunAsUserStrategyOptions{
-			Type: securityv1.RunAsUserStrategyMustRunAsRange,
+			Type: securityv1.RunAsUserStrategyRunAsAny,
 		},
 		SELinuxContext: securityv1.SELinuxContextStrategyOptions{
 			Type: securityv1.SELinuxStrategyMustRunAs,
@@ -49,11 +49,11 @@ func generateSpireAgentSCC(config *v1alpha1.SpireAgent) *securityv1.SecurityCont
 		},
 		AllowHostDirVolumePlugin: true,
 		AllowHostIPC:             false,
-		AllowHostNetwork:         true,
+		AllowHostNetwork:         false,
 		AllowHostPID:             true,
-		AllowHostPorts:           true,
-		AllowPrivilegeEscalation: ptr.To(true),
-		AllowPrivilegedContainer: true,
+		AllowHostPorts:           false,
+		AllowPrivilegeEscalation: ptr.To(false),
+		AllowPrivilegedContainer: false,
 		AllowedCapabilities:      []corev1.Capability{},
 		DefaultAddCapabilities:   []corev1.Capability{},
 		RequiredDropCapabilities: []corev1.Capability{

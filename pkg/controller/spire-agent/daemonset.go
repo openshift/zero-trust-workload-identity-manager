@@ -175,8 +175,8 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 				},
 				Spec: corev1.PodSpec{
 					HostPID:            true,
-					HostNetwork:        true,
-					DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
+					HostNetwork:        false,
+					DNSPolicy:          corev1.DNSClusterFirst,
 					ServiceAccountName: "spire-agent",
 					Containers: []corev1.Container{
 						{
@@ -219,7 +219,14 @@ func generateSpireAgentDaemonSet(config v1alpha1.SpireAgentSpec, ztwim *v1alpha1
 							VolumeMounts: volumeMounts,
 							Resources:    utils.DerefResourceRequirements(config.Resources),
 							SecurityContext: &corev1.SecurityContext{
-								Privileged: ptr.To(true),
+								AllowPrivilegeEscalation: ptr.To(false),
+								Privileged:               ptr.To(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{
+										"ALL",
+									},
+								},
+								ReadOnlyRootFilesystem: ptr.To(true),
 							},
 						},
 					},
