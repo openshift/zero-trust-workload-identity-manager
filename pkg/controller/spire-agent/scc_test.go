@@ -48,8 +48,8 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 		t.Errorf("expected ReadOnlyRootFilesystem to be true")
 	}
 
-	if scc.RunAsUser.Type != securityv1.RunAsUserStrategyMustRunAsRange {
-		t.Errorf("expected RunAsUser.Type to be MustRunAsRange")
+	if scc.RunAsUser.Type != securityv1.RunAsUserStrategyRunAsAny {
+		t.Errorf("expected RunAsUser.Type to be RunAsAny")
 	}
 
 	if scc.SELinuxContext.Type != securityv1.SELinuxStrategyMustRunAs {
@@ -86,20 +86,20 @@ func TestGenerateSpireAgentSCC(t *testing.T) {
 	if scc.AllowHostIPC {
 		t.Errorf("expected AllowHostIPC to be false")
 	}
-	if !scc.AllowHostNetwork {
-		t.Errorf("expected AllowHostNetwork to be true")
+	if scc.AllowHostNetwork {
+		t.Errorf("expected AllowHostNetwork to be false")
 	}
 	if !scc.AllowHostPID {
 		t.Errorf("expected AllowHostPID to be true")
 	}
-	if !scc.AllowHostPorts {
-		t.Errorf("expected AllowHostPorts to be true")
+	if scc.AllowHostPorts {
+		t.Errorf("expected AllowHostPorts to be false")
 	}
-	if scc.AllowPrivilegeEscalation == nil || !*scc.AllowPrivilegeEscalation {
-		t.Errorf("expected AllowPrivilegeEscalation to be true")
+	if scc.AllowPrivilegeEscalation == nil || *scc.AllowPrivilegeEscalation {
+		t.Errorf("expected AllowPrivilegeEscalation to be false")
 	}
-	if !scc.AllowPrivilegedContainer {
-		t.Errorf("expected AllowPrivilegedContainer to be true")
+	if scc.AllowPrivilegedContainer {
+		t.Errorf("expected AllowPrivilegedContainer to be false")
 	}
 
 	if len(scc.AllowedCapabilities) != 0 {

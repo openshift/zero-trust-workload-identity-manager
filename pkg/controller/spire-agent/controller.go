@@ -98,7 +98,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if kerrors.IsNotFound(err) {
 			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
 			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				"Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster",
 				metav1.ConditionFalse)
 			return ctrl.Result{}, nil
 		}
