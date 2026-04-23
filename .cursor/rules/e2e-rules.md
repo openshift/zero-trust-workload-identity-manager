@@ -27,12 +27,12 @@ name: `cluster`). It aggregates status from all four operands.
 
 ## 2. Write-scope restriction (NON-NEGOTIABLE)
 
-- **ONLY** create or modify files inside `test/` (e.g. `test/e2e/`) and
-  `output/` (for generated test plans).
+- **ONLY** create or modify files inside these two top-level directories:
+  1. `test/` — e2e specs, utils, and suite files (e.g. `test/e2e/`).
+  2. `output/` — generated test-plan documents (e.g.
+     `output/pr-105/test-cases.md`). These are **NOT** inside `test/`.
 - **NEVER** touch `cmd/`, `pkg/`, `api/`, `config/`, `go.mod`, `go.sum`,
-  `Makefile`, `Dockerfile`, or any file outside these two directories.
-- Generated `test-cases.md` files go into `output/<key>/` (e.g.
-  `output/pr-105/test-cases.md`), NOT into the test tree.
+  `Makefile`, `Dockerfile`, or any file outside `test/` and `output/`.
 - If a non-test change is required for the test to work (e.g. a missing
   exported type), **report it as a suggestion** in the test-cases.md
   instead of making the edit.
