@@ -147,37 +147,62 @@ For each scenario, decide:
 | Related file exists but different scenario | `new-in-file` -- add new `Context`/`It` in the existing file |
 | No match at all | `new-file` -- create new `*_test.go` (only if truly distinct) |
 
-### Step 6: Prioritize (Top 10 most impactful)
+### Step 6: Generate Top 10 Most Impactful Missing Tests
 
-Rank the missing test scenarios using these ZTWIM-specific categories.
-Focus **only** on scenarios NOT already covered:
+Select the **10 most impactful** test scenarios **NOT already covered** by
+existing specs (confirmed via Step 5 dedup). Rank using these categories:
 
 | # | Category | What to test |
 |---|---|---|
-| 1 | **Core SPIFFE/SPIRE functionality** | Workload attestation, SVID issuance, trust bundle distribution, CSI volume mount, ClusterSPIFFEID |
-| 2 | **Operand lifecycle** | CR create/update/delete for each of the 4 operands, condition checks (Ready, all sub-conditions), aggregate status on ZeroTrustWorkloadIdentityManager |
-| 3 | **Security hardening** | SCC field validation (AllowHostNetwork, AllowPrivilegeEscalation, etc.), pod SecurityContext (runAsNonRoot, drop ALL, readOnlyRootFilesystem), restricted-v2 SCC compliance |
-| 4 | **Configuration edge cases** | Invalid CRs (missing required fields, out-of-range TTL, invalid persistence size), webhook rejection, boundary values |
-| 5 | **Reconciliation and self-healing** | Pod deletion recovery (operator, server, agent, CSI), ConfigMap drift correction, CreateOnlyMode pause/resume |
-| 6 | **OLM integration** | Subscription-based install, upgrade path (channel switching), uninstall cleanup, OperatorCondition.Upgradeable transition on pod failure |
-| 7 | **Multi-operand coordination** | ZeroTrustWorkloadIdentityManager aggregate status, cross-operand dependency (Agent needs Server running), concurrent pod failures across operands |
-| 8 | **OpenShift platform integration** | SCC objects on cluster, RBAC ClusterRoles, ServiceMonitor (if applicable), audit logging, version compatibility (min 2 OCP versions) |
-| 9 | **Error handling and negative cases** | Invalid input rejection by webhooks, permission denial, missing CRDs, operator behavior when ZeroTrustWorkloadIdentityManager CR is missing |
-| 10 | **Operational day-2** | Log level changes (Subscription env + CR spec), resource limits/requests, node scheduling (nodeSelector, tolerations, affinity), custom labels propagation |
+| 1 | **Core Functionality** | Primary use cases: workload attestation, SVID issuance, trust bundle distribution, CSI volume mount, ClusterSPIFFEID, operand CR lifecycle |
+| 2 | **Configuration Edge Cases** | Invalid/boundary configurations: missing required fields, out-of-range TTL, invalid persistence size, webhook rejection, min/max boundary values |
+| 3 | **Dynamic Behavior** | Runtime changes not tested: log-level reload, resource limit changes, CreateOnlyMode toggle, ConfigMap drift correction, rolling update tracking |
+| 4 | **Integration Gaps** | Component interactions not validated: cross-operand dependency (Agent needs Server), ZeroTrustWorkloadIdentityManager aggregate status, OLM Subscription propagation |
+| 5 | **Multi-tenant / Namespace** | Cross-namespace scenarios: ClusterSPIFFEID with namespace selectors, workload attestation across namespaces, RBAC scoping per namespace |
+| 6 | **Error Handling** | Failure modes not covered: permission denial, missing CRDs, operator behavior when parent CR is absent, pod crash recovery, cascading failures |
+| 7 | **Upgrade / Compatibility** | Version compatibility gaps: OLM upgrade path (channel switching), CSV replacement chain, uninstall cleanup, OperatorCondition.Upgradeable transitions |
+| 8 | **Performance** | Load/scale testing if missing: large number of ClusterSPIFFEIDs, concurrent attestation, DaemonSet rollout on many-node clusters |
+| 9 | **Security** | Permission/isolation tests: SCC field validation, pod SecurityContext (runAsNonRoot, drop ALL, readOnlyRootFilesystem), restricted-v2 SCC compliance, RBAC least-privilege |
+| 10 | **Real Customer Scenarios** | Use cases from the RFE/Jira not tested: end-to-end workflows described in the ticket, production-like topologies, day-2 operational patterns |
 
-For each PR/Jira, identify which categories are impacted. Generate test
-cases for the impacted categories first, then fill gaps in un-covered
-categories if the change is broad.
+**Prioritization rules:**
+
+- For each PR/Jira, identify which categories are impacted by the diff.
+- Generate test cases for impacted categories **first**, then fill gaps in
+  un-covered categories if the change is broad.
+- Assign a priority to each test case:
+  - **Critical** -- blocks core functionality or security; must pass before merge.
+  - **High** -- important gap in coverage; should be addressed in the same release.
+  - **Medium** -- nice-to-have hardening; can be deferred if time-constrained.
+
+**Test case ID format:**
+
+Use `<TICKET>-TC-NNN` where `<TICKET>` is the source identifier:
+
+| Source | ID example |
+|---|---|
+| Jira `SPIRE-439` | `SPIRE-439-TC-001` |
+| Jira `OCPSTRAT-1234` | `OCPSTRAT-1234-TC-001` |
+| GitHub PR #105 | `PR-105-TC-001` |
+
+Number sequentially (`TC-001`, `TC-002`, ...) within a single test plan.
 
 ### Step 7: Generate test-cases.md
 
-Write the test plan to a local output directory:
+Write the test plan to a local output directory. Use the Jira key when
+available, otherwise use the PR number:
 
 ```bash
-mkdir -p output/${JIRA_KEY:-pr-$PR_NUMBER}
+# Jira source
+mkdir -p output/${JIRA_KEY}
+# GitHub PR source
+mkdir -p output/pr-${PR_NUMBER}
 ```
 
-Use this template for `output/<key>/test-cases.md`:
+File name: `test-cases.md` (e.g. `output/SPIRE-439/test-cases.md` or
+`output/pr-105/test-cases.md`).
+
+Use this template:
 
 ```markdown
 # Test Plan: <title>
@@ -191,19 +216,22 @@ Use this template for `output/<key>/test-cases.md`:
 
 ## Test Cases
 
-### TC-001: <Title> [P0]
-**Domain:** <domain-key>
-**Category:** <one of the 10 categories above>
-**OpenShift-specific:** yes/no
-**Scope:** <keywords>
-**Prerequisites:** <cluster state, CRDs, namespaces>
+### <TICKET>-TC-001: <Title>
+**Priority:** Critical | High | Medium
+**Domain:** <domain-key(s) from Section 6>
+**Category:** <one of the 10 categories from Step 6>
+**OpenShift-specific:** yes / no
+**Coverage Gap:** <What existing tests do NOT cover that this test fills.>
+**Prerequisites:** <cluster state, CRDs, namespaces, operator version>
 **Steps:**
-1. ...
-2. ...
-**Expected result:** ...
+1. <Concrete action with actual config/commands>
+   **Expected:** <What should happen after this step>
+2. <Next action>
+   **Expected:** <Outcome>
+3. ...
 **Stop condition:** <which later TCs are blocked if this fails>
 
-(repeat for TC-002, TC-003, ...)
+(repeat for <TICKET>-TC-002, <TICKET>-TC-003, ... up to 10)
 
 ## Coverage Map
 
@@ -240,6 +268,17 @@ Use this template for `output/<key>/test-cases.md`:
 
 Mark each checklist item `[x]` if a TC covers it. Append a warning for
 missing items.
+
+**Writing good test steps:**
+
+- Each step must be **concrete**: include the actual API call, kubectl
+  command, CR YAML snippet, or Go assertion -- not vague prose.
+- Every step must have its own **Expected** line describing the observable
+  outcome (HTTP status, condition value, field value, pod state, etc.).
+- If a step creates a resource, note the cleanup requirement
+  (`DeferCleanup` in the eventual e2e code).
+- Group related assertions into one step when they all verify the same
+  object (e.g. "Verify SCC fields" with multiple Expected sub-bullets).
 
 **Default behavior stops here.** Steps 8-9 below run only if the user
 explicitly asks to generate e2e code or raise a PR.
