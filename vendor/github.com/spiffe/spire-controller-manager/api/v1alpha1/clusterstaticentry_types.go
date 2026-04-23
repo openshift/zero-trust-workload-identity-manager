@@ -60,10 +60,11 @@ type ClusterStaticEntryStatus struct {
 // ClusterStaticEntry is the Schema for the clusterstaticentries API
 type ClusterStaticEntry struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata"`
 
-	Spec   ClusterStaticEntrySpec   `json:"spec,omitempty"`
-	Status ClusterStaticEntryStatus `json:"status,omitempty"`
+	Spec ClusterStaticEntrySpec `json:"spec"`
+	// +optional
+	Status ClusterStaticEntryStatus `json:"status"`
 }
 
 //+kubebuilder:object:root=true
@@ -71,7 +72,7 @@ type ClusterStaticEntry struct {
 // ClusterStaticEntryList contains a list of ClusterStaticEntry
 type ClusterStaticEntryList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata"`
 	Items           []ClusterStaticEntry `json:"items"`
 }
 

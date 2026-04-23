@@ -540,7 +540,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:    "spire-server",
+					ServiceAccountName: "spire-server",
 					Containers: []corev1.Container{
 						{
 							Name:            "spire-server",

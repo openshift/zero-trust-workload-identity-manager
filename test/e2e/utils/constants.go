@@ -45,9 +45,9 @@ const (
 	SpiffeHelperContainerName = "spiffe-helper"
 	SpiffeHelperImage         = "ghcr.io/spiffe/spiffe-helper:0.11.0"
 
-	DefaultInterval = 10 * time.Second
-	ShortInterval   = 5 * time.Second
-	DefaultTimeout  = 5 * time.Minute
-	ShortTimeout    = 2 * time.Minute
+	DefaultInterval    = 10 * time.Second
+	ShortInterval      = 5 * time.Second
+	DefaultTimeout     = 5 * time.Minute
+	ShortTimeout       = 2 * time.Minute
 	TestContextTimeout = 10 * time.Minute
 )
