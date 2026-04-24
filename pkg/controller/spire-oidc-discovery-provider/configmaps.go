@@ -119,6 +119,7 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim 
 			"cert_file_path": "/etc/oidc/tls/tls.crt",
 			"key_file_path":  "/etc/oidc/tls/tls.key",
 		},
+		"set_key_use": dp.Spec.SetKeyUse,
 		"workload_api": map[string]string{
 			"socket_path":  "/spiffe-workload-api/" + agentSocketName,
 			"trust_domain": trustDomain,
