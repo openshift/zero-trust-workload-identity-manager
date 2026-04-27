@@ -1,629 +1,262 @@
-# ZTWIM E2E Test Generation Rules
+# ZTWIM E2E test generation (LLM runbook)
 
-Apply whenever you add, extend, or refactor tests in this repository, or when
-a contributor asks you to generate e2e tests for a PR or Jira ticket. These
-rules are always active -- even if the current file is not under `test/`.
+## Context & Persona
 
----
+**Role:** Senior SDET specializing in Kubernetes Operators, Ginkgo v2, and OpenShift Security.
 
-## 1. Scope and context
+**Core Objective:** Generate high-fidelity E2E test plans and code for the `zero-trust-workload-identity-manager` (ZTWIM) while strictly adhering to repository boundaries (editing ONLY `test/` and `output/`).
 
-This is the **Zero Trust Workload Identity Manager** (ZTWIM) operator. It
-manages four operands on OpenShift via OLM:
+**Tone:** Technical, precise, and safety-first.
 
-| Operand | CR kind | Workload | Well-known name |
-|---|---|---|---|
-| SPIRE Server | `SpireServer` | StatefulSet | `spire-server` |
-| SPIRE Agent | `SpireAgent` | DaemonSet | `spire-agent` |
-| SPIFFE CSI Driver | `SpiffeCSIDriver` | DaemonSet | `spire-spiffe-csi-driver` |
-| SPIRE OIDC Discovery Provider | `SpireOIDCDiscoveryProvider` | Deployment | `spire-spiffe-oidc-discovery-provider` |
+**When to apply:** Any work that adds, extends, or refactors e2e tests, or a request like “generate e2e for PR / Jira”. Active even if the current file is not under `test/`.
 
-The top-level CR is `ZeroTrustWorkloadIdentityManager` (cluster-scoped,
-name: `cluster`). It aggregates status from all four operands.
+**One-line flow:** *Fetch change → list existing specs → map diff to domains → dedup → list up to 10 missing scenarios → write `output/.../test-cases.md` → only write Go if the user asks.*
 
-**Framework:** controller-runtime / operator-sdk, Ginkgo v2 / Gomega, OLM.
+**Repo:** `openshift/zero-trust-workload-identity-manager` — Ginkgo v2, Gomega, OLM, OpenShift.
 
 ---
 
-## 2. Write-scope restriction (NON-NEGOTIABLE)
+## A. Hard rules (read first)
 
-- **ONLY** create or modify files inside these two top-level directories:
-  1. `test/` — e2e specs, utils, and suite files (e.g. `test/e2e/`).
-  2. `output/` — generated test-plan documents (e.g.
-     `output/pr-105/test-cases.md`). These are **NOT** inside `test/`.
-- **NEVER** touch `cmd/`, `pkg/`, `api/`, `config/`, `go.mod`, `go.sum`,
-  `Makefile`, `Dockerfile`, or any file outside `test/` and `output/`.
-- If a non-test change is required for the test to work (e.g. a missing
-  exported type), **report it as a suggestion** in the test-cases.md
-  instead of making the edit.
-- Before every commit, run:
-  ```bash
-  git diff --name-only | grep -v '^test/' | grep -v '^output/'
-  ```
-  If that command produces output, **abort the commit** and remove the
-  offending files from staging.
+| Rule | |
+| --- | --- |
+| **MAY edit** | Only `test/**` and `output/**` |
+| **MUST NOT edit** | `cmd/`, `pkg/`, `api/`, `config/`, `go.mod`, `go.sum`, `Makefile`, `Dockerfile`, or anything else outside `test/` and `output/` |
+| **Non-test fix needed** (missing export, etc.) | Put it in `test-cases.md` as a *suggestion*, do not change production code |
+| **Constants** | In `test/e2e/utils/constants.go` — **append only**, never delete or rename existing entries |
+| **Helpers** | Reuse `test/e2e/utils/utils.go`; do not copy-paste the same wait logic twice |
+| **New specs** | **Never** add a second `It` that duplicates an existing one; **extend** or **skip** and cite `covered by <file>:<spec name>` |
 
----
-
-## 3. Workflow -- generating tests from a PR or Jira ticket
-
-When a contributor says "generate e2e tests for [PR URL or Jira key]",
-follow these steps in order. Print progress after each step.
-
-### Step 1: Identify source
-
-- Extract the PR number or Jira key from the user's message.
-- If the value contains `/pull/` -- treat as **GitHub PR**.
-- If the value looks like a Jira key (`PROJ-123`) or contains `/browse/`
-  -- treat as **Jira ticket**.
-- If neither is provided, ask:
-  `"Enter a Jira link or GitHub PR URL:"`
-
-### Step 2: Fetch context
-
-**If GitHub PR:**
+**Pre-commit check (empty output required):**
 ```bash
-gh pr view $PR_NUMBER --repo $OWNER/$REPO \
-  --json title,body,files,headRefName,baseRefName,commits
-gh pr diff $PR_NUMBER --repo $OWNER/$REPO
+git diff --name-only | grep -v '^test/' | grep -v '^output/'
 ```
 
-**If Jira:**
-```bash
-curl -s -u "$JIRA_EMAIL:$JIRA_PERSONAL_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/2/issue/$JIRA_KEY?fields=summary,description,issuetype,status,priority,labels,components"
-```
+**Operands (do not invent names):** `ZeroTrustWorkloadIdentityManager` (name `cluster`) aggregates four CRs: `SpireServer` (StatefulSet `spire-server`), `SpireAgent` (DaemonSet `spire-agent`), `SpiffeCSIDriver` (DaemonSet `spire-spiffe-csi-driver`), `SpireOIDCDiscoveryProvider` (Deployment `spire-spiffe-oidc-discovery-provider`).
 
-If `gh` or Jira access fails, ask the user to provide the PR description,
-diff, or Jira summary manually. Do not abort.
+---
 
-### Step 3: Discover existing tests
+## B. Linear workflow (steps 1–7)
 
-Since we are already inside the ZTWIM repo, read the existing test tree
-directly:
+Run in order. **After each major step, state what you did in one line** (e.g. “Step 3: found 34 `It` blocks”).
 
+### 1) Source
+- URL contains `/pull/` → **GitHub PR** (extract number).
+- Looks like `PROJ-123` or Jira URL → **Jira**.
+- Else ask: `Enter a Jira link or GitHub PR URL:`
+
+### 2) Ingest the change
+- **PR:** `gh pr view <N> --repo <owner>/<repo> --json title,body,files,headRefName,baseRefName,commits` then `gh pr diff <N> --repo <owner>/<repo>`.
+- **Jira:** REST issue fields `summary,description,issuetype,status` (or user pastes text if `curl` unavailable).
+- If fetch fails, ask the user to paste title + diff; **do not stop**.
+
+### 3) Classify the diff
+Map **each changed path** to domain(s) using this table:
+
+| Path pattern | Domains (pick all that apply) |
+| --- | --- |
+| `api/*_types.go` | `reconciliation`, `negative-input-validation` |
+| `pkg/controller/*_controller.go` | `reconciliation`, `controller-manager` |
+| `pkg/controller/*/scc.go` | `openshift-scc`, `security-context` |
+| `pkg/controller/*/{daemonset,statefulset,deployment}.go` | `controller-manager`, `security-context` |
+| `pkg/controller/*/configmap.go` | `configmap`, `reconciliation` |
+| `pkg/controller/*/{rbac,role}.go` | `rbac`, `openshift-rbac-scoping` |
+| `config/rbac/` | `rbac`, `openshift-rbac-scoping` |
+| `config/crd/` | `negative-input-validation`, `csv-versioning` |
+| `config/webhook/` | `negative-input-validation`, `webhook` |
+| `config/manager/` | `install-health`, `controller-manager` |
+| `config/manifests/` | `olm-lifecycle-install`, `csv-versioning` |
+| `test/` | informational (existing coverage only) |
+
+**Also consider** (even if the diff is narrow): `install-health`, `security-context` / `openshift-scc`, `rbac` / `openshift-rbac-scoping`, `openshift-monitoring` if metrics touched, `olm-lifecycle-install`.
+
+**Heuristic for gaps:** If the diff adds a **new function branch**, **new reconciler parameter**, **new condition path**, or **new resource type** in reconcile — treat that path as a **candidate e2e** unless a spec already asserts the same outcome.
+
+### 4) Discover existing e2e (read repo)
 ```bash
 rg 'Describe\(|Context\(|It\(' test/e2e/ --glob '*_test.go'
-rg '^func ' test/e2e/utils/utils.go test/e2e/utils/*.go 2>/dev/null
+rg '^\s*func ' test/e2e/utils/utils.go test/e2e/utils/*.go 2>/dev/null
 rg '^\s*(const|var)\s' test/e2e/utils/constants.go 2>/dev/null
 ```
 
-### Step 4: Analyze changes and map to test domains
+**Known contexts in `e2e_test.go`:** `Installation`, `OperatorCondition`, `SpireAgent attestation`, `Common configurations`, `CreateOnlyMode` — add new work in the best-fitting **existing** `Context` when possible.
 
-Classify every changed file into one or more domains:
+### 5) Dedup (per scenario you might add)
 
-| File path pattern | Domain(s) |
-|---|---|
-| `api/*_types.go` | reconciliation, negative-input-validation |
-| `pkg/controller/*_controller.go` | reconciliation, controller-manager |
-| `pkg/controller/*/scc.go` | openshift-scc, security-context |
-| `pkg/controller/*/daemonset.go` or `*/statefulset.go` or `*/deployment.go` | controller-manager, security-context |
-| `pkg/controller/*/configmap.go` | configmap, reconciliation |
-| `pkg/controller/*/rbac.go` or `*/role.go` | rbac, openshift-rbac-scoping |
-| `config/rbac/` | rbac, openshift-rbac-scoping |
-| `config/crd/` | negative-input-validation, csv-versioning |
-| `config/webhook/` | negative-input-validation, webhook |
-| `config/manager/` | install-health, controller-manager |
-| `config/manifests/` | olm-lifecycle-install, csv-versioning |
-| `test/` | (informational only -- existing test coverage) |
+1. `rg '<keyword|CR kind|file base>' test/ --glob '*_test.go'`
+2. **Decision:**
 
-Always append the Red Hat mandatory domains regardless of diff:
-`install-health`, `security-context` / `openshift-scc`, `rbac` /
-`openshift-rbac-scoping`, `openshift-monitoring` (if applicable),
-`olm-lifecycle-install`.
+| If | Then |
+| --- | --- |
+| Same behavior + same assertions already in an `It` | `skip` — document as covered |
+| Same area, need more assertions | `extend` — same `It` or new `It` in **same** `Context` |
+| New scenario, file already has similar specs | `new-in-file` — new `It` in `e2e_test.go` |
+| Genuinely new area | `new-file` only if a separate `*_test.go` is justified (rare) |
 
-### Step 5: Dedup
-
-Run dedup queries against `test/e2e/` for each domain:
-
+3. **Optional** domain keyword search (use when the scenario maps to a domain):
 ```bash
-rg 'Describe\(|Context\(|It\(' test/e2e/ --glob '*_test.go'
-
-# Per domain
-rg 'CRD|Established' test/e2e/                           # install-health
-rg 'SecurityContext|RunAsNonRoot|Capabilities' test/e2e/  # security-context
-rg 'ClusterRole|Permission|RBAC' test/e2e/                # rbac
-rg 'ConfigMap|Data\[' test/e2e/                           # configmap
-rg 'Deployment|StatefulSet|DaemonSet' test/e2e/           # controller-manager
-rg 'Create\(|Update\(|Delete\(' test/e2e/                 # reconciliation
-rg 'invalid|reject|deny|forbidden' test/e2e/ -i          # negative-input-validation
-rg 'Subscription|InstallPlan|CSV' test/e2e/               # olm-lifecycle-install
-rg 'upgrade|channel|replaces' test/e2e/ -i                # olm-upgrade-path
-rg 'uninstall|cleanup|finalizer' test/e2e/ -i             # olm-uninstall
-rg 'SCC|SecurityContextConstraint' test/e2e/              # openshift-scc
-rg 'ServiceMonitor|Prometheus|/metrics' test/e2e/         # openshift-monitoring
-rg 'WaitFor.*Conditions' test/e2e/                        # condition-based waits
-rg 'ResourceRequirements|Limits|Requests' test/e2e/       # resource limits
-rg 'NodeSelector|Toleration|Affinity' test/e2e/           # scheduling
-rg 'DeferCleanup' test/e2e/                               # cleanup patterns
+rg 'CRD|Established' test/e2e/                    # install-health
+rg 'ConfigMap|Data\[' test/e2e/                    # configmap
+rg 'Subscription|InstallPlan|CSV' test/e2e/      # olm
+rg 'NodeSelector|Toleration|Affinity' test/e2e/    # scheduling
+rg 'ResourceRequirements|Limits|Requests' test/e2e/
+rg 'WaitFor.*Conditions' test/e2e/
 ```
 
-For each scenario, decide:
+### 6) Top 10 missing test ideas
+Pick up to **10** scenarios **not** covered after Step 5. **Prioritize** categories the diff actually touches, then other gaps.
 
-| Hits | Decision |
-|---|---|
-| Exact spec match with same assertions | `skip` -- already covered |
-| Partial match (same Context, different assertions) | `extend` -- add assertions to existing `It` or new `It` in same `Context` |
-| Related file exists but different scenario | `new-in-file` -- add new `Context`/`It` in the existing file |
-| No match at all | `new-file` -- create new `*_test.go` (only if truly distinct) |
+| # | Category | Focus |
+| --- | --- | --- |
+| 1 | Core | Attestation, SVID, trust bundle, CSI, ClusterSPIFFEID, operand lifecycle |
+| 2 | Config edge | Invalid / boundary spec, webhooks, TTL, sizes |
+| 3 | Dynamic | Log level, resources, **CreateOnlyMode**, ConfigMap drift, rollouts |
+| 4 | Integration | Cross-operand deps, ZTWIM aggregate status, Subscription → Deployment env |
+| 5 | Multi-tenant / NS | Selectors, cross-namespace, RBAC scope |
+| 6 | Errors | Denied RBAC, missing CRD, crash recovery, cascades |
+| 7 | Upgrade / compat | OLM channel, CSV chain, `OperatorCondition.Upgradeable`, uninstall |
+| 8 | Performance | Many ClusterSPIFFEIDs, large cluster rollouts (if missing) |
+| 9 | Security | SCC, SecurityContext, restricted-v2, least-privilege RBAC |
+| 10 | Customer / Jira | Workflows and topologies from the ticket |
 
-### Step 6: Generate Top 10 Most Impactful Missing Tests
+**Priority label per case:** `Critical` | `High` | `Medium`  
+**ID format:** `<TICKET>-TC-NNN` — e.g. `SPIRE-439-TC-001`, or `PR-105-TC-001` for PR-sourced plans.
 
-Select the **10 most impactful** test scenarios **NOT already covered** by
-existing specs (confirmed via Step 5 dedup). Rank using these categories:
-
-| # | Category | What to test |
-|---|---|---|
-| 1 | **Core Functionality** | Primary use cases: workload attestation, SVID issuance, trust bundle distribution, CSI volume mount, ClusterSPIFFEID, operand CR lifecycle |
-| 2 | **Configuration Edge Cases** | Invalid/boundary configurations: missing required fields, out-of-range TTL, invalid persistence size, webhook rejection, min/max boundary values |
-| 3 | **Dynamic Behavior** | Runtime changes not tested: log-level reload, resource limit changes, CreateOnlyMode toggle, ConfigMap drift correction, rolling update tracking |
-| 4 | **Integration Gaps** | Component interactions not validated: cross-operand dependency (Agent needs Server), ZeroTrustWorkloadIdentityManager aggregate status, OLM Subscription propagation |
-| 5 | **Multi-tenant / Namespace** | Cross-namespace scenarios: ClusterSPIFFEID with namespace selectors, workload attestation across namespaces, RBAC scoping per namespace |
-| 6 | **Error Handling** | Failure modes not covered: permission denial, missing CRDs, operator behavior when parent CR is absent, pod crash recovery, cascading failures |
-| 7 | **Upgrade / Compatibility** | Version compatibility gaps: OLM upgrade path (channel switching), CSV replacement chain, uninstall cleanup, OperatorCondition.Upgradeable transitions |
-| 8 | **Performance** | Load/scale testing if missing: large number of ClusterSPIFFEIDs, concurrent attestation, DaemonSet rollout on many-node clusters |
-| 9 | **Security** | Permission/isolation tests: SCC field validation, pod SecurityContext (runAsNonRoot, drop ALL, readOnlyRootFilesystem), restricted-v2 SCC compliance, RBAC least-privilege |
-| 10 | **Real Customer Scenarios** | Use cases from the RFE/Jira not tested: end-to-end workflows described in the ticket, production-like topologies, day-2 operational patterns |
-
-**Prioritization rules:**
-
-- For each PR/Jira, identify which categories are impacted by the diff.
-- Generate test cases for impacted categories **first**, then fill gaps in
-  un-covered categories if the change is broad.
-- Assign a priority to each test case:
-  - **Critical** -- blocks core functionality or security; must pass before merge.
-  - **High** -- important gap in coverage; should be addressed in the same release.
-  - **Medium** -- nice-to-have hardening; can be deferred if time-constrained.
-
-**Test case ID format:**
-
-Use `<TICKET>-TC-NNN` where `<TICKET>` is the source identifier:
-
-| Source | ID example |
-|---|---|
-| Jira `SPIRE-439` | `SPIRE-439-TC-001` |
-| Jira `OCPSTRAT-1234` | `OCPSTRAT-1234-TC-001` |
-| GitHub PR #105 | `PR-105-TC-001` |
-
-Number sequentially (`TC-001`, `TC-002`, ...) within a single test plan.
-
-### Step 7: Generate test-cases.md
-
-Write the test plan to a local output directory. Use the Jira key when
-available, otherwise use the PR number:
+### 7) Write `test-cases.md` (default stop here)
 
 ```bash
-# Jira source
-mkdir -p output/${JIRA_KEY}
-# GitHub PR source
-mkdir -p output/pr-${PR_NUMBER}
+mkdir -p "output/${JIRA_KEY}"          # or
+mkdir -p "output/pr-${PR_NUMBER}"
 ```
 
-File name: `test-cases.md` (e.g. `output/SPIRE-439/test-cases.md` or
-`output/pr-105/test-cases.md`).
+**Path:** `output/<JIRA_KEY>/test-cases.md` or `output/pr-<N>/test-cases.md`
 
-Use this template:
+**Use this template (fill all sections; steps must be concrete):**
 
 ```markdown
 # Test Plan: <title>
-
 <!-- Source: <URL> -->
 <!-- Repo: openshift/zero-trust-workload-identity-manager -->
-<!-- Framework: controller-runtime (operator-sdk) | Ginkgo v2 -->
+<!-- Framework: Ginkgo v2 / controller-runtime -->
 
 ## Summary
-<1-3 sentences: what changed and what must be tested.>
+<1-3 sentences>
 
 ## Test Cases
 
 ### <TICKET>-TC-001: <Title>
 **Priority:** Critical | High | Medium
-**Domain:** <domain-key(s) from Section 6>
-**Category:** <one of the 10 categories from Step 6>
-**OpenShift-specific:** yes / no
-**Coverage Gap:** <What existing tests do NOT cover that this test fills.>
-**Prerequisites:** <cluster state, CRDs, namespaces, operator version>
+**Domain:** <from Section 3 table>
+**Category:** <1-10 from Step 6>
+**OpenShift-specific:** yes | no
+**Coverage Gap:** <what is missing today>
+**Prerequisites:** <cluster, CRDs, operator>
 **Steps:**
-1. <Concrete action with actual config/commands>
-   **Expected:** <What should happen after this step>
-2. <Next action>
-   **Expected:** <Outcome>
-3. ...
-**Stop condition:** <which later TCs are blocked if this fails>
-
-(repeat for <TICKET>-TC-002, <TICKET>-TC-003, ... up to 10)
+1. <action + real kubectl/CR/yaml or assertion>
+   **Expected:** <observable>
+2. ...
+**Stop condition:** <downstream impact if this fails>
+(repeat TC-002 … up to 10)
 
 ## Coverage Map
+| Scenario | Existing spec | Domain | Decision (skip/extend/new) |
+| --- | --- | --- | --- |
 
-| Scenario | Existing spec | Domain | Decision |
-|---|---|---|---|
-| <keyword> | <path:line or "(none)"> | <domain> | extend / new / skip |
-
-## OLM Coverage
-- Subscription install: covered / not covered
-- Channel switching: covered / not covered
-- Upgrade path: covered / not covered
-- Dependency management: covered / not covered
-- Uninstall cleanup: covered / not covered
-
-## OpenShift Coverage
-- SCC validation: covered / not covered
-- RBAC scoping: covered / not covered
-- Image scanning: covered / not covered
-- Prometheus metrics: covered / not covered
-- Audit logging: covered / not covered
-- Version compatibility: covered / not covered
-
-## Red Hat Certification Checklist
-- [ ] OLM install
-- [ ] SCC validation
-- [ ] RBAC least-privilege
-- [ ] Image scanning / signing
-- [ ] Prometheus metrics
-- [ ] Audit logging
-- [ ] Version compatibility
-- [ ] Uninstall cleanup
-- [ ] Security context
+## OLM / OpenShift / Red Hat
+- OLM: install / channel / upgrade / cleanup — covered or not
+- OpenShift: SCC, RBAC, metrics, audit — covered or not
+- Certification checklist: mark [x] if a TC covers; warn on gaps
 ```
 
-Mark each checklist item `[x]` if a TC covers it. Append a warning for
-missing items.
+**Step quality bar:** every step = concrete command or API; every step has **Expected**; note `DeferCleanup` for created resources.
 
-**Writing good test steps:**
-
-- Each step must be **concrete**: include the actual API call, kubectl
-  command, CR YAML snippet, or Go assertion -- not vague prose.
-- Every step must have its own **Expected** line describing the observable
-  outcome (HTTP status, condition value, field value, pod state, etc.).
-- If a step creates a resource, note the cleanup requirement
-  (`DeferCleanup` in the eventual e2e code).
-- Group related assertions into one step when they all verify the same
-  object (e.g. "Verify SCC fields" with multiple Expected sub-bullets).
-
-**Default behavior stops here.** Steps 8-9 below run only if the user
-explicitly asks to generate e2e code or raise a PR.
-
-### Step 8: Generate e2e code (only if user asks)
-
-Follow the code generation guardrails in Section 9 below. Only modify
-files under `test/`.
-
-### Step 9: Branch and PR (only if user asks)
-
-Create a feature branch (e.g. `qa/e2e-<key>-<short-title>`), commit only
-files under `test/` and `output/`, push, and open a PR against `main`.
-Include the test-cases.md summary in the PR body.
+**Steps 8–9 (only if the user explicitly asks):**
+- **8 — Code:** generate Go **only** under `test/`, follow sections C–E below, then re-run the git diff scope check.
+- **9 — PR:** branch e.g. `qa/e2e-<key>-<short>`, commit only `test/` + `output/`, open PR, paste test-plan summary in body.
 
 ---
 
-## 4. No duplicate e2e coverage
+## C. Ginkgo / Gomega (required patterns)
 
-Before adding any new `It` / `Describe` / file:
+- Structure: `Describe` → `Context` → `It` with `By()` for phases.
+- Async: `Eventually(...).WithTimeout(...).WithPolling(...).Should(...)` — OLM: prefer **≥ 60s** where CSV/install is involved.
+- “Does not change”: `Consistently` (e.g. ConfigMap drift under CreateOnlyMode).
+- Shared install order: top-level `Ordered` + `BeforeAll` (cheap global setup) + `BeforeEach` with `context.WithTimeout(..., utils.TestContextTimeout)` and `DeferCleanup(cancel)`.
+- **Every new `It`:** at least one `Label(...)` from the list in **D** below.
 
-1. Search the test tree for specs that already exercise the same feature:
-   ```bash
-   rg '<keyword>' test/ --glob '*_test.go'
-   ```
-2. If existing e2e already covers the behavior (same assertions and setup,
-   or a small extension suffices): **do not add a parallel spec**. Extend
-   the existing `Context`/`It`, or report `covered by <path>:<spec>` in the
-   coverage map.
-3. Add new specs **only** when no current test reasonably covers the
-   scenario.
+**Snippet references** (use repo helpers, do not reimplement long waits by hand):
+- Condition waits: `WaitForSpire*Conditions`, `WaitForZeroTrustWorkloadIdentityManagerConditions`
+- Rollouts: `WaitFor*RollingUpdate` then `WaitFor*Available` / `WaitFor*Ready`
+- OLM: `FindOperatorSubscription`, `PatchSubscriptionEnv`, `WaitForDeploymentEnvVar`
+- Config: `GetNestedStringFromConfigMapJSON` — for CR-in-ConfigMap checks
+- CR updates: `UpdateCRWithRetry` + `DeferCleanup` restore
+- New namespace for test data: create + `DeferCleanup(Delete)`
+
+**Minimal patterns:**
+
+```go
+// Per-test timeout (match existing e2e_test.go style)
+BeforeEach(func() {
+    var cancel context.CancelFunc
+    testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
+    DeferCleanup(cancel)
+})
+```
+
+```go
+// Drift must NOT be fixed (CreateOnlyMode)
+Consistently(...).WithTimeout(30*time.Second).WithPolling(5*time.Second).Should(...)
+
+// Drift must be fixed (mode off)
+Eventually(...).WithTimeout(utils.DefaultTimeout).WithPolling(utils.DefaultInterval).Should(...)
+```
 
 ---
 
-## 5. ZTWIM test structure (baked-in)
+## D. Ginkgo `Label` vocabulary (at least one per `It`)
 
-The repo's e2e layout. Do not invent a new structure.
+`install-health`, `security-context`, `rbac`, `configmap`, `controller-manager`, `reconciliation`, `negative-input-validation`, `negative-permission-validation`, `upgrade`, `olm-lifecycle-install`, `olm-upgrade-path`, `olm-uninstall`, `olm-dependency-management`, `csv-versioning`, `openshift-scc`, `openshift-rbac-scoping`, `openshift-network-policy`, `openshift-image-scanning`, `openshift-monitoring`, `openshift-logging`, `openshift-audit`, `openshift-version-compat`, `openshift-fips-mode`
+
+**Example:** `It("…", Label("reconciliation", "configmap"), func() { … })`
+
+---
+
+## E. Repo layout and APIs (do not deviate)
 
 | File | Role |
-|---|---|
-| `test/e2e/e2e_suite_test.go` | Suite entrypoint, `BeforeSuite` (k8sClient, clientset, apiextClient, configClient), `TestE2E`. Keep thin. |
-| `test/e2e/e2e_test.go` | All test specs. Single `Ordered` top-level `Describe("Zero Trust Workload Identity Manager")` with `BeforeAll` for cluster discovery and `BeforeEach` for per-test context timeout. |
-| `test/e2e/utils/constants.go` | All fixed values. **Never modify or delete existing constants.** Only append. |
-| `test/e2e/utils/utils.go` | All reusable helpers. **Never duplicate existing helpers.** |
+| --- | --- |
+| `test/e2e/e2e_suite_test.go` | `BeforeSuite` clients, `TestE2E` — keep thin |
+| `test/e2e/e2e_test.go` | All specs; one `Ordered` `Describe("Zero Trust Workload Identity Manager")` |
+| `test/e2e/utils/constants.go` | **Append-only** names, env var keys, timeouts |
+| `test/e2e/utils/utils.go` | Shared helpers only |
 
-### Existing Contexts in `e2e_test.go`
+**Constants to reuse (excerpt):** `OperatorNamespace`, `OperatorDeploymentName`, `OperatorSubscriptionNameFragment`, `OperatorLogLevelEnvVar`, `CreateOnlyModeEnvVar`, `SpireServer*`, `SpireAgent*`, `SpiffeCSIDriver*`, `SpireOIDCDiscoveryProvider*`, `SpiffeHelper*`, `DefaultInterval`, `ShortInterval`, `DefaultTimeout`, `ShortTimeout`, `TestContextTimeout` — **read `constants.go` for exact strings; do not hardcode duplicates.**
 
-| Context | What it covers |
-|---|---|
-| `Installation` | CRD Established, operator Deployment available, ZTWIM CR creation, pod recovery, all 4 operand CR creation + condition checks, aggregate status |
-| `OperatorCondition` | Upgradeable True/False transitions on pod deletion, concurrent pod failures |
-| `SpireAgent attestation` | ClusterSPIFFEID, test pod with CSI volume, SVID file verification |
-| `Common configurations` | Log level, resource limits, nodeSelector, tolerations, affinity, custom labels -- for all 4 operands |
-| `CreateOnlyMode` | Subscription env toggle, ConfigMap drift detection |
-
-### Constants (`test/e2e/utils/constants.go`)
-
-```go
-OperatorNamespace                         = "zero-trust-workload-identity-manager"
-OperatorDeploymentName                    = "zero-trust-workload-identity-manager-controller-manager"
-OperatorLabelSelector                     = "name=zero-trust-workload-identity-manager"
-OperatorSubscriptionNameFragment          = "zero-trust-workload-identity-manager"
-OperatorLogLevelEnvVar                    = "OPERATOR_LOG_LEVEL"
-CreateOnlyModeEnvVar                      = "CREATE_ONLY_MODE"
-SpireServerStatefulSetName                = "spire-server"
-SpireServerPodLabel                       = "app.kubernetes.io/name=spire-server"
-SpireServerConfigMapName                  = "spire-server"
-SpireServerConfigKey                      = "server.conf"
-SpireAgentDaemonSetName                   = "spire-agent"
-SpireAgentPodLabel                        = "app.kubernetes.io/name=spire-agent"
-SpireAgentConfigMapName                   = "spire-agent"
-SpireAgentConfigKey                       = "agent.conf"
-SpiffeCSIDriverDaemonSetName              = "spire-spiffe-csi-driver"
-SpiffeCSIDriverPodLabel                   = "app.kubernetes.io/name=spiffe-csi-driver"
-SpireOIDCDiscoveryProviderDeploymentName  = "spire-spiffe-oidc-discovery-provider"
-SpireOIDCDiscoveryProviderPodLabel        = "app.kubernetes.io/name=spiffe-oidc-discovery-provider"
-SpireOIDCDiscoveryProviderConfigMapName   = "spire-spiffe-oidc-discovery-provider"
-SpireOIDCDiscoveryProviderConfigKey       = "oidc-discovery-provider.conf"
-SpiffeHelperConfigMapName                 = "spiffe-helper-config"
-SpiffeHelperContainerName                 = "spiffe-helper"
-SpiffeHelperImage                         = "ghcr.io/spiffe/spiffe-helper:0.11.0"
-DefaultInterval                           = 10 * time.Second
-ShortInterval                             = 5 * time.Second
-DefaultTimeout                            = 5 * time.Minute
-ShortTimeout                              = 2 * time.Minute
-TestContextTimeout                        = 10 * time.Minute
-```
-
-### Helpers (`test/e2e/utils/utils.go`)
-
-Reuse these -- never write inline wait loops when a helper exists:
-
-**Cluster:**
-`GetKubeConfig`, `GetClusterBaseDomain`, `InferControlPlaneRoleKey`, `GetTestDir`
-
-**CRD:**
-`IsCRDEstablished`, `WaitForCRDEstablished`
-
-**Pod:**
-`IsPodRunning`, `IsPodReady`, `FilterActivePods`, `WaitForPodRunning`, `WaitForPodReady`, `ExecInPod`
-
-**Deployment:**
-`IsDeploymentAvailable`, `IsDeploymentRolloutComplete`, `WaitForDeploymentAvailable`, `WaitForDeploymentRollingUpdate`
-
-**StatefulSet:**
-`IsStatefulSetReady`, `WaitForStatefulSetReady`, `WaitForStatefulSetRollingUpdate`
-
-**DaemonSet:**
-`IsDaemonSetAvailable`, `WaitForDaemonSetAvailable`, `WaitForDaemonSetRollingUpdate`
-
-**Operand conditions:**
-`WaitForSpireServerConditions`, `WaitForSpireAgentConditions`, `WaitForSpiffeCSIDriverConditions`, `WaitForSpireOIDCDiscoveryProviderConditions`, `WaitForZeroTrustWorkloadIdentityManagerConditions`
-
-**Verification:**
-`VerifyContainerResources`, `VerifyPodLabels`, `VerifyPodScheduling`, `VerifyPodTolerations`
-
-**OLM / Subscription:**
-`FindOperatorSubscription`, `PatchSubscriptionEnv`, `WaitForDeploymentEnvVar`, `GetDeploymentEnvVar`
-
-**ConfigMap:**
-`GetNestedStringFromConfigMapJSON`
-
-**OperatorCondition:**
-`FindOperatorConditionName`, `GetUpgradeableCondition`, `WaitForUpgradeableStatus`
-
-**CR update:**
-`UpdateCRWithRetry`
-
-**Attestation:**
-`DefaultAttestationSpiffeHelperConfig`, `SpiffeHelperConfig.String`
+**Helpers to reuse (excerpt):** `GetKubeConfig`, `GetClusterBaseDomain`, `GetTestDir`, `WaitForCRDEstablished`, `WaitForPod*`, `WaitForDeployment*`, `WaitForStatefulSet*`, `WaitForDaemonSet*`, `WaitForSpire*Conditions`, `WaitForZeroTrustWorkloadIdentityManagerConditions`, `VerifyContainerResources`, `VerifyPodLabels`, `VerifyPodScheduling`, `VerifyPodTolerations`, `FindOperatorSubscription`, `PatchSubscriptionEnv`, `WaitForDeploymentEnvVar`, `GetDeploymentEnvVar`, `GetUpgradeableCondition`, `WaitForUpgradeableStatus`, `UpdateCRWithRetry`, `DefaultAttestationSpiffeHelperConfig`
 
 ---
 
-## 6. Domain tagging (mandatory)
+## F. OLM, OpenShift, Red Hat (mindset + checklist)
 
-Every generated `It` block must carry at least one Ginkgo v2 `Label`:
-
-```text
-install-health, security-context, rbac, configmap, controller-manager,
-reconciliation, negative-input-validation, negative-permission-validation,
-upgrade, olm-lifecycle-install, olm-upgrade-path, olm-uninstall,
-olm-dependency-management, csv-versioning, openshift-scc,
-openshift-rbac-scoping, openshift-network-policy, openshift-image-scanning,
-openshift-monitoring, openshift-logging, openshift-audit,
-openshift-version-compat, openshift-fips-mode
-```
-
-Example:
-```go
-It("should reject invalid bundle format", Label("negative-input-validation", "webhook"), func() { ... })
-```
+- **OLM:** Installation paths must go through **Subscription / InstallPlan / CSV**, not ad-hoc `apply` of operator manifests unless the test’s purpose is different.
+- **OpenShift:** Tests assume a real OCP cluster; default SCC is `restricted-v2`. SPIRE Agent has custom SCC `spire-agent` — validate if you touch that surface.
+- **SecurityContext** (typical check on operand pods / containers when relevant): `runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile.type: RuntimeDefault`
+- **Certification checklist to sanity-check the plan** (warn if all missing): OLM install, SCC, RBAC least privilege, image signing/scan (if in scope), metrics, audit, OCP version compatibility, uninstall, securityContext.
 
 ---
 
-## 7. OLM, OpenShift, and Red Hat certification
+## G. Code generation phases (if user asked for code)
 
-### OLM-aware testing
-
-- Tests that install the operator **must** use the OLM path
-  (Subscription -> InstallPlan -> CSV), not raw `kubectl apply`.
-- Include channel-switching tests when the operator supports multiple
-  channels.
-- Use `Eventually` with timeouts >= 60s for OLM operations (CSV
-  activation can take 30-90s).
-- Verify `OperatorCondition.Upgradeable` transitions correctly when
-  operand pods are unhealthy.
-
-### OpenShift-aware testing
-
-- Assume tests run on a genuine OpenShift cluster, not vanilla Kubernetes.
-- Verify the operator works under the `restricted-v2` SCC (default on
-  OpenShift 4.11+).
-- For every operand pod, validate the full `securityContext`:
-  ```yaml
-  runAsNonRoot: true
-  allowPrivilegeEscalation: false
-  capabilities.drop: [ALL]
-  seccompProfile.type: RuntimeDefault
-  ```
-- Check the audit log for sensitive operations where relevant.
-- SPIRE Agent has a custom SCC (`spire-agent`) -- validate its fields
-  explicitly (AllowHostPID, AllowHostDirVolumePlugin, etc.).
-
-### Red Hat certification mindset
-
-Every test should answer: *"Does this operator meet Red Hat certification
-requirements?"*
-
-Mandatory checklist (warn if any are missing):
-
-- [ ] OLM install (Subscription-based)
-- [ ] SCC validation (restricted-v2 + custom spire-agent SCC)
-- [ ] RBAC least-privilege
-- [ ] Image scanning / signing (if applicable)
-- [ ] Prometheus metrics export (if applicable)
-- [ ] Audit logging
-- [ ] Operator version compatibility (min 2 OCP versions)
-- [ ] Uninstall cleanup
-- [ ] Security context (runAsNonRoot, readOnly filesystem)
+1. **Phase 0** — Rerun discovery commands from Step 4; list every `It` you might touch.
+2. **Phase 1** — Dedup (Step 5); **never** add parallel duplicate specs.
+3. **Phase 2** — New immutable values → **append** `constants.go`. Shared logic used ≥2 times → `utils.go`. One-off → private in test file.
+4. **Phase 3** — Implement: `It` + labels + helpers + `DeferCleanup`; no hardcoded values that already exist in `constants.go`.
+5. **Phase 4** — `git diff --name-only` scope check (see **A**).
 
 ---
 
-## 8. Ginkgo v2 / Gomega patterns
+## H. Style
 
-- `Describe` -> `Context` -> `It`, with `By()` for each logical step.
-- `Eventually(...).WithTimeout(t).WithPolling(p).Should(...)` for async
-  waits.
-- `Consistently(...).WithTimeout(t).WithPolling(p).Should(...)` to prove
-  something does NOT change (e.g. drift not corrected in CreateOnlyMode).
-- `Ordered` on the top-level `Describe` when tests share state
-  (installation -> configuration -> uninstall).
-- `DeferCleanup(func(ctx context.Context) { ... })` for resource teardown.
-- `BeforeAll` for expensive one-time setup (cluster discovery, subscription
-  lookup).
-- `BeforeEach` for per-test context isolation:
-  ```go
-  BeforeEach(func() {
-      var cancel context.CancelFunc
-      testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
-      DeferCleanup(cancel)
-  })
-  ```
-
-### ZTWIM-specific proven patterns
-
-**Condition polling:**
-```go
-utils.WaitForSpireAgentConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
-    "ServiceAccountAvailable":             metav1.ConditionTrue,
-    "SecurityContextConstraintsAvailable": metav1.ConditionTrue,
-    "DaemonSetAvailable":                  metav1.ConditionTrue,
-    "Ready":                               metav1.ConditionTrue,
-}, utils.DefaultTimeout)
-```
-
-**Rolling update tracking:**
-```go
-initialGen := daemonset.Generation
-// ... apply CR change ...
-utils.WaitForDaemonSetRollingUpdate(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, initialGen, utils.ShortTimeout)
-utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
-```
-
-**Pod lifecycle verification:**
-```go
-oldPodNames := make(map[string]struct{})
-for _, pod := range pods.Items { oldPodNames[pod.Name] = struct{}{} }
-// ... delete pods ...
-Eventually(func() bool {
-    newPods, _ := clientset.CoreV1().Pods(ns).List(ctx, opts)
-    for _, p := range newPods.Items {
-        if _, old := oldPodNames[p.Name]; old { return false }
-        if p.Status.Phase != corev1.PodRunning { return false }
-    }
-    return true
-}).WithTimeout(timeout).WithPolling(interval).Should(BeTrue())
-```
-
-**SecurityContext verification:**
-```go
-for _, pod := range pods.Items {
-    for _, c := range pod.Spec.Containers {
-        Expect(c.SecurityContext.RunAsNonRoot).To(Equal(ptr.To(true)))
-        Expect(c.SecurityContext.AllowPrivilegeEscalation).To(Equal(ptr.To(false)))
-        Expect(c.SecurityContext.Capabilities.Drop).To(ContainElement(corev1.Capability("ALL")))
-    }
-}
-```
-
-**CR update with retry:**
-```go
-err = utils.UpdateCRWithRetry(testCtx, k8sClient, spireAgent, func() {
-    spireAgent.Spec.Resources = expectedResources
-})
-Expect(err).NotTo(HaveOccurred())
-DeferCleanup(func(ctx context.Context) {
-    agent := &operatorv1alpha1.SpireAgent{}
-    if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, agent); err == nil {
-        agent.Spec.Resources = nil
-        k8sClient.Update(ctx, agent)
-    }
-})
-```
-
-**Namespace isolation for test data:**
-```go
-testNS := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "e2e-<domain>-test"}}
-Expect(k8sClient.Create(testCtx, testNS)).To(Succeed())
-DeferCleanup(func(ctx context.Context) { _ = k8sClient.Delete(ctx, testNS) })
-```
-
----
-
-## 9. Code generation guardrails
-
-### Phase E2E-0 -- Pre-generation analysis
-
-```bash
-find test/e2e -name '*_test.go' | sort
-rg 'Describe\(|Context\(|It\(' test/e2e/ --glob '*_test.go'
-rg '^func ' test/e2e/utils/utils.go test/e2e/utils/*.go 2>/dev/null
-rg '^\s*(const|var)\s' test/e2e/utils/constants.go 2>/dev/null
-```
-
-### Phase E2E-1 -- Dedup with reusability check
-
-1. Search existing test files for the scenario keyword.
-2. If found in an existing `It` block with the same assertions -> mark
-   `extend`, do NOT add a new spec.
-3. If found in the same file but different `Context`/`It` -> add a new
-   `It` in the **same file**, reusing helpers.
-4. If truly new -> proceed to Phase E2E-2.
-
-### Phase E2E-2 -- Helper and constant extraction
-
-- **NEVER modify or delete existing constants** in
-  `test/e2e/utils/constants.go`. Only **append** new constants.
-- Immutable values (timeouts, names, labels, ports) go into
-  `test/e2e/utils/constants.go`.
-- Reusable functions (used in >= 2 tests) go into
-  `test/e2e/utils/utils.go`.
-- One-off helpers stay private inside the test file.
-
-### Phase E2E-3 -- Test code generation
-
-- Follow the repo's `Describe` -> `Context` -> `It` structure.
-- Use constants from `utils/constants.go` -- no hardcoded values.
-- Call helpers -- no inline wait loops.
-- Tag every `It` with domain labels.
-- Use `DeferCleanup` for every created resource.
-- Use `BeforeEach` with `context.WithTimeout` for test isolation.
-
-### Phase E2E-4 -- Scope check before commit
-
-```bash
-git diff --name-only | grep -v '^test/' | grep -v '^output/'
-# Must produce no output.
-```
-
----
-
-## 10. Style and reviewability
-
-- Go: idiomatic naming, small functions, explicit error handling.
-- Prefer code a reviewer can follow quickly: linear flow inside `It`
-  blocks, named helpers for non-obvious steps, avoid deep nesting.
-- Do not add comments that simply narrate what the code does. Comments
-  explain *why*, not *what*.
+- Idiomatic Go; small functions; handle errors.
+- `It` blocks: linear story; use helpers for non-obvious steps; avoid deep nesting.
+- Comments explain **why**, not a play-by-play of the code.
