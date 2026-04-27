@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2025-12-09T12:17:30Z"
+    createdAt: "2026-04-16T11:28:02Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -235,7 +235,7 @@ metadata:
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
-  name: zero-trust-workload-identity-manager.v1.0.0
+  name: zero-trust-workload-identity-manager.v1.0.1
   namespace: zero-trust-workload-identity-manager
 spec:
   apiservicedefinitions: {}
@@ -551,7 +551,7 @@ spec:
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
                 - name: OPERATOR_VERSION
-                  value: 1.0.0
+                  value: 1.0.1
                 - name: RELATED_IMAGE_SPIRE_SERVER
                   value: ghcr.io/spiffe/spire-server:1.13.3
                 - name: RELATED_IMAGE_SPIRE_AGENT
@@ -561,7 +561,7 @@ spec:
                 - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
                   value: ghcr.io/spiffe/oidc-discovery-provider:1.13.3
                 - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-                  value: ghcr.io/spiffe/spire-controller-manager:0.6.3
+                  value: ghcr.io/spiffe/spire-controller-manager:0.6.4
                 - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
@@ -652,10 +652,10 @@ spec:
     name: spiffe-csi-driver
   - image: ghcr.io/spiffe/oidc-discovery-provider:1.13.3
     name: spire-oidc-discovery-provider
-  - image: ghcr.io/spiffe/spire-controller-manager:0.6.3
+  - image: ghcr.io/spiffe/spire-controller-manager:0.6.4
     name: spire-controller-manager
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
     name: node-driver-registrar
   - image: registry.access.redhat.com/ubi9:latest
     name: spiffe-csi-init-container
-  version: 1.0.0
+  version: 1.0.1

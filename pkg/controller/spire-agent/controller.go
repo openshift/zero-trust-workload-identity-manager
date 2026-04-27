@@ -2,6 +2,7 @@ package spire_agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	securityv1 "github.com/openshift/api/security/v1"
@@ -247,7 +248,7 @@ func (r *SpireAgentReconciler) validateProxyConfiguration(statusMgr *status.Mana
 	result := utils.ValidateProxyConfiguration()
 
 	if !result.Valid {
-		r.log.Error(fmt.Errorf(result.Reason), result.Message)
+		r.log.Error(errors.New(result.Reason), result.Message)
 		statusMgr.AddCondition(ConfigurationValid, result.Reason, result.Message, metav1.ConditionFalse)
 		return fmt.Errorf("proxy configuration invalid: %s", result.Message)
 	}
