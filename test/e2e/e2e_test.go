@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	securityv1 "github.com/openshift/api/security/v1"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
@@ -1799,6 +1800,227 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				return !strings.Contains(cm.Data[utils.SpireServerConfigKey], driftMarker)
 			}).WithPolling(utils.ShortInterval).WithTimeout(utils.ShortTimeout).Should(BeTrue(),
 				"ConfigMap drift should be corrected when CreateOnlyMode is False")
+		})
+	})
+
+	Context("SpireAgent DaemonSet security hardening", func() {
+		BeforeEach(func() {
+			var cancel context.CancelFunc
+			testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
+			DeferCleanup(cancel)
+		})
+
+		It("SPIRE Agent DaemonSet should have host networking disabled", Label("security-context", "openshift-scc"), func() {
+			By("Fetching SPIRE Agent DaemonSet")
+			ds, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get SPIRE Agent DaemonSet")
+
+			By("Verifying HostNetwork is disabled")
+			Expect(ds.Spec.Template.Spec.HostNetwork).To(BeFalse(),
+				"SPIRE Agent DaemonSet must not use host networking after SCC hardening")
+
+			By("Verifying DNS policy is ClusterFirst")
+			Expect(ds.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSClusterFirst),
+				"DNS policy must be ClusterFirst when HostNetwork is disabled")
+
+			By("Verifying HostPID is retained for workload attestation")
+			Expect(ds.Spec.Template.Spec.HostPID).To(BeTrue(),
+				"SPIRE Agent DaemonSet must retain HostPID=true; it is required for node attestation")
+
+			By("Verifying HostIPC is disabled")
+			Expect(ds.Spec.Template.Spec.HostIPC).To(BeFalse(),
+				"SPIRE Agent DaemonSet must not use host IPC; mirrors SCC AllowHostIPC: false")
+		})
+
+		It("SPIRE Agent DaemonSet container should have a hardened security context", Label("security-context", "openshift-scc"), func() {
+			By("Fetching SPIRE Agent DaemonSet")
+			ds, err := clientset.AppsV1().DaemonSets(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentDaemonSetName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get SPIRE Agent DaemonSet")
+
+			By("Locating spire-agent container")
+			var spireAgentContainer *corev1.Container
+			for i := range ds.Spec.Template.Spec.Containers {
+				if ds.Spec.Template.Spec.Containers[i].Name == "spire-agent" {
+					spireAgentContainer = &ds.Spec.Template.Spec.Containers[i]
+					break
+				}
+			}
+			Expect(spireAgentContainer).NotTo(BeNil(), "spire-agent container not found in DaemonSet")
+
+			sc := spireAgentContainer.SecurityContext
+			Expect(sc).NotTo(BeNil(), "spire-agent container must declare a SecurityContext")
+
+			By("Verifying container does not run as privileged")
+			Expect(sc.Privileged).To(Equal(ptr.To(false)),
+				"spire-agent container must not run as privileged after SCC hardening")
+
+			By("Verifying privilege escalation is prevented")
+			Expect(sc.AllowPrivilegeEscalation).To(Equal(ptr.To(false)),
+				"spire-agent container must not allow privilege escalation")
+
+			By("Verifying read-only root filesystem is enforced")
+			Expect(sc.ReadOnlyRootFilesystem).To(Equal(ptr.To(true)),
+				"spire-agent container must use a read-only root filesystem")
+
+			By("Verifying all Linux capabilities are dropped")
+			Expect(sc.Capabilities).NotTo(BeNil(), "spire-agent container must declare Capabilities")
+			Expect(sc.Capabilities.Drop).To(ContainElement(corev1.Capability("ALL")),
+				"spire-agent container must drop ALL capabilities")
+
+			By("Verifying no host ports are exposed")
+			for _, p := range spireAgentContainer.Ports {
+				Expect(p.HostPort).To(BeZero(),
+					"spire-agent container must not bind host ports; mirrors SCC AllowHostPorts: false")
+			}
+		})
+	})
+
+	Context("SpireAgent SCC hardening", func() {
+		BeforeEach(func() {
+			var cancel context.CancelFunc
+			testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
+			DeferCleanup(cancel)
+		})
+
+		It("SPIRE Agent SCC should restrict host access and privileged execution", Label("openshift-scc", "security-context"), func() {
+			By("Fetching spire-agent SCC")
+			scc := &securityv1.SecurityContextConstraints{}
+			err := k8sClient.Get(testCtx, types.NamespacedName{Name: "spire-agent"}, scc)
+			Expect(err).NotTo(HaveOccurred(), "failed to get spire-agent SecurityContextConstraints")
+
+			By("Verifying host network access is denied")
+			Expect(scc.AllowHostNetwork).To(BeFalse(),
+				"SCC must not allow host network access after hardening")
+
+			By("Verifying host IPC access is denied")
+			Expect(scc.AllowHostIPC).To(BeFalse(),
+				"SCC must not allow host IPC access")
+
+			By("Verifying host port binding is denied")
+			Expect(scc.AllowHostPorts).To(BeFalse(),
+				"SCC must not allow host port binding after hardening")
+
+			By("Verifying privileged container execution is denied")
+			Expect(scc.AllowPrivilegedContainer).To(BeFalse(),
+				"SCC must not allow privileged containers after hardening")
+
+			By("Verifying privilege escalation is denied")
+			Expect(scc.AllowPrivilegeEscalation).To(Equal(ptr.To(false)),
+				"SCC must not allow privilege escalation after hardening")
+
+			By("Verifying RunAsUser strategy is RunAsAny")
+			Expect(scc.RunAsUser.Type).To(Equal(securityv1.RunAsUserStrategyRunAsAny),
+				"SCC RunAsUser strategy must be RunAsAny to accommodate SPIRE Agent's fixed UID")
+
+			By("Verifying read-only root filesystem is enforced at the SCC policy level")
+			Expect(scc.ReadOnlyRootFilesystem).To(BeTrue(),
+				"SCC must enforce read-only root filesystem for all admitted pods")
+
+			By("Verifying AllowHostPID is retained for workload attestation")
+			Expect(scc.AllowHostPID).To(BeTrue(),
+				"SCC must retain AllowHostPID=true; SPIRE Agent requires host PID access for node attestation")
+
+			By("Verifying RequiredDropCapabilities includes ALL")
+			Expect(scc.RequiredDropCapabilities).To(ContainElement(corev1.Capability("ALL")),
+				"SCC must require dropping ALL capabilities at the policy level")
+		})
+
+		It("SPIRE Agent pods should be bound to the hardened spire-agent SCC", Label("openshift-scc", "security-context"), func() {
+			By("Listing SPIRE Agent pods")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+				LabelSelector: utils.SpireAgentPodLabel,
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to list SPIRE Agent pods")
+			Expect(pods.Items).NotTo(BeEmpty(), "expected at least one running SPIRE Agent pod")
+
+			By("Verifying each pod is admitted under the spire-agent SCC")
+			for _, pod := range pods.Items {
+				sccAnnotation, ok := pod.Annotations["openshift.io/scc"]
+				Expect(ok).To(BeTrue(), "pod %s must carry the openshift.io/scc annotation", pod.Name)
+				Expect(sccAnnotation).To(Equal("spire-agent"),
+					"pod %s must be admitted under the spire-agent SCC, not a privileged fallback", pod.Name)
+			}
+		})
+
+		It("SPIRE Agent replacement pod after deletion should be admitted under the hardened spire-agent SCC", Label("openshift-scc", "security-context", "reconciliation"), func() {
+			By("Listing current SPIRE Agent pods")
+			pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
+				LabelSelector: utils.SpireAgentPodLabel,
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to list SPIRE Agent pods")
+			Expect(pods.Items).NotTo(BeEmpty(), "expected at least one running SPIRE Agent pod")
+
+			targetPod := pods.Items[0]
+			oldPodName := targetPod.Name
+			fmt.Fprintf(GinkgoWriter, "will delete SPIRE Agent pod '%s' to trigger replacement\n", oldPodName)
+
+			By("Deleting a SPIRE Agent pod to trigger DaemonSet replacement")
+			err = clientset.CoreV1().Pods(utils.OperatorNamespace).Delete(testCtx, oldPodName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to delete SPIRE Agent pod '%s'", oldPodName)
+
+			By("Waiting for a Running replacement pod (old pod gone or different name)")
+			var replacementPodName string
+			Eventually(func() bool {
+				newPods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{LabelSelector: utils.SpireAgentPodLabel})
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to list pods: %v\n", err)
+					return false
+				}
+				for _, p := range newPods.Items {
+					if p.Name == oldPodName {
+						continue
+					}
+					if p.Status.Phase == corev1.PodRunning && p.DeletionTimestamp == nil {
+						replacementPodName = p.Name
+						return true
+					}
+				}
+				return false
+			}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"a replacement SPIRE Agent pod should be Running within %v", utils.DefaultTimeout)
+
+			By("Verifying the replacement pod is admitted under the hardened spire-agent SCC")
+			replacementPod, err := clientset.CoreV1().Pods(utils.OperatorNamespace).Get(testCtx, replacementPodName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get replacement pod '%s'", replacementPodName)
+			sccAnnotation, ok := replacementPod.Annotations["openshift.io/scc"]
+			Expect(ok).To(BeTrue(), "replacement pod %s must carry the openshift.io/scc annotation", replacementPodName)
+			Expect(sccAnnotation).To(Equal("spire-agent"),
+				"replacement pod %s must be admitted under the spire-agent SCC after hardening, not a privileged fallback", replacementPodName)
+			fmt.Fprintf(GinkgoWriter, "replacement pod '%s' admitted under SCC '%s'\n", replacementPodName, sccAnnotation)
+
+			By("Waiting for SPIRE Agent DaemonSet to become fully available after pod replacement")
+			utils.WaitForDaemonSetAvailable(testCtx, clientset, utils.SpireAgentDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("spire-agent SCC should be reconciled back to hardened state if manually modified", Label("openshift-scc", "reconciliation"), func() {
+			By("Fetching spire-agent SCC and confirming it is in the hardened state")
+			scc := &securityv1.SecurityContextConstraints{}
+			err := k8sClient.Get(testCtx, types.NamespacedName{Name: "spire-agent"}, scc)
+			Expect(err).NotTo(HaveOccurred(), "failed to get spire-agent SCC")
+			Expect(scc.AllowHostNetwork).To(BeFalse(), "SCC must already be in hardened state before drift test")
+
+			By("Patching the SCC to reintroduce host network access (simulating manual drift)")
+			err = utils.UpdateCRWithRetry(testCtx, k8sClient, scc, func() {
+				scc.AllowHostNetwork = true
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SCC to introduce drift")
+			fmt.Fprintf(GinkgoWriter, "introduced drift: SCC AllowHostNetwork set to true\n")
+
+			By("Verifying the operator reconciles the SCC back to AllowHostNetwork: false")
+			Eventually(func() bool {
+				current := &securityv1.SecurityContextConstraints{}
+				if err := k8sClient.Get(testCtx, types.NamespacedName{Name: "spire-agent"}, current); err != nil {
+					fmt.Fprintf(GinkgoWriter, "failed to get SCC: %v\n", err)
+					return false
+				}
+				if current.AllowHostNetwork {
+					fmt.Fprintf(GinkgoWriter, "SCC AllowHostNetwork is still true — drift not yet corrected\n")
+					return false
+				}
+				fmt.Fprintf(GinkgoWriter, "SCC drift corrected: AllowHostNetwork restored to false\n")
+				return true
+			}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"operator should reconcile SCC AllowHostNetwork back to false within %v", utils.DefaultTimeout)
 		})
 	})
 })
