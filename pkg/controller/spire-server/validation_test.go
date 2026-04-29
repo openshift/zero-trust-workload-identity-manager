@@ -785,3 +785,155 @@ func TestValidateFederatedTrustDomain(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateUpstreamAuthority(t *testing.T) {
+	tests := []struct {
+		name        string
+		ua          *v1alpha1.UpstreamAuthorityConfig
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "nil upstream authority is valid",
+			ua:          nil,
+			expectError: false,
+		},
+		{
+			name: "both certManager and vault set",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					Namespace:  "ns",
+					IssuerName: "issuer",
+				},
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddr: "https://vault.example.org/",
+					K8sAuth:   &v1alpha1.VaultK8sAuthConfig{K8sAuthRoleName: "role"},
+				},
+			},
+			expectError: true,
+			errorMsg:    "exactly one",
+		},
+		{
+			name:        "neither certManager nor vault set",
+			ua:          &v1alpha1.UpstreamAuthorityConfig{},
+			expectError: true,
+			errorMsg:    "exactly one",
+		},
+		{
+			name: "valid certManager config",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					Namespace:  "cert-manager",
+					IssuerName: "spire-ca",
+					IssuerKind: "ClusterIssuer",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "certManager missing namespace",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					IssuerName: "spire-ca",
+				},
+			},
+			expectError: true,
+			errorMsg:    "namespace is required",
+		},
+		{
+			name: "certManager missing issuerName",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					Namespace: "cert-manager",
+				},
+			},
+			expectError: true,
+			errorMsg:    "issuerName is required",
+		},
+		{
+			name: "certManager invalid issuerKind",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+					Namespace:  "cert-manager",
+					IssuerName: "spire-ca",
+					IssuerKind: "InvalidKind",
+				},
+			},
+			expectError: true,
+			errorMsg:    "issuerKind must be",
+		},
+		{
+			name: "valid vault config",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddr: "https://vault.example.org/",
+					K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+						K8sAuthRoleName: "spire-role",
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "vault missing vaultAddr",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+						K8sAuthRoleName: "spire-role",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "vaultAddr is required",
+		},
+		{
+			name: "vault invalid vaultAddr scheme",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddr: "ftp://vault.example.org/",
+					K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+						K8sAuthRoleName: "spire-role",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "must start with http",
+		},
+		{
+			name: "vault missing k8sAuth",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddr: "https://vault.example.org/",
+				},
+			},
+			expectError: true,
+			errorMsg:    "k8sAuth is required",
+		},
+		{
+			name: "vault k8sAuth missing roleName",
+			ua: &v1alpha1.UpstreamAuthorityConfig{
+				Vault: &v1alpha1.UpstreamAuthorityVault{
+					VaultAddr: "https://vault.example.org/",
+					K8sAuth:   &v1alpha1.VaultK8sAuthConfig{},
+				},
+			},
+			expectError: true,
+			errorMsg:    "k8sAuthRoleName is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateUpstreamAuthority(tt.ua)
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got nil")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectError && err != nil && !containsString(err.Error(), tt.errorMsg) {
+				t.Errorf("validateUpstreamAuthority() error = %q, expected to contain %q", err.Error(), tt.errorMsg)
+			}
+		})
+	}
+}

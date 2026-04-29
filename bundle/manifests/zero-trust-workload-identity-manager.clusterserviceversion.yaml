@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-04-16T11:28:02Z"
+    createdAt: "2026-04-29T11:14:08Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -423,6 +423,15 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - cert-manager.io
+          resources:
+          - certificaterequests
+          verbs:
+          - create
+          - delete
+          - get
+          - list
         - apiGroups:
           - coordination.k8s.io
           resources:

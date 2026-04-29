@@ -192,6 +192,7 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;update
 // +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions,verbs=get;list;watch
 // +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions/status,verbs=update
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests,verbs=create;get;list;delete
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) {

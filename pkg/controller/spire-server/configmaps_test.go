@@ -1772,3 +1772,248 @@ func createTestZTWIM() *v1alpha1.ZeroTrustWorkloadIdentityManager {
 		},
 	}
 }
+
+func TestGenerateServerConfMap_WithCertManagerUpstreamAuthority(t *testing.T) {
+	config := createValidConfig()
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{
+		CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+			Namespace:   "cert-manager",
+			IssuerName:  "spire-ca",
+			IssuerKind:  "ClusterIssuer",
+			IssuerGroup: "cert-manager.io",
+		},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins, ok := confMap["plugins"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Failed to get plugins section")
+	}
+
+	ua, ok := plugins["UpstreamAuthority"].([]map[string]interface{})
+	if !ok || len(ua) == 0 {
+		t.Fatal("Expected UpstreamAuthority plugin block")
+	}
+
+	cmPlugin, ok := ua[0]["cert-manager"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected cert-manager plugin")
+	}
+
+	pd, ok := cmPlugin["plugin_data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected plugin_data in cert-manager plugin")
+	}
+
+	if pd["issuer_name"] != "spire-ca" {
+		t.Errorf("Expected issuer_name %q, got %v", "spire-ca", pd["issuer_name"])
+	}
+	if pd["issuer_kind"] != "ClusterIssuer" {
+		t.Errorf("Expected issuer_kind %q, got %v", "ClusterIssuer", pd["issuer_kind"])
+	}
+	if pd["issuer_group"] != "cert-manager.io" {
+		t.Errorf("Expected issuer_group %q, got %v", "cert-manager.io", pd["issuer_group"])
+	}
+	if pd["namespace"] != "cert-manager" {
+		t.Errorf("Expected namespace %q, got %v", "cert-manager", pd["namespace"])
+	}
+}
+
+func TestGenerateServerConfMap_WithVaultUpstreamAuthority(t *testing.T) {
+	config := createValidConfig()
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{
+		Vault: &v1alpha1.UpstreamAuthorityVault{
+			VaultAddr:     "https://vault.example.org/",
+			PKIMountPoint: "test-pki",
+			K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+				K8sAuthMountPoint: "my-k8s-auth",
+				K8sAuthRoleName:   "spire-role",
+				Audience:          "vault",
+			},
+		},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins, ok := confMap["plugins"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Failed to get plugins section")
+	}
+
+	ua, ok := plugins["UpstreamAuthority"].([]map[string]interface{})
+	if !ok || len(ua) == 0 {
+		t.Fatal("Expected UpstreamAuthority plugin block")
+	}
+
+	vaultPlugin, ok := ua[0]["vault"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected vault plugin")
+	}
+
+	pd, ok := vaultPlugin["plugin_data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected plugin_data in vault plugin")
+	}
+
+	if pd["vault_addr"] != "https://vault.example.org/" {
+		t.Errorf("Expected vault_addr %q, got %v", "https://vault.example.org/", pd["vault_addr"])
+	}
+	if pd["pki_mount_point"] != "test-pki" {
+		t.Errorf("Expected pki_mount_point %q, got %v", "test-pki", pd["pki_mount_point"])
+	}
+	if pd["insecure_skip_verify"] != false {
+		t.Errorf("Expected insecure_skip_verify false, got %v", pd["insecure_skip_verify"])
+	}
+
+	k8sAuth, ok := pd["k8s_auth"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected k8s_auth in vault plugin_data")
+	}
+	if k8sAuth["k8s_auth_mount_point"] != "my-k8s-auth" {
+		t.Errorf("Expected k8s_auth_mount_point %q, got %v", "my-k8s-auth", k8sAuth["k8s_auth_mount_point"])
+	}
+	if k8sAuth["k8s_auth_role_name"] != "spire-role" {
+		t.Errorf("Expected k8s_auth_role_name %q, got %v", "spire-role", k8sAuth["k8s_auth_role_name"])
+	}
+	if k8sAuth["token_path"] != "/var/run/secrets/tokens/vault" {
+		t.Errorf("Expected token_path %q, got %v", "/var/run/secrets/tokens/vault", k8sAuth["token_path"])
+	}
+}
+
+func TestGenerateServerConfMap_WithoutUpstreamAuthority(t *testing.T) {
+	config := createValidConfig()
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins, ok := confMap["plugins"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Failed to get plugins section")
+	}
+
+	if _, exists := plugins["UpstreamAuthority"]; exists {
+		t.Error("UpstreamAuthority should not be present when not configured")
+	}
+}
+
+func TestGenerateServerConfMap_VaultWithCACert(t *testing.T) {
+	config := createValidConfig()
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{
+		Vault: &v1alpha1.UpstreamAuthorityVault{
+			VaultAddr: "https://vault.example.org/",
+			CACertSecretRef: &v1alpha1.SecretKeyReference{
+				Name: "vault-ca-cert",
+				Key:  "ca.pem",
+			},
+			K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+				K8sAuthRoleName: "spire-role",
+			},
+		},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins := confMap["plugins"].(map[string]interface{})
+	ua := plugins["UpstreamAuthority"].([]map[string]interface{})
+	vaultPlugin := ua[0]["vault"].(map[string]interface{})
+	pd := vaultPlugin["plugin_data"].(map[string]interface{})
+
+	if pd["ca_cert_path"] != "/run/spire/upstream-ca/ca.crt" {
+		t.Errorf("Expected ca_cert_path %q, got %v", "/run/spire/upstream-ca/ca.crt", pd["ca_cert_path"])
+	}
+}
+
+func TestGenerateServerConfMap_VaultWithNamespace(t *testing.T) {
+	config := createValidConfig()
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{
+		Vault: &v1alpha1.UpstreamAuthorityVault{
+			VaultAddr:      "https://vault.example.org/",
+			VaultNamespace: "admin/team1",
+			K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+				K8sAuthRoleName: "spire-role",
+			},
+		},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins := confMap["plugins"].(map[string]interface{})
+	ua := plugins["UpstreamAuthority"].([]map[string]interface{})
+	vaultPlugin := ua[0]["vault"].(map[string]interface{})
+	pd := vaultPlugin["plugin_data"].(map[string]interface{})
+
+	if pd["namespace"] != "admin/team1" {
+		t.Errorf("Expected namespace %q, got %v", "admin/team1", pd["namespace"])
+	}
+}
+
+func TestGenerateServerConfMap_CertManagerDefaults(t *testing.T) {
+	config := createValidConfig()
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{
+		CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+			Namespace:  "sandbox",
+			IssuerName: "my-issuer",
+		},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins := confMap["plugins"].(map[string]interface{})
+	ua := plugins["UpstreamAuthority"].([]map[string]interface{})
+	cmPlugin := ua[0]["cert-manager"].(map[string]interface{})
+	pd := cmPlugin["plugin_data"].(map[string]interface{})
+
+	if pd["issuer_kind"] != "Issuer" {
+		t.Errorf("Expected default issuer_kind %q, got %v", "Issuer", pd["issuer_kind"])
+	}
+	if pd["issuer_group"] != "cert-manager.io" {
+		t.Errorf("Expected default issuer_group %q, got %v", "cert-manager.io", pd["issuer_group"])
+	}
+}

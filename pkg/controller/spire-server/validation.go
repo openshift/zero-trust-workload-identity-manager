@@ -157,6 +157,54 @@ func validateTTLDurationsWithWarnings(config *v1alpha1.SpireServerSpec) TTLValid
 	return result
 }
 
+// validateUpstreamAuthority validates the UpstreamAuthority configuration
+func validateUpstreamAuthority(ua *v1alpha1.UpstreamAuthorityConfig) error {
+	if ua == nil {
+		return nil
+	}
+
+	cmSet := ua.CertManager != nil
+	vaultSet := ua.Vault != nil
+
+	if cmSet == vaultSet {
+		return fmt.Errorf("exactly one of certManager or vault must be set")
+	}
+
+	if cmSet {
+		return validateUpstreamAuthorityCertManager(ua.CertManager)
+	}
+	return validateUpstreamAuthorityVault(ua.Vault)
+}
+
+func validateUpstreamAuthorityCertManager(cm *v1alpha1.UpstreamAuthorityCertManager) error {
+	if cm.Namespace == "" {
+		return fmt.Errorf("certManager.namespace is required")
+	}
+	if cm.IssuerName == "" {
+		return fmt.Errorf("certManager.issuerName is required")
+	}
+	if cm.IssuerKind != "" && cm.IssuerKind != "Issuer" && cm.IssuerKind != "ClusterIssuer" {
+		return fmt.Errorf("certManager.issuerKind must be Issuer or ClusterIssuer, got %s", cm.IssuerKind)
+	}
+	return nil
+}
+
+func validateUpstreamAuthorityVault(v *v1alpha1.UpstreamAuthorityVault) error {
+	if v.VaultAddr == "" {
+		return fmt.Errorf("vault.vaultAddr is required")
+	}
+	if !strings.HasPrefix(v.VaultAddr, "http://") && !strings.HasPrefix(v.VaultAddr, "https://") {
+		return fmt.Errorf("vault.vaultAddr must start with http:// or https://, got %s", v.VaultAddr)
+	}
+	if v.K8sAuth == nil {
+		return fmt.Errorf("vault.k8sAuth is required")
+	}
+	if v.K8sAuth.K8sAuthRoleName == "" {
+		return fmt.Errorf("vault.k8sAuth.k8sAuthRoleName is required")
+	}
+	return nil
+}
+
 // validateFederationConfig validates the federation configuration
 func validateFederationConfig(federation *v1alpha1.FederationConfig, trustDomain string) error {
 	if federation == nil {

@@ -24,7 +24,10 @@ import (
 	spiffev1alpha "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 )
 
-const defaultCaKeyType = "rsa-2048"
+const (
+	defaultCaKeyType = "rsa-2048"
+	vaultTokenPath   = "/var/run/secrets/tokens/vault"
+)
 
 type ControllerManagerConfigYAML struct {
 	Kind                                  string            `json:"kind"`
@@ -320,7 +323,84 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 		serverSection["federation"] = generateFederationConfig(config.Federation)
 	}
 
+	if config.UpstreamAuthority != nil {
+		plugins := configMap["plugins"].(map[string]interface{})
+		plugins["UpstreamAuthority"] = buildUpstreamAuthorityPlugin(config.UpstreamAuthority)
+	}
+
 	return configMap
+}
+
+func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[string]interface{} {
+	if ua.CertManager != nil {
+		return []map[string]interface{}{
+			{
+				"cert-manager": map[string]interface{}{
+					"plugin_data": buildCertManagerPluginData(ua.CertManager),
+				},
+			},
+		}
+	}
+	return []map[string]interface{}{
+		{
+			"vault": map[string]interface{}{
+				"plugin_data": buildVaultPluginData(ua.Vault),
+			},
+		},
+	}
+}
+
+func buildCertManagerPluginData(cm *v1alpha1.UpstreamAuthorityCertManager) map[string]interface{} {
+	issuerKind := cm.IssuerKind
+	if issuerKind == "" {
+		issuerKind = "Issuer"
+	}
+	issuerGroup := cm.IssuerGroup
+	if issuerGroup == "" {
+		issuerGroup = "cert-manager.io"
+	}
+	return map[string]interface{}{
+		"issuer_name":  cm.IssuerName,
+		"issuer_kind":  issuerKind,
+		"issuer_group": issuerGroup,
+		"namespace":    cm.Namespace,
+	}
+}
+
+func buildVaultPluginData(v *v1alpha1.UpstreamAuthorityVault) map[string]interface{} {
+	pkiMountPoint := v.PKIMountPoint
+	if pkiMountPoint == "" {
+		pkiMountPoint = "pki"
+	}
+
+	pluginData := map[string]interface{}{
+		"vault_addr":      v.VaultAddr,
+		"pki_mount_point": pkiMountPoint,
+	}
+
+	if v.CACertSecretRef != nil {
+		pluginData["ca_cert_path"] = "/run/spire/upstream-ca/ca.crt"
+	}
+
+	pluginData["insecure_skip_verify"] = v.InsecureSkipVerify
+
+	if v.VaultNamespace != "" {
+		pluginData["namespace"] = v.VaultNamespace
+	}
+
+	if v.K8sAuth != nil {
+		k8sAuthMountPoint := v.K8sAuth.K8sAuthMountPoint
+		if k8sAuthMountPoint == "" {
+			k8sAuthMountPoint = "kubernetes"
+		}
+		pluginData["k8s_auth"] = map[string]interface{}{
+			"k8s_auth_mount_point": k8sAuthMountPoint,
+			"k8s_auth_role_name":   v.K8sAuth.K8sAuthRoleName,
+			"token_path":           vaultTokenPath,
+		}
+	}
+
+	return pluginData
 }
 
 // generateFederationConfig generates the federation configuration for SPIRE server

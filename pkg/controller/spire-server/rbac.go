@@ -71,6 +71,14 @@ func (r *SpireServerReconciler) reconcileRBAC(ctx context.Context, server *v1alp
 func (r *SpireServerReconciler) reconcileClusterRole(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
 	desired := getSpireServerClusterRole(server.Spec.Labels)
 
+	if server.Spec.UpstreamAuthority != nil && server.Spec.UpstreamAuthority.CertManager != nil {
+		desired.Rules = append(desired.Rules, rbacv1.PolicyRule{
+			APIGroups: []string{"cert-manager.io"},
+			Resources: []string{"certificaterequests"},
+			Verbs:     []string{"create", "get", "list", "delete"},
+		})
+	}
+
 	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on cluster role")
 		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,

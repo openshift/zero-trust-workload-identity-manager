@@ -255,7 +255,83 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 		addFederationConfigurationToStatefulSet(sts, config.Federation)
 	}
 
+	if config.UpstreamAuthority != nil {
+		addUpstreamAuthorityToStatefulSet(sts, config.UpstreamAuthority)
+	}
+
 	return sts
+}
+
+func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.UpstreamAuthorityConfig) {
+	if ua.Vault == nil {
+		return
+	}
+
+	v := ua.Vault
+
+	if v.K8sAuth != nil {
+		audience := v.K8sAuth.Audience
+		if audience == "" {
+			audience = "vault"
+		}
+		expirationSeconds := int64(600)
+
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes,
+			corev1.Volume{
+				Name: "vault-token",
+				VolumeSource: corev1.VolumeSource{
+					Projected: &corev1.ProjectedVolumeSource{
+						Sources: []corev1.VolumeProjection{
+							{
+								ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+									Audience:          audience,
+									ExpirationSeconds: &expirationSeconds,
+									Path:              "vault",
+								},
+							},
+						},
+					},
+				},
+			},
+		)
+
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "vault-token",
+				MountPath: "/var/run/secrets/tokens",
+				ReadOnly:  true,
+			},
+		)
+	}
+
+	if v.CACertSecretRef != nil {
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes,
+			corev1.Volume{
+				Name: "upstream-ca",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: v.CACertSecretRef.Name,
+						Items: []corev1.KeyToPath{
+							{
+								Key:  v.CACertSecretRef.Key,
+								Path: "ca.crt",
+							},
+						},
+					},
+				},
+			},
+		)
+
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "upstream-ca",
+				MountPath: "/run/spire/upstream-ca",
+				ReadOnly:  true,
+			},
+		)
+	}
 }
 
 // addFederationConfigurationToStatefulSet adds federation port, volume and mount to the StatefulSet

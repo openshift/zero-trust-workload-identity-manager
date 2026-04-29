@@ -1444,6 +1444,118 @@ spec:
                 maxItems: 50
                 type: array
                 x-kubernetes-list-type: atomic
+              upstreamAuthority:
+                description: |-
+                  upstreamAuthority configures an external PKI to sign the SPIRE intermediate CA.
+                  When absent, SPIRE uses a self-signed CA.
+                properties:
+                  certManager:
+                    description: certManager configures the cert-manager UpstreamAuthority
+                      plugin.
+                    properties:
+                      issuerGroup:
+                        default: cert-manager.io
+                        description: issuerGroup is the API group of the issuer.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      issuerKind:
+                        default: Issuer
+                        description: issuerKind is the kind of the issuer (Issuer
+                          or ClusterIssuer).
+                        enum:
+                        - Issuer
+                        - ClusterIssuer
+                        type: string
+                      issuerName:
+                        description: issuerName is the name of the cert-manager Issuer
+                          or ClusterIssuer.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: namespace is the namespace to create CertificateRequests
+                          in.
+                        maxLength: 63
+                        minLength: 1
+                        type: string
+                    required:
+                    - issuerName
+                    - namespace
+                    type: object
+                  vault:
+                    description: vault configures the HashiCorp Vault UpstreamAuthority
+                      plugin.
+                    properties:
+                      caCertSecretRef:
+                        description: |-
+                          caCertSecretRef references a Secret containing the CA certificate
+                          used to verify the Vault server's TLS certificate.
+                        properties:
+                          key:
+                            description: key is the key within the Secret data.
+                            minLength: 1
+                            type: string
+                          name:
+                            description: name is the name of the Secret.
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      insecureSkipVerify:
+                        default: false
+                        description: insecureSkipVerify disables TLS certificate verification
+                          for the Vault connection.
+                        type: boolean
+                      k8sAuth:
+                        description: k8sAuth configures Kubernetes auth method for
+                          Vault authentication.
+                        properties:
+                          audience:
+                            default: vault
+                            description: audience must match the bound_audiences configured
+                              on the Vault role.
+                            type: string
+                          k8sAuthMountPoint:
+                            default: kubernetes
+                            description: k8sAuthMountPoint is the Vault auth mount
+                              path for the Kubernetes auth method.
+                            minLength: 1
+                            type: string
+                          k8sAuthRoleName:
+                            description: k8sAuthRoleName is the Vault role bound to
+                              the SPIRE server ServiceAccount.
+                            minLength: 1
+                            type: string
+                        required:
+                        - k8sAuthRoleName
+                        type: object
+                      pkiMountPoint:
+                        default: pki
+                        description: pkiMountPoint is the Vault mount path for the
+                          PKI secrets engine.
+                        minLength: 1
+                        type: string
+                      vaultAddr:
+                        description: vaultAddr is the URL of the Vault server (e.g.,
+                          https://vault.example.org/).
+                        pattern: ^https?://.+
+                        type: string
+                      vaultNamespace:
+                        description: vaultNamespace is the Vault Enterprise namespace
+                          (leave empty for OSS Vault).
+                        type: string
+                    required:
+                    - k8sAuth
+                    - vaultAddr
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: exactly one of certManager or vault must be set
+                  rule: (has(self.certManager) && !has(self.vault)) || (!has(self.certManager)
+                    && has(self.vault))
             required:
             - caSubject
             - datastore

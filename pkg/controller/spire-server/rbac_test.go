@@ -2384,3 +2384,109 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+func TestClusterRole_CertManagerRuleConditional(t *testing.T) {
+	baseRuleCount := len(getSpireServerClusterRole(nil).Rules)
+
+	tests := []struct {
+		name            string
+		server          *v1alpha1.SpireServer
+		expectCMRule    bool
+		expectedRuleLen int
+	}{
+		{
+			name: "certManager upstream authority adds rule",
+			server: &v1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireServerSpec{
+					UpstreamAuthority: &v1alpha1.UpstreamAuthorityConfig{
+						CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+							Namespace:  "cert-manager",
+							IssuerName: "spire-ca",
+						},
+					},
+				},
+			},
+			expectCMRule:    true,
+			expectedRuleLen: baseRuleCount + 1,
+		},
+		{
+			name: "no upstream authority does not add rule",
+			server: &v1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			expectCMRule:    false,
+			expectedRuleLen: baseRuleCount,
+		},
+		{
+			name: "vault upstream authority does not add rule",
+			server: &v1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireServerSpec{
+					UpstreamAuthority: &v1alpha1.UpstreamAuthorityConfig{
+						Vault: &v1alpha1.UpstreamAuthorityVault{
+							VaultAddr: "https://vault.example.org/",
+							K8sAuth:   &v1alpha1.VaultK8sAuthConfig{K8sAuthRoleName: "role"},
+						},
+					},
+				},
+			},
+			expectCMRule:    false,
+			expectedRuleLen: baseRuleCount,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			reconciler := newRBACTestReconciler(fakeClient)
+
+			fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-server"))
+			fakeClient.CreateReturns(nil)
+
+			statusMgr := status.NewManager(fakeClient)
+			err := reconciler.reconcileClusterRole(context.Background(), tt.server, statusMgr, false)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if fakeClient.CreateCallCount() != 1 {
+				t.Fatalf("Expected Create called once, got %d", fakeClient.CreateCallCount())
+			}
+
+			_, created, _ := fakeClient.CreateArgsForCall(0)
+			cr, ok := created.(*rbacv1.ClusterRole)
+			if !ok {
+				t.Fatalf("Expected ClusterRole, got %T", created)
+			}
+
+			if len(cr.Rules) != tt.expectedRuleLen {
+				t.Errorf("Expected %d rules, got %d", tt.expectedRuleLen, len(cr.Rules))
+			}
+
+			found := false
+			for _, rule := range cr.Rules {
+				if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "cert-manager.io" {
+					found = true
+					if rule.Resources[0] != "certificaterequests" {
+						t.Errorf("Expected resource certificaterequests, got %v", rule.Resources)
+					}
+					expectedVerbs := []string{"create", "get", "list", "delete"}
+					if len(rule.Verbs) != len(expectedVerbs) {
+						t.Errorf("Expected verbs %v, got %v", expectedVerbs, rule.Verbs)
+					}
+					for i, v := range expectedVerbs {
+						if i < len(rule.Verbs) && rule.Verbs[i] != v {
+							t.Errorf("Expected verb %q at index %d, got %q", v, i, rule.Verbs[i])
+						}
+					}
+				}
+			}
+			if tt.expectCMRule && !found {
+				t.Error("Expected cert-manager.io rule in ClusterRole but not found")
+			}
+			if !tt.expectCMRule && found {
+				t.Error("Did not expect cert-manager.io rule in ClusterRole but found one")
+			}
+		})
+	}
+}

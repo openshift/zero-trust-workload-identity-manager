@@ -147,6 +147,15 @@ rules:
   - list
   - watch
 - apiGroups:
+  - cert-manager.io
+  resources:
+  - certificaterequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+- apiGroups:
   - coordination.k8s.io
   resources:
   - leases

@@ -279,6 +279,16 @@ func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, serve
 		}
 	}
 
+	if server.Spec.UpstreamAuthority != nil {
+		if err := validateUpstreamAuthority(server.Spec.UpstreamAuthority); err != nil {
+			r.log.Error(err, "Invalid upstream authority configuration")
+			statusMgr.AddCondition(ConfigurationValid, "InvalidUpstreamAuthorityConfiguration",
+				fmt.Sprintf("Upstream authority configuration validation failed: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+	}
+
 	// Only set to true if the condition previously existed as false
 	existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, ConfigurationValid)
 	if existingCondition != nil && existingCondition.Status == metav1.ConditionFalse {

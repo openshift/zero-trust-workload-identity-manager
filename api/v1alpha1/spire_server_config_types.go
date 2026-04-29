@@ -108,6 +108,11 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Optional
 	Federation *FederationConfig `json:"federation,omitempty"`
 
+	// upstreamAuthority configures an external PKI to sign the SPIRE intermediate CA.
+	// When absent, SPIRE uses a self-signed CA.
+	// +kubebuilder:validation:Optional
+	UpstreamAuthority *UpstreamAuthorityConfig `json:"upstreamAuthority,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 
@@ -225,7 +230,7 @@ type ServingCertConfig struct {
 }
 
 // FederatesWithConfig represents a remote trust domain to federate with
-// +kubebuilder:validation:XValidation:rule="self.bundleEndpointProfile == 'https_spiffe' ? has(self.endpointSpiffeId) && self.endpointSpiffeId != '' : true",message="endpointSpiffeId is required when bundleEndpointProfile is https_spiffe"
+// +kubebuilder:validation:XValidation:rule="self.bundleEndpointProfile == 'https_spiffe' ? has(self.endpointSpiffeId) && self.endpointSpiffeId != ” : true",message="endpointSpiffeId is required when bundleEndpointProfile is https_spiffe"
 type FederatesWithConfig struct {
 	// trustDomain is the federated trust domain name
 	// +kubebuilder:validation:Required
@@ -353,6 +358,116 @@ type CASubject struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxLength=255
 	CommonName string `json:"commonName,omitempty"`
+}
+
+// UpstreamAuthorityConfig selects and configures an UpstreamAuthority plugin.
+// Exactly one of certManager or vault must be set.
+// +kubebuilder:validation:XValidation:rule="(has(self.certManager) && !has(self.vault)) || (!has(self.certManager) && has(self.vault))",message="exactly one of certManager or vault must be set"
+type UpstreamAuthorityConfig struct {
+	// certManager configures the cert-manager UpstreamAuthority plugin.
+	// +kubebuilder:validation:Optional
+	CertManager *UpstreamAuthorityCertManager `json:"certManager,omitempty"`
+
+	// vault configures the HashiCorp Vault UpstreamAuthority plugin.
+	// +kubebuilder:validation:Optional
+	Vault *UpstreamAuthorityVault `json:"vault,omitempty"`
+}
+
+// UpstreamAuthorityCertManager configures the cert-manager UpstreamAuthority plugin.
+// The SPIRE server uses the in-cluster Kubernetes ServiceAccount to request
+// a signed intermediate CA via a CertificateRequest resource.
+type UpstreamAuthorityCertManager struct {
+	// namespace is the namespace to create CertificateRequests in.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	Namespace string `json:"namespace"`
+
+	// issuerName is the name of the cert-manager Issuer or ClusterIssuer.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	IssuerName string `json:"issuerName"`
+
+	// issuerKind is the kind of the issuer (Issuer or ClusterIssuer).
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=Issuer;ClusterIssuer
+	// +kubebuilder:default:=Issuer
+	IssuerKind string `json:"issuerKind,omitempty"`
+
+	// issuerGroup is the API group of the issuer.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:default:="cert-manager.io"
+	IssuerGroup string `json:"issuerGroup,omitempty"`
+}
+
+// UpstreamAuthorityVault configures the HashiCorp Vault UpstreamAuthority plugin
+// using the Vault PKI secrets engine.
+type UpstreamAuthorityVault struct {
+	// vaultAddr is the URL of the Vault server (e.g., https://vault.example.org/).
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^https?://.+`
+	VaultAddr string `json:"vaultAddr"`
+
+	// pkiMountPoint is the Vault mount path for the PKI secrets engine.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:default:="pki"
+	PKIMountPoint string `json:"pkiMountPoint,omitempty"`
+
+	// caCertSecretRef references a Secret containing the CA certificate
+	// used to verify the Vault server's TLS certificate.
+	// +kubebuilder:validation:Optional
+	CACertSecretRef *SecretKeyReference `json:"caCertSecretRef,omitempty"`
+
+	// insecureSkipVerify disables TLS certificate verification for the Vault connection.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:=false
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+
+	// vaultNamespace is the Vault Enterprise namespace (leave empty for OSS Vault).
+	// +kubebuilder:validation:Optional
+	VaultNamespace string `json:"vaultNamespace,omitempty"`
+
+	// k8sAuth configures Kubernetes auth method for Vault authentication.
+	// +kubebuilder:validation:Required
+	K8sAuth *VaultK8sAuthConfig `json:"k8sAuth"`
+}
+
+// VaultK8sAuthConfig configures the Kubernetes authentication method for Vault.
+// A projected ServiceAccount token is mounted into the SPIRE server pod and
+// used for zero-credential authentication with Vault.
+type VaultK8sAuthConfig struct {
+	// k8sAuthMountPoint is the Vault auth mount path for the Kubernetes auth method.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:default:="kubernetes"
+	K8sAuthMountPoint string `json:"k8sAuthMountPoint,omitempty"`
+
+	// k8sAuthRoleName is the Vault role bound to the SPIRE server ServiceAccount.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	K8sAuthRoleName string `json:"k8sAuthRoleName"`
+
+	// audience must match the bound_audiences configured on the Vault role.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:="vault"
+	Audience string `json:"audience,omitempty"`
+}
+
+// SecretKeyReference is a reference to a specific key within a Secret.
+type SecretKeyReference struct {
+	// name is the name of the Secret.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// key is the key within the Secret data.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
 }
 
 // SpireServerStatus defines the observed state of the SPIRE server reconciliation performed by the operator.

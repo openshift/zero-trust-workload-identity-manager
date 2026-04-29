@@ -964,3 +964,171 @@ func TestReconcileStatefulSet(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateStatefulSet_VaultK8sAuth(t *testing.T) {
+	config := &v1alpha1.SpireServerSpec{
+		Persistence: v1alpha1.Persistence{
+			Size:       "1Gi",
+			AccessMode: "ReadWriteOnce",
+		},
+		UpstreamAuthority: &v1alpha1.UpstreamAuthorityConfig{
+			Vault: &v1alpha1.UpstreamAuthorityVault{
+				VaultAddr: "https://vault.example.org/",
+				K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+					K8sAuthRoleName: "spire-role",
+					Audience:        "vault",
+				},
+			},
+		},
+	}
+
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+
+	var foundVolume bool
+	for _, vol := range sts.Spec.Template.Spec.Volumes {
+		if vol.Name == "vault-token" {
+			foundVolume = true
+			if vol.Projected == nil {
+				t.Fatal("Expected projected volume source for vault-token")
+			}
+			if len(vol.Projected.Sources) != 1 {
+				t.Fatalf("Expected 1 projection source, got %d", len(vol.Projected.Sources))
+			}
+			sat := vol.Projected.Sources[0].ServiceAccountToken
+			if sat == nil {
+				t.Fatal("Expected ServiceAccountToken projection")
+			}
+			if sat.Audience != "vault" {
+				t.Errorf("Expected audience %q, got %q", "vault", sat.Audience)
+			}
+			if sat.Path != "vault" {
+				t.Errorf("Expected path %q, got %q", "vault", sat.Path)
+			}
+			if *sat.ExpirationSeconds != 600 {
+				t.Errorf("Expected expiration 600, got %d", *sat.ExpirationSeconds)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Error("vault-token volume not found")
+	}
+
+	spireContainer := findContainerByName(sts.Spec.Template.Spec.Containers, "spire-server")
+	if spireContainer == nil {
+		t.Fatal("spire-server container not found")
+	}
+	var foundMount bool
+	for _, mount := range spireContainer.VolumeMounts {
+		if mount.Name == "vault-token" {
+			foundMount = true
+			if mount.MountPath != "/var/run/secrets/tokens" {
+				t.Errorf("Expected mount path %q, got %q", "/var/run/secrets/tokens", mount.MountPath)
+			}
+			if !mount.ReadOnly {
+				t.Error("Expected vault-token mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Error("vault-token volume mount not found")
+	}
+}
+
+func TestGenerateStatefulSet_VaultCACert(t *testing.T) {
+	config := &v1alpha1.SpireServerSpec{
+		Persistence: v1alpha1.Persistence{
+			Size:       "1Gi",
+			AccessMode: "ReadWriteOnce",
+		},
+		UpstreamAuthority: &v1alpha1.UpstreamAuthorityConfig{
+			Vault: &v1alpha1.UpstreamAuthorityVault{
+				VaultAddr: "https://vault.example.org/",
+				CACertSecretRef: &v1alpha1.SecretKeyReference{
+					Name: "vault-ca",
+					Key:  "ca.pem",
+				},
+				K8sAuth: &v1alpha1.VaultK8sAuthConfig{
+					K8sAuthRoleName: "spire-role",
+				},
+			},
+		},
+	}
+
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+
+	var foundVolume bool
+	for _, vol := range sts.Spec.Template.Spec.Volumes {
+		if vol.Name == "upstream-ca" {
+			foundVolume = true
+			if vol.Secret == nil {
+				t.Fatal("Expected secret volume source for upstream-ca")
+			}
+			if vol.Secret.SecretName != "vault-ca" {
+				t.Errorf("Expected secret name %q, got %q", "vault-ca", vol.Secret.SecretName)
+			}
+			if len(vol.Secret.Items) != 1 || vol.Secret.Items[0].Key != "ca.pem" || vol.Secret.Items[0].Path != "ca.crt" {
+				t.Errorf("Expected item mapping ca.pem -> ca.crt, got %v", vol.Secret.Items)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Error("upstream-ca volume not found")
+	}
+
+	spireContainer := findContainerByName(sts.Spec.Template.Spec.Containers, "spire-server")
+	var foundMount bool
+	for _, mount := range spireContainer.VolumeMounts {
+		if mount.Name == "upstream-ca" {
+			foundMount = true
+			if mount.MountPath != "/run/spire/upstream-ca" {
+				t.Errorf("Expected mount path %q, got %q", "/run/spire/upstream-ca", mount.MountPath)
+			}
+			if !mount.ReadOnly {
+				t.Error("Expected upstream-ca mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Error("upstream-ca volume mount not found")
+	}
+}
+
+func TestGenerateStatefulSet_CertManager(t *testing.T) {
+	config := &v1alpha1.SpireServerSpec{
+		Persistence: v1alpha1.Persistence{
+			Size:       "1Gi",
+			AccessMode: "ReadWriteOnce",
+		},
+		UpstreamAuthority: &v1alpha1.UpstreamAuthorityConfig{
+			CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+				Namespace:  "cert-manager",
+				IssuerName: "spire-ca",
+			},
+		},
+	}
+
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+
+	for _, vol := range sts.Spec.Template.Spec.Volumes {
+		if vol.Name == "vault-token" || vol.Name == "upstream-ca" {
+			t.Errorf("Unexpected volume %q for cert-manager upstream authority", vol.Name)
+		}
+	}
+}
+
+func TestGenerateStatefulSet_NoUpstreamAuthority(t *testing.T) {
+	config := &v1alpha1.SpireServerSpec{
+		Persistence: v1alpha1.Persistence{
+			Size:       "1Gi",
+			AccessMode: "ReadWriteOnce",
+		},
+	}
+
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+
+	for _, vol := range sts.Spec.Template.Spec.Volumes {
+		if vol.Name == "vault-token" || vol.Name == "upstream-ca" {
+			t.Errorf("Unexpected volume %q when no upstream authority configured", vol.Name)
+		}
+	}
+}
