@@ -230,7 +230,7 @@ type ServingCertConfig struct {
 }
 
 // FederatesWithConfig represents a remote trust domain to federate with
-// +kubebuilder:validation:XValidation:rule="self.bundleEndpointProfile == 'https_spiffe' ? has(self.endpointSpiffeId) && self.endpointSpiffeId != ” : true",message="endpointSpiffeId is required when bundleEndpointProfile is https_spiffe"
+// +kubebuilder:validation:XValidation:rule="self.bundleEndpointProfile == 'https_spiffe' ? has(self.endpointSpiffeId) && self.endpointSpiffeId != '' : true",message="endpointSpiffeId is required when bundleEndpointProfile is https_spiffe"
 type FederatesWithConfig struct {
 	// trustDomain is the federated trust domain name
 	// +kubebuilder:validation:Required
