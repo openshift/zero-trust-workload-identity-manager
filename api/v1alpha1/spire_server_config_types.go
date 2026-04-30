@@ -407,6 +407,8 @@ type UpstreamAuthorityCertManager struct {
 // using the Vault PKI secrets engine.
 type UpstreamAuthorityVault struct {
 	// vaultAddr is the URL of the Vault server (e.g., https://vault.example.org/).
+	// HTTP is permitted for in-cluster Vault instances reached via the Kubernetes
+	// service network; use HTTPS for any Vault endpoint reachable outside the cluster.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^https?://.+`
 	VaultAddr string `json:"vaultAddr"`

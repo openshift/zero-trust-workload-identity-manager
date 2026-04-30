@@ -324,8 +324,10 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 	}
 
 	if config.UpstreamAuthority != nil {
-		plugins := configMap["plugins"].(map[string]interface{})
-		plugins["UpstreamAuthority"] = buildUpstreamAuthorityPlugin(config.UpstreamAuthority)
+		if uaPlugin := buildUpstreamAuthorityPlugin(config.UpstreamAuthority); uaPlugin != nil {
+			plugins := configMap["plugins"].(map[string]interface{})
+			plugins["UpstreamAuthority"] = uaPlugin
+		}
 	}
 
 	return configMap
@@ -341,13 +343,16 @@ func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[st
 			},
 		}
 	}
-	return []map[string]interface{}{
-		{
-			"vault": map[string]interface{}{
-				"plugin_data": buildVaultPluginData(ua.Vault),
+	if ua.Vault != nil {
+		return []map[string]interface{}{
+			{
+				"vault": map[string]interface{}{
+					"plugin_data": buildVaultPluginData(ua.Vault),
+				},
 			},
-		},
+		}
 	}
+	return nil
 }
 
 func buildCertManagerPluginData(cm *v1alpha1.UpstreamAuthorityCertManager) map[string]interface{} {

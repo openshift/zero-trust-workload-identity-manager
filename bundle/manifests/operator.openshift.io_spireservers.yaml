@@ -1539,8 +1539,10 @@ spec:
                         minLength: 1
                         type: string
                       vaultAddr:
-                        description: vaultAddr is the URL of the Vault server (e.g.,
-                          https://vault.example.org/).
+                        description: |-
+                          vaultAddr is the URL of the Vault server (e.g., https://vault.example.org/).
+                          HTTP is permitted for in-cluster Vault instances reached via the Kubernetes
+                          service network; use HTTPS for any Vault endpoint reachable outside the cluster.
                         pattern: ^https?://.+
                         type: string
                       vaultNamespace:
