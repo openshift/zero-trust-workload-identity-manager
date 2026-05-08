@@ -2,6 +2,7 @@ package spire_server
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -193,8 +194,15 @@ func validateUpstreamAuthorityVault(v *v1alpha1.UpstreamAuthorityVault) error {
 	if v.VaultAddr == "" {
 		return fmt.Errorf("vault.vaultAddr is required")
 	}
-	if !strings.HasPrefix(v.VaultAddr, "http://") && !strings.HasPrefix(v.VaultAddr, "https://") {
-		return fmt.Errorf("vault.vaultAddr must start with http:// or https://, got %s", v.VaultAddr)
+	u, err := url.Parse(v.VaultAddr)
+	if err != nil {
+		return fmt.Errorf("vault.vaultAddr is not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("vault.vaultAddr must use http or https scheme, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("vault.vaultAddr must include a host")
 	}
 	if v.K8sAuth == nil {
 		return fmt.Errorf("vault.k8sAuth is required")

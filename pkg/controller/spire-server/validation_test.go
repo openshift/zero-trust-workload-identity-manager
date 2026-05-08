@@ -897,7 +897,7 @@ func TestValidateUpstreamAuthority(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "must start with http",
+			errorMsg:    "must use http or https scheme",
 		},
 		{
 			name: "vault missing k8sAuth",

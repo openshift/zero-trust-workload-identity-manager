@@ -26,7 +26,22 @@ import (
 
 const (
 	defaultCaKeyType = "rsa-2048"
-	vaultTokenPath   = "/var/run/secrets/tokens/vault"
+
+	// Upstream Authority plugin names
+	pluginNameUpstreamAuthority = "UpstreamAuthority"
+	pluginNameCertManager       = "cert-manager"
+	pluginNameVault             = "vault"
+
+	// Upstream Authority defaults
+	defaultIssuerKind      = "Issuer"
+	defaultIssuerGroup     = "cert-manager.io"
+	defaultPKIMountPoint   = "pki"
+	defaultK8sAuthMount    = "kubernetes"
+	vaultTokenPath         = "/var/run/secrets/tokens/vault"
+	vaultTokenMountDir     = "/var/run/secrets/tokens"
+	vaultTokenFileName     = "vault"
+	upstreamCAMountPath    = "/run/spire/upstream-ca"
+	upstreamCACertFileName = "ca.crt"
 )
 
 type ControllerManagerConfigYAML struct {
@@ -326,7 +341,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 	if config.UpstreamAuthority != nil {
 		if uaPlugin := buildUpstreamAuthorityPlugin(config.UpstreamAuthority); uaPlugin != nil {
 			plugins := configMap["plugins"].(map[string]interface{})
-			plugins["UpstreamAuthority"] = uaPlugin
+			plugins[pluginNameUpstreamAuthority] = uaPlugin
 		}
 	}
 
@@ -337,7 +352,7 @@ func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[st
 	if ua.CertManager != nil {
 		return []map[string]interface{}{
 			{
-				"cert-manager": map[string]interface{}{
+				pluginNameCertManager: map[string]interface{}{
 					"plugin_data": buildCertManagerPluginData(ua.CertManager),
 				},
 			},
@@ -346,7 +361,7 @@ func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[st
 	if ua.Vault != nil {
 		return []map[string]interface{}{
 			{
-				"vault": map[string]interface{}{
+				pluginNameVault: map[string]interface{}{
 					"plugin_data": buildVaultPluginData(ua.Vault),
 				},
 			},
@@ -358,11 +373,11 @@ func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[st
 func buildCertManagerPluginData(cm *v1alpha1.UpstreamAuthorityCertManager) map[string]interface{} {
 	issuerKind := cm.IssuerKind
 	if issuerKind == "" {
-		issuerKind = "Issuer"
+		issuerKind = defaultIssuerKind
 	}
 	issuerGroup := cm.IssuerGroup
 	if issuerGroup == "" {
-		issuerGroup = "cert-manager.io"
+		issuerGroup = defaultIssuerGroup
 	}
 	return map[string]interface{}{
 		"issuer_name":  cm.IssuerName,
@@ -375,7 +390,7 @@ func buildCertManagerPluginData(cm *v1alpha1.UpstreamAuthorityCertManager) map[s
 func buildVaultPluginData(v *v1alpha1.UpstreamAuthorityVault) map[string]interface{} {
 	pkiMountPoint := v.PKIMountPoint
 	if pkiMountPoint == "" {
-		pkiMountPoint = "pki"
+		pkiMountPoint = defaultPKIMountPoint
 	}
 
 	pluginData := map[string]interface{}{
@@ -384,7 +399,7 @@ func buildVaultPluginData(v *v1alpha1.UpstreamAuthorityVault) map[string]interfa
 	}
 
 	if v.CACertSecretRef != nil {
-		pluginData["ca_cert_path"] = "/run/spire/upstream-ca/ca.crt"
+		pluginData["ca_cert_path"] = upstreamCAMountPath + "/" + upstreamCACertFileName
 	}
 
 	pluginData["insecure_skip_verify"] = v.InsecureSkipVerify
@@ -396,7 +411,7 @@ func buildVaultPluginData(v *v1alpha1.UpstreamAuthorityVault) map[string]interfa
 	if v.K8sAuth != nil {
 		k8sAuthMountPoint := v.K8sAuth.K8sAuthMountPoint
 		if k8sAuthMountPoint == "" {
-			k8sAuthMountPoint = "kubernetes"
+			k8sAuthMountPoint = defaultK8sAuthMount
 		}
 		pluginData["k8s_auth"] = map[string]interface{}{
 			"k8s_auth_mount_point": k8sAuthMountPoint,

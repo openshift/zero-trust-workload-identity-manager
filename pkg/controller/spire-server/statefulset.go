@@ -272,7 +272,7 @@ func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.Ups
 	if v.K8sAuth != nil {
 		audience := v.K8sAuth.Audience
 		if audience == "" {
-			audience = "vault"
+			audience = vaultTokenFileName
 		}
 		expirationSeconds := int64(600)
 
@@ -286,7 +286,7 @@ func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.Ups
 								ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 									Audience:          audience,
 									ExpirationSeconds: &expirationSeconds,
-									Path:              "vault",
+									Path:              vaultTokenFileName,
 								},
 							},
 						},
@@ -299,7 +299,7 @@ func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.Ups
 			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
 			corev1.VolumeMount{
 				Name:      "vault-token",
-				MountPath: "/var/run/secrets/tokens",
+				MountPath: vaultTokenMountDir,
 				ReadOnly:  true,
 			},
 		)
@@ -315,7 +315,7 @@ func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.Ups
 						Items: []corev1.KeyToPath{
 							{
 								Key:  v.CACertSecretRef.Key,
-								Path: "ca.crt",
+								Path: upstreamCACertFileName,
 							},
 						},
 					},
@@ -327,7 +327,7 @@ func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.Ups
 			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
 			corev1.VolumeMount{
 				Name:      "upstream-ca",
-				MountPath: "/run/spire/upstream-ca",
+				MountPath: upstreamCAMountPath,
 				ReadOnly:  true,
 			},
 		)
