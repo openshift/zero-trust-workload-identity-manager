@@ -77,11 +77,6 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Set Ready to false at the start of reconciliation
-	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &spiffeCSIDriver, func() *v1alpha1.ConditionalStatus {
-		return &spiffeCSIDriver.Status.ConditionalStatus
-	}, "SpiffeCSIDriver")
-
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
 		if err := statusMgr.ApplyStatus(ctx, &spiffeCSIDriver, func() *v1alpha1.ConditionalStatus {

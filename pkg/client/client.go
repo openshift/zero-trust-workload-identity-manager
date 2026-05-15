@@ -157,12 +157,9 @@ func (c *customCtrlClientImpl) UpdateWithRetry(
 			return fmt.Errorf("failed to fetch latest %q for update: %w", key, err)
 		}
 		obj.SetResourceVersion(current.GetResourceVersion())
-		if err := c.Client.Update(ctx, obj, opts...); err != nil {
-			return fmt.Errorf("failed to update %q resource: %w", key, err)
-		}
-		return nil
+		return c.Client.Update(ctx, obj, opts...)
 	}); err != nil {
-		return err
+		return fmt.Errorf("failed to update %q resource: %w", key, err)
 	}
 
 	return nil
@@ -178,12 +175,9 @@ func (c *customCtrlClientImpl) StatusUpdateWithRetry(
 			return fmt.Errorf("failed to fetch latest %q for update: %w", key, err)
 		}
 		obj.SetResourceVersion(current.GetResourceVersion())
-		if err := c.Client.Status().Update(ctx, obj, opts...); err != nil {
-			return fmt.Errorf("failed to update %q resource: %w", key, err)
-		}
-		return nil
+		return c.Client.Status().Update(ctx, obj, opts...)
 	}); err != nil {
-		return err
+		return fmt.Errorf("failed to update %q status: %w", key, err)
 	}
 	return nil
 }

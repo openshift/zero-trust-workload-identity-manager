@@ -232,11 +232,6 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 		return ctrl.Result{}, err
 	}
-	// Set Ready to false at the start of reconciliation
-	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &config, func() *v1alpha1.ConditionalStatus {
-		return &config.Status.ConditionalStatus
-	}, "ZeroTrustWorkloadIdentityManager")
-
 	statusMgr := status.NewManager(r.ctrlClient)
 
 	defer func() {

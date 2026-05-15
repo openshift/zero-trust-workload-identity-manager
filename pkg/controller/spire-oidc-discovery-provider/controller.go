@@ -84,11 +84,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, err
 	}
 
-	// Set Ready to false at the start of reconciliation
-	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &oidcDiscoveryProviderConfig, func() *v1alpha1.ConditionalStatus {
-		return &oidcDiscoveryProviderConfig.Status.ConditionalStatus
-	}, "SpireOIDCDiscoveryProvider")
-
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
 		if err := statusMgr.ApplyStatus(ctx, &oidcDiscoveryProviderConfig, func() *v1alpha1.ConditionalStatus {
