@@ -37,6 +37,12 @@ func NewManager(customClient customClient.CustomCtrlClient) *Manager {
 	}
 }
 
+// GetCondition returns a condition by type if it exists in the manager
+func (m *Manager) GetCondition(conditionType string) (Condition, bool) {
+	c, ok := m.conditions[conditionType]
+	return c, ok
+}
+
 // AddCondition adds or updates a condition
 func (m *Manager) AddCondition(conditionType, reason, message string, status metav1.ConditionStatus) {
 	m.conditions[conditionType] = Condition{
@@ -130,10 +136,20 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 	}
 
 	// Only update if status has changed
-	if !equality.Semantic.DeepEqual(originalStatus, status) {
+	statusChanged := !equality.Semantic.DeepEqual(originalStatus, status)
+	fmt.Printf("DIAG ApplyStatus: obj=%s rv=%s statusChanged=%v conditionsInMgr=%d\n",
+		obj.GetName(), obj.GetResourceVersion(), statusChanged, len(m.conditions))
+	if statusChanged {
 		if err := m.customClient.StatusUpdateWithRetry(ctx, obj); err != nil {
+			fmt.Printf("DIAG ApplyStatus: StatusUpdateWithRetry FAILED for %s rv=%s err=%v\n",
+				obj.GetName(), obj.GetResourceVersion(), err)
 			return fmt.Errorf("failed to update status: %w", err)
 		}
+		fmt.Printf("DIAG ApplyStatus: StatusUpdateWithRetry SUCCEEDED for %s newRV=%s\n",
+			obj.GetName(), obj.GetResourceVersion())
+	} else {
+		fmt.Printf("DIAG ApplyStatus: SKIPPED write for %s rv=%s (no change detected)\n",
+			obj.GetName(), obj.GetResourceVersion())
 	}
 
 	return nil

@@ -232,13 +232,31 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 		}
 		return ctrl.Result{}, err
 	}
+
+	// DIAG: Log the RV and CreateOnlyMode condition from the cache-backed Get
+	cachedRV := config.GetResourceVersion()
+	cachedCreateOnlyMode := "nil"
+	if c := apimeta.FindStatusCondition(config.Status.ConditionalStatus.Conditions, CreateOnlyMode); c != nil {
+		cachedCreateOnlyMode = string(c.Status)
+	}
+	r.log.Info("DIAG: cache read", "rv", cachedRV, "cachedCreateOnlyMode", cachedCreateOnlyMode, "envCreateOnlyMode", utils.IsInCreateOnlyMode(), "conditionCount", len(config.Status.ConditionalStatus.Conditions))
+
 	statusMgr := status.NewManager(r.ctrlClient)
 
 	defer func() {
+		// DIAG: Log what the status manager is about to write
+		createOnlyInMgr := "not-set"
+		if c, ok := statusMgr.GetCondition(CreateOnlyMode); ok {
+			createOnlyInMgr = string(c.Status)
+		}
+		r.log.Info("DIAG: deferred ApplyStatus starting", "rv", config.GetResourceVersion(), "createOnlyModeInStatusMgr", createOnlyInMgr)
+
 		if err := statusMgr.ApplyStatus(ctx, &config, func() *v1alpha1.ConditionalStatus {
 			return &config.Status.ConditionalStatus
 		}); err != nil {
-			r.log.Error(err, "failed to update status")
+			r.log.Error(err, "DIAG: deferred ApplyStatus FAILED", "rv", config.GetResourceVersion())
+		} else {
+			r.log.Info("DIAG: deferred ApplyStatus succeeded", "newRV", config.GetResourceVersion())
 		}
 	}()
 

@@ -169,13 +169,27 @@ func (c *customCtrlClientImpl) StatusUpdateWithRetry(
 	ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption,
 ) error {
 	key := types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
+	attempt := 0
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		attempt++
 		current := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(client.Object)
 		if err := c.Client.Get(ctx, key, current); err != nil {
 			return fmt.Errorf("failed to fetch latest %q for update: %w", key, err)
 		}
-		obj.SetResourceVersion(current.GetResourceVersion())
-		return c.Client.Status().Update(ctx, obj, opts...)
+		fetchedRV := current.GetResourceVersion()
+		objRVBefore := obj.GetResourceVersion()
+		obj.SetResourceVersion(fetchedRV)
+		fmt.Printf("DIAG StatusUpdateWithRetry: key=%s attempt=%d objRV_before=%s cacheRV=%s\n",
+			key, attempt, objRVBefore, fetchedRV)
+		err := c.Client.Status().Update(ctx, obj, opts...)
+		if err != nil {
+			fmt.Printf("DIAG StatusUpdateWithRetry: key=%s attempt=%d FAILED: %v\n",
+				key, attempt, err)
+		} else {
+			fmt.Printf("DIAG StatusUpdateWithRetry: key=%s attempt=%d OK newRV=%s\n",
+				key, attempt, obj.GetResourceVersion())
+		}
+		return err
 	}); err != nil {
 		return fmt.Errorf("failed to update %q status: %w", key, err)
 	}
