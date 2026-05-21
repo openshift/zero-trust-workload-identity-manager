@@ -169,58 +169,17 @@ func (c *customCtrlClientImpl) StatusUpdateWithRetry(
 	ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption,
 ) error {
 	key := types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
-	attempt := 0
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		attempt++
 		current := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(client.Object)
 		if err := c.Client.Get(ctx, key, current); err != nil {
 			return fmt.Errorf("failed to fetch latest %q for update: %w", key, err)
 		}
-		cacheRV := current.GetResourceVersion()
-		obj.SetResourceVersion(cacheRV)
-		condSummary := extractConditionSummary(obj)
-		fmt.Printf("DIAG StatusUpdateWithRetry: key=%s attempt=%d cacheRV=%s conditions=[%s]\n",
-			key, attempt, cacheRV, condSummary)
-		err := c.Client.Status().Update(ctx, obj, opts...)
-		if err != nil {
-			fmt.Printf("DIAG StatusUpdateWithRetry: key=%s attempt=%d FAILED: %v\n", key, attempt, err)
-		} else {
-			fmt.Printf("DIAG StatusUpdateWithRetry: key=%s attempt=%d OK newRV=%s\n", key, attempt, obj.GetResourceVersion())
-		}
-		return err
+		obj.SetResourceVersion(current.GetResourceVersion())
+		return c.Client.Status().Update(ctx, obj, opts...)
 	}); err != nil {
 		return fmt.Errorf("failed to update %q status: %w", key, err)
 	}
 	return nil
-}
-
-func extractConditionSummary(obj client.Object) string {
-	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	statusField := v.FieldByName("Status")
-	if !statusField.IsValid() {
-		return "no-status-field"
-	}
-	var conditions []interface{}
-	condField := statusField.FieldByName("Conditions")
-	if !condField.IsValid() {
-		csField := statusField.FieldByName("ConditionalStatus")
-		if csField.IsValid() {
-			condField = csField.FieldByName("Conditions")
-		}
-	}
-	if !condField.IsValid() {
-		return "no-conditions-field"
-	}
-	for i := 0; i < condField.Len(); i++ {
-		c := condField.Index(i)
-		cType := c.FieldByName("Type").String()
-		cStatus := c.FieldByName("Status").String()
-		conditions = append(conditions, fmt.Sprintf("%s=%s", cType, cStatus))
-	}
-	return fmt.Sprintf("%v", conditions)
 }
 
 func (c *customCtrlClientImpl) StatusUpdate(

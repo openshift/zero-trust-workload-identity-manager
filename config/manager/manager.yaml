@@ -58,6 +58,7 @@ spec:
       - command:
         - /usr/bin/zero-trust-workload-identity-manager
         args:
+          - --leader-elect
           - --health-probe-bind-address=:8081
           - --v=$(OPERATOR_LOG_LEVEL)
           - --metrics-bind-address=$(METRICS_BIND_ADDRESS)
