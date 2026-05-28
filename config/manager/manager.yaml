@@ -79,19 +79,19 @@ spec:
         - name: OPERATOR_VERSION
           value: 1.0.1
         - name: RELATED_IMAGE_SPIRE_SERVER
-          value: ghcr.io/spiffe/spire-server:1.13.3
+          value: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-server-rhel9@sha256:6a14fb03c3b7256a405cff52ae0e5c7e66b1fa1a8e3a955d6670123f5534d4e4
         - name: RELATED_IMAGE_SPIRE_AGENT
-          value: ghcr.io/spiffe/spire-agent:1.13.3
+          value: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-agent-rhel9@sha256:54865d9de74a500528dcef5c24dfe15c0baee8df662e76459e83bf9921dfce4e
         - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
-          value: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
+          value: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-csi-driver-rhel9@sha256:5359e8709d1b73386eddef202d59b7c511aa5366ca04f5ee707bbf760977e55d
         - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
-          value: ghcr.io/spiffe/oidc-discovery-provider:1.13.3
+          value: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-oidc-discovery-provider-rhel9@sha256:70f04312f96851a37ec9bfcc605d6a7edb4c87b548621007183b7caa2333816a
         - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-          value: ghcr.io/spiffe/spire-controller-manager:0.6.4
+          value: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-controller-manager-rhel9@sha256:7ddf330a798dbb112c2f58d2548941100a964db705617680d09969eaa3e07727
         - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
-          value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4
+          value: registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9@sha256:1c480fa5089a32cf804fc84df7219ca64066cbac2eeb962c4385754132c3873b
         - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
-          value: registry.access.redhat.com/ubi9:latest
+          value: registry.access.redhat.com/ubi9@sha256:dec374e05cc13ebbc0975c9f521f3db6942d27f8ccdf06b180160490eef8bdbc
         - name: OPERATOR_LOG_LEVEL
           value: "2"
         - name: METRICS_BIND_ADDRESS
