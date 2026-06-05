@@ -17,9 +17,9 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
-go.work.sum
+# Go workspace file (only at repo root, not inside vendor/)
+/go.work
+/go.work.sum
 
 # env file
 .env
