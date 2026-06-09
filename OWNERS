@@ -1,14 +1,12 @@
 reviewers:
-  - anirudhAgniRedhat
-  - bharath-b-rh
-  - swghosh
   - TrilokGeer
   - rausingh-rh
-  - iamP1
+  - bharath-b-rh
+  - swghosh
+  - nhegde07
 approvers:
-  - anirudhAgniRedhat
-  - bharath-b-rh
-  - swghosh
   - TrilokGeer
   - rausingh-rh
-  - iamP1
+  - bharath-b-rh
+  - swghosh
+  - nhegde07
