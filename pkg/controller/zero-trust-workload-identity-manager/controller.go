@@ -152,7 +152,7 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=list;watch;create
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;update;delete,resourceNames=spire-bundle;spire-controller-manager-leader-election;spire-server-external-cert-reader;spire-oidc-external-cert-reader
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=list;watch;create
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;update;delete,resourceNames=spire-bundle;spire-controller-manager-leader-election;spire-server-external-cert-reader;spire-oidc-external-cert-reader
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;update;delete,resourceNames=spire-bundle;spire-controller-manager-leader-election;spire-server-external-cert-reader;spire-oidc-external-cert-reader;spire-csi-use-privileged-scc
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=update;delete,resourceNames=spire-controller-manager-webhook
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;watch;create
@@ -184,7 +184,9 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=list;watch;create
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;update;delete,resourceNames=spire-server
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;watch;create
-// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;update;delete,resourceNames=spire-agent;spire-spiffe-csi-driver
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;update;delete,resourceNames=spire-agent
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use,resourceNames=privileged
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;delete,resourceNames=spire-spiffe-csi-driver
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=list;watch;create
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;update;delete,resourceNames=spire-server-federation;spire-oidc-discovery-provider

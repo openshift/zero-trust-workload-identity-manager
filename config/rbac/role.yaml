@@ -262,6 +262,7 @@ rules:
   - spire-controller-manager-leader-election
   - spire-oidc-external-cert-reader
   - spire-server-external-cert-reader
+  - spire-csi-use-privileged-scc
   resources:
   - rolebindings
   - roles
@@ -307,13 +308,29 @@ rules:
   - security.openshift.io
   resourceNames:
   - spire-agent
-  - spire-spiffe-csi-driver
   resources:
   - securitycontextconstraints
   verbs:
   - delete
   - get
   - update
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - privileged
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - spire-spiffe-csi-driver
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - delete
+  - get
 - apiGroups:
   - spire.spiffe.io
   resources:

@@ -15,6 +15,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -115,6 +116,9 @@ func generateSpiffeCsiDriverDaemonSet(config v1alpha1.SpiffeCSIDriverSpec) *apps
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						securityv1.RequiredSCCAnnotation: utils.PrivilegedSCCName,
+					},
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{

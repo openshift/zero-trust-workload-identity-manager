@@ -81,6 +81,11 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 		t.Errorf("Expected template labels %v, got %v", allLabels, daemonSet.Spec.Template.Labels)
 	}
 
+	if daemonSet.Spec.Template.Annotations["openshift.io/required-scc"] != "privileged" {
+		t.Errorf("Expected required-scc annotation 'privileged', got %q",
+			daemonSet.Spec.Template.Annotations["openshift.io/required-scc"])
+	}
+
 	// Test ServiceAccountName
 	if daemonSet.Spec.Template.Spec.ServiceAccountName != "spire-spiffe-csi-driver" {
 		t.Errorf("Expected service account name 'spire-spiffe-csi-driver', got '%s'",

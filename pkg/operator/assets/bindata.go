@@ -1,6 +1,7 @@
 // Code generated for package assets by go-bindata DO NOT EDIT. (@generated)
 // sources:
 // bindata/spiffe-csi/spiffe-csi-csi-driver.yaml
+// bindata/spiffe-csi/spiffe-csi-privileged-role-binding.yaml
 // bindata/spiffe-csi/spiffe-csi-service-account.yaml
 // bindata/spire-agent/spire-agent-cluster-role-binding.yaml
 // bindata/spire-agent/spire-agent-cluster-role.yaml
@@ -116,6 +117,41 @@ func spiffeCsiSpiffeCsiCsiDriverYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "spiffe-csi/spiffe-csi-csi-driver.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spiffeCsiSpiffeCsiPrivilegedRoleBindingYaml = []byte(`kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-csi-use-privileged-scc
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-csi-driver
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+subjects:
+  - kind: ServiceAccount
+    name: spire-spiffe-csi-driver
+    namespace: zero-trust-workload-identity-manager
+roleRef:
+  kind: ClusterRole
+  name: system:openshift:scc:privileged
+  apiGroup: rbac.authorization.k8s.io
+`)
+
+func spiffeCsiSpiffeCsiPrivilegedRoleBindingYamlBytes() ([]byte, error) {
+	return _spiffeCsiSpiffeCsiPrivilegedRoleBindingYaml, nil
+}
+
+func spiffeCsiSpiffeCsiPrivilegedRoleBindingYaml() (*asset, error) {
+	bytes, err := spiffeCsiSpiffeCsiPrivilegedRoleBindingYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spiffe-csi/spiffe-csi-privileged-role-binding.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -1029,6 +1065,7 @@ func AssetNames() []string {
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
 	"spiffe-csi/spiffe-csi-csi-driver.yaml":                                               spiffeCsiSpiffeCsiCsiDriverYaml,
+	"spiffe-csi/spiffe-csi-privileged-role-binding.yaml":                                  spiffeCsiSpiffeCsiPrivilegedRoleBindingYaml,
 	"spiffe-csi/spiffe-csi-service-account.yaml":                                          spiffeCsiSpiffeCsiServiceAccountYaml,
 	"spire-agent/spire-agent-cluster-role-binding.yaml":                                   spireAgentSpireAgentClusterRoleBindingYaml,
 	"spire-agent/spire-agent-cluster-role.yaml":                                           spireAgentSpireAgentClusterRoleYaml,
@@ -1098,8 +1135,9 @@ type bintree struct {
 
 var _bintree = &bintree{nil, map[string]*bintree{
 	"spiffe-csi": {nil, map[string]*bintree{
-		"spiffe-csi-csi-driver.yaml":      {spiffeCsiSpiffeCsiCsiDriverYaml, map[string]*bintree{}},
-		"spiffe-csi-service-account.yaml": {spiffeCsiSpiffeCsiServiceAccountYaml, map[string]*bintree{}},
+		"spiffe-csi-csi-driver.yaml":              {spiffeCsiSpiffeCsiCsiDriverYaml, map[string]*bintree{}},
+		"spiffe-csi-privileged-role-binding.yaml": {spiffeCsiSpiffeCsiPrivilegedRoleBindingYaml, map[string]*bintree{}},
+		"spiffe-csi-service-account.yaml":         {spiffeCsiSpiffeCsiServiceAccountYaml, map[string]*bintree{}},
 	}},
 	"spire-agent": {nil, map[string]*bintree{
 		"spire-agent-cluster-role-binding.yaml": {spireAgentSpireAgentClusterRoleBindingYaml, map[string]*bintree{}},

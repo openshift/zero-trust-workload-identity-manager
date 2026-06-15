@@ -35,6 +35,7 @@ const (
 
 	// Service Accounts
 	SpiffeCsiDriverServiceAccountAssetName            = "spiffe-csi/spiffe-csi-service-account.yaml"
+	SpiffeCsiDriverPrivilegedRoleBindingAssetName     = "spiffe-csi/spiffe-csi-privileged-role-binding.yaml"
 	SpireAgentServiceAccountAssetName                 = "spire-agent/spire-agent-service-account.yaml"
 	SpireOIDCDiscoveryProviderServiceAccountAssetName = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml"
 	SpireServerServiceAccountAssetName                = "spire-server/spire-server-service-account.yaml"
@@ -98,4 +99,7 @@ const (
 	SpireOIDCExternalCertRoleBindingName   = "spire-oidc-external-cert-reader"
 	SpireServerExternalCertRoleName        = "spire-server-external-cert-reader"
 	SpireServerExternalCertRoleBindingName = "spire-server-external-cert-reader"
+
+	//Security Context Constraints
+	PrivilegedSCCName = "privileged"
 )

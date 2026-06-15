@@ -1,0 +1,18 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spire-csi-use-privileged-scc
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/name: spiffe-csi-driver
+    app.kubernetes.io/instance: spire
+    app.kubernetes.io/managed-by: "zero-trust-workload-identity-manager"
+    app.kubernetes.io/part-of: "zero-trust-workload-identity-manager"
+subjects:
+  - kind: ServiceAccount
+    name: spire-spiffe-csi-driver
+    namespace: zero-trust-workload-identity-manager
+roleRef:
+  kind: ClusterRole
+  name: system:openshift:scc:privileged
+  apiGroup: rbac.authorization.k8s.io
