@@ -28,8 +28,9 @@ type SpiffeCSIDriverSpec struct {
 	// This directory will be bind-mounted into workload containers by the CSI driver.
 	// The directory is shared between the SPIRE agent and CSI driver via a hostPath volume.
 	// Must be an absolute path without traversal attempts or null bytes.
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=256
-	// +kubebuilder:validation:Pattern=`^/[a-zA-Z0-9._/\-]*$`
+	// +kubebuilder:validation:Pattern=`^/[a-zA-Z0-9._/\-]+$`
 	// +kubebuilder:default:="/run/spire/agent-sockets"
 	AgentSocketPath string `json:"agentSocketPath,omitempty"`
 

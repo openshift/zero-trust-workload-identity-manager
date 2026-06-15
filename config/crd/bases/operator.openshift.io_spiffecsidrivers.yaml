@@ -964,7 +964,8 @@ spec:
                   The directory is shared between the SPIRE agent and CSI driver via a hostPath volume.
                   Must be an absolute path without traversal attempts or null bytes.
                 maxLength: 256
-                pattern: ^/[a-zA-Z0-9._/\-]*$
+                minLength: 1
+                pattern: ^/[a-zA-Z0-9._/\-]+$
                 type: string
               labels:
                 additionalProperties:
