@@ -335,15 +335,6 @@ rules:
   - get
   - update
 - apiGroups:
-  - security.openshift.io
-  resourceNames:
-  - spire-spiffe-csi-driver
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - delete
-  - get
-- apiGroups:
   - spire.spiffe.io
   resources:
   - clusterfederatedtrustdomains

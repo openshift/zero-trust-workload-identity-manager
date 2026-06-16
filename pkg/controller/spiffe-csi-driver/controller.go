@@ -27,7 +27,6 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -144,11 +143,6 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Remove legacy custom CSI driver SCC after DaemonSet pins pods to privileged
-	if err := r.deleteLegacyCSIDriverSCC(ctx); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -174,7 +168,6 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&storagev1.CSIDriver{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
-		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(legacyCSIDriverSCCPredicate())).
 		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
 		Complete(r)
 	if err != nil {

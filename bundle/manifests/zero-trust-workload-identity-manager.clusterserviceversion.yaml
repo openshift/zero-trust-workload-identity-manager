@@ -537,11 +537,23 @@ spec:
           resourceNames:
           - spire-bundle
           - spire-controller-manager-leader-election
+          - spire-csi-use-privileged-scc
           - spire-oidc-external-cert-reader
           - spire-server-external-cert-reader
-          - spire-csi-use-privileged-scc
           resources:
           - rolebindings
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resourceNames:
+          - spire-bundle
+          - spire-controller-manager-leader-election
+          - spire-oidc-external-cert-reader
+          - spire-server-external-cert-reader
+          resources:
           - roles
           verbs:
           - delete
@@ -584,16 +596,6 @@ spec:
         - apiGroups:
           - security.openshift.io
           resourceNames:
-          - spire-agent
-          resources:
-          - securitycontextconstraints
-          verbs:
-          - delete
-          - get
-          - update
-        - apiGroups:
-          - security.openshift.io
-          resourceNames:
           - privileged
           resources:
           - securitycontextconstraints
@@ -602,12 +604,13 @@ spec:
         - apiGroups:
           - security.openshift.io
           resourceNames:
-          - spire-spiffe-csi-driver
+          - spire-agent
           resources:
           - securitycontextconstraints
           verbs:
           - delete
           - get
+          - update
         - apiGroups:
           - spire.spiffe.io
           resources:

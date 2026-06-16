@@ -186,7 +186,6 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;watch;create
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;update;delete,resourceNames=spire-agent
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use,resourceNames=privileged
-// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;delete,resourceNames=spire-spiffe-csi-driver
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=list;watch;create
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;update;delete,resourceNames=spire-server-federation;spire-oidc-discovery-provider
