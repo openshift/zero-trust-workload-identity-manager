@@ -138,7 +138,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile DaemonSet (pods pin openshift.io/required-scc: privileged)
+	// Reconcile DaemonSet (with pods pinned to openshift.io/required-scc: privileged)
 	if err := r.reconcileDaemonSet(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
