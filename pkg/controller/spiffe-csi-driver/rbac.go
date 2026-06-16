@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	privilegedSCCClusterRoleName      = "system:openshift:scc:privileged"
-	privilegedSCCRoleBindingName      = "spire-csi-use-privileged-scc"
+	privilegedSCCClusterRoleName = "system:openshift:scc:privileged"
+	privilegedSCCRoleBindingName = "spire-csi-use-privileged-scc"
 )
 
 // reconcilePrivilegedRoleBinding binds the CSI driver ServiceAccount to the platform privileged SCC ClusterRole.
@@ -64,9 +64,6 @@ func (r *SpiffeCsiReconciler) reconcilePrivilegedRoleBinding(ctx context.Context
 
 	if createOnlyMode {
 		r.log.V(1).Info("Privileged RoleBinding exists, skipping update due to create-only mode", "name", desired.Name)
-		statusMgr.AddCondition(SecurityContextConstraintsAvailable, "SpiffeCSIPrivilegedRoleBindingUpToDate",
-			"Privileged SCC RoleBinding is up to date",
-			metav1.ConditionTrue)
 		return nil
 	}
 
