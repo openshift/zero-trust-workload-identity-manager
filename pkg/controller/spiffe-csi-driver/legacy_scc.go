@@ -45,9 +45,13 @@ func (r *SpiffeCsiReconciler) deleteLegacyCSIDriverSCC(ctx context.Context) erro
 		if kerrors.IsNotFound(err) {
 			return nil
 		}
+		//if deletion is failed update status condition.
+		//if deletion is successful update the status condition to true.
 		r.log.Error(err, "failed to delete legacy CSI driver SCC")
 		return err
 	}
+
+	//operator condition should fail in case of garbage collection failure
 
 	r.log.Info("Deleted legacy CSI driver SCC", "name", legacyCSIDriverSCCName)
 	return nil
