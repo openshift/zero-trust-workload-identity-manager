@@ -355,8 +355,10 @@ type CASubject struct {
 	Organization string `json:"organization,omitempty"`
 
 	// commonName specifies the common name for the CA.
+	// Must contain only alphanumeric characters, spaces, dots, underscores, or hyphens.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9 ._-]*$`
 	CommonName string `json:"commonName,omitempty"`
 }
 

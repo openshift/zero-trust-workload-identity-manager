@@ -973,8 +973,11 @@ spec:
                   CA.
                 properties:
                   commonName:
-                    description: commonName specifies the common name for the CA.
+                    description: |-
+                      commonName specifies the common name for the CA.
+                      Must contain only alphanumeric characters, spaces, dots, underscores, or hyphens.
                     maxLength: 255
+                    pattern: ^[a-zA-Z0-9 ._-]*$
                     type: string
                   country:
                     description: |-
