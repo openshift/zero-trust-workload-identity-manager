@@ -871,8 +871,8 @@ func TestReconcileCSIDriver_AllScenarios(t *testing.T) {
 	}
 }
 
-// TestReconcileSCC_AllScenarios tests reconcileSCC scenarios
-func TestReconcileSCC_AllScenarios(t *testing.T) {
+// TestReconcilePrivilegedRoleBinding_AllScenarios tests reconcilePrivilegedRoleBinding scenarios
+func TestReconcilePrivilegedRoleBinding_AllScenarios(t *testing.T) {
 	tests := []struct {
 		name        string
 		getErr      error
@@ -924,7 +924,7 @@ func TestReconcileSCC_AllScenarios(t *testing.T) {
 			}
 			statusMgr := status.NewManager(fakeClient)
 
-			err := reconciler.reconcileSCC(context.Background(), driver, statusMgr)
+			err := reconciler.reconcilePrivilegedRoleBinding(context.Background(), driver, statusMgr, false)
 
 			if tt.expectError && err == nil {
 				t.Fatal("Expected error but got nil")
@@ -1180,7 +1180,7 @@ func TestReconcile_ErrorPropagation(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "reconcileSCC error propagates",
+			name: "reconcilePrivilegedRoleBinding error propagates",
 			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
 				callCount := 0
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1207,7 +1207,7 @@ func TestReconcile_ErrorPropagation(t *testing.T) {
 					case 3, 4: // ServiceAccount, CSIDriver
 						return nil
 					default:
-						return errors.New("scc get error")
+						return errors.New("rolebinding get error")
 					}
 				}
 			},

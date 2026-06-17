@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -79,6 +80,11 @@ func TestGenerateSpiffeCsiDriverDaemonSet(t *testing.T) {
 	// Test PodTemplateSpec Labels
 	if !reflect.DeepEqual(daemonSet.Spec.Template.Labels, allLabels) {
 		t.Errorf("Expected template labels %v, got %v", allLabels, daemonSet.Spec.Template.Labels)
+	}
+
+	if daemonSet.Spec.Template.Annotations[securityv1.RequiredSCCAnnotation] != utils.PrivilegedSCCName {
+		t.Errorf("Expected required-scc annotation 'privileged', got %q",
+			daemonSet.Spec.Template.Annotations[securityv1.RequiredSCCAnnotation])
 	}
 
 	// Test ServiceAccountName

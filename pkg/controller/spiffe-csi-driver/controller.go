@@ -25,7 +25,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	securityv1 "github.com/openshift/api/security/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -88,7 +89,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if kerrors.IsNotFound(err) {
 			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
 			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				"Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster",
 				metav1.ConditionFalse)
 			return ctrl.Result{}, nil
 		}
@@ -132,12 +133,12 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile SCC
-	if err := r.reconcileSCC(ctx, &spiffeCSIDriver, statusMgr); err != nil {
+	// Reconcile privileged SCC RoleBinding
+	if err := r.reconcilePrivilegedRoleBinding(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile DaemonSet
+	// Reconcile DaemonSet (with pods pinned to openshift.io/required-scc: privileged)
 	if err := r.reconcileDaemonSet(ctx, &spiffeCSIDriver, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -166,7 +167,7 @@ func (r *SpiffeCsiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&storagev1.CSIDriver{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
-		Watches(&securityv1.SecurityContextConstraints{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
 		Complete(r)
 	if err != nil {
