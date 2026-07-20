@@ -30,4 +30,4 @@ spec:
   - name: spiffe-helper-rhel9
     from:
       kind: DockerImage
-      name: ghcr.io/spiffe/spiffe-helper:0.8.2
+      name: ghcr.io/spiffe/spiffe-helper:0.11.0
