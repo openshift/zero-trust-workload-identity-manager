@@ -1,0 +1,23 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+    patch:
+      default:
+        target: auto
+
+ignore:
+  - "vendor/**"
+  - "test/**"
+  - "hack/**"
+  - "docs/**"
+  - "bindata/**"
+  - "config/**"
+  - "bundle/**"
+  - "release/**"
+  - "tools/**"
+  - "**/*_test.go"
+  - "**/zz_generated*.go"
+  - "pkg/operator/assets/bindata.go"
+  - "**/doc.go"
