@@ -540,6 +540,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 				"entryIDPrefix: test-cluster":          "",
 				"spireServerSocketPath":                "/tmp/spire-server/private/api.sock",
 				"apiVersion: spire.spiffe.io/v1alpha1": "",
+				"gcInterval: 10000000000":              "",
 			},
 		},
 		{
@@ -593,6 +594,36 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGenerateControllerManagerConfig_GCInterval(t *testing.T) {
+	validConfig := createValidConfig()
+	validZTWIM := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			ClusterName:     "test-cluster",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+
+	cmConfig, err := generateControllerManagerConfig(validConfig, validZTWIM)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if cmConfig.ControllerManagerConfig.GCInterval != 10*time.Second {
+		t.Errorf("Expected GCInterval to be 10s, got %v", cmConfig.ControllerManagerConfig.GCInterval)
+	}
+
+	yamlStr, err := generateSpireControllerManagerConfigYaml(validConfig, validZTWIM)
+	if err != nil {
+		t.Fatalf("Unexpected error generating YAML: %v", err)
+	}
+
+	expectedNanos := "gcInterval: 10000000000"
+	if !strings.Contains(yamlStr, expectedNanos) {
+		t.Errorf("Expected YAML to contain %q (10s in nanoseconds), but it doesn't.\nYAML:\n%s", expectedNanos, yamlStr)
 	}
 }
 
