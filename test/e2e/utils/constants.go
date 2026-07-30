@@ -34,6 +34,8 @@ const (
 	SpireAgentPodLabel                       = "app.kubernetes.io/name=spire-agent"
 	SpireAgentConfigMapName                  = "spire-agent"
 	SpireAgentConfigKey                      = "agent.conf"
+	SpireControllerManagerConfigMapName      = "spire-controller-manager"
+	SpireControllerManagerConfigKey          = "controller-manager-config.yaml"
 	SpiffeCSIDriverDaemonSetName             = "spire-spiffe-csi-driver"
 	SpiffeCSIDriverPodLabel                  = "app.kubernetes.io/name=spiffe-csi-driver"
 	SpireOIDCDiscoveryProviderDeploymentName = "spire-spiffe-oidc-discovery-provider"
