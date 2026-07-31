@@ -29,7 +29,7 @@ A controller-runtime operator (not library-go) that deploys and manages upstream
 
 **1. Never hand-edit generated files** — `zz_generated.deepcopy.go`, `config/crd/bases/*.yaml`, `pkg/operator/assets/bindata.go`. Use `make generate`, `make manifests`, `make update-bindata`. Run `make verify` before pushing.
 
-**2. All five ZTWIM-owned CRDs are cluster-scoped singletons named `cluster`** — enforced by CEL XValidation. The three upstream `spire.spiffe.io` CRDs (ClusterSPIFFEID, ClusterFederatedTrustDomain, ClusterStaticEntry) are NOT singletons. Controller names use the full prefix: `zero-trust-workload-identity-manager-<component>-controller` (constants in `pkg/controller/utils/constants.go`).
+**2. All five ZTWIM-owned CRDs are cluster-scoped singletons named `cluster`** — enforced by CEL XValidation. The three upstream `spire.spiffe.io` CRDs (ClusterSPIFFEID, ClusterFederatedTrustDomain, ClusterStaticEntry) are NOT singletons — see [`ai-docs/domain/upstream-spiffe-crds.md`](ai-docs/domain/upstream-spiffe-crds.md). Controller names use the full prefix: `zero-trust-workload-identity-manager-<component>-controller` (constants in `pkg/controller/utils/constants.go`).
 
 **3. Operand controllers watch the parent ZTWIM CR** — all four operand controllers watch `ZeroTrustWorkloadIdentityManager` with `ZTWIMSpecChangedPredicate`, and managed resources with component-specific label predicates (`ControllerManagedResourcesForComponent`). The ZTWIM controller does NOT create operand CRs — it only aggregates status.
 
@@ -49,6 +49,7 @@ A controller-runtime operator (not library-go) that deploys and manages upstream
 ```text
 ai-docs/
 ├── domain/                    # CRD type docs (ZTWIM, SpireServer, SpireAgent, etc.)
+│   └── upstream-spiffe-crds.md
 ├── architecture/              # Repo layout, controller table, reconciliation flow
 │   └── components.md
 ├── decisions/                 # Component ADRs (controller-runtime choice, bindata)
@@ -63,7 +64,7 @@ ai-docs/
 └── ZTWIM_TESTING.md           # Unit (FakeCustomCtrlClient) + E2E (Ginkgo)
 ```
 
-**AI Agent Path**: domain/ → architecture/ → decisions/ → ZTWIM_DEVELOPMENT.md
+**AI Agent Path**: [`ai-docs/README.md`](ai-docs/README.md) → domain/ → architecture/ → decisions/ → ZTWIM_DEVELOPMENT.md
 
 **Platform Patterns**: [Operator](https://github.com/openshift/enhancements/tree/master/ai-docs) | [Testing](https://github.com/openshift/enhancements/tree/master/ai-docs) | [Security](https://github.com/openshift/enhancements/tree/master/ai-docs)
 

@@ -102,6 +102,8 @@ All five CRDs enforce `metadata.name == 'cluster'` via CEL validation rules:
 
 This means there can only ever be one instance of each CRD. The operator relies on this invariant for reconciliation — it always looks up the `cluster` resource.
 
+The three upstream `spire.spiffe.io` CRDs are **not** singletons — see [upstream-spiffe-crds.md](upstream-spiffe-crds.md).
+
 ## Immutability Pattern
 
 Several fields use CEL immutability rules:

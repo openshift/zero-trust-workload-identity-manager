@@ -92,6 +92,7 @@ spec:
 - **Trying to change `trustDomain` after creation** — immutable field; you must delete and recreate.
 - **Assuming this CR configures SPIRE internals** — it does not. Low-level SPIRE config lives in SpireServer and SpireAgent CRs.
 - **Ignoring `status.operands`** — the top-level `Ready` condition alone doesn't tell you *which* component is unhealthy.
-```
+
+See also: [Installation / Bootstrap](../ZTWIM_DEVELOPMENT.md#installation--bootstrap) for required CR apply order.
 
 ---

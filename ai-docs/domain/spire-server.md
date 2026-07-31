@@ -119,10 +119,11 @@ spec:
 ## Common Mistakes
 
 - **Setting `persistence.size` too small** — once created, it's immutable. Plan for growth.
-- **Mismatching `jwtIssuer` with the OIDC Discovery Provider's `jwtIssuer`** — they must agree.
+- **Mismatching `jwtIssuer` with the OIDC Discovery Provider's `jwtIssuer`** — they must agree. See [SpireOIDCDiscoveryProvider](spire-oidc-discovery-provider.md#field-details).
 - **Forgetting `endpointSpiffeId` for `https_spiffe` federation** — CEL validation requires it when profile is `https_spiffe`.
 - **Switching between ACME and servingCert** — the `httpsWeb` config is immutable once the choice is made.
 - **Setting `CAValidity` shorter than `DefaultX509Validity`** — issued SVIDs would outlive their signing CA.
-```
+
+See also: [`jwtIssuer` must match SpireOIDCDiscoveryProvider](spire-oidc-discovery-provider.md#field-details); [upstream SPIFFE CRDs](upstream-spiffe-crds.md) for workload identity registration.
 
 ---

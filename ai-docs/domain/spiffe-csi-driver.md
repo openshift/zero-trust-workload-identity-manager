@@ -29,11 +29,11 @@ type SpiffeCSIDriverSpec struct {
 ### Field Details
 
 - `agentSocketPath`: absolute path (1–256 chars, pattern `^/[a-zA-Z0-9._/\-]+$`). Default: `/run/spire/agent-sockets`. The CSI driver reads the SPIRE agent socket from this host directory.
-- `pluginName`: domain-name format (max 127 chars). Default: `csi.spiffe.io`. This is the `driver` name workloads use in `csi` volume definitions.
+- `pluginName`: domain-name format (max 127 chars). Default: `csi.spiffe.io`. This is the `driver` name workloads use in `csi` volume definitions. Must match [`SpireOIDCDiscoveryProvider.spec.csiDriverName`](spire-oidc-discovery-provider.md#field-details).
 
 ## Key Concepts
 
-- **Socket Path Pair**: The `agentSocketPath` here and `SpireAgent.spec.socketPath` must match — the agent writes to the path and the CSI driver reads from it. The workload's `volumeMounts[].mountPath` does **not** need to match; the CSI driver bind-mounts the agent socket directory into whatever path the workload declares.
+- **Socket Path Pair**: [`agentSocketPath`](spiffe-csi-driver.md#field-details) here and [`SpireAgent.spec.socketPath`](spire-agent.md#spec-structure) must match — the agent writes to the path and the CSI driver reads from it. The workload's `volumeMounts[].mountPath` does **not** need to match; the CSI driver bind-mounts the agent socket directory into whatever path the workload declares.
 - **CSI Ephemeral Volumes**: The driver registers as a CSI plugin with the kubelet. When a pod with a `csi.spiffe.io` volume starts, kubelet calls the CSI driver's `NodePublishVolume` to bind-mount the socket into the pod.
 - **Plugin Name**: Changing `pluginName` from the default requires updating all workload pod specs to reference the new driver name.
 - **DaemonSet Deployment**: The CSI driver runs as a DaemonSet (one per node), co-located with the SPIRE Agent.
@@ -88,9 +88,11 @@ containers:
 
 ## Common Mistakes
 
-- **`agentSocketPath` mismatch with SpireAgent** — the most common issue. If these paths diverge, the CSI driver mounts an empty directory and workloads fail to connect to the Workload API.
+- **`agentSocketPath` mismatch with SpireAgent** — the most common issue. If these paths diverge, the CSI driver mounts an empty directory and workloads fail to connect to the Workload API. See [SpireAgent.spec.socketPath](spire-agent.md#spec-structure).
 - **Changing `pluginName` without updating workloads** — existing pods reference the old driver name and will fail to schedule.
 - **Missing tolerations** — like the agent, the CSI driver must run on all nodes where workloads need SPIFFE identities.
 - **Forgetting `readOnly: true` on workload volume mounts** — while functional without it, the socket should always be mounted read-only for security.
+
+See also: [SpireAgent](spire-agent.md) for socket path pairing; [SpireOIDCDiscoveryProvider](spire-oidc-discovery-provider.md) for `pluginName`/`csiDriverName` consistency.
 
 ---

@@ -24,6 +24,54 @@ make verify         # vet + fmt + lint
 make lint           # golangci-lint (v1.59.1)
 ```
 
+## Installation / Bootstrap
+
+ZTWIM is installed via OLM. After the operator Deployment is running, **users must create all CRs manually** — the ZTWIM controller aggregates status but does **not** create operand CRs.
+
+### Required CRs
+
+All five ZTWIM-owned CRs are cluster-scoped singletons named `cluster`:
+
+| Order | CR | Why This Order |
+|-------|----|----------------|
+| 1 | `ZeroTrustWorkloadIdentityManager` | Defines trust domain and cluster identity; parent for owner references |
+| 2 | `SpireServer` | CA root and spire-controller-manager sidecar; required before agents can attest |
+| 3 | `SpireAgent` | Per-node daemon; exposes Workload API socket |
+| 4 | `SpiffeCSIDriver` | Bind-mounts agent socket into pods; [`agentSocketPath`](domain/spiffe-csi-driver.md#field-details) must match [SpireAgent `socketPath`](domain/spire-agent.md#spec-structure) |
+| 5 | `SpireOIDCDiscoveryProvider` | Optional for X.509-only; required for JWT/OIDC. [`jwtIssuer`](domain/spire-oidc-discovery-provider.md#field-details) must match [SpireServer](domain/spire-server.md#spec-structure) |
+
+Sample manifests live in `config/samples/`. Apply in order:
+
+```bash
+oc apply -f config/samples/operator.openshift.io_v1alpha1_zerotrustworkloadidentitymanager.yaml
+oc apply -f config/samples/operator.openshift.io_v1alpha1_spireserver.yaml
+oc apply -f config/samples/operator.openshift.io_v1alpha1_spireagent.yaml
+oc apply -f config/samples/operator.openshift.io_v1alpha1_spiffecsidriver.yaml
+oc apply -f config/samples/operator.openshift.io_v1alpha1_spireoidcdiscoveryprovider.yaml
+```
+
+Or apply the full sample set (includes upstream SPIFFE CR examples):
+
+```bash
+oc apply -k config/samples/
+```
+
+### Workload Identity (After Infrastructure Is Ready)
+
+Once SpireServer and SpireAgent report Ready, create [user-managed ClusterSPIFFEIDs](domain/upstream-spiffe-crds.md#user-created-instances) to grant application workloads SVIDs. Workload pods must mount the CSI volume (`driver: csi.spiffe.io` — see [SpiffeCSIDriver](domain/spiffe-csi-driver.md#workload-volume-reference)).
+
+The OIDC controller automatically creates two operator-managed ClusterSPIFFEIDs when SpireOIDCDiscoveryProvider is applied — do not create these manually.
+
+### Verify Installation
+
+```bash
+oc get zerotrustworkloadidentitymanagers cluster -o yaml
+oc get spireservers,spireagents,spiffecsidrivers,spireoidcdiscoveryproviders
+oc get clusterspiffeids.spire.spiffe.io
+```
+
+Check `status.conditions` on the ZTWIM CR for aggregated operand health.
+
 ## Code Style
 
 ### Import Order

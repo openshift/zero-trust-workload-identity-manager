@@ -33,8 +33,8 @@ type SpireOIDCDiscoveryProviderSpec struct {
 
 ### Field Details
 
-- `csiDriverName`: must match `SpiffeCSIDriver.spec.pluginName` so the OIDC provider pod can mount the Workload API socket via CSI.
-- `jwtIssuer`: must match `SpireServer.spec.jwtIssuer`. The OIDC discovery document's `issuer` field is set to this value.
+- `csiDriverName`: must match [`SpiffeCSIDriver.spec.pluginName`](spiffe-csi-driver.md#field-details) so the OIDC provider pod can mount the Workload API socket via CSI.
+- `jwtIssuer`: must match [`SpireServer.spec.jwtIssuer`](spire-server.md#spec-structure). The OIDC discovery document's `issuer` field is set to this value.
 - `replicaCount`: controls the Deployment replica count (1–5). Scale up for HA in production.
 - `managedRoute`: when `"true"`, operator creates an OpenShift Route pointing to the OIDC provider Service (typically `*.apps.<cluster>`).
 - `externalSecretRef`: reference to a Secret containing a TLS certificate for the Route. Used when the default wildcard cert is insufficient (e.g., custom domain).
@@ -82,11 +82,12 @@ spec:
 
 ## Common Mistakes
 
-- **`jwtIssuer` mismatch between SpireServer and SpireOIDCDiscoveryProvider** — the most critical consistency requirement. If they differ, JWT-SVIDs will fail validation at relying parties.
-- **`csiDriverName` mismatch with SpiffeCSIDriver** — OIDC provider pods fail to mount the Workload API socket and can't fetch signing keys.
+- **`jwtIssuer` mismatch between SpireServer and SpireOIDCDiscoveryProvider** — the most critical consistency requirement. If they differ, JWT-SVIDs will fail validation at relying parties. See [SpireServer.spec.jwtIssuer](spire-server.md#spec-structure).
+- **`csiDriverName` mismatch with SpiffeCSIDriver** — OIDC provider pods fail to mount the Workload API socket and can't fetch signing keys. See [SpiffeCSIDriver.spec.pluginName](spiffe-csi-driver.md#field-details).
 - **Running only 1 replica in production** — the OIDC endpoint is on the critical path for cloud credential exchange. Use `replicaCount: 2+` for HA.
 - **Forgetting DNS for the Route** — `managedRoute: "true"` creates the Route, but the `jwtIssuer` URL must resolve to the cluster's ingress. Ensure DNS is configured.
 - **Not exposing the provider externally** — cloud IAM providers need to reach the OIDC endpoints from the internet (or via VPC peering). A cluster-internal-only Route won't work.
-```
+
+See also: [SpireServer](spire-server.md) for `jwtIssuer`; [SpiffeCSIDriver](spiffe-csi-driver.md) for `pluginName`; [upstream SPIFFE CRDs](upstream-spiffe-crds.md) for operator-managed `ClusterSPIFFEID` resources.
 
 ---

@@ -50,7 +50,7 @@ type SpireAgentSpec struct {
 
 ## Key Concepts
 
-- **Socket Path Coordination**: `socketPath` must match `SpiffeCSIDriver.spec.agentSocketPath`. The agent creates a Unix socket in this directory; the CSI driver bind-mounts it into workload pods.
+- **Socket Path Coordination**: [`socketPath`](spire-agent.md#spec-structure) must match [`SpiffeCSIDriver.spec.agentSocketPath`](spiffe-csi-driver.md#field-details). The agent creates a Unix socket in this directory; the CSI driver bind-mounts it into workload pods.
 - **Node Attestation (PSAT)**: The agent presents a Kubernetes Projected Service Account Token to the SPIRE Server to prove which node it's running on. Enabled by default.
 - **Workload Attestation**: When a workload connects to the Workload API socket, the agent queries the kubelet to verify the caller's pod identity (namespace, service account, labels, etc.).
 - **Kubelet Verification Modes**: In OpenShift, `auto` mode finds the kubelet CA at `/etc/kubernetes/kubelet-ca.crt`. For custom setups or non-standard node images, use `hostCert` with explicit paths.
@@ -98,10 +98,11 @@ spec:
 
 ## Common Mistakes
 
-- **Mismatched `socketPath`** — if this doesn't match `SpiffeCSIDriver.spec.agentSocketPath`, workloads get "connection refused" when requesting SVIDs.
+- **Mismatched `socketPath`** — if this doesn't match [`SpiffeCSIDriver.spec.agentSocketPath`](spiffe-csi-driver.md#field-details), workloads get "connection refused" when requesting SVIDs.
 - **Missing tolerations** — without appropriate tolerations, agents won't schedule on tainted nodes (masters, infra), leaving those nodes without identity infrastructure.
 - **Setting `type: skip` in production** — disabling kubelet TLS verification defeats node identity assurance. Use only for debugging.
 - **Forgetting to set `hostCertBasePath` when `type: hostCert`** — CEL validation rejects the CR.
-```
+
+See also: [SpiffeCSIDriver](spiffe-csi-driver.md) for socket path pairing; [Installation / Bootstrap](../ZTWIM_DEVELOPMENT.md#installation--bootstrap).
 
 ---
