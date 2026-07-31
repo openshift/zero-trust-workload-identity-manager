@@ -60,7 +60,7 @@ make build-operator
 ./bin/zero-trust-workload-identity-manager --v=5 --metrics-secure=false
 ```
 
-The binary is FIPS-aware — `hack/go-fips.sh` sets `GOEXPERIMENT=strictfipsruntime` when the compiler supports it. Local builds without the FIPS-capable toolchain still succeed but emit a warning.
+The binary is FIPS-aware — `hack/go-fips.sh` sets `GOEXPERIMENT=strictfipsruntime` when the compiler supports it. Local builds without the FIPS-capable toolchain still succeed but emit a warning. Non-FIPS builds cannot be used in CI or production (per `hack/go-fips.sh`).
 
 ### Testing on Cluster
 
@@ -174,7 +174,7 @@ make bundle-build BUNDLE_IMG=<registry>/ztwim-bundle:v<version>
 3. **DO NOT** run `make test` without `OPERATOR_NAMESPACE=zero-trust-workload-identity-manager` — tests rely on it for namespace resolution.
 4. **DO NOT** skip `make manifests generate` after changing `api/v1alpha1/` types — CRDs and DeepCopy will be stale.
 5. **DO NOT** use `controllerutil.SetControllerReference` without registering the owner type in the scheme — it will fail silently.
-6. **DO NOT** return `nil` from a reconciler when a sub-function errors — always propagate errors so controller-runtime can requeue.
+6. **DO NOT** return `nil` from a reconciler when a sub-function returns an API or transient error — always propagate these so controller-runtime can requeue. Validation errors are the exception: they set a status condition (e.g., `ConfigurationValid=False`) and return `(Result{}, nil)` to avoid requeue, waiting for a spec change instead.
 7. **DO NOT** create resources without setting owner references — orphaned resources won't be garbage-collected.
 8. **DO NOT** bypass the `FakeCustomCtrlClient` interface in tests — use counterfeiter fakes for consistent stubbing.
 
@@ -214,6 +214,5 @@ Events are reserved for **user-actionable warnings** — not routine reconciliat
 | `HTTP_PROXY` | HTTP proxy for operand pods | `""` |
 | `HTTPS_PROXY` | HTTPS proxy for operand pods | `""` |
 | `TRUSTED_CA_BUNDLE_CONFIGMAP` | CA bundle ConfigMap (required when proxy set) | `""` |
-```
 
 ---

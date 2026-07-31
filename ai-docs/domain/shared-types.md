@@ -28,9 +28,10 @@ All operand types implement `GetConditionalStatus() ConditionalStatus` for gener
 // conditions.go
 
 // Condition types
-Degraded    = "Degraded"      // Irrecoverable error (e.g., permission issues)
-Ready       = "Ready"         // Operand deployed and functioning
-Upgradeable = "Upgradeable"   // Safe to upgrade
+Degraded           = "Degraded"           // Irrecoverable error (e.g., permission issues)
+Ready              = "Ready"              // Operand deployed and functioning
+Upgradeable        = "Upgradeable"        // Safe to upgrade
+OperandsAvailable  = "OperandsAvailable"  // All operand CRs healthy (ZTWIM aggregator only)
 
 // Condition reasons
 ReasonFailed           = "Failed"            // Reconciliation failed
@@ -95,7 +96,7 @@ Generic reference type for pointing to other Kubernetes resources. Used internal
 
 All five CRDs enforce `metadata.name == 'cluster'` via CEL validation rules:
 
-```
+```text
 +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'"
 ```
 
@@ -105,10 +106,8 @@ This means there can only ever be one instance of each CRD. The operator relies 
 
 Several fields use CEL immutability rules:
 
-```
+```text
 +kubebuilder:validation:XValidation:rule="self == oldSelf",message="field is immutable"
 ```
 
 Applied to: `trustDomain`, `clusterName`, `bundleConfigMap` (on ZeroTrustWorkloadIdentityManager), `persistence.size/accessMode/storageClass` (on SpireServer), and federation `profile` (on SpireServer).
-```
-All six domain concept documents are above, delimited by `

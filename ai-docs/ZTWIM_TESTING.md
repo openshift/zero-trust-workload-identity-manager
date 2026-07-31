@@ -11,7 +11,7 @@ ZTWIM uses a **two-tier** test architecture:
 | Unit | `pkg/controller/*/` | Go `testing` + testify | Logic in isolation with fakes |
 | E2E | `test/e2e/` | Ginkgo v2 + Gomega | Live OpenShift cluster |
 
-There is no integration tier — the controller-runtime envtest layer is not used.
+The `make test` target uses controller-runtime's envtest (`setup-envtest` / `KUBEBUILDER_ASSETS`) to provide a real API server and etcd for tests, but controller logic is exercised through the counterfeiter-generated `FakeCustomCtrlClient`, not by running full reconciliation loops against envtest.
 
 ## Unit Tests
 
@@ -78,7 +78,7 @@ func newTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireServerRecon
 
 Each reconciler sub-function gets its own test file:
 
-```
+```text
 pkg/controller/spire-server/
 ├── controller_test.go          # Reconcile loop, full flow, error scenarios
 ├── service_account_test.go     # reconcileServiceAccount tests

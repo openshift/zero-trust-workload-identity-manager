@@ -33,7 +33,7 @@ type SpiffeCSIDriverSpec struct {
 
 ## Key Concepts
 
-- **Socket Path Triad**: The `agentSocketPath` here, `SpireAgent.spec.socketPath`, and the workload's CSI volume mount must all align. The agent writes to the path, the CSI driver reads from it, and the workload pod gets it mounted.
+- **Socket Path Pair**: The `agentSocketPath` here and `SpireAgent.spec.socketPath` must match — the agent writes to the path and the CSI driver reads from it. The workload's `volumeMounts[].mountPath` does **not** need to match; the CSI driver bind-mounts the agent socket directory into whatever path the workload declares.
 - **CSI Ephemeral Volumes**: The driver registers as a CSI plugin with the kubelet. When a pod with a `csi.spiffe.io` volume starts, kubelet calls the CSI driver's `NodePublishVolume` to bind-mount the socket into the pod.
 - **Plugin Name**: Changing `pluginName` from the default requires updating all workload pod specs to reference the new driver name.
 - **DaemonSet Deployment**: The CSI driver runs as a DaemonSet (one per node), co-located with the SPIRE Agent.
@@ -92,6 +92,5 @@ containers:
 - **Changing `pluginName` without updating workloads** — existing pods reference the old driver name and will fail to schedule.
 - **Missing tolerations** — like the agent, the CSI driver must run on all nodes where workloads need SPIFFE identities.
 - **Forgetting `readOnly: true` on workload volume mounts** — while functional without it, the socket should always be mounted read-only for security.
-```
 
 ---

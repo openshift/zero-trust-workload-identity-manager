@@ -4,7 +4,7 @@
 
 ## 1. Repository Layout
 
-```
+```text
 cmd/zero-trust-workload-identity-manager/main.go   ← entry point, scheme registration, controller wiring
 api/v1alpha1/                                       ← CRD types + conditions (kubebuilder markers)
   zz_generated.deepcopy.go                          ← DO NOT EDIT — controller-gen output
@@ -94,7 +94,7 @@ Every operand controller follows this sequence (SpireServer shown; others are su
 6. `ApplyStatus` errors are logged but never propagated — the reconciliation result is not affected.
 
 Condition conventions:
-- Types: `Ready`, `Degraded`, `Upgradeable` (global); per-resource types like `StatefulSetAvailable`, `ConfigMapAvailable`.
+- Types: `Ready`, `Degraded`, `Upgradeable` (global); `OperandsAvailable` (ZTWIM aggregator); per-resource types like `StatefulSetAvailable`, `ConfigMapAvailable`.
 - Reasons: `Failed`, `Ready`, `Progressing`, `OperandsNotReady`, `ResourceConflict`.
 
 ### NotFound Handling: Primary vs Dependent
@@ -109,7 +109,7 @@ Condition conventions:
 
 ## 5. Wiring & Registration (`main.go`)
 
-```
+```text
 main() → NewCacheBuilder() → ctrl.NewManager(config, opts{NewCache: cacheBuilder})
        → for each controller: New(mgr) → SetupWithManager(mgr)
        → mgr.Start(ctrl.SetupSignalHandler())
@@ -162,7 +162,7 @@ When `Create` returns `IsAlreadyExists`, the resource exists outside the operato
 
 Static resources (RBAC, ServiceAccounts, CSIDriver, Services, Webhooks) follow:
 
-```
+```text
 bindata YAML → Decode*ObjBytes() → set namespace/labels/ownerRef → Exists() check
   → if !exists: Create()
   → if exists && !createOnlyMode && ResourceNeedsUpdate(): UpdateWithRetry()
@@ -190,7 +190,9 @@ Images are resolved from `RELATED_IMAGE_*` environment variables set by OLM from
 
 ## 9. Feature Toggles
 
-**`CREATE_ONLY_MODE`** (env var, `utils.go:237-255`): When `"true"` (case-insensitive), controllers create resources that don't exist but skip updates to existing resources. Each controller checks via `handleCreateOnlyMode()` and sets a `CreateOnlyMode` status condition. The ZTWIM aggregator reflects this to the OLM `OperatorCondition.Upgradeable` — setting `Upgradeable=False` when create-only mode is active.
+**`CREATE_ONLY_MODE`** (env var, `utils.go:237-255`): When `"true"` (case-insensitive), controllers create resources that don't exist but skip drift-correction updates on managed resources. Each controller checks via `handleCreateOnlyMode()` and sets a `CreateOnlyMode` status condition. The ZTWIM aggregator reflects this to the OLM `OperatorCondition.Upgradeable` — setting `Upgradeable=False` when create-only mode is active.
+
+**Known exceptions**: `reconcileSCC` (`spire-agent/scc.go`) and `reconcileSpireBundleConfigMap` (`spire-server/configmap.go`) do not accept the `createOnlyMode` parameter. The SCC will be updated unconditionally; the bundle ConfigMap is create-only by design (never updates existing).
 
 ## 10. OpenShift Integrations
 
@@ -266,7 +268,7 @@ Images are resolved from `RELATED_IMAGE_*` environment variables set by OLM from
 | `ResourceNeedsUpdate` | Type-specific field comparison | No-op Update API calls |
 | Status semantic equality | `equality.Semantic.DeepEqual` on status | No-op Status Update API calls |
 | Retry wrappers | `RetryOnConflict` | Failed writes due to stale resourceVersion |
-| Create-only mode | Skip all Updates | All update writes post-creation |
+| Create-only mode | Skip drift-correction Updates on managed resources | Drift-correction update writes (status and OLM condition writes still occur) |
 
 ---
 
