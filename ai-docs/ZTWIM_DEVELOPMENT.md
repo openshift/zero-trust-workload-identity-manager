@@ -26,7 +26,7 @@ make lint           # golangci-lint (v1.59.1)
 
 ## Installation / Bootstrap
 
-ZTWIM is installed via OLM. After the operator Deployment is running, **users must create all CRs manually** — the ZTWIM controller aggregates status but does **not** create operand CRs.
+ZTWIM is installed via OLM. After the operator Deployment is running, **users must create all five ZTWIM-owned CRs manually** — the ZTWIM controller aggregates status but does **not** create operand CRs.
 
 ### Required CRs
 

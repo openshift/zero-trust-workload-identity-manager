@@ -64,7 +64,7 @@ ai-docs/
 └── ZTWIM_TESTING.md           # Unit (FakeCustomCtrlClient) + E2E (Ginkgo)
 ```
 
-**AI Agent Path**: [`ai-docs/README.md`](ai-docs/README.md) → domain/ → architecture/ → decisions/ → ZTWIM_DEVELOPMENT.md
+**AI Agent Path**: [`ai-docs/README.md`](ai-docs/README.md) → domain/ → architecture/ → ZTWIM_DEVELOPMENT.md → decisions/
 
 **Platform Patterns**: [Operator](https://github.com/openshift/enhancements/tree/master/ai-docs) | [Testing](https://github.com/openshift/enhancements/tree/master/ai-docs) | [Security](https://github.com/openshift/enhancements/tree/master/ai-docs)
 

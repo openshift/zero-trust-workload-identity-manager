@@ -65,7 +65,7 @@ Both use `spec.className: zero-trust-workload-identity-manager-spire`. Do not ha
 
 ### User-Created Instances
 
-Users create additional ClusterSPIFFEIDs for application workloads. Example from `config/samples/spire.spiffe.io_v1alpha1_clusterspiffeid.yaml`:
+Users create additional ClusterSPIFFEIDs for application workloads. Example (schema-valid; the sample in `config/samples/` uses deprecated field shapes):
 
 ```yaml
 apiVersion: spire.spiffe.io/v1alpha1
@@ -74,13 +74,16 @@ metadata:
   name: example-workload
 spec:
   className: zero-trust-workload-identity-manager-spire  # required for this ZTWIM installation
-  workloadSelector:
-    k8sServiceAccount:
-      name: example-sa
-      namespace: example-ns
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: example-ns
+  podSelector:
+    matchLabels:
+      app: example-workload
   dnsNameTemplates:
   - "*.example.com"
-  ttl: 3600
+  ttl: 3600s
 ```
 
 **Important**: User-created ClusterSPIFFEIDs must set `spec.className` to `zero-trust-workload-identity-manager-spire` or spire-controller-manager will ignore them.
@@ -89,7 +92,7 @@ spec:
 
 Declares a remote trust domain whose bundle SPIRE should fetch and trust. Used for SPIRE federation beyond what `SpireServer.spec.federation` configures at the server level.
 
-Example from `config/samples/spire.spiffe.io_v1alpha1_clusterfederatedtrustdomain.yaml`:
+Example (schema-valid; includes required `bundleEndpointURL`):
 
 ```yaml
 apiVersion: spire.spiffe.io/v1alpha1
@@ -98,7 +101,9 @@ metadata:
   name: example.com
 spec:
   trustDomain: example.com
-  bundleEndpointProfile: https_web
+  bundleEndpointURL: https://spire.example.com/bundle
+  bundleEndpointProfile:
+    type: https_web
 ```
 
 ZTWIM does not create these — users or platform teams manage them. spire-controller-manager syncs bundles to the SPIRE Server.
@@ -107,7 +112,7 @@ ZTWIM does not create these — users or platform teams manage them. spire-contr
 
 Creates a SPIRE registration entry with explicit selectors, bypassing the dynamic Kubernetes workload selector model. Useful for non-Kubernetes workloads or legacy integrations.
 
-Example from `config/samples/spire.spiffe.io_v1alpha1_clusterstaticentries.yaml`:
+Example (schema-valid):
 
 ```yaml
 apiVersion: spire.spiffe.io/v1alpha1
@@ -118,9 +123,8 @@ spec:
   parentID: "spiffe://example.com/spire/server"
   spiffeID: "spiffe://example.com/example-workload"
   selectors:
-  - type: unix
-    value: uid:1000
-  ttl: 3600
+  - "unix:uid:1000"
+  x509SVIDTTL: 3600s
 ```
 
 ## Relationship to ZTWIM Operand CRs

@@ -10,8 +10,8 @@ Follow this order when working on a task:
 
 1. **`domain/`** — CRD types, validation rules, field relationships
 2. **`architecture/components.md`** — controller patterns, reconcile flow, shared utilities
-3. **`decisions/`** — architectural decisions (controller-runtime, bindata)
-4. **`ZTWIM_DEVELOPMENT.md`** — build workflow, bootstrap, common tasks
+3. **`ZTWIM_DEVELOPMENT.md`** — build workflow, bootstrap, common tasks
+4. **`decisions/`** — architectural decisions (controller-runtime, bindata)
 5. **`ZTWIM_TESTING.md`** — unit and E2E test patterns (when writing tests)
 
 ## Documentation Map
