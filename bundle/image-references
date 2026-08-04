@@ -1,0 +1,33 @@
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+spec:
+  tags:
+  - name: zero-trust-workload-identity-manager-rhel9
+    from:
+      kind: DockerImage
+      name: openshift.io/zero-trust-workload-identity-manager:latest
+  - name: spiffe-spire-server-rhel9
+    from:
+      kind: DockerImage
+      name: ghcr.io/spiffe/spire-server:1.14.7
+  - name: spiffe-spire-agent-rhel9
+    from:
+      kind: DockerImage
+      name: ghcr.io/spiffe/spire-agent:1.14.7
+  - name: spiffe-spire-oidc-discovery-provider-rhel9
+    from:
+      kind: DockerImage
+      name: ghcr.io/spiffe/oidc-discovery-provider:1.14.7
+  - name: spiffe-spire-controller-manager-rhel9
+    from:
+      kind: DockerImage
+      name: ghcr.io/spiffe/spire-controller-manager:0.6.4
+  - name: spiffe-csi-driver-rhel9
+    from:
+      kind: DockerImage
+      name: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
+  - name: spiffe-helper-rhel9
+    from:
+      kind: DockerImage
+      name: ghcr.io/spiffe/spiffe-helper:0.11.0

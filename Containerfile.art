@@ -1,0 +1,40 @@
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_golang_1.25 AS builder
+
+ARG SOURCE_DIR="/go/src/github.com/openshift/zero-trust-workload-identity-manager"
+WORKDIR $SOURCE_DIR
+
+COPY . $SOURCE_DIR
+COPY LICENSE /licenses/
+
+RUN make build --warn-undefined-variables
+
+FROM registry.redhat.io/ubi9/ubi-minimal:latest@sha256:ae09ecc3d754bc1726cbda3e2599cc7839e09fe1cc547ce173cf669b645be3cc
+
+ARG RELEASE_VERSION
+ARG COMMIT_SHA
+ARG SOURCE_URL
+ARG SOURCE_DIR="/go/src/github.com/openshift/zero-trust-workload-identity-manager"
+
+COPY --from=builder $SOURCE_DIR/bin/zero-trust-workload-identity-manager /usr/bin/
+COPY --from=builder /licenses /licenses
+
+USER 65534:65534
+
+LABEL com.redhat.component="zero-trust-workload-identity-manager-container" \
+      name="zero-trust-workload-identity-manager/zero-trust-workload-identity-manager-rhel9" \
+      version="${RELEASE_VERSION}" \
+      summary="zero-trust-workload-identity-manager" \
+      maintainer="Red Hat, Inc." \
+      description="zero-trust-workload-identity-manager-container" \
+      vendor="Red Hat, Inc." \
+      release="${RELEASE_VERSION}" \
+      io.openshift.expose-services="" \
+      io.openshift.build.commit.id="${COMMIT_SHA}" \
+      io.openshift.build.source-location="${SOURCE_URL}" \
+      io.openshift.build.commit.url="${SOURCE_URL}/commit/${COMMIT_SHA}" \
+      io.openshift.tags="spire,identity,spiffe,security" \
+      io.k8s.display-name="openshift-zero-trust-workload-identity-manager" \
+      io.k8s.description="zero-trust-workload-identity-manager-container" \
+      cpe="cpe:/a:redhat:zero_trust_workload_identity_manager:1.1::el9"
+
+ENTRYPOINT ["/usr/bin/zero-trust-workload-identity-manager"]
