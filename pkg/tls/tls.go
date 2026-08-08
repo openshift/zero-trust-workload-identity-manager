@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
 	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
@@ -53,14 +54,17 @@ func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, schem
 		return TLSConfigResult{}, fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
 
-	initialTLSAdherencePolicy, err := utiltls.FetchAPIServerTLSAdherencePolicy(ctx, k8sClient)
+	fetchCtx, fetchCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer fetchCancel()
+
+	initialTLSAdherencePolicy, err := utiltls.FetchAPIServerTLSAdherencePolicy(fetchCtx, k8sClient)
 	if err != nil {
 		klog.Errorf("error while fetching TLS adherence policy from API server: %v. Continuing with default adherence value: %s", err, string(configv1.TLSAdherencePolicyNoOpinion))
 		// Default to empty string if the API server is not available or the field is not set. We will still keep a watch on the API server for the field and trigger a restart if the value changes.
 		initialTLSAdherencePolicy = configv1.TLSAdherencePolicyNoOpinion
 	}
 
-	initialTLSProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, k8sClient)
+	initialTLSProfileSpec, err := utiltls.FetchAPIServerTLSProfile(fetchCtx, k8sClient)
 	if err != nil {
 		klog.Errorf("error while fetching TLS profile from API server: %v. Continuing with empty profile.", err)
 		// Default to an empty profile if the API server is not available or the field is not set. We will still keep a watch on the API server for the field and trigger a restart if the value changes.
@@ -77,6 +81,8 @@ func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, schem
 	}, nil
 }
 
+// getOperatorAndOperandTLSConfig resolves operator TLS callbacks and operand TLS settings
+// from the cluster adherence policy and profile spec.
 func getOperatorAndOperandTLSConfig(tlsAdherencePolicy configv1.TLSAdherencePolicy, tlsProfileSpec configv1.TLSProfileSpec) (func(*tls.Config), *OperandTLSConfig) {
 	var (
 		operatorTLSConfig func(*tls.Config)
@@ -103,6 +109,7 @@ func getOperatorAndOperandTLSConfig(tlsAdherencePolicy configv1.TLSAdherencePoli
 	return operatorTLSConfig, operandTLSConfig
 }
 
+// getOperandTLSConfig converts a cluster TLS profile spec into operand-facing TLS settings.
 func getOperandTLSConfig(tlsProfileSpec configv1.TLSProfileSpec) *OperandTLSConfig {
 	profile := OperandTLSConfig{
 		MinTLSVersion: string(tlsProfileSpec.MinTLSVersion),

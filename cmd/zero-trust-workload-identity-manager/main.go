@@ -136,6 +136,46 @@ func main() {
 		webhookTLSOpts = append(webhookTLSOpts, disableHTTP2)
 	}
 
+	config := ctrl.GetConfigOrDie()
+
+	// Increase QPS and Burst to allow more concurrent API calls
+	config.QPS = 50    // Default is usually 5, increase as needed
+	config.Burst = 100 // Default is usually 10, increase as needed
+
+	// Add OpenShift SCC scheme
+	if err := securityv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add securityv1 scheme")
+	}
+	if err := ctrlmgr.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add spiffev1alpha1 scheme")
+	}
+
+	if err := routev1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add routev1 scheme")
+	}
+
+	// Add OperatorCondition scheme for OLM integration
+	if err := operatorv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add operatorv1 scheme")
+	}
+
+	// Add configv1 scheme for tls profile watcher
+	if err := configv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add configv1 scheme")
+	}
+
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
+	tlsConfigResult, err := pkgtls.FetchAPIServerTLSConfig(ctx, config, scheme)
+	exitOnError(err, "unable to resolve TLS configuration")
+
+	if tlsConfigResult.TLSConfig != nil {
+		//strict adherence is set.
+		metricsTLSOpts = append(metricsTLSOpts, tlsConfigResult.TLSConfig)
+		webhookTLSOpts = append(webhookTLSOpts, tlsConfigResult.TLSConfig)
+	}
+
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: webhookTLSOpts,
 	})
@@ -188,42 +228,6 @@ func main() {
 		})
 		metricsServerOptions.TLSOpts = metricsTLSOpts
 	}
-	config := ctrl.GetConfigOrDie()
-
-	// Increase QPS and Burst to allow more concurrent API calls
-	config.QPS = 50    // Default is usually 5, increase as needed
-	config.Burst = 100 // Default is usually 10, increase as needed
-
-	// Add OpenShift SCC scheme
-	if err := securityv1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add securityv1 scheme")
-	}
-	if err := ctrlmgr.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add spiffev1alpha1 scheme")
-	}
-
-	if err := routev1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add routev1 scheme")
-	}
-
-	// Add OperatorCondition scheme for OLM integration
-	if err := operatorv1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add operatorv1 scheme")
-	}
-
-	// Add configv1 scheme for tls profile watcher
-	if err := configv1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add configv1 scheme")
-	}
-
-	tlsConfigResult, err := pkgtls.FetchAPIServerTLSConfig(context.Background(), config, scheme)
-	exitOnError(err, "unable to resolve TLS configuration")
-
-	if tlsConfigResult.TLSConfig != nil {
-		//strict adherence is set.
-		metricsTLSOpts = append(metricsTLSOpts, tlsConfigResult.TLSConfig)
-		webhookTLSOpts = append(webhookTLSOpts, tlsConfigResult.TLSConfig)
-	}
 
 	// Create unified cache builder to prevent race conditions between manager and reconciler caches
 	cacheBuilder, err := customClient.NewCacheBuilder()
@@ -250,11 +254,6 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 	})
 	exitOnError(err, "unable to start manager")
-
-	// Create a context that can be cancelled when there is a need to shut down the manager	.
-	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
-	// Ensure the context is cancelled when the program exits.
-	defer cancel()
 
 	// Set up the TLS security profile watcher controller.
 	// This will trigger a graceful shutdown when the TLS profile changes.
