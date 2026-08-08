@@ -32,6 +32,7 @@ import (
 	customClient "github.com/openshift/zero-trust-workload-identity-manager/pkg/client"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 )
 
 const (
@@ -56,10 +57,11 @@ type SpireServerReconciler struct {
 	eventRecorder record.EventRecorder
 	log           logr.Logger
 	scheme        *runtime.Scheme
+	tlsConfig     *pkgtls.OperandTLSConfig
 }
 
 // New returns a new Reconciler instance.
-func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
+func New(mgr ctrl.Manager, tlsConfig *pkgtls.OperandTLSConfig) (*SpireServerReconciler, error) {
 	c, err := customClient.NewCustomClient(mgr)
 	if err != nil {
 		return nil, err
@@ -70,6 +72,7 @@ func New(mgr ctrl.Manager) (*SpireServerReconciler, error) {
 		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
 		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
 		scheme:        mgr.GetScheme(),
+		tlsConfig:     tlsConfig,
 	}, nil
 }
 
@@ -98,7 +101,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if kerrors.IsNotFound(err) {
 			r.log.Error(err, "failed to get ZeroTrustWorkloadIdentityManager")
 			statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
-				fmt.Sprintf("Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster"),
+				"Failed to retrieve ZeroTrustWorkloadIdentityManager from cluster",
 				metav1.ConditionFalse)
 			return ctrl.Result{}, nil
 		}
@@ -159,6 +162,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Reconcile ConfigMaps
+	//TODO: Pass tlsConfig to reconcileConfigMap so taht minTLSVersion, cipherSuites and curvePreferences are injected to the HCL config of Operand (spire-server).
 	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, &ztwim, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -171,6 +175,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Reconcile Spire Bundle ConfigMap
+	//TODO: Pass tlsConfig to reconcileConfigMap so taht minTLSVersion, cipherSuites and curvePreferences are injected to the HCL config of Operand (spire-controller-manager).
 	if err := r.reconcileSpireBundleConfigMap(ctx, &server, statusMgr, &ztwim); err != nil {
 		return ctrl.Result{}, err
 	}
