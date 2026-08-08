@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -49,8 +50,10 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	ztwimController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/zero-trust-workload-identity-manager"
 
+	configv1 "github.com/openshift/api/config/v1"
 	securityv1 "github.com/openshift/api/security/v1"
-
+	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
+	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 	ctrlmgr "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -208,6 +211,20 @@ func main() {
 		exitOnError(err, "unable to add operatorv1 scheme")
 	}
 
+	// Add configv1 scheme for tls profile watcher
+	if err := configv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add configv1 scheme")
+	}
+
+	tlsConfigResult, err := pkgtls.FetchAPIServerTLSConfig(context.Background(), config, scheme)
+	exitOnError(err, "unable to resolve TLS configuration")
+
+	if tlsConfigResult.TLSConfig != nil {
+		//strict adherence is set.
+		metricsTLSOpts = append(metricsTLSOpts, tlsConfigResult.TLSConfig)
+		webhookTLSOpts = append(webhookTLSOpts, tlsConfigResult.TLSConfig)
+	}
+
 	// Create unified cache builder to prevent race conditions between manager and reconciler caches
 	cacheBuilder, err := customClient.NewCacheBuilder()
 	exitOnError(err, "unable to create cache builder")
@@ -234,19 +251,42 @@ func main() {
 	})
 	exitOnError(err, "unable to start manager")
 
+	// Create a context that can be cancelled when there is a need to shut down the manager	.
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	// Ensure the context is cancelled when the program exits.
+	defer cancel()
+
+	// Set up the TLS security profile watcher controller.
+	// This will trigger a graceful shutdown when the TLS profile changes.
+	if err := (&utiltls.SecurityProfileWatcher{
+		Client:                    mgr.GetClient(),
+		InitialTLSProfileSpec:     tlsConfigResult.TLSProfileSpec,
+		InitialTLSAdherencePolicy: tlsConfigResult.TLSAdherencePolicy,
+		OnProfileChange: func(_ context.Context, oldTLSProfileSpec, newTLSProfileSpec configv1.TLSProfileSpec) {
+			setupLog.Info("TLS profile has changed, initiating a shutdown to reload it", "oldProfile", oldTLSProfileSpec, "newProfile", newTLSProfileSpec)
+			cancel()
+		},
+		OnAdherencePolicyChange: func(_ context.Context, oldPol, newPol configv1.TLSAdherencePolicy) {
+			setupLog.Info("TLS adherence policy has changed, initiating a shutdown to reload it", "oldPolicy", oldPol, "newPolicy", newPol)
+			cancel()
+		},
+	}).SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to create TLS security profile watcher controller")
+	}
+
 	ztwimControllerManager, err := ztwimController.New(mgr)
 	exitOnError(err, "unable to set up ztwim controller manager")
 	if err = ztwimControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup ztwim controller manager")
 	}
 
-	spireServerControllerManager, err := spireServerController.New(mgr)
+	spireServerControllerManager, err := spireServerController.New(mgr, tlsConfigResult.OperandTLSConfig)
 	exitOnError(err, "unable to set up spire server controller manager")
 	if err = spireServerControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup spire server controller manager")
 	}
 
-	spireAgentControllerManager, err := spireAgentController.New(mgr)
+	spireAgentControllerManager, err := spireAgentController.New(mgr, tlsConfigResult.OperandTLSConfig)
 	if err != nil {
 		exitOnError(err, "unable to set up spire agent controller manager")
 	}
@@ -262,7 +302,7 @@ func main() {
 		exitOnError(err, "unable to setup spiffe csi driver controller manager")
 	}
 
-	spireOIDCDiscoveryProviderControllerManager, err := spireOIDCDiscoveryProviderController.New(mgr)
+	spireOIDCDiscoveryProviderControllerManager, err := spireOIDCDiscoveryProviderController.New(mgr, tlsConfigResult.OperandTLSConfig)
 	if err != nil {
 		exitOnError(err, "unable to set up spire OIDC discovery provider controller manager")
 	}
@@ -280,7 +320,7 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
-	err = mgr.Start(ctrl.SetupSignalHandler())
+	err = mgr.Start(ctx)
 	exitOnError(err, "problem running manager")
 }
 
