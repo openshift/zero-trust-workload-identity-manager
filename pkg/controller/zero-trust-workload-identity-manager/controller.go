@@ -125,6 +125,7 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 	operatorConditionName string
 }
 
+// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers,verbs=list;watch
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers,verbs=get;update,resourceNames=cluster
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=zerotrustworkloadidentitymanagers/status,verbs=update,resourceNames=cluster
