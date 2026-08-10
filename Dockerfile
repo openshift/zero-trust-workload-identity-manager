@@ -13,7 +13,7 @@ RUN go mod download
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -mod=mod -a -o zero-trust-workload-identity-manager ./cmd/zero-trust-workload-identity-manager/main.go
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal-pqc:latest
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:latest
 WORKDIR /
 COPY --from=builder /workspace/zero-trust-workload-identity-manager /usr/bin
 USER 65532:65532
