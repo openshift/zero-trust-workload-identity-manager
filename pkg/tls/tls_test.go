@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
@@ -41,6 +42,7 @@ func applyTLSConfig(t *testing.T, tlsConfig func(*tls.Config)) *tls.Config {
 func TestGetOperatorAndOperandTLSConfig(t *testing.T) {
 	oldProfile := configv1.TLSProfiles[configv1.TLSProfileOldType]
 	modernProfile := configv1.TLSProfiles[configv1.TLSProfileModernType]
+	setupLog := logr.Discard()
 
 	tests := []struct {
 		name               string
@@ -50,7 +52,7 @@ func TestGetOperatorAndOperandTLSConfig(t *testing.T) {
 		wantNilOperand     bool
 		wantMinTLSVersion  uint16
 		wantCipherSuites   bool
-		wantOperandMinTLS  string
+		wantOperandMinTLS  configv1.TLSProtocolVersion
 		wantOperandCiphers bool
 	}{
 		{
@@ -61,13 +63,12 @@ func TestGetOperatorAndOperandTLSConfig(t *testing.T) {
 			wantNilOperand:  true,
 		},
 		{
-			name:               "StrictAllComponents honors Old profile",
-			adherence:          configv1.TLSAdherencePolicyStrictAllComponents,
-			profileSpec:        *oldProfile,
-			wantMinTLSVersion:  libgocrypto.TLSVersionOrDie(string(oldProfile.MinTLSVersion)),
-			wantCipherSuites:   true,
-			wantOperandMinTLS:  string(oldProfile.MinTLSVersion),
-			wantOperandCiphers: true,
+			name:              "StrictAllComponents honors Old profile on operator only",
+			adherence:         configv1.TLSAdherencePolicyStrictAllComponents,
+			profileSpec:       *oldProfile,
+			wantMinTLSVersion: libgocrypto.TLSVersionOrDie(string(oldProfile.MinTLSVersion)),
+			wantCipherSuites:  true,
+			wantNilOperand:    true,
 		},
 		{
 			name:              "StrictAllComponents honors Modern profile without cipher suites",
@@ -75,7 +76,7 @@ func TestGetOperatorAndOperandTLSConfig(t *testing.T) {
 			profileSpec:       *modernProfile,
 			wantMinTLSVersion: libgocrypto.TLSVersionOrDie(string(modernProfile.MinTLSVersion)),
 			wantCipherSuites:  false,
-			wantOperandMinTLS: string(modernProfile.MinTLSVersion),
+			wantOperandMinTLS: modernProfile.MinTLSVersion,
 		},
 		{
 			name:      "StrictAllComponents honors custom profile",
@@ -89,14 +90,14 @@ func TestGetOperatorAndOperandTLSConfig(t *testing.T) {
 			},
 			wantMinTLSVersion:  tls.VersionTLS12,
 			wantCipherSuites:   true,
-			wantOperandMinTLS:  string(configv1.VersionTLS12),
+			wantOperandMinTLS:  configv1.VersionTLS12,
 			wantOperandCiphers: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			operatorTLSConfig, operandTLSProfile := getOperatorAndOperandTLSConfig(tt.adherence, tt.profileSpec)
+			operatorTLSConfig, operandTLSProfile := getOperatorAndOperandTLSConfig(tt.adherence, tt.profileSpec, setupLog)
 
 			if tt.wantNilOperator {
 				if operatorTLSConfig != nil {
@@ -136,18 +137,12 @@ func TestGetOperatorAndOperandTLSConfig(t *testing.T) {
 	}
 }
 
-func TestGetOperandTLSProfile(t *testing.T) {
+func TestGetOperandTLSConfig(t *testing.T) {
+	setupLog := logr.Discard()
 	oldProfile := configv1.TLSProfiles[configv1.TLSProfileOldType]
 
-	config := getOperandTLSConfig(*oldProfile)
-	if config == nil {
-		t.Fatal("expected non-nil config")
-	}
-	if config.MinTLSVersion != string(oldProfile.MinTLSVersion) {
-		t.Fatalf("MinTLSVersion = %q, want %q", config.MinTLSVersion, oldProfile.MinTLSVersion)
-	}
-	if len(config.CipherSuites) == 0 {
-		t.Fatal("expected cipher suites to be populated")
+	if config := getOperandTLSConfig(*oldProfile, setupLog); config != nil {
+		t.Fatalf("expected nil operand config for Old profile, got %#v", config)
 	}
 
 	customConfig := getOperandTLSConfig(configv1.TLSProfileSpec{
@@ -156,12 +151,29 @@ func TestGetOperandTLSProfile(t *testing.T) {
 			"ECDHE-RSA-AES256-GCM-SHA384",
 		},
 		MinTLSVersion: configv1.VersionTLS12,
-	})
+	}, setupLog)
+	if customConfig == nil {
+		t.Fatal("expected non-nil operand config")
+	}
+	if customConfig.MinTLSVersion != configv1.VersionTLS12 {
+		t.Fatalf("MinTLSVersion = %q, want %q", customConfig.MinTLSVersion, configv1.VersionTLS12)
+	}
 	if !reflect.DeepEqual(customConfig.CipherSuites, []string{
 		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
 	}) {
-		t.Fatalf("CipherSuites = %q, want comma-separated IANA names", customConfig.CipherSuites)
+		t.Fatalf("CipherSuites = %q, want IANA cipher names", customConfig.CipherSuites)
+	}
+}
+
+func TestDefaultClusterTLSProfileSpec(t *testing.T) {
+	got, _ := utiltls.GetTLSProfileSpec(nil)
+	want, err := utiltls.GetTLSProfileSpec(nil)
+	if err != nil {
+		t.Fatalf("GetTLSProfileSpec(nil) error = %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("defaultClusterTLSProfileSpec() = %#v, want %#v", got, want)
 	}
 }
 
@@ -171,19 +183,20 @@ func TestFetchAPIServerTLSConfig_clientCreationError(t *testing.T) {
 		t.Fatalf("failed to install configv1 scheme: %v", err)
 	}
 
-	_, err := FetchAPIServerTLSConfig(context.Background(), nil, scheme)
+	_, err := FetchAPIServerTLSConfig(context.Background(), nil, scheme, logr.Discard())
 	if err == nil {
 		t.Fatal("expected error when rest config is nil, got nil")
 	}
 }
 
-func TestFetchAPIServerTLSConfig_gracefulDefaultsOnFetchFailure(t *testing.T) {
+func TestFetchAPIServerTLSConfig_nonStrictProfileFetchSeedsDefaultBaseline(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := configv1.Install(scheme); err != nil {
 		t.Fatalf("failed to install configv1 scheme: %v", err)
 	}
 
-	result, err := FetchAPIServerTLSConfig(context.Background(), &rest.Config{}, scheme)
+	defaultProfile, _ := utiltls.GetTLSProfileSpec(nil)
+	result, err := FetchAPIServerTLSConfig(context.Background(), &rest.Config{}, scheme, logr.Discard())
 	if err != nil {
 		t.Fatalf("FetchAPIServerTLSConfig() error = %v", err)
 	}
@@ -191,14 +204,14 @@ func TestFetchAPIServerTLSConfig_gracefulDefaultsOnFetchFailure(t *testing.T) {
 	if result.TLSAdherencePolicy != configv1.TLSAdherencePolicyNoOpinion {
 		t.Fatalf("TLSAdherencePolicy = %q, want %q", result.TLSAdherencePolicy, configv1.TLSAdherencePolicyNoOpinion)
 	}
-	if !reflect.DeepEqual(result.TLSProfileSpec, configv1.TLSProfileSpec{}) {
-		t.Fatalf("TLSProfileSpec = %#v, want empty profile", result.TLSProfileSpec)
-	}
-	if result.TLSConfig != nil {
-		t.Fatal("expected nil TLSConfig when fetch fails and adherence defaults to NoOpinion")
+	if result.OperatorTLSConfig != nil {
+		t.Fatal("expected nil operator TLS config under non-strict adherence")
 	}
 	if result.OperandTLSConfig != nil {
-		t.Fatal("expected nil OperandTLSConfig when fetch fails and adherence defaults to NoOpinion")
+		t.Fatal("expected nil operand TLS config under non-strict adherence")
+	}
+	if !reflect.DeepEqual(result.TLSProfileSpec, defaultProfile) {
+		t.Fatalf("TLSProfileSpec = %#v, want default Intermediate baseline %#v", result.TLSProfileSpec, defaultProfile)
 	}
 }
 
