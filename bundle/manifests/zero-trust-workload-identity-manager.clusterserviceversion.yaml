@@ -355,6 +355,15 @@ spec:
           - get
           - update
         - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - patch
+          - update
+        - apiGroups:
           - admissionregistration.k8s.io
           resources:
           - validatingwebhookconfigurations
