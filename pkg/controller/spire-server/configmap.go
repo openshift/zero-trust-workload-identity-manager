@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -604,6 +605,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec, ztwim *v1
 		ControllerManagerConfig: spiffev1alpha.ControllerManagerConfig{
 			ClusterName: ztwim.Spec.ClusterName,
 			TrustDomain: ztwim.Spec.TrustDomain,
+			GCInterval:  10 * time.Second,
 			ControllerManagerConfigurationSpec: spiffev1alpha.ControllerManagerConfigurationSpec{
 				Metrics: spiffev1alpha.ControllerMetrics{
 					BindAddress: "0.0.0.0:8082",
