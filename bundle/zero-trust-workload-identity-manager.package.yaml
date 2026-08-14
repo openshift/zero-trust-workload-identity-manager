@@ -1,6 +1,6 @@
 ---
 packageName: zero-trust-workload-identity-manager
 channels:
-- name: stable
+- name: alpha
   currentCSV: zero-trust-workload-identity-manager.v1.1.0
-defaultChannel: stable
+defaultChannel: alpha
