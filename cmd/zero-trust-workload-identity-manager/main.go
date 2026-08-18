@@ -167,13 +167,13 @@ func main() {
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
-	parsedTLSCfg, err := pkgtls.FetchAPIServerTLSConfig(ctx, config, scheme, setupLog)
+	tlsConfig, err := pkgtls.FetchAPIServerTLSConfig(ctx, config, scheme, setupLog)
 	exitOnError(err, "unable to resolve TLS configuration")
 
-	if parsedTLSCfg.OperatorTLSConfig != nil {
+	if tlsConfig.Resolved.OperatorTLSConfig != nil {
 		//strict adherence is set.
-		metricsTLSOpts = append(metricsTLSOpts, parsedTLSCfg.OperatorTLSConfig)
-		webhookTLSOpts = append(webhookTLSOpts, parsedTLSCfg.OperatorTLSConfig)
+		metricsTLSOpts = append(metricsTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)
+		webhookTLSOpts = append(webhookTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)
 	}
 
 	webhookServer := webhook.NewServer(webhook.Options{
@@ -259,8 +259,8 @@ func main() {
 	// This will trigger a graceful shutdown when the TLS profile changes.
 	if err := (&utiltls.SecurityProfileWatcher{
 		Client:                    mgr.GetClient(),
-		InitialTLSProfileSpec:     parsedTLSCfg.TLSProfileSpec,
-		InitialTLSAdherencePolicy: parsedTLSCfg.TLSAdherencePolicy,
+		InitialTLSProfileSpec:     tlsConfig.InitialTLSProfileSpec,
+		InitialTLSAdherencePolicy: tlsConfig.InitialTLSAdherencePolicy,
 		OnProfileChange: func(_ context.Context, oldTLSProfileSpec, newTLSProfileSpec configv1.TLSProfileSpec) {
 			setupLog.Info("TLS profile has changed, initiating a shutdown to reload it", "oldProfile", oldTLSProfileSpec, "newProfile", newTLSProfileSpec)
 			cancel()
@@ -279,13 +279,13 @@ func main() {
 		exitOnError(err, "unable to setup ztwim controller manager")
 	}
 
-	spireServerControllerManager, err := spireServerController.New(mgr, parsedTLSCfg.OperandTLSConfig)
+	spireServerControllerManager, err := spireServerController.New(mgr, tlsConfig.Resolved.OperandTLSConfig)
 	exitOnError(err, "unable to set up spire server controller manager")
 	if err = spireServerControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup spire server controller manager")
 	}
 
-	spireAgentControllerManager, err := spireAgentController.New(mgr, parsedTLSCfg.OperandTLSConfig)
+	spireAgentControllerManager, err := spireAgentController.New(mgr, tlsConfig.Resolved.OperandTLSConfig)
 	if err != nil {
 		exitOnError(err, "unable to set up spire agent controller manager")
 	}
@@ -301,7 +301,7 @@ func main() {
 		exitOnError(err, "unable to setup spiffe csi driver controller manager")
 	}
 
-	spireOIDCDiscoveryProviderControllerManager, err := spireOIDCDiscoveryProviderController.New(mgr, parsedTLSCfg.OperandTLSConfig)
+	spireOIDCDiscoveryProviderControllerManager, err := spireOIDCDiscoveryProviderController.New(mgr, tlsConfig.Resolved.OperandTLSConfig)
 	if err != nil {
 		exitOnError(err, "unable to set up spire OIDC discovery provider controller manager")
 	}

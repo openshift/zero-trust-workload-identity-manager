@@ -35,91 +35,114 @@ type OperandTLSConfig struct {
 	MinTLSVersion    configv1.TLSProtocolVersion `json:"minTLSVersion,omitempty"`    // Kubernetes TLS version e.g. "VersionTLS10"
 }
 
-// ParsedTLSConfig holds the resolved TLS configuration along with the cluster-wide TLS profile metadata needed by the SecurityProfileWatcher.
-type ParsedTLSConfig struct {
+type Resolved struct {
 	// OperatorTLSConfig is a function that applies TLS settings to a tls.Config. Used for operator metrics and webhook.
 	OperatorTLSConfig func(*tls.Config)
 	//OperandTLSConfig is the TLS config spec for the SPIRE operands.
 	OperandTLSConfig *OperandTLSConfig
-	// TLSAdherencePolicy is the cluster-wide TLS adherence policy.
-	TLSAdherencePolicy configv1.TLSAdherencePolicy
-	// TLSProfileSpec is the cluster-wide TLS profile spec.
-	TLSProfileSpec configv1.TLSProfileSpec
+}
+
+// TLSConfig holds the resolved TLS configuration along with the cluster-wide TLS profile metadata needed by the SecurityProfileWatcher.
+type TLSConfig struct {
+	Resolved *Resolved
+	// InitialTLSAdherencePolicy is the cluster-wide TLS adherence policy fetched at the startup.
+	InitialTLSAdherencePolicy configv1.TLSAdherencePolicy
+	// InitialTLSProfileSpec is the cluster-wide TLS profile spec fetched at the startup.
+	InitialTLSProfileSpec configv1.TLSProfileSpec
 }
 
 // FetchAPIServerTLSConfig fetches operator TLS settings from apiservers/cluster.
-func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, scheme *runtime.Scheme, setupLog logr.Logger) (ParsedTLSConfig, error) {
-	var (
-		operatorTLSConfig func(*tls.Config) = nil
-		operandTLSConfig  *OperandTLSConfig = nil
-	)
-
+func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, scheme *runtime.Scheme, setupLog logr.Logger) (*TLSConfig, error) {
 	k8sClient, err := client.New(restConfig, client.Options{Scheme: scheme})
 	if err != nil {
-		return ParsedTLSConfig{}, fmt.Errorf("unable to create Kubernetes client: %w", err)
+		return nil, fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
 
-	initialTLSAdherencePolicy, err := utiltls.FetchAPIServerTLSAdherencePolicy(ctx, k8sClient)
-	if err != nil {
-		setupLog.Error(err, "error while fetching TLS adherence policy from API server. Continuing with default adherence policy", "adherencePolicy", configv1.TLSAdherencePolicyNoOpinion)
-		// Default to empty string if the API server is not available or the field is not set. We will still keep a watch on the API server for the field and trigger a restart if the value changes.
-		initialTLSAdherencePolicy = configv1.TLSAdherencePolicyNoOpinion
+	tlsConfig := &TLSConfig{
+		Resolved: &Resolved{
+			OperatorTLSConfig: nil,
+			OperandTLSConfig:  nil,
+		},
+		InitialTLSAdherencePolicy: configv1.TLSAdherencePolicyNoOpinion, // Default value.
+		InitialTLSProfileSpec:     configv1.TLSProfileSpec{},
 	}
 
-	initialTLSProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, k8sClient)
+	apiServer, err := fetchConfigV1APIServer(ctx, k8sClient)
 	if err != nil {
-		//get default profile spec. Error is not read since it is never returned as of today as the default profile spec is always available and read from initialized map.
-		initialTLSProfileSpec, _ = utiltls.GetTLSProfileSpec(nil)
-
-		if libgocrypto.ShouldHonorClusterTLSProfile(initialTLSAdherencePolicy) {
-			if errors.IsNotFound(err) {
-				setupLog.Info("TLS profile not found. Continuing with default profile spec.")
-				operatorTLSConfig, operandTLSConfig = getOperatorAndOperandTLSConfig(initialTLSAdherencePolicy, initialTLSProfileSpec, setupLog)
-			} else {
-				// Strict adherence with non-404 errors: return error, do not proceed
-				return ParsedTLSConfig{}, fmt.Errorf("error while fetching TLS profile from API server: %v", err)
-			}
+		if errors.IsNotFound(err) {
+			// 404 error: continue with default profile spec.
+			setupLog.Info(utiltls.APIServerName, "not found. Continuing with default profile spec.")
+			// Assign default spec. Error is not read since it is never returned as of today for this code path. Following call will return the default profile spec from initialized map.
+			tlsConfig.InitialTLSProfileSpec, _ = utiltls.GetTLSProfileSpec(nil)
+			tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
+			tlsConfig.Resolved.OperandTLSConfig = getOperandTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
 		} else {
-			setupLog.Error(err, "error while fetching TLS profile from API server. Continuing with Go defaults.")
+			// Non-404 error: return error, do not proceed. Never start with unkonwn tlsProfile.
+			return nil, fmt.Errorf("error while fetching %q: %w", utiltls.APIServerName, err)
 		}
 	} else {
-		operatorTLSConfig, operandTLSConfig = getOperatorAndOperandTLSConfig(initialTLSAdherencePolicy, initialTLSProfileSpec, setupLog)
+		tlsConfig, err = getOperatorAndOperandTLSConfig(apiServer, setupLog)
+		if err != nil {
+			// Error while parsing TLS profile spec: return error, do not proceed. Never start with unkonwn tlsProfile.
+			return nil, err
+		}
 	}
 
-	return ParsedTLSConfig{
-		OperatorTLSConfig:  operatorTLSConfig,
-		OperandTLSConfig:   operandTLSConfig,
-		TLSAdherencePolicy: initialTLSAdherencePolicy,
-		TLSProfileSpec:     initialTLSProfileSpec,
-	}, nil
+	return tlsConfig, nil
+}
+
+// fetchConfigV1APIServer fetches the config.v1.APIServer object.
+func fetchConfigV1APIServer(ctx context.Context, k8sClient client.Client) (*configv1.APIServer, error) {
+	apiServer := &configv1.APIServer{}
+	key := client.ObjectKey{Name: utiltls.APIServerName}
+
+	if err := k8sClient.Get(ctx, key, apiServer); err != nil {
+		return nil, fmt.Errorf("failed to get APIServer %q: %w", key.String(), err)
+	}
+
+	return apiServer, nil
 }
 
 // getOperatorAndOperandTLSConfig resolves operator TLS callbacks and operand TLS settings
 // from the cluster adherence policy and profile spec.
-func getOperatorAndOperandTLSConfig(tlsAdherencePolicy configv1.TLSAdherencePolicy, tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.Logger) (func(*tls.Config), *OperandTLSConfig) {
-	var (
-		operatorTLSConfig func(*tls.Config)
-		operandTLSConfig  *OperandTLSConfig
-	)
+func getOperatorAndOperandTLSConfig(apiServer *configv1.APIServer, setupLog logr.Logger) (*TLSConfig, error) {
 
-	// If the cluster-wide TLS adherence policy is set to honor the cluster-wide TLS profile,
-	// use the cluster-wide TLS profile-based configuration.
-	if libgocrypto.ShouldHonorClusterTLSProfile(tlsAdherencePolicy) {
-		profileTLSConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
-		if len(unsupportedCiphers) > 0 {
-			setupLog.Info("TLS configuration contains unsupported ciphers that will be ignored", "unsupportedCiphers", unsupportedCiphers)
-		}
-
-		// Set the TLS configuration to the cluster-wide TLS profile-based configuration.
-		operatorTLSConfig = profileTLSConfig
-		operandTLSConfig = getOperandTLSConfig(tlsProfileSpec, setupLog)
-	} else {
-		// Do nothing. Go defaults.
-		operatorTLSConfig = nil
-		operandTLSConfig = nil
+	tlsProfileSpec, err := utiltls.GetTLSProfileSpec(apiServer.Spec.TLSSecurityProfile)
+	if err != nil {
+		// Error can only happen if profile type is set to custom and then the custom profile is nil.
+		return nil, fmt.Errorf("failed to parse TLS profile spec: %w", err)
 	}
 
-	return operatorTLSConfig, operandTLSConfig
+	tlsConfig := &TLSConfig{
+		Resolved: &Resolved{
+			OperatorTLSConfig: nil,
+			OperandTLSConfig:  nil,
+		},
+		InitialTLSAdherencePolicy: apiServer.Spec.TLSAdherence,
+		InitialTLSProfileSpec:     tlsProfileSpec,
+	}
+
+	// If the TLS adherence policy is set to honor the TLS profile,
+	// use the cluster-wide TLS profile-based configuration.
+	if libgocrypto.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence) {
+		tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsProfileSpec, setupLog)
+		tlsConfig.Resolved.OperandTLSConfig = getOperandTLSConfig(tlsProfileSpec, setupLog)
+	} else {
+		// Do nothing. Go defaults.
+		tlsConfig.Resolved.OperatorTLSConfig = nil
+		tlsConfig.Resolved.OperandTLSConfig = nil
+	}
+
+	return tlsConfig, nil
+}
+
+func getOperatorTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.Logger) func(*tls.Config) {
+	profileTLSConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
+	if len(unsupportedCiphers) > 0 {
+		setupLog.Info("TLS configuration contains unsupported ciphers that will be ignored", "unsupportedCiphers", unsupportedCiphers)
+	}
+
+	return profileTLSConfig
 }
 
 // getOperandTLSConfig converts a cluster TLS profile spec into operand-facing TLS settings.
