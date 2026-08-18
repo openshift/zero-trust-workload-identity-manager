@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -540,7 +541,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 				"entryIDPrefix: test-cluster":          "",
 				"spireServerSocketPath":                "/tmp/spire-server/private/api.sock",
 				"apiVersion: spire.spiffe.io/v1alpha1": "",
-				"gcInterval: 10000000000":              "",
+				fmt.Sprintf("gcInterval: %d", int64(defaultControllerManagerGCInterval)): "",
 			},
 		},
 		{
