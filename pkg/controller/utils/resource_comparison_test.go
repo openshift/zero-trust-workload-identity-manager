@@ -2671,3 +2671,87 @@ func TestSecurityContextConstraintsNeedsUpdate_AllScenarios(t *testing.T) {
 		})
 	}
 }
+
+func TestIsResourceManagedByOperator(t *testing.T) {
+	tests := []struct {
+		name     string
+		labels   map[string]string
+		expected bool
+	}{
+		{
+			name:     "nil labels",
+			labels:   nil,
+			expected: false,
+		},
+		{
+			name:     "empty labels",
+			labels:   map[string]string{},
+			expected: false,
+		},
+		{
+			name: "missing managed-by label",
+			labels: map[string]string{
+				"app": "some-app",
+			},
+			expected: false,
+		},
+		{
+			name: "wrong managed-by value",
+			labels: map[string]string{
+				AppManagedByLabelKey: "some-other-operator",
+			},
+			expected: false,
+		},
+		{
+			name: "correct managed-by label",
+			labels: map[string]string{
+				AppManagedByLabelKey: AppManagedByLabelValue,
+			},
+			expected: true,
+		},
+		{
+			name: "correct managed-by label with extra labels",
+			labels: map[string]string{
+				AppManagedByLabelKey:     AppManagedByLabelValue,
+				"app.kubernetes.io/name": "spire-server",
+				"custom-label":           "custom-value",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-sa",
+					Labels: tt.labels,
+				},
+			}
+			result := IsResourceManagedByOperator(obj)
+			if result != tt.expected {
+				t.Errorf("IsResourceManagedByOperator() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+
+	t.Run("works with different resource types", func(t *testing.T) {
+		managedLabels := map[string]string{
+			AppManagedByLabelKey: AppManagedByLabelValue,
+		}
+
+		clusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cr", Labels: managedLabels},
+		}
+		if !IsResourceManagedByOperator(clusterRole) {
+			t.Error("Expected ClusterRole to be managed")
+		}
+
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cm", Labels: nil},
+		}
+		if IsResourceManagedByOperator(configMap) {
+			t.Error("Expected ConfigMap without labels to not be managed")
+		}
+	})
+}

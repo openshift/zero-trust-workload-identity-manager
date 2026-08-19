@@ -182,3 +182,24 @@ func TestReconcileErrorError(t *testing.T) {
 		t.Errorf("Expected '%s', got '%s'", expected, err.Error())
 	}
 }
+
+func TestNewOwnershipConflictError(t *testing.T) {
+	err := NewOwnershipConflictError("ServiceAccount", "spire-server")
+	if err == nil {
+		t.Fatal("Expected non-nil error")
+	}
+	if err.Reason != OwnershipConflictError {
+		t.Errorf("Expected reason %s, got %s", OwnershipConflictError, err.Reason)
+	}
+	if err.Message == "" {
+		t.Error("Expected non-empty message")
+	}
+	if err.Err == nil {
+		t.Error("Expected non-nil wrapped error")
+	}
+
+	errStr := err.Error()
+	if errStr == "" {
+		t.Error("Expected non-empty error string")
+	}
+}

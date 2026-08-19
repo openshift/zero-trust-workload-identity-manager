@@ -18,6 +18,18 @@ import (
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 )
 
+// IsResourceManagedByOperator checks if the given resource is managed by this operator
+// by verifying the presence of the managed-by label. Returns false if the resource
+// exists but was not created by this operator, preventing accidental overwrites.
+func IsResourceManagedByOperator(obj client.Object) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		return false
+	}
+	val, exists := labels[AppManagedByLabelKey]
+	return exists && val == AppManagedByLabelValue
+}
+
 // ResourceNeedsUpdate determines if a resource needs to be updated based on its type
 // This checks labels, annotations, and type-specific fields
 func ResourceNeedsUpdate(existing, desired client.Object) bool {

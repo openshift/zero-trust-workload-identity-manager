@@ -15,6 +15,8 @@ const (
 	RetryRequiredError ErrorReason = "RetryRequiredError"
 
 	MultipleInstanceError ErrorReason = "MultipleInstanceError"
+
+	OwnershipConflictError ErrorReason = "OwnershipConflictError"
 )
 
 type ReconcileError struct {
@@ -44,6 +46,14 @@ func NewMultipleInstanceError(err error) *ReconcileError {
 		Reason:  MultipleInstanceError,
 		Message: fmt.Sprint(err.Error()),
 		Err:     err,
+	}
+}
+
+func NewOwnershipConflictError(resourceKind, resourceName string) *ReconcileError {
+	return &ReconcileError{
+		Reason:  OwnershipConflictError,
+		Message: fmt.Sprintf("%s %q exists but is not managed by this operator", resourceKind, resourceName),
+		Err:     fmt.Errorf("resource %s %q exists but is not managed by this operator, skipping update to avoid overwriting", resourceKind, resourceName),
 	}
 }
 
