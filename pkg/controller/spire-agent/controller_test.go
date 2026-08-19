@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1254,6 +1255,9 @@ func TestReconcile_FullFlow_AllScenarios(t *testing.T) {
 					if tt.configMapExists {
 						v.Name = key.Name
 						v.Namespace = key.Namespace
+						v.Labels = map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						}
 						if tt.configMapDiff {
 							v.Data = map[string]string{"agent.conf": "old-config"}
 						}
@@ -1264,6 +1268,9 @@ func TestReconcile_FullFlow_AllScenarios(t *testing.T) {
 					if tt.daemonSetExists {
 						v.Name = key.Name
 						v.Namespace = key.Namespace
+						v.Labels = map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						}
 						return nil
 					}
 					return kerrors.NewNotFound(schema.GroupResource{}, key.Name)
@@ -1378,6 +1385,9 @@ func TestReconcileConfigMap_AllScenarios(t *testing.T) {
 					if tt.cmExists {
 						v.Name = key.Name
 						v.Namespace = key.Namespace
+						v.Labels = map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						}
 						if tt.cmDiff {
 							v.Data = map[string]string{"agent.conf": "old-config"}
 						}
@@ -1494,6 +1504,9 @@ func TestReconcileDaemonSet_AllScenarios(t *testing.T) {
 					if tt.dsExists {
 						v.Name = key.Name
 						v.Namespace = key.Namespace
+						v.Labels = map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						}
 						if !tt.dsDiff {
 							// Set same hash to simulate no change needed
 							v.Spec.Template.Annotations = map[string]string{

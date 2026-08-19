@@ -615,7 +615,10 @@ func TestReconcileDaemonSet(t *testing.T) {
 						Name:            "spiffe-csi-driver",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {

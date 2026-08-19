@@ -98,6 +98,9 @@ func TestReconcileConfigMap(t *testing.T) {
 				Name:            "spire-oidc-discovery-provider",
 				Namespace:       utils.GetOperatorNamespace(),
 				ResourceVersion: "123",
+				Labels: map[string]string{
+					utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+				},
 			},
 			Data: map[string]string{
 				"oidc-discovery-provider.conf": "old-config",
@@ -138,6 +141,9 @@ func TestReconcileConfigMap(t *testing.T) {
 				Name:            "spire-oidc-discovery-provider",
 				Namespace:       utils.GetOperatorNamespace(),
 				ResourceVersion: "123",
+				Labels: map[string]string{
+					utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+				},
 			},
 			Data: map[string]string{
 				"oidc-discovery-provider.conf": "old-config",
@@ -172,6 +178,9 @@ func TestReconcileConfigMap(t *testing.T) {
 				Name:            "spire-oidc-discovery-provider",
 				Namespace:       utils.GetOperatorNamespace(),
 				ResourceVersion: "123",
+				Labels: map[string]string{
+					utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+				},
 			},
 			Data: map[string]string{
 				"oidc-discovery-provider.conf": "old-config",

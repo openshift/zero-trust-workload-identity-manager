@@ -929,7 +929,10 @@ func TestReconcileStatefulSet(t *testing.T) {
 				existingSts := &appsv1.StatefulSet{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "spire-server", Namespace: utils.GetOperatorNamespace(),
-						ResourceVersion: "123", Labels: map[string]string{"old": "label"},
+						ResourceVersion: "123", Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: appsv1.StatefulSetSpec{Replicas: ptr.To(int32(1))},
 				}

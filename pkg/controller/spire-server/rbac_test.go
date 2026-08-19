@@ -456,7 +456,13 @@ func TestReconcileClusterRole(t *testing.T) {
 			server: createRBACTestServer(),
 			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
 				existingCR := &rbacv1.ClusterRole{
-					ObjectMeta: metav1.ObjectMeta{Name: "spire-server", ResourceVersion: "123"},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-server",
+						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
+					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					if cr, ok := obj.(*rbacv1.ClusterRole); ok {
@@ -482,7 +488,10 @@ func TestReconcileClusterRole(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-server",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -595,7 +604,10 @@ func TestReconcileClusterRoleBinding(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-server",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -622,7 +634,10 @@ func TestReconcileClusterRoleBinding(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-server",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -649,7 +664,10 @@ func TestReconcileClusterRoleBinding(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-server",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -762,7 +780,10 @@ func TestReconcileSpireBundleRole(t *testing.T) {
 						Name:            "spire-bundle",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -864,7 +885,10 @@ func TestReconcileSpireBundleRoleBinding(t *testing.T) {
 						Name:            "spire-bundle",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1008,7 +1032,13 @@ func TestReconcileControllerManagerClusterRole(t *testing.T) {
 			server: createRBACTestServer(),
 			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
 				existingCR := &rbacv1.ClusterRole{
-					ObjectMeta: metav1.ObjectMeta{Name: "spire-controller-manager", ResourceVersion: "123"},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "spire-controller-manager",
+						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
+					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					if cr, ok := obj.(*rbacv1.ClusterRole); ok {
@@ -1116,7 +1146,10 @@ func TestReconcileControllerManagerClusterRoleBinding(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-controller-manager",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1143,7 +1176,10 @@ func TestReconcileControllerManagerClusterRoleBinding(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-controller-manager",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1252,7 +1288,10 @@ func TestReconcileLeaderElectionRole(t *testing.T) {
 						Name:            "spire-controller-manager-leader-election",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1280,7 +1319,10 @@ func TestReconcileLeaderElectionRole(t *testing.T) {
 						Name:            "spire-controller-manager-leader-election",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1389,7 +1431,10 @@ func TestReconcileLeaderElectionRoleBinding(t *testing.T) {
 						Name:            "spire-controller-manager-leader-election",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1417,7 +1462,10 @@ func TestReconcileLeaderElectionRoleBinding(t *testing.T) {
 						Name:            "spire-controller-manager-leader-election",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1723,6 +1771,9 @@ func TestReconcileExternalCertRole(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      utils.SpireServerExternalCertRoleName,
 							Namespace: utils.GetOperatorNamespace(),
+							Labels: map[string]string{
+								utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+							},
 						},
 						Rules: []rbacv1.PolicyRule{{
 							APIGroups:     []string{""},
@@ -1757,6 +1808,9 @@ func TestReconcileExternalCertRole(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      utils.SpireServerExternalCertRoleName,
 							Namespace: utils.GetOperatorNamespace(),
+							Labels: map[string]string{
+								utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+							},
 							OwnerReferences: []metav1.OwnerReference{{
 								APIVersion: "ztwim.openshift.io/v1alpha1",
 								Kind:       "SpireServer",
@@ -1859,6 +1913,9 @@ func TestReconcileExternalCertRole(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      utils.SpireServerExternalCertRoleName,
 							Namespace: utils.GetOperatorNamespace(),
+							Labels: map[string]string{
+								utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+							},
 						},
 						Rules: []rbacv1.PolicyRule{{
 							APIGroups:     []string{""},
@@ -1876,6 +1933,9 @@ func TestReconcileExternalCertRole(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      utils.SpireServerExternalCertRoleName,
 						Namespace: utils.GetOperatorNamespace(),
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Rules: []rbacv1.PolicyRule{{
 						APIGroups:     []string{""},
@@ -1972,7 +2032,10 @@ func TestReconcileExternalCertRoleBinding(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      utils.SpireServerExternalCertRoleBindingName,
 							Namespace: utils.GetOperatorNamespace(),
-							Labels:    map[string]string{"old": "label"},
+							Labels: map[string]string{
+								"old":                      "label",
+								utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+							},
 						},
 						Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "old-sa"}},
 						RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "old"},
@@ -1993,7 +2056,10 @@ func TestReconcileExternalCertRoleBinding(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      utils.SpireServerExternalCertRoleBindingName,
 							Namespace: utils.GetOperatorNamespace(),
-							Labels:    map[string]string{"old": "label"},
+							Labels: map[string]string{
+								"old":                      "label",
+								utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+							},
 							OwnerReferences: []metav1.OwnerReference{{
 								APIVersion: "ztwim.openshift.io/v1alpha1",
 								Kind:       "SpireServer",
@@ -2085,6 +2151,9 @@ func TestReconcileExternalCertRoleBinding(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      utils.SpireServerExternalCertRoleBindingName,
 							Namespace: utils.GetOperatorNamespace(),
+							Labels: map[string]string{
+								utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+							},
 						},
 						Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "old-sa"}},
 						RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "old"},
@@ -2098,6 +2167,9 @@ func TestReconcileExternalCertRoleBinding(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      utils.SpireServerExternalCertRoleBindingName,
 						Namespace: utils.GetOperatorNamespace(),
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "old-sa"}},
 					RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: "old"},
@@ -2179,25 +2251,18 @@ func TestReconcileExternalCertRBAC(t *testing.T) {
 				},
 			},
 			setupObjects: func() []client.Object { return []client.Object{} },
-			setupClient:  func(store *testStore) customClient.CustomCtrlClient { return newFakeClient(store) },
-			expectError:  false,
+			setupClient: func(store *testStore) customClient.CustomCtrlClient {
+				fake := &fakes.FakeCustomCtrlClient{}
+				fake.GetReturns(kerrors.NewNotFound(rbacv1.Resource(""), ""))
+				fake.CreateReturns(nil)
+				return fake
+			},
+			expectError: false,
 			postTestChecks: func(t *testing.T, client customClient.CustomCtrlClient) {
-				role := &rbacv1.Role{}
-				err := client.Get(ctx, types.NamespacedName{
-					Name:      utils.SpireServerExternalCertRoleName,
-					Namespace: utils.GetOperatorNamespace(),
-				}, role)
-				if err != nil {
-					t.Errorf("Expected role to be created: %v", err)
-				}
-
-				rb := &rbacv1.RoleBinding{}
-				err = client.Get(ctx, types.NamespacedName{
-					Name:      utils.SpireServerExternalCertRoleBindingName,
-					Namespace: utils.GetOperatorNamespace(),
-				}, rb)
-				if err != nil {
-					t.Errorf("Expected rolebinding to be created: %v", err)
+				if fc, ok := client.(*fakes.FakeCustomCtrlClient); ok {
+					if fc.CreateCallCount() != 2 {
+						t.Errorf("Expected 2 Create calls (Role + RoleBinding), got %d", fc.CreateCallCount())
+					}
 				}
 			},
 		},

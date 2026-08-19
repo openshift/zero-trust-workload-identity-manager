@@ -177,7 +177,13 @@ func TestReconcileCSIDriver(t *testing.T) {
 			},
 			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
 				existingCSI := &storagev1.CSIDriver{
-					ObjectMeta: metav1.ObjectMeta{Name: "csi.spiffe.io", ResourceVersion: "123"},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "csi.spiffe.io",
+						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
+					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					if csi, ok := obj.(*storagev1.CSIDriver); ok {
@@ -204,7 +210,10 @@ func TestReconcileCSIDriver(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "csi.spiffe.io",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -233,7 +242,10 @@ func TestReconcileCSIDriver(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "csi.spiffe.io",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {

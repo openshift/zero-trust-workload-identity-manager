@@ -1389,6 +1389,9 @@ func TestReconcileSpireServerConfigMap(t *testing.T) {
 						Name:            "spire-server",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Data: map[string]string{"server.conf": "old-config"},
 				}
@@ -1411,6 +1414,9 @@ func TestReconcileSpireServerConfigMap(t *testing.T) {
 						Name:            "spire-server",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Data: map[string]string{"server.conf": "old-config"},
 				}
@@ -1433,6 +1439,9 @@ func TestReconcileSpireServerConfigMap(t *testing.T) {
 						Name:            "spire-server",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Data: map[string]string{"server.conf": "old-config"},
 				}
@@ -1560,6 +1569,9 @@ func TestReconcileSpireControllerManagerConfigMap(t *testing.T) {
 						Name:            "spire-controller-manager-config",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Data: map[string]string{"spire-controller-manager-config.yaml": "old-config"},
 				}
@@ -1582,6 +1594,9 @@ func TestReconcileSpireControllerManagerConfigMap(t *testing.T) {
 						Name:            "spire-controller-manager-config",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Data: map[string]string{"spire-controller-manager-config.yaml": "old-config"},
 				}

@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,7 +98,10 @@ func TestReconcileClusterSpiffeIDs(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "spire-oidc-discovery-provider",
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old": "label"},
+						Labels: map[string]string{
+							"old":                      "label",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fakeClient.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {

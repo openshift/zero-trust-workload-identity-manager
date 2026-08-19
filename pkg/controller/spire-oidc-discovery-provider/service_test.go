@@ -191,6 +191,9 @@ func TestReconcileService(t *testing.T) {
 						Name:            "spire-spiffe-oidc-discovery-provider",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
+						Labels: map[string]string{
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -218,7 +221,10 @@ func TestReconcileService(t *testing.T) {
 						Name:            "spire-spiffe-oidc-discovery-provider",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
 				}
@@ -248,7 +254,10 @@ func TestReconcileService(t *testing.T) {
 						Name:            "spire-spiffe-oidc-discovery-provider",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
 				}

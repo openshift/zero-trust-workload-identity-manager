@@ -326,7 +326,10 @@ func TestReconcileSpireServerService(t *testing.T) {
 						Name:            "spire-server",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
 				}
@@ -357,7 +360,10 @@ func TestReconcileSpireServerService(t *testing.T) {
 						Name:            "spire-server",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
 				}
@@ -388,7 +394,10 @@ func TestReconcileSpireServerService(t *testing.T) {
 						Name:            "spire-server",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
 				}
@@ -513,7 +522,10 @@ func TestReconcileSpireControllerManagerService(t *testing.T) {
 						Name:            "spire-controller-manager-webhook",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.2"},
 				}
@@ -544,7 +556,10 @@ func TestReconcileSpireControllerManagerService(t *testing.T) {
 						Name:            "spire-controller-manager-webhook",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels:          map[string]string{"old-label": "old-value"},
+						Labels: map[string]string{
+							"old-label":                "old-value",
+							utils.AppManagedByLabelKey: utils.AppManagedByLabelValue,
+						},
 					},
 					Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.2"},
 				}
