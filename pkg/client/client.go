@@ -204,10 +204,20 @@ func (c *customCtrlClientImpl) Exists(ctx context.Context, key client.ObjectKey,
 	return true, nil
 }
 
-// CreateOrUpdateObject tries to create the object, updates if already exists
+// CreateOrUpdateObject tries to create the object, updates if already exists.
+// Before updating, it verifies the existing resource is managed by this operator
+// to prevent overwriting resources owned by other applications.
 func (c *customCtrlClientImpl) CreateOrUpdateObject(ctx context.Context, obj client.Object) error {
 	err := c.Create(ctx, obj)
 	if err != nil && errors.IsAlreadyExists(err) {
+		existing := obj.DeepCopyObject().(client.Object)
+		key := types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
+		if getErr := c.Client.Get(ctx, key, existing); getErr != nil {
+			return fmt.Errorf("failed to get existing resource %q for ownership check: %w", key, getErr)
+		}
+		if !utils.IsResourceManagedByOperator(existing) {
+			return utils.NewOwnershipConflictError(obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+		}
 		return c.Update(ctx, obj)
 	}
 	return err
