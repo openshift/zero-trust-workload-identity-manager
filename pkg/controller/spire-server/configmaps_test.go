@@ -540,6 +540,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 				"entryIDPrefix: test-cluster":          "",
 				"spireServerSocketPath":                "/tmp/spire-server/private/api.sock",
 				"apiVersion: spire.spiffe.io/v1alpha1": "",
+				"gcInterval: 10s":                      "",
 			},
 		},
 		{

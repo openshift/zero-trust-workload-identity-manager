@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -611,6 +612,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec, ztwim *v1
 				Health: spiffev1alpha.ControllerHealth{
 					HealthProbeBindAddress: "0.0.0.0:8083",
 				},
+				GCInterval:       10 * time.Second,
 				EntryIDPrefix:    ztwim.Spec.ClusterName,
 				WatchClassless:   false,
 				ClassName:        "zero-trust-workload-identity-manager-spire",
