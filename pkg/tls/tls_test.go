@@ -488,3 +488,33 @@ func TestFetchAPIServerTLSConfig_nonStrictInvalidCustomFails(t *testing.T) {
 		t.Fatal("expected error for invalid custom profile")
 	}
 }
+
+func TestGetInjectableTLSConfigForOperand(t *testing.T) {
+	if got := GetInjectableTLSConfigForOperand(nil); got != nil {
+		t.Fatalf("expected nil injectable config, got %#v", got)
+	}
+
+	partial := GetInjectableTLSConfigForOperand(&OperandTLSConfig{MinTLSVersion: configv1.VersionTLS12})
+	if len(partial) != 1 || partial["min_tls_version"] != configv1.VersionTLS12 {
+		t.Fatalf("expected partial injectable config, got %#v", partial)
+	}
+
+	full := GetInjectableTLSConfigForOperand(&OperandTLSConfig{
+		MinTLSVersion:    configv1.VersionTLS13,
+		CipherSuites:     []string{"TLS_AES_128_GCM_SHA256"},
+		CurvePreferences: []string{"X25519"},
+	})
+	if len(full) != 3 {
+		t.Fatalf("expected full injectable config with 3 fields, got %#v", full)
+	}
+
+	if got := GetInjectableTLSConfigForOperand(&OperandTLSConfig{}); got != nil {
+		t.Fatalf("expected nil injectable config for empty operand profile, got %#v", got)
+	}
+}
+
+func TestGetOperandTLSConfig_emptyProfileReturnsNil(t *testing.T) {
+	if config := getOperandTLSConfig(configv1.TLSProfileSpec{}, logr.Discard()); config != nil {
+		t.Fatalf("expected nil operand config for empty profile, got %#v", config)
+	}
+}

@@ -149,7 +149,7 @@ func getOperatorTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.
 func getOperandTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.Logger) *OperandTLSConfig {
 	// If the minimum TLS version is less than 1.2, return nil. SPIRE does not support TLS 1.0 and TLS 1.1.
 	if tlsProfileSpec.MinTLSVersion == configv1.VersionTLS10 || tlsProfileSpec.MinTLSVersion == configv1.VersionTLS11 {
-		setupLog.Info("TLS profile specifies a minimum TLS version that is less than 1.2. Continuing with nil operand TLS config.")
+		setupLog.Info("TLS profile specifies a minimum TLS version that is less than 1.2. Continuing with empty operand TLS config. Operands will run with Go default TLS config.")
 
 		return nil
 	}
@@ -159,5 +159,40 @@ func getOperandTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.L
 		CipherSuites:  libgocrypto.OpenSSLToIANACipherSuites(tlsProfileSpec.Ciphers),
 	}
 
+	if config.MinTLSVersion == "" && len(config.CipherSuites) == 0 && len(config.CurvePreferences) == 0 {
+		return nil
+	}
+
+	if len(config.CipherSuites) == 0 {
+		config.CipherSuites = nil
+	}
+	if len(config.CurvePreferences) == 0 {
+		config.CurvePreferences = nil
+	}
+
 	return &config
+}
+
+// GetInjectableTLSConfigForOperand returns a map of TLS config that can be injected into the Operand configmap.
+// Only non-empty fields are included. Returns nil when there is nothing to inject.
+func GetInjectableTLSConfigForOperand(tlsConfig *OperandTLSConfig) map[string]interface{} {
+	if tlsConfig == nil {
+		return nil
+	}
+
+	injectable := map[string]interface{}{}
+	if tlsConfig.MinTLSVersion != "" {
+		injectable["min_tls_version"] = tlsConfig.MinTLSVersion
+	}
+	if len(tlsConfig.CipherSuites) > 0 {
+		injectable["cipher_suites"] = tlsConfig.CipherSuites
+	}
+	if len(tlsConfig.CurvePreferences) > 0 {
+		injectable["curve_preferences"] = tlsConfig.CurvePreferences
+	}
+	if len(injectable) == 0 {
+		return nil
+	}
+
+	return injectable
 }
