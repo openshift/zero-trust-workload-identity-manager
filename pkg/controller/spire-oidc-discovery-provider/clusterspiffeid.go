@@ -51,6 +51,16 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx con
 		}
 		r.log.Info("Created OIDC ClusterSPIFFEID", "name", desiredOIDC.Name)
 	} else {
+		// Verify resource is managed by this operator before updating
+		if !utils.IsResourceManagedByOperator(existingOIDC) {
+			ownerErr := utils.NewOwnershipConflictError("ClusterSPIFFEID", desiredOIDC.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desiredOIDC.Name)
+			statusMgr.AddCondition(ClusterSPIFFEIDAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
+		}
+
 		// Resource exists, check if we need to update
 		if utils.ResourceNeedsUpdate(existingOIDC, desiredOIDC) {
 			if createOnlyMode {
@@ -107,6 +117,16 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileClusterSpiffeIDs(ctx con
 		}
 		r.log.Info("Created Default ClusterSPIFFEID", "name", desiredDefault.Name)
 	} else {
+		// Verify resource is managed by this operator before updating
+		if !utils.IsResourceManagedByOperator(existingDefault) {
+			ownerErr := utils.NewOwnershipConflictError("ClusterSPIFFEID", desiredDefault.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desiredDefault.Name)
+			statusMgr.AddCondition(ClusterSPIFFEIDAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
+		}
+
 		// Resource exists, check if we need to update
 		if utils.ResourceNeedsUpdate(existingDefault, desiredDefault) {
 			if createOnlyMode {

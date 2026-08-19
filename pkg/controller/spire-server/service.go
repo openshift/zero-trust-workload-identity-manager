@@ -75,6 +75,16 @@ func (r *SpireServerReconciler) reconcileSpireServerService(ctx context.Context,
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("Service", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("Service exists, skipping update due to create-only mode", "name", desired.Name)
@@ -156,6 +166,16 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerService(ctx conte
 
 		r.log.Info("Created Service", "name", desired.Name, "namespace", desired.Namespace)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("Service", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(ServiceAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update

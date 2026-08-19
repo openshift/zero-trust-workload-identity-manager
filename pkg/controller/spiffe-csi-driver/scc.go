@@ -102,6 +102,16 @@ func (r *SpiffeCsiReconciler) reconcileSCC(ctx context.Context, driver *v1alpha1
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("SecurityContextConstraints", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(SecurityContextConstraintsAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Preserve fields set by OpenShift from existing resource BEFORE comparison
 	desired.ResourceVersion = existing.ResourceVersion
 	desired.Priority = existing.Priority

@@ -49,20 +49,30 @@ func (r *SpireAgentReconciler) reconcileConfigMap(ctx context.Context, agent *v1
 			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire agent ConfigMap")
-	} else if err == nil && (existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
-		!equality.Semantic.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode")
-		} else {
-			spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
-				r.log.Error(err, "failed to update spire-agent config map")
-				statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSpireAgentCM) {
+			ownerErr := utils.NewOwnershipConflictError("ConfigMap", spireAgentConfigMap.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", spireAgentConfigMap.Name)
+			statusMgr.AddCondition(ConfigMapAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return "", ownerErr
+		}
+		if existingSpireAgentCM.Data["agent.conf"] != spireAgentConfigMap.Data["agent.conf"] ||
+			!equality.Semantic.DeepEqual(existingSpireAgentCM.Labels, spireAgentConfigMap.Labels) {
+			if createOnlyMode {
+				r.log.Info("Skipping ConfigMap update due to create-only mode")
+			} else {
+				spireAgentConfigMap.ResourceVersion = existingSpireAgentCM.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, spireAgentConfigMap); err != nil {
+					r.log.Error(err, "failed to update spire-agent config map")
+					statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+				}
+				r.log.Info("Updated ConfigMap with new config")
 			}
-			r.log.Info("Updated ConfigMap with new config")
 		}
 	} else if err != nil {
 		statusMgr.AddCondition(ConfigMapAvailable, "SpireAgentConfigMapGenerationFailed",

@@ -114,6 +114,16 @@ func (r *SpireServerReconciler) reconcileClusterRole(ctx context.Context, server
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ClusterRole", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("ClusterRole exists, skipping update due to create-only mode", "name", desired.Name)
@@ -177,6 +187,16 @@ func (r *SpireServerReconciler) reconcileClusterRoleBinding(ctx context.Context,
 
 		r.log.Info("Created ClusterRoleBinding", "name", desired.Name)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ClusterRoleBinding", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update
@@ -244,6 +264,16 @@ func (r *SpireServerReconciler) reconcileSpireBundleRole(ctx context.Context, se
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("Role", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("Role exists, skipping update due to create-only mode", "name", desired.Name)
@@ -307,6 +337,16 @@ func (r *SpireServerReconciler) reconcileSpireBundleRoleBinding(ctx context.Cont
 
 		r.log.Info("Created RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("RoleBinding", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update
@@ -374,6 +414,16 @@ func (r *SpireServerReconciler) reconcileControllerManagerClusterRole(ctx contex
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ClusterRole", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("ClusterRole exists, skipping update due to create-only mode", "name", desired.Name)
@@ -437,6 +487,16 @@ func (r *SpireServerReconciler) reconcileControllerManagerClusterRoleBinding(ctx
 
 		r.log.Info("Created ClusterRoleBinding", "name", desired.Name)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ClusterRoleBinding", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update
@@ -504,6 +564,16 @@ func (r *SpireServerReconciler) reconcileLeaderElectionRole(ctx context.Context,
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("Role", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("Role exists, skipping update due to create-only mode", "name", desired.Name)
@@ -567,6 +637,16 @@ func (r *SpireServerReconciler) reconcileLeaderElectionRoleBinding(ctx context.C
 
 		r.log.Info("Created RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("RoleBinding", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update
@@ -728,6 +808,16 @@ func (r *SpireServerReconciler) reconcileExternalCertRole(ctx context.Context, s
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("Role", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("External cert Role exists, skipping update due to create-only mode", "name", desired.Name)
@@ -791,6 +881,16 @@ func (r *SpireServerReconciler) reconcileExternalCertRoleBinding(ctx context.Con
 
 		r.log.Info("Created external cert RoleBinding", "name", desired.Name, "namespace", desired.Namespace)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("RoleBinding", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update

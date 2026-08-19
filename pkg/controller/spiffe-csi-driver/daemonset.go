@@ -42,19 +42,29 @@ func (r *SpiffeCsiReconciler) reconcileDaemonSet(ctx context.Context, driver *v1
 			return fmt.Errorf("failed to create DaemonSet: %w", err)
 		}
 		r.log.Info("Created spiffe csi DaemonSet")
-	} else if err == nil && needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
-		if createOnlyMode {
-			r.log.Info("Skipping DaemonSet update due to create-only mode")
-		} else {
-			spiffeCsiDaemonset.ResourceVersion = existingSpiffeCsiDaemonSet.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spiffeCsiDaemonset); err != nil {
-				r.log.Error(err, "failed to update spiffe csi daemon set")
-				statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return fmt.Errorf("failed to update DaemonSet: %w", err)
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSpiffeCsiDaemonSet) {
+			ownerErr := utils.NewOwnershipConflictError("DaemonSet", spiffeCsiDaemonset.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", spiffeCsiDaemonset.Name)
+			statusMgr.AddCondition(DaemonSetAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
+		}
+		if needsUpdate(existingSpiffeCsiDaemonSet, *spiffeCsiDaemonset) {
+			if createOnlyMode {
+				r.log.Info("Skipping DaemonSet update due to create-only mode")
+			} else {
+				spiffeCsiDaemonset.ResourceVersion = existingSpiffeCsiDaemonSet.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, spiffeCsiDaemonset); err != nil {
+					r.log.Error(err, "failed to update spiffe csi daemon set")
+					statusMgr.AddCondition(DaemonSetAvailable, "SpiffeCSIDaemonSetUpdateFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return fmt.Errorf("failed to update DaemonSet: %w", err)
+				}
+				r.log.Info("Updated spiffe csi DaemonSet")
 			}
-			r.log.Info("Updated spiffe csi DaemonSet")
 		}
 	} else if err != nil {
 		r.log.Error(err, "Failed to get SpiffeCsiDaemon set")

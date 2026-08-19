@@ -41,19 +41,29 @@ func (r *SpireAgentReconciler) reconcileDaemonSet(ctx context.Context, agent *v1
 			return fmt.Errorf("failed to create DaemonSet: %w", err)
 		}
 		r.log.Info("Created spire agent DaemonSet")
-	} else if err == nil && needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
-		if createOnlyMode {
-			r.log.Info("Skipping DaemonSet update due to create-only mode")
-		} else {
-			spireAgentDaemonset.ResourceVersion = existingSpireAgentDaemonSet.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireAgentDaemonset); err != nil {
-				r.log.Error(err, "failed to update spire agent DaemonSet")
-				statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return fmt.Errorf("failed to update DaemonSet: %w", err)
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSpireAgentDaemonSet) {
+			ownerErr := utils.NewOwnershipConflictError("DaemonSet", spireAgentDaemonset.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", spireAgentDaemonset.Name)
+			statusMgr.AddCondition(DaemonSetAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
+		}
+		if needsUpdate(existingSpireAgentDaemonSet, *spireAgentDaemonset) {
+			if createOnlyMode {
+				r.log.Info("Skipping DaemonSet update due to create-only mode")
+			} else {
+				spireAgentDaemonset.ResourceVersion = existingSpireAgentDaemonSet.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, spireAgentDaemonset); err != nil {
+					r.log.Error(err, "failed to update spire agent DaemonSet")
+					statusMgr.AddCondition(DaemonSetAvailable, "SpireAgentDaemonSetUpdateFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return fmt.Errorf("failed to update DaemonSet: %w", err)
+				}
+				r.log.Info("Updated spire agent DaemonSet")
 			}
-			r.log.Info("Updated spire agent DaemonSet")
 		}
 	} else if err != nil {
 		r.log.Error(err, "failed to get spire-agent daemonset")

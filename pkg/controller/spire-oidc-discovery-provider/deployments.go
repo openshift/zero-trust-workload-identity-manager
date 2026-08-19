@@ -41,19 +41,29 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileDeployment(ctx context.C
 			return err
 		}
 		r.log.Info("Created spire oidc discovery provider deployment")
-	} else if err == nil && needsUpdate(existingSpireOidcDeployment, *deployment) {
-		if createOnlyMode {
-			r.log.Info("Skipping Deployment update due to create-only mode")
-		} else {
-			deployment.ResourceVersion = existingSpireOidcDeployment.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, deployment); err != nil {
-				r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
-				statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return err
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSpireOidcDeployment) {
+			ownerErr := utils.NewOwnershipConflictError("Deployment", deployment.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", deployment.Name)
+			statusMgr.AddCondition(DeploymentAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
+		}
+		if needsUpdate(existingSpireOidcDeployment, *deployment) {
+			if createOnlyMode {
+				r.log.Info("Skipping Deployment update due to create-only mode")
+			} else {
+				deployment.ResourceVersion = existingSpireOidcDeployment.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, deployment); err != nil {
+					r.log.Error(err, "Failed to update spire oidc discovery provider deployment")
+					statusMgr.AddCondition(DeploymentAvailable, "SpireOIDCDeploymentUpdateFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return err
+				}
+				r.log.Info("Updated spire oidc discovery provider deployment")
 			}
-			r.log.Info("Updated spire oidc discovery provider deployment")
 		}
 	} else if err != nil {
 		r.log.Error(err, "Failed to get existing spire oidc discovery provider deployment")

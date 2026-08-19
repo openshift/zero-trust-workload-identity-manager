@@ -49,20 +49,30 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Co
 			return "", err
 		}
 		r.log.Info("Created ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-	} else if err == nil && (utils.GenerateMapHash(existingOidcCm.Data) != utils.GenerateMapHash(cm.Data) ||
-		!equality.Semantic.DeepEqual(existingOidcCm.Labels, cm.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode", "Namespace", cm.Namespace, "Name", cm.Name)
-		} else {
-			cm.ResourceVersion = existingOidcCm.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, cm); err != nil {
-				r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
-				statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", err
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingOidcCm) {
+			ownerErr := utils.NewOwnershipConflictError("ConfigMap", cm.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", cm.Name)
+			statusMgr.AddCondition(ConfigMapAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return "", ownerErr
+		}
+		if utils.GenerateMapHash(existingOidcCm.Data) != utils.GenerateMapHash(cm.Data) ||
+			!equality.Semantic.DeepEqual(existingOidcCm.Labels, cm.Labels) {
+			if createOnlyMode {
+				r.log.Info("Skipping ConfigMap update due to create-only mode", "Namespace", cm.Namespace, "Name", cm.Name)
+			} else {
+				cm.ResourceVersion = existingOidcCm.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, cm); err != nil {
+					r.log.Error(err, "Failed to update ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
+					statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return "", err
+				}
+				r.log.Info("Updated ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 			}
-			r.log.Info("Updated ConfigMap", "Namespace", cm.Namespace, "Name", cm.Name)
 		}
 	} else if err != nil {
 		r.log.Error(err, "Failed to get ConfigMap")

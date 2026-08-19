@@ -59,6 +59,13 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileRoute(ctx context.Contex
 					metav1.ConditionFalse)
 				return err
 			}
+		} else if !utils.IsResourceManagedByOperator(&existingRoute) {
+			ownerErr := utils.NewOwnershipConflictError("Route", route.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", route.Name)
+			statusMgr.AddCondition(RouteAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
 		} else if checkRouteConflict(&existingRoute, route) {
 			r.log.Info("Found conflict in routes, updating route")
 			route.ResourceVersion = existingRoute.ResourceVersion

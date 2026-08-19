@@ -128,6 +128,13 @@ func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1al
 					metav1.ConditionFalse)
 				return err
 			}
+		} else if !utils.IsResourceManagedByOperator(&existingRoute) {
+			ownerErr := utils.NewOwnershipConflictError("Route", route.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", route.Name)
+			statusMgr.AddCondition(RouteAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
 		} else if checkFederationRouteConflict(&existingRoute, route) {
 			if createOnlyMode {
 				r.log.Info("Skipping federation route update due to create-only mode")

@@ -60,6 +60,16 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileServiceAccount(ctx conte
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ServiceAccount", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(ServiceAccountAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("ServiceAccount exists, skipping update due to create-only mode", "name", desired.Name)

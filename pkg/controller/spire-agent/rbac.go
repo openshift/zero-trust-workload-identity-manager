@@ -77,6 +77,16 @@ func (r *SpireAgentReconciler) reconcileClusterRole(ctx context.Context, agent *
 		return nil
 	}
 
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ClusterRole", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
+	}
+
 	// Resource exists, check if we need to update
 	if createOnlyMode {
 		r.log.V(1).Info("ClusterRole exists, skipping update due to create-only mode", "name", desired.Name)
@@ -140,6 +150,16 @@ func (r *SpireAgentReconciler) reconcileClusterRoleBinding(ctx context.Context, 
 
 		r.log.Info("Created ClusterRoleBinding", "name", desired.Name)
 		return nil
+	}
+
+	// Verify resource is managed by this operator before updating
+	if !utils.IsResourceManagedByOperator(existing) {
+		ownerErr := utils.NewOwnershipConflictError("ClusterRoleBinding", desired.Name)
+		r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", desired.Name)
+		statusMgr.AddCondition(RBACAvailable, v1alpha1.ReasonFailed,
+			ownerErr.Error(),
+			metav1.ConditionFalse)
+		return ownerErr
 	}
 
 	// Resource exists, check if we need to update

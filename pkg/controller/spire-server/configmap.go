@@ -80,19 +80,29 @@ func (r *SpireServerReconciler) reconcileSpireServerConfigMap(ctx context.Contex
 			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire server ConfigMap")
-	} else if err == nil && (existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] ||
-		!equality.Semantic.DeepEqual(existingSpireServerCM.Labels, spireServerConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping ConfigMap update due to create-only mode")
-		} else {
-			spireServerConfigMap.ResourceVersion = existingSpireServerCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireServerConfigMap); err != nil {
-				statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSpireServerCM) {
+			ownerErr := utils.NewOwnershipConflictError("ConfigMap", spireServerConfigMap.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", spireServerConfigMap.Name)
+			statusMgr.AddCondition(ServerConfigMapAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return "", ownerErr
+		}
+		if existingSpireServerCM.Data["server.conf"] != spireServerConfigMap.Data["server.conf"] ||
+			!equality.Semantic.DeepEqual(existingSpireServerCM.Labels, spireServerConfigMap.Labels) {
+			if createOnlyMode {
+				r.log.Info("Skipping ConfigMap update due to create-only mode")
+			} else {
+				spireServerConfigMap.ResourceVersion = existingSpireServerCM.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, spireServerConfigMap); err != nil {
+					statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+				}
+				r.log.Info("Updated ConfigMap with new config")
 			}
-			r.log.Info("Updated ConfigMap with new config")
 		}
 	} else if err != nil {
 		statusMgr.AddCondition(ServerConfigMapAvailable, "SpireServerConfigMapGenerationFailed",
@@ -146,20 +156,30 @@ func (r *SpireServerReconciler) reconcileSpireControllerManagerConfigMap(ctx con
 			return "", fmt.Errorf("failed to create ConfigMap: %w", err)
 		}
 		r.log.Info("Created spire controller manager ConfigMap")
-	} else if err == nil && (existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != spireControllerManagerConfigMap.Data["controller-manager-config.yaml"] ||
-		!equality.Semantic.DeepEqual(existingSpireControllerManagerCM.Labels, spireControllerManagerConfigMap.Labels)) {
-		if createOnlyMode {
-			r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
-		} else {
-			spireControllerManagerConfigMap.ResourceVersion = existingSpireControllerManagerCM.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, spireControllerManagerConfigMap); err != nil {
-				statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return "", fmt.Errorf("failed to update ConfigMap: %w", err)
-			}
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSpireControllerManagerCM) {
+			ownerErr := utils.NewOwnershipConflictError("ConfigMap", spireControllerManagerConfigMap.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", spireControllerManagerConfigMap.Name)
+			statusMgr.AddCondition(ControllerManagerConfigAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return "", ownerErr
 		}
-		r.log.Info("Updated ConfigMap with new config")
+		if existingSpireControllerManagerCM.Data["controller-manager-config.yaml"] != spireControllerManagerConfigMap.Data["controller-manager-config.yaml"] ||
+			!equality.Semantic.DeepEqual(existingSpireControllerManagerCM.Labels, spireControllerManagerConfigMap.Labels) {
+			if createOnlyMode {
+				r.log.Info("Skipping spire controller manager ConfigMap update due to create-only mode")
+			} else {
+				spireControllerManagerConfigMap.ResourceVersion = existingSpireControllerManagerCM.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, spireControllerManagerConfigMap); err != nil {
+					statusMgr.AddCondition(ControllerManagerConfigAvailable, "SpireControllerManagerConfigMapGenerationFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return "", fmt.Errorf("failed to update ConfigMap: %w", err)
+				}
+			}
+			r.log.Info("Updated ConfigMap with new config")
+		}
 	} else if err != nil {
 		r.log.Error(err, "failed to update spire controller manager config map")
 		return "", err

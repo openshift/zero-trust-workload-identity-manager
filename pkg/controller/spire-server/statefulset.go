@@ -50,18 +50,28 @@ func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server
 			return fmt.Errorf("failed to create StatefulSet: %w", err)
 		}
 		r.log.Info("Created spire server StatefulSet")
-	} else if err == nil && needsUpdate(existingSTS, *sts) {
-		if createOnlyMode {
-			r.log.Info("Skipping StatefulSet update due to create-only mode")
-		} else {
-			sts.ResourceVersion = existingSTS.ResourceVersion
-			if err = r.ctrlClient.Update(ctx, sts); err != nil {
-				statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetUpdateFailed",
-					err.Error(),
-					metav1.ConditionFalse)
-				return fmt.Errorf("failed to update StatefulSet: %w", err)
+	} else if err == nil {
+		if !utils.IsResourceManagedByOperator(&existingSTS) {
+			ownerErr := utils.NewOwnershipConflictError("StatefulSet", sts.Name)
+			r.log.Error(ownerErr, "cannot update resource not managed by operator", "name", sts.Name)
+			statusMgr.AddCondition(StatefulSetAvailable, v1alpha1.ReasonFailed,
+				ownerErr.Error(),
+				metav1.ConditionFalse)
+			return ownerErr
+		}
+		if needsUpdate(existingSTS, *sts) {
+			if createOnlyMode {
+				r.log.Info("Skipping StatefulSet update due to create-only mode")
+			} else {
+				sts.ResourceVersion = existingSTS.ResourceVersion
+				if err = r.ctrlClient.Update(ctx, sts); err != nil {
+					statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetUpdateFailed",
+						err.Error(),
+						metav1.ConditionFalse)
+					return fmt.Errorf("failed to update StatefulSet: %w", err)
+				}
+				r.log.Info("Updated spire server StatefulSet")
 			}
-			r.log.Info("Updated spire server StatefulSet")
 		}
 	} else if err != nil {
 		r.log.Error(err, "failed to get spire server stateful set resource")
