@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -42,6 +43,12 @@ const (
 	vaultTokenFileName     = "vault"
 	upstreamCAMountPath    = "/run/spire/upstream-ca"
 	upstreamCACertFileName = "ca.crt"
+
+	// defaultControllerManagerGCInterval is the documented spire-controller-manager
+	// default. GCInterval is a non-pointer time.Duration without omitempty, so
+	// leaving it unset serializes as gcInterval: 0
+	// See https://github.com/spiffe/spire-controller-manager/issues/698
+	defaultControllerManagerGCInterval = 10 * time.Second
 )
 
 type ControllerManagerConfigYAML struct {
@@ -629,6 +636,7 @@ func generateControllerManagerConfig(config *v1alpha1.SpireServerSpec, ztwim *v1
 				"local-path-storage",
 				"openshift-*",
 			},
+			GCInterval: defaultControllerManagerGCInterval,
 		},
 	}, nil
 }
