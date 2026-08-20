@@ -2,6 +2,7 @@ package spire_server
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -529,6 +530,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 				"entryIDPrefix: test-cluster":          "",
 				"spireServerSocketPath":                "/tmp/spire-server/private/api.sock",
 				"apiVersion: spire.spiffe.io/v1alpha1": "",
+				fmt.Sprintf("gcInterval: %d", int64(defaultControllerManagerGCInterval)): "",
 			},
 		},
 		{
