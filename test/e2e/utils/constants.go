@@ -61,4 +61,22 @@ const (
 	DefaultTimeout     = 5 * time.Minute
 	ShortTimeout       = 2 * time.Minute
 	TestContextTimeout = 10 * time.Minute
+
+	// Federation test constants
+	FederationTimeout           = 10 * time.Minute
+	FederationBundlePropagation = 3 * time.Minute
+	FederationRouteName         = "spire-server-federation"
+	FederationRoutePort         = 443
+
+	MTLSServerImage     = "registry.access.redhat.com/ubi9/ubi-minimal:latest"
+	MTLSServerPort      = 8443
+	MTLSTestNamespaceA  = "e2e-federation-mtls-a"
+	MTLSTestNamespaceB  = "e2e-federation-mtls-b"
+	MTLSServerPodName   = "mtls-server"
+	MTLSClientPodName   = "mtls-client"
+	MTLSServerSAName    = "mtls-server-sa"
+	MTLSClientSAName    = "mtls-client-sa"
+	MTLSServerAppLabel  = "federation-mtls-server"
+	MTLSClientAppLabel  = "federation-mtls-client"
+	MTLSServerRouteName = "mtls-server"
 )

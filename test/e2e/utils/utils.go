@@ -219,6 +219,41 @@ func ExecInPod(ctx context.Context, namespace, podName, containerName string, co
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
+// ExecInPodWithKubeconfig runs a command in a pod container targeting a specific cluster
+// via explicit KUBECONFIG path. Returns stdout, stderr, and error.
+func ExecInPodWithKubeconfig(ctx context.Context, kubeconfig, namespace, podName, containerName string, command []string) (stdout, stderr string, err error) {
+	cli := "oc"
+	if _, lookupErr := exec.LookPath("oc"); lookupErr != nil {
+		cli = "kubectl"
+	}
+
+	args := []string{"exec", podName, "-n", namespace, "-c", containerName, "--"}
+	args = append(args, command...)
+
+	cmd := exec.CommandContext(ctx, cli, args...)
+	env := os.Environ()
+	for i, e := range env {
+		if strings.HasPrefix(e, "KUBECONFIG=") {
+			env[i] = "KUBECONFIG=" + kubeconfig
+			break
+		}
+	}
+	if kubeconfig != "" {
+		cmd.Env = append(env, "KUBECONFIG="+kubeconfig)
+	} else {
+		cmd.Env = env
+	}
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	if err = cmd.Run(); err != nil {
+		return stdoutBuf.String(), stderrBuf.String(), fmt.Errorf("exec %s %v: %w", cli, args, err)
+	}
+	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
 // ReadSVIDPEM reads /certs/svid.pem from the given pod container.
 func ReadSVIDPEM(ctx context.Context, namespace, podName, containerName string) (string, error) {
 	stdout, stderr, err := ExecInPod(ctx, namespace, podName, containerName, []string{"cat", "/certs/svid.pem"})
