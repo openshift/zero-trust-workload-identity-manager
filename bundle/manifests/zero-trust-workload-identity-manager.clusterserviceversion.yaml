@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-06-03T12:11:19Z"
+    createdAt: "2026-08-24T12:24:10Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -235,7 +235,7 @@ metadata:
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
-  name: zero-trust-workload-identity-manager.v1.1.0
+  name: zero-trust-workload-identity-manager.v1.1.1
   namespace: zero-trust-workload-identity-manager
 spec:
   apiservicedefinitions: {}
@@ -731,7 +731,7 @@ spec:
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
                 - name: OPERATOR_VERSION
-                  value: 1.1.0
+                  value: 1.1.1
                 - name: RELATED_IMAGE_SPIRE_SERVER
                   value: ghcr.io/spiffe/spire-server:1.14.7
                 - name: RELATED_IMAGE_SPIRE_AGENT
@@ -838,4 +838,4 @@ spec:
     name: node-driver-registrar
   - image: registry.access.redhat.com/ubi9:latest
     name: spiffe-csi-init-container
-  version: 1.1.0
+  version: 1.1.1
