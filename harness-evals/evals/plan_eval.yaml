@@ -1,0 +1,70 @@
+stage: plan
+round: 1
+evals:
+  - id: pl-eval-001
+    prompt: >-
+      A technical plan describes controller reconciliation for three workload types
+      (StatefulSet, DaemonSet, Deployment) using an imperative apply pattern.
+      Evaluate whether the plan specifies the reconciliation strategy including
+      conflict detection, retry logic, and idempotency guarantees for each
+      workload type.
+    assertions:
+      - "Phase template must include reconciliation strategy bullet when phase involves controller reconciliation"
+      - "Plan must specify apply mechanism per workload type (imperative, SSA, create-or-update)"
+      - "Plan must document conflict detection and retry behavior for read-modify-write operations"
+      - "Plan must specify idempotency guarantees — repeated reconciliation must not cause drift"
+      - "Plan must document partial failure handling when some resources apply successfully and others fail"
+    failure_class: "reconciliation-strategy-gap"
+    derived_from: "reconciliation-safety"
+
+  - id: pl-eval-002
+    prompt: >-
+      A technical plan describes a feature that modifies security configurations
+      for multiple operand components. Each component has different privilege
+      requirements. Evaluate whether the plan includes verification hooks that
+      assert runtime security posture matches the designed configuration.
+    assertions:
+      - "Verification hooks must include runtime security posture verification for phases modifying security configurations"
+      - "Plan must not rely solely on configuration correctness — must verify actual runtime state"
+      - "§6 Verification matrix must include a row for security posture assertion (actual UID/GID/capabilities match design)"
+    failure_class: "security-verification-gap"
+    derived_from: "operand-security-configuration"
+
+  - id: pl-eval-003
+    prompt: >-
+      A technical plan describes an operator feature where multiple architectural
+      approaches exist (e.g., imperative apply vs server-side apply, custom update
+      logic vs framework-provided patterns). Evaluate whether the plan documents
+      rejected alternatives and rationale.
+    assertions:
+      - "§1 Architectural strategy must include an ADR / design deviation log when multiple architectural approaches exist"
+      - "Each rejected alternative must state what was considered, why it was rejected, and conditions for revisiting"
+      - "Plan must not silently choose an approach without documenting the alternative landscape"
+    failure_class: "architectural-decision-gap"
+    derived_from: "reconciliation-safety"
+
+  - id: pl-eval-004
+    prompt: >-
+      A technical plan describes update logic for operand workloads (StatefulSets,
+      DaemonSets, Deployments) but does not differentiate update strategies by
+      workload type. Evaluate whether the plan specifies workload-type-specific
+      update strategies.
+    assertions:
+      - "Plan must specify update strategy per Kubernetes workload type when multiple types are managed"
+      - "StatefulSet rolling update constraints must be documented (partition, ordinal handling)"
+      - "DaemonSet update policy (OnDelete vs RollingUpdate) must be specified with rationale"
+      - "Deployment rollout strategy and its interaction with operator reconciliation must be documented"
+    failure_class: "reconciliation-update-failure"
+    derived_from: "reconciliation-safety"
+
+  - id: pl-eval-005
+    prompt: >-
+      A technical plan describes a feature that interacts with platform-managed
+      security policies that evolve across platform versions. Evaluate whether
+      the plan includes forward-compatibility planning for platform evolution.
+    assertions:
+      - "§7 Risks must include platform evolution risks when the feature depends on platform-managed policies"
+      - "Plan must document forward-compatibility strategy for upcoming platform security defaults"
+      - "Plan must identify which platform version boundaries affect the feature's security configuration"
+    failure_class: "platform-compatibility-gap"
+    derived_from: "operand-security-configuration"
