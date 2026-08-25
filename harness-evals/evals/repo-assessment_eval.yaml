@@ -1,0 +1,81 @@
+stage: repo-assessment
+round: 1
+evals:
+  - id: ra-eval-001
+    prompt: >-
+      An operator manages four operand components, each requiring different privilege
+      levels (one needs root access for node operations, one needs full privilege for
+      volume operations, one needs moderate privileges, one needs minimal privileges).
+      Evaluate whether the repo-assessment artifact includes a per-operand security
+      constraint matrix that maps each component to its required security policy type,
+      UID/GID, supplemental groups, capabilities, and platform policy interaction behavior.
+    assertions:
+      - "§10.1 must include a per-operand security constraint matrix when multiple operands have heterogeneous privilege requirements"
+      - "Each operand entry must specify: security policy type, required UID/GID, supplemental groups, capabilities, volume permissions"
+      - "Matrix must document platform policy interaction semantics (injection vs explicit request behavior)"
+      - "Matrix must identify risks from policy enforcement differences across platform versions"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+
+  - id: ra-eval-002
+    prompt: >-
+      An operator references seven external container images via environment variables
+      in its deployment manifest. The operator is expected to run on multiple CPU
+      architectures (x86_64, ARM, s390x, ppc64le). Evaluate whether the repo-assessment
+      artifact enumerates all external image references and documents their architecture
+      availability.
+    assertions:
+      - "§4.3 must enumerate all externally-referenced container images (images not built by this repo)"
+      - "Each image reference must document its available architectures (multi-arch manifest list vs single-arch)"
+      - "Each image reference must be checked against every target architecture: x86_64, ARM, s390x, and ppc64le"
+      - "Single-architecture images must be flagged as critical risks for multi-arch deployment"
+      - "An image that lacks any required target architecture must be flagged as a critical risk, including partial multi-arch manifest lists"
+      - "Assessment must distinguish between images the operator builds vs images it references from upstream"
+    failure_class: "architecture-support-gap"
+    derived_from: "multi-arch-support"
+
+  - id: ra-eval-003
+    prompt: >-
+      An operator uses a kubebuilder-generated ClusterRole for reconcilers
+      (config/rbac/role.yaml) and separate operand ClusterRoles in bindata.
+      The operator has multiple controllers sharing the manager role, and each
+      operand component has its own RBAC requirements. Evaluate whether the
+      repo-assessment artifact documents RBAC scope separately for operator
+      vs operand roles and includes a minimum-privilege audit.
+    assertions:
+      - "§10.1 or §6 Security guardrails must document RBAC permission scope separately for operator reconciler role and operand ClusterRoles"
+      - "Assessment must distinguish kubebuilder manager-role permissions from operand bindata ClusterRoles"
+      - "Wildcard verbs or overly broad resource grants must be flagged as risks"
+      - "Over-permissioned roles must be identified with specific verbs/resources that exceed minimum requirements"
+      - "Assessment must identify applicable resourceNames restrictions, including singleton operand CRs named cluster, and flag roles that omit them"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+
+  - id: ra-eval-004
+    prompt: >-
+      An operator uses an imperative reconciliation pattern (read static manifests,
+      apply to cluster) for managing StatefulSets, DaemonSets, and Deployments.
+      Evaluate whether the repo-assessment artifact documents the reconciliation
+      flow including conflict handling, retry behavior, and update strategy per
+      workload type.
+    assertions:
+      - "§4.2 must document the reconciliation/processing flow with explicit step ordering"
+      - "§4.2 must specify what happens on error at each reconciliation stage (retry, abort, degrade)"
+      - "Assessment must document the apply strategy for each managed workload type"
+      - "Assessment must document conflict detection and retry behavior for each managed workload that uses read-modify-write reconciliation"
+      - "Status condition transitions on reconciliation failure must be documented in §4.4"
+    failure_class: "reconciliation-information-gap"
+    derived_from: "reconciliation-safety"
+
+  - id: ra-eval-005
+    prompt: >-
+      An operator runs on a platform where security policies evolve across versions
+      (new default policies may conflict with operand security configurations).
+      Evaluate whether the repo-assessment artifact tracks platform security policy
+      evolution and assesses impact on operand configurations.
+    assertions:
+      - "§10.1 must document platform security policy version interactions when operand security depends on platform policies"
+      - "Assessment must identify which platform version introduced or changed security policies affecting operands"
+      - "Forward-compatibility risks from platform security evolution must appear in §11 Risks"
+    failure_class: "platform-compatibility-gap"
+    derived_from: "operand-security-configuration"

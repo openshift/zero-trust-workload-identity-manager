@@ -1,0 +1,140 @@
+stage: code-generation
+round: 1
+description: >-
+  Per-task code quality evals that run during /opsx-apply. Derived from PR
+  pattern analysis — each eval tests a generic code quality dimension, not
+  a specific file or feature. Tagged with oape_command for routing.
+evals:
+  # --- api-implement command evals ---
+  - id: cg-eval-001
+    prompt: >-
+      A controller reconciliation task implements a read-modify-write pattern
+      for updating managed resources. Evaluate whether the generated code
+      includes proper conflict handling.
+    assertions:
+      - "Code must not implement custom read-modify-write update logic when framework-provided patterns (SSA, optimistic concurrency) suffice"
+      - "If custom update logic is required, it must handle 409 Conflict responses with retry"
+      - "ResourceVersion must not be cached across reconcile cycles — fetch fresh on each reconcile"
+      - "Unit tests must verify behavior on version conflict (mock 409 response)"
+    failure_class: "reconciliation-race-condition"
+    derived_from: "reconciliation-safety"
+    oape_command: "api-implement"
+
+  - id: cg-eval-002
+    prompt: >-
+      A controller task implements security context configuration for an operand
+      component that requires elevated privileges. Evaluate whether the generated
+      code correctly configures all security context fields.
+    assertions:
+      - "SecurityContext must explicitly set all required fields — do not rely on platform policy injection for values the pod spec must declare"
+      - "When security policy uses MustRunAs semantics, pod spec must explicitly request values from the allowed range"
+      - "SupplementalGroups, RunAsUser, RunAsGroup, and Capabilities must be set explicitly when the security policy requires them"
+      - "Unit tests must verify the generated security context configuration matches expected values"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+    oape_command: "api-implement"
+
+  - id: cg-eval-003
+    prompt: >-
+      A controller task implements configuration propagation from a CR to an
+      operand's ConfigMap, where the operand pod must restart to pick up changes.
+      Evaluate whether the generated code includes the standard config change
+      detection pattern.
+    assertions:
+      - "ConfigMap content changes must trigger operand pod restart via hash annotation on the pod template"
+      - "Hash annotation must be computed from the ConfigMap data, not metadata"
+      - "Unit tests must verify that ConfigMap content change produces a different hash annotation value"
+    failure_class: "operand-config-propagation-failure"
+    derived_from: "operand-configuration"
+    oape_command: "api-implement"
+
+  # --- api-generate command evals ---
+  - id: cg-eval-004
+    prompt: >-
+      A CRD type definition task adds fields that control operand security
+      configuration (security policy references, privilege levels, identity settings).
+      Evaluate whether the generated API types include appropriate validation.
+    assertions:
+      - "Security-sensitive fields must include validation markers (enum constraints, CEL rules, or format validators)"
+      - "Fields controlling privilege levels must have explicit defaults that follow least-privilege principle"
+      - "Immutable fields (if any) must use CEL XValidation with oldSelf pattern"
+      - "Generated code must pass `make generate && make manifests && make verify`"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+    oape_command: "api-generate"
+
+  - id: cg-eval-005
+    prompt: >-
+      An API type generation task adds or modifies CRD fields. ZTWIM does
+      not expose container image references on CRD types — OLM injects operand
+      images via RELATED_IMAGE_* environment variables. Evaluate whether the
+      generated API avoids introducing image reference fields and keeps image
+      wiring in OLM manifests instead.
+    assertions:
+      - "Generated CRD types must not add container image reference fields — images are resolved from RELATED_IMAGE_* env vars"
+      - "If the task touches image wiring, changes must be limited to config/manager and bundle CSV relatedImages, not CRD spec fields"
+      - "Generated code must pass `make generate && make manifests && make verify`"
+    failure_class: "architecture-support-gap"
+    derived_from: "multi-arch-support"
+    oape_command: "api-generate"
+
+  # --- api-generate-tests command evals ---
+  - id: cg-eval-006
+    prompt: >-
+      A test generation task creates unit tests for controller reconciliation
+      logic that manages multiple resource types. Evaluate whether the tests
+      cover conflict and error scenarios.
+    assertions:
+      - "Tests must cover the happy path (resource created/updated successfully)"
+      - "Tests must cover conflict scenarios (stale ResourceVersion, 409 Conflict response)"
+      - "Tests must cover partial failure (some resources apply, others fail)"
+      - "Tests must verify status condition transitions on reconciliation errors"
+    failure_class: "reconciliation-race-condition"
+    derived_from: "reconciliation-safety"
+    oape_command: "api-generate-tests"
+
+  - id: cg-eval-007
+    prompt: >-
+      A test generation task creates unit tests for security context configuration
+      logic. Evaluate whether the tests verify all security context fields are
+      correctly set.
+    assertions:
+      - "Tests must verify all SecurityContext fields are set explicitly (not relying on defaults)"
+      - "Tests must verify UID/GID/SupplementalGroups match expected values from the operator's security design"
+      - "Tests must include negative cases (what happens when security context values are invalid)"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+    oape_command: "api-generate-tests"
+
+  # --- manual command evals ---
+  - id: cg-eval-008
+    prompt: >-
+      A manifest/bindata task modifies RBAC resources (operator manager-role
+      in config/rbac/role.yaml and/or operand ClusterRoles in bindata).
+      ZTWIM uses one kubebuilder-generated manager-role shared by all
+      reconcilers; operand ClusterRoles are defined separately per component.
+      Evaluate whether the generated RBAC follows minimum-privilege principles
+      for the scope being modified.
+    assertions:
+      - "RBAC must use specific verbs (get, list, watch, create, update, patch, delete) — no wildcard (*) verbs"
+      - "Resources must be scoped to specific API groups and resource names — no wildcard resources"
+      - "Operator manager-role and operand ClusterRoles must not be conflated — each bindata operand role must be scoped to that component's API needs"
+      - "Changes must pass `make manifests && make verify`"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+    oape_command: "manual"
+
+  - id: cg-eval-009
+    prompt: >-
+      A task updates operand image references (RELATED_IMAGE environment
+      variables in config/manager and CSV relatedImages entries). Evaluate
+      whether the update keeps wiring consistent and considers multi-arch
+      deployment requirements.
+    assertions:
+      - "RELATED_IMAGE environment variables in config/manager must stay consistent with bundle CSV relatedImages entries"
+      - "Updated image references should be validated for multi-architecture manifest availability"
+      - "All seven RELATED_IMAGE_* variables must remain defined when image wiring changes"
+      - "Changes must pass `make verify` and bundle validation"
+    failure_class: "architecture-support-gap"
+    derived_from: "multi-arch-support"
+    oape_command: "manual"

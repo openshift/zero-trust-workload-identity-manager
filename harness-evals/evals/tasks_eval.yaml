@@ -1,0 +1,67 @@
+stage: tasks
+round: 1
+evals:
+  - id: tk-eval-001
+    prompt: >-
+      A task backlog includes tasks that introduce or modify external container
+      image references (operand images, init containers, sidecars). Evaluate
+      whether these tasks include multi-architecture validation as an acceptance
+      criterion.
+    assertions:
+      - "Tasks introducing or modifying external container image references must include multi-arch validation in acceptance criteria"
+      - "Acceptance criteria must verify all referenced images are available as multi-architecture manifest lists"
+      - "Validation must cover all platform-supported architectures, not just the CI architecture"
+    failure_class: "architecture-support-gap"
+    derived_from: "multi-arch-support"
+
+  - id: tk-eval-002
+    prompt: >-
+      A task backlog includes tasks that modify security-related configurations
+      (security policies, privilege levels, RBAC permissions, security contexts).
+      Evaluate whether these tasks include security posture verification as a
+      specific acceptance criterion.
+    assertions:
+      - "Tasks modifying security configurations must include acceptance criteria verifying runtime security posture"
+      - "Verification must assert actual container security state (UID/GID/capabilities) not just configuration correctness"
+      - "Security verification must be part of the implementation task, not deferred to a separate testing task"
+    failure_class: "security-constraint-gap"
+    derived_from: "operand-security-configuration"
+
+  - id: tk-eval-003
+    prompt: >-
+      An operator manages four independent operand components, each with distinct
+      security requirements, configuration surfaces, and lifecycle dependencies.
+      A task backlog combines changes to multiple operands in single tasks.
+      Evaluate whether task decomposition separates concerns by operand component.
+    assertions:
+      - "When operator manages multiple operands with independent concerns, tasks must be decomposed at operand-component granularity"
+      - "Tasks must not combine unrelated operand changes where one component's issue could mask another's"
+      - "Each operand's security configuration must be addressable as an independent unit of work"
+    failure_class: "task-granularity-gap"
+    derived_from: "operand-security-configuration"
+
+  - id: tk-eval-004
+    prompt: >-
+      A task backlog includes implementation tasks for controller reconciliation
+      logic that performs read-modify-write operations on cluster resources.
+      Evaluate whether the acceptance criteria include conflict handling verification.
+    assertions:
+      - "Tasks implementing read-modify-write reconciliation must include acceptance criteria for conflict handling"
+      - "Acceptance criteria must verify behavior on version conflicts (409 Conflict responses)"
+      - "Tasks must verify idempotency — repeated execution must not cause resource drift"
+    failure_class: "reconciliation-race-condition"
+    derived_from: "reconciliation-safety"
+
+  - id: tk-eval-005
+    prompt: >-
+      A task backlog includes tasks for operand configuration propagation
+      (modifying ConfigMaps that operand pods consume). Evaluate whether tasks
+      include acceptance criteria verifying that configuration changes trigger
+      operand pod restarts or reloads.
+    assertions:
+      - "Tasks modifying operand configuration must include acceptance criteria for configuration propagation verification"
+      - "Acceptance criteria must verify operand pods detect and apply configuration changes (restart or reload)"
+      - "If the task uses restart-based propagation, implementation notes must specify a deterministic restart trigger, such as a ConfigMap-data hash annotation"
+      - "If the task uses reload-based propagation, acceptance criteria must verify that the operand completes the reload after the ConfigMap changes"
+    failure_class: "operand-config-propagation-failure"
+    derived_from: "operand-configuration"
