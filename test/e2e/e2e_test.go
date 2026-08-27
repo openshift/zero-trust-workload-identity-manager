@@ -336,6 +336,58 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			}
 		})
 
+		It("SPIRE Agent process should run as root with supplemental GID within namespace range", func() {
+			By("Getting a ready spire-agent pod")
+			agentPod, err := utils.GetReadySpireAgentPod(testCtx, clientset)
+			Expect(err).NotTo(HaveOccurred(), "should find a ready spire-agent pod")
+			fmt.Fprintf(GinkgoWriter, "using spire-agent pod: %s\n", agentPod.Name)
+
+			By("Executing grep on /proc/self/status in spire-agent container")
+			effectiveUID, gids, err := utils.GetProcStatusFromPod(testCtx, utils.OperatorNamespace,
+				agentPod.Name, utils.SpireAgentContainerName)
+			Expect(err).NotTo(HaveOccurred(), "failed to get proc status from spire-agent pod")
+			fmt.Fprintf(GinkgoWriter, "spire-agent process: effectiveUID=%d, Groups=%v\n", effectiveUID, gids)
+
+			By("Verifying process runs as root (UID 0)")
+			Expect(effectiveUID).To(Equal(0), "spire-agent process should run as root (UID 0)")
+
+			By("Verifying process has root group (GID 0)")
+			hasRootGroup := false
+			for _, g := range gids {
+				if g == 0 {
+					hasRootGroup = true
+					break
+				}
+			}
+			Expect(hasRootGroup).To(BeTrue(), "spire-agent process should have root group (GID 0) in Groups")
+
+			By("Fetching namespace supplemental-groups annotation")
+			operatorNS := &corev1.Namespace{}
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: utils.OperatorNamespace}, operatorNS)).To(Succeed(),
+				"failed to fetch operator namespace %s", utils.OperatorNamespace)
+
+			ann := operatorNS.Annotations["openshift.io/sa.scc.supplemental-groups"]
+			Expect(strings.TrimSpace(ann)).NotTo(BeEmpty(),
+				"namespace %s should have supplemental groups annotation", utils.OperatorNamespace)
+
+			rangeStart, rangeSize, err := utils.ParseSupplementalRange(ann)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse supplemental groups annotation %q", ann)
+
+			By("Verifying process has supplemental GID within namespace range")
+			rangeEnd := rangeStart + rangeSize
+			hasSupplementalGID := false
+			for _, g := range gids {
+				if g >= rangeStart && g < rangeEnd {
+					hasSupplementalGID = true
+					fmt.Fprintf(GinkgoWriter, "found supplemental GID %d within namespace range [%d, %d)\n", g, rangeStart, rangeEnd)
+					break
+				}
+			}
+			Expect(hasSupplementalGID).To(BeTrue(),
+				"spire-agent process should have at least one supplemental GID within namespace range [%d, %d); actual Groups=%v",
+				rangeStart, rangeEnd, gids)
+		})
+
 		It("Prometheus metrics endpoint should be serving", func() {
 			By("Verifying metrics Service exists with correct port configuration")
 			metricsSvc, err := clientset.CoreV1().Services(utils.OperatorNamespace).Get(testCtx,
