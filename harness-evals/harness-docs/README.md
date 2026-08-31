@@ -12,7 +12,8 @@ Follow this order when working on a task:
 2. **`architecture/components.md`** — controller patterns, reconcile flow, shared utilities
 3. **`ZTWIM_DEVELOPMENT.md`** — build workflow, bootstrap, common tasks
 4. **`decisions/`** — architectural decisions (controller-runtime, bindata)
-5. **`ZTWIM_TESTING.md`** — unit and E2E test patterns (when writing tests)
+5. **`ZTWIM_TEST_IMPLEMENTATION.md`** — how to write and run unit/E2E test code
+6. **`ZTWIM_TEST_PLAN_HARNESS.md`** — ADR-driven test plan generation (OpenSpec QE workflow)
 
 ## Documentation Map
 
@@ -29,7 +30,8 @@ Follow this order when working on a task:
 | [decisions/adr-0001-controller-runtime-over-library-go.md](decisions/adr-0001-controller-runtime-over-library-go.md) | Why controller-runtime instead of library-go |
 | [decisions/adr-0002-bindata-for-operand-manifests.md](decisions/adr-0002-bindata-for-operand-manifests.md) | Why go-bindata for static operand manifests |
 | [ZTWIM_DEVELOPMENT.md](ZTWIM_DEVELOPMENT.md) | Build, bootstrap, adding operands/bindata/CRD fields |
-| [ZTWIM_TESTING.md](ZTWIM_TESTING.md) | Unit (FakeCustomCtrlClient) and E2E (Ginkgo) patterns |
+| [ZTWIM_TEST_IMPLEMENTATION.md](ZTWIM_TEST_IMPLEMENTATION.md) | Write and run unit/E2E tests (FakeCustomCtrlClient, Ginkgo) |
+| [ZTWIM_TEST_PLAN_HARNESS.md](ZTWIM_TEST_PLAN_HARNESS.md) | Generate ADR-driven test plans (OpenSpec QE workflow) |
 | [references/ecosystem.md](references/ecosystem.md) | Links to Platform operator/testing/security docs |
 | [references/enhancements.md](references/enhancements.md) | OpenShift enhancement proposals and upstream refs |
 | [exec-plans/README.md](exec-plans/README.md) | Multi-step feature execution plans |

@@ -61,7 +61,8 @@ ai-docs/
 │   ├── ecosystem.md           # Links to Platform
 │   └── enhancements.md        # Enhancement proposals & upstream refs
 ├── ZTWIM_DEVELOPMENT.md       # Build, workflow, common tasks, env vars
-└── ZTWIM_TESTING.md           # Unit (FakeCustomCtrlClient) + E2E (Ginkgo)
+├── ZTWIM_TEST_IMPLEMENTATION.md  # Write/run unit + E2E test code
+└── ZTWIM_TEST_PLAN_HARNESS.md    # ADR-driven test plan generation (OpenSpec QE)
 ```
 
 **AI Agent Path**: [`ai-docs/README.md`](ai-docs/README.md) → domain/ → architecture/ → ZTWIM_DEVELOPMENT.md → decisions/
