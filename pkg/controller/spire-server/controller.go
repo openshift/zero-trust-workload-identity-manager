@@ -163,14 +163,14 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Reconcile ConfigMaps
 	//TODO: Pass tlsConfig to reconcileConfigMap so taht minTLSVersion, cipherSuites and curvePreferences are injected to the HCL config of Operand (spire-server).
-	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, &ztwim, createOnlyMode)
+	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, &ztwim, r.tlsConfig, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Reconcile Spire Controller Manager ConfigMap
 	//TODO: Pass tlsConfig to reconcileConfigMap so taht minTLSVersion, cipherSuites and curvePreferences are injected to the HCL config of Operand (spire-controller-manager).
-	spireControllerManagerConfigMapHash, err := r.reconcileSpireControllerManagerConfigMap(ctx, &server, statusMgr, &ztwim, createOnlyMode)
+	spireControllerManagerConfigMapHash, err := r.reconcileSpireControllerManagerConfigMap(ctx, &server, statusMgr, &ztwim, r.tlsConfig, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
