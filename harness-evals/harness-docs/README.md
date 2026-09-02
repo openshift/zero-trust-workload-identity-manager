@@ -2,7 +2,7 @@
 
 Retrieval-first documentation for AI agents and contributors working on the Zero Trust Workload Identity Manager operator.
 
-> **Start here**: Read [`../AGENTS.md`](../AGENTS.md) for critical patterns and build commands before generating code.
+> **Start here**: Read [`../../AGENTS.md`](../../AGENTS.md) for critical patterns and build commands before generating code.
 
 ## Agent Path
 

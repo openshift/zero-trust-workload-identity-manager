@@ -3,7 +3,7 @@
 **Component**: Zero Trust Workload Identity Manager
 **Repository**: openshift/zero-trust-workload-identity-manager
 
-> **Retrieval-first**: Before generating code, read the relevant `ai-docs/` files. Start with `domain/` for API types, then `architecture/components.md` for patterns, then `ZTWIM_DEVELOPMENT.md` for workflow.
+> **Retrieval-first**: Before generating code, read the relevant `harness-evals/harness-docs/` files. Start with `domain/` for API types, then `architecture/components.md` for patterns, then `ZTWIM_DEVELOPMENT.md` for workflow.
 >
 > **Generic Platform Patterns**: See Platform documentation (openshift/enhancements/ai-docs/) for operator patterns, testing practices, security guidelines, and cross-repo ADRs.
 
@@ -29,7 +29,7 @@ A controller-runtime operator (not library-go) that deploys and manages upstream
 
 **1. Never hand-edit generated files** — `zz_generated.deepcopy.go`, `config/crd/bases/*.yaml`, `pkg/operator/assets/bindata.go`. Use `make generate`, `make manifests`, `make update-bindata`. Run `make verify` before pushing.
 
-**2. All five ZTWIM-owned CRDs are cluster-scoped singletons named `cluster`** — enforced by CEL XValidation. The three upstream `spire.spiffe.io` CRDs (ClusterSPIFFEID, ClusterFederatedTrustDomain, ClusterStaticEntry) are NOT singletons — see [`ai-docs/domain/upstream-spiffe-crds.md`](ai-docs/domain/upstream-spiffe-crds.md). Controller names use the full prefix: `zero-trust-workload-identity-manager-<component>-controller` (constants in `pkg/controller/utils/constants.go`).
+**2. All five ZTWIM-owned CRDs are cluster-scoped singletons named `cluster`** — enforced by CEL XValidation. The three upstream `spire.spiffe.io` CRDs (ClusterSPIFFEID, ClusterFederatedTrustDomain, ClusterStaticEntry) are NOT singletons — see [`harness-evals/harness-docs/domain/upstream-spiffe-crds.md`](harness-evals/harness-docs/domain/upstream-spiffe-crds.md). Controller names use the full prefix: `zero-trust-workload-identity-manager-<component>-controller` (constants in `pkg/controller/utils/constants.go`).
 
 **3. Operand controllers watch the parent ZTWIM CR** — all four operand controllers watch `ZeroTrustWorkloadIdentityManager` with `ZTWIMSpecChangedPredicate`, and managed resources with component-specific label predicates (`ControllerManagedResourcesForComponent`). The ZTWIM controller does NOT create operand CRs — it only aggregates status.
 
@@ -47,7 +47,7 @@ A controller-runtime operator (not library-go) that deploys and manages upstream
 ## Documentation Structure
 
 ```text
-ai-docs/
+harness-evals/harness-docs/
 ├── domain/                    # CRD type docs (ZTWIM, SpireServer, SpireAgent, etc.)
 │   └── upstream-spiffe-crds.md
 ├── architecture/              # Repo layout, controller table, reconciliation flow
@@ -65,7 +65,7 @@ ai-docs/
 └── ZTWIM_TEST_PLAN_HARNESS.md    # ADR-driven test plan generation (OpenSpec QE)
 ```
 
-**AI Agent Path**: [`ai-docs/README.md`](ai-docs/README.md) → domain/ → architecture/ → ZTWIM_DEVELOPMENT.md → decisions/
+**AI Agent Path**: [`harness-evals/harness-docs/README.md`](harness-evals/harness-docs/README.md) → domain/ → architecture/ → ZTWIM_DEVELOPMENT.md → decisions/
 
 **Platform Patterns**: [Operator](https://github.com/openshift/enhancements/tree/master/ai-docs) | [Testing](https://github.com/openshift/enhancements/tree/master/ai-docs) | [Security](https://github.com/openshift/enhancements/tree/master/ai-docs)
 
