@@ -20,7 +20,7 @@ import (
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -63,81 +63,33 @@ func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, schem
 			OperatorTLSConfig: nil,
 			OperandTLSConfig:  nil,
 		},
-		InitialTLSAdherencePolicy: configv1.TLSAdherencePolicyNoOpinion, // Default value.
+		InitialTLSAdherencePolicy: configv1.TLSAdherencePolicyNoOpinion, // Default value. Ztwim ignores tlsAdherence; profile application is unchanged.
 		InitialTLSProfileSpec:     configv1.TLSProfileSpec{},
 	}
 
-	apiServer, err := fetchConfigV1APIServer(ctx, k8sClient)
+	tlsConfig.InitialTLSProfileSpec, err = openshifttls.FetchAPIServerTLSProfile(ctx, k8sClient)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// 404 error: continue with default profile spec.
-			setupLog.Info(utiltls.APIServerName, "not found. Continuing with default profile spec.")
-			// Assign default spec. Error is not read since it is never returned as of today for this code path. Following call will return the default profile spec from initialized map.
-			tlsConfig.InitialTLSProfileSpec, _ = utiltls.GetTLSProfileSpec(nil)
+			setupLog.Info(openshifttls.APIServerName, "not found. Continuing with default profile spec.")
+			// Assign default spec which is intermediate
+			tlsConfig.InitialTLSProfileSpec = *configv1.TLSProfiles[libgocrypto.DefaultTLSProfileType]
 			tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
 			tlsConfig.Resolved.OperandTLSConfig = getOperandTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
 		} else {
 			// Non-404 error: return error, do not proceed. Never start with unkonwn tlsProfile.
-			return nil, fmt.Errorf("error while fetching %q: %w", utiltls.APIServerName, err)
+			return nil, fmt.Errorf("error while fetching %q: %w", openshifttls.APIServerName, err)
 		}
 	} else {
-		tlsConfig, err = getOperatorAndOperandTLSConfig(apiServer, setupLog)
-		if err != nil {
-			// Error while parsing TLS profile spec: return error, do not proceed. Never start with unkonwn tlsProfile.
-			return nil, err
-		}
-	}
-
-	return tlsConfig, nil
-}
-
-// fetchConfigV1APIServer fetches the config.v1.APIServer object.
-func fetchConfigV1APIServer(ctx context.Context, k8sClient client.Client) (*configv1.APIServer, error) {
-	apiServer := &configv1.APIServer{}
-	key := client.ObjectKey{Name: utiltls.APIServerName}
-
-	if err := k8sClient.Get(ctx, key, apiServer); err != nil {
-		return nil, fmt.Errorf("failed to get APIServer %q: %w", key.String(), err)
-	}
-
-	return apiServer, nil
-}
-
-// getOperatorAndOperandTLSConfig resolves operator TLS callbacks and operand TLS settings
-// from the cluster adherence policy and profile spec.
-func getOperatorAndOperandTLSConfig(apiServer *configv1.APIServer, setupLog logr.Logger) (*TLSConfig, error) {
-
-	tlsProfileSpec, err := utiltls.GetTLSProfileSpec(apiServer.Spec.TLSSecurityProfile)
-	if err != nil {
-		// Error can only happen if profile type is set to custom and then the custom profile is nil.
-		return nil, fmt.Errorf("failed to parse TLS profile spec: %w", err)
-	}
-
-	tlsConfig := &TLSConfig{
-		Resolved: &Resolved{
-			OperatorTLSConfig: nil,
-			OperandTLSConfig:  nil,
-		},
-		InitialTLSAdherencePolicy: apiServer.Spec.TLSAdherence,
-		InitialTLSProfileSpec:     tlsProfileSpec,
-	}
-
-	// If the TLS adherence policy is set to honor the TLS profile,
-	// use the cluster-wide TLS profile-based configuration.
-	if libgocrypto.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence) {
-		tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsProfileSpec, setupLog)
-		tlsConfig.Resolved.OperandTLSConfig = getOperandTLSConfig(tlsProfileSpec, setupLog)
-	} else {
-		// Do nothing. Go defaults.
-		tlsConfig.Resolved.OperatorTLSConfig = nil
-		tlsConfig.Resolved.OperandTLSConfig = nil
+		tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
+		tlsConfig.Resolved.OperandTLSConfig = getOperandTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
 	}
 
 	return tlsConfig, nil
 }
 
 func getOperatorTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.Logger) func(*tls.Config) {
-	profileTLSConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
+	profileTLSConfig, unsupportedCiphers := openshifttls.NewTLSConfigFromProfile(tlsProfileSpec)
 	if len(unsupportedCiphers) > 0 {
 		setupLog.Info("TLS configuration contains unsupported ciphers that will be ignored", "unsupportedCiphers", unsupportedCiphers)
 	}
@@ -147,30 +99,37 @@ func getOperatorTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.
 
 // getOperandTLSConfig converts a cluster TLS profile spec into operand-facing TLS settings.
 func getOperandTLSConfig(tlsProfileSpec configv1.TLSProfileSpec, setupLog logr.Logger) *OperandTLSConfig {
+	var operandTLSCfg *OperandTLSConfig
 	// If the minimum TLS version is less than 1.2, return nil. SPIRE does not support TLS 1.0 and TLS 1.1.
 	if tlsProfileSpec.MinTLSVersion == configv1.VersionTLS10 || tlsProfileSpec.MinTLSVersion == configv1.VersionTLS11 {
-		setupLog.Info("TLS profile specifies a minimum TLS version that is less than 1.2. Continuing with empty operand TLS config. Operands will run with Go default TLS config.")
+		setupLog.Info("TLS profile specifies a minimum TLS version that is less than 1.2. Returning default TLS Profile for operand")
+		defaultTLSProfile := *configv1.TLSProfiles[libgocrypto.DefaultTLSProfileType]
+		operandTLSCfg = &OperandTLSConfig{
+			MinTLSVersion: defaultTLSProfile.MinTLSVersion,
+			CipherSuites:  libgocrypto.OpenSSLToIANACipherSuites(defaultTLSProfile.Ciphers),
+		}
 
-		return nil
+		return operandTLSCfg
 	}
 
-	config := OperandTLSConfig{
+	operandTLSCfg = &OperandTLSConfig{
 		MinTLSVersion: tlsProfileSpec.MinTLSVersion,
 		CipherSuites:  libgocrypto.OpenSSLToIANACipherSuites(tlsProfileSpec.Ciphers),
 	}
 
-	if config.MinTLSVersion == "" && len(config.CipherSuites) == 0 && len(config.CurvePreferences) == 0 {
+	//if the operand TLS config is empty, return nil
+	if operandTLSCfg.MinTLSVersion == "" && len(operandTLSCfg.CipherSuites) == 0 && len(operandTLSCfg.CurvePreferences) == 0 {
 		return nil
 	}
 
-	if len(config.CipherSuites) == 0 {
-		config.CipherSuites = nil
+	if len(operandTLSCfg.CipherSuites) == 0 {
+		operandTLSCfg.CipherSuites = nil
 	}
-	if len(config.CurvePreferences) == 0 {
-		config.CurvePreferences = nil
+	if len(operandTLSCfg.CurvePreferences) == 0 {
+		operandTLSCfg.CurvePreferences = nil
 	}
 
-	return &config
+	return operandTLSCfg
 }
 
 // GetInjectableTLSConfigForOperand returns a map of TLS config that can be injected into the Operand configmap.

@@ -52,7 +52,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	securityv1 "github.com/openshift/api/security/v1"
-	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 	ctrlmgr "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -171,7 +171,6 @@ func main() {
 	exitOnError(err, "unable to resolve TLS configuration")
 
 	if tlsConfig.Resolved.OperatorTLSConfig != nil {
-		//strict adherence is set.
 		metricsTLSOpts = append(metricsTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)
 		webhookTLSOpts = append(webhookTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)
 	}
@@ -257,7 +256,7 @@ func main() {
 
 	// Set up the TLS security profile watcher controller.
 	// This will trigger a graceful shutdown when the TLS profile changes.
-	if err := (&utiltls.SecurityProfileWatcher{
+	if err := (&openshifttls.SecurityProfileWatcher{
 		Client:                    mgr.GetClient(),
 		InitialTLSProfileSpec:     tlsConfig.InitialTLSProfileSpec,
 		InitialTLSAdherencePolicy: tlsConfig.InitialTLSAdherencePolicy,
@@ -265,9 +264,8 @@ func main() {
 			setupLog.Info("TLS profile has changed, initiating a shutdown to reload it", "oldProfile", oldTLSProfileSpec, "newProfile", newTLSProfileSpec)
 			cancel()
 		},
-		OnAdherencePolicyChange: func(_ context.Context, oldPol, newPol configv1.TLSAdherencePolicy) {
-			setupLog.Info("TLS adherence policy has changed, initiating a shutdown to reload it", "oldPolicy", oldPol, "newPolicy", newPol)
-			cancel()
+		OnAdherencePolicyChange: func(_ context.Context, _, _ configv1.TLSAdherencePolicy) {
+			// ZTWIM ignores tlsAdherence; profile application is unchanged.
 		},
 	}).SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to create TLS security profile watcher controller")
