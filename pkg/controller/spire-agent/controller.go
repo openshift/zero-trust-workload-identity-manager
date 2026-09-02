@@ -151,7 +151,6 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Reconcile ConfigMap
-	//TODO: Pass tlsConfig to reconcileConfigMap so taht minTLSVersion, cipherSuites and curvePreferences are injected to the HCL config of Operand (spire-agent).
 	configHash, err := r.reconcileConfigMap(ctx, &agent, statusMgr, &ztwim, r.tlsConfig, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err

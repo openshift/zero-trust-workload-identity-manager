@@ -150,7 +150,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	}
 
 	// Reconcile ConfigMap
-	//TODO: Pass tlsConfig to reconcileConfigMap so taht minTLSVersion, cipherSuites and curvePreferences are injected to the HCL config of Operand (spire-oidc-discovery-provider).
 	configHash, err := r.reconcileConfigMap(ctx, &oidcDiscoveryProviderConfig, statusMgr, &ztwim, r.tlsConfig, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
