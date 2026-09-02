@@ -71,7 +71,7 @@ func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, schem
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// 404 error: continue with default profile spec.
-			setupLog.Info(openshifttls.APIServerName, "not found. Continuing with default profile spec.")
+			setupLog.Info("APIServer CR not found. Continuing with default profile.", "name", openshifttls.APIServerName)
 			// Assign default spec which is intermediate
 			tlsConfig.InitialTLSProfileSpec = *configv1.TLSProfiles[libgocrypto.DefaultTLSProfileType]
 			tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
