@@ -80,15 +80,15 @@ spec:
         - name: OPERATOR_VERSION
           value: 1.1.0
         - name: RELATED_IMAGE_SPIRE_SERVER
-          value: ghcr.io/spiffe/spire-server:1.14.7
+          value: quay.io/rh-ee-nhegde/spire-server:v-pqc
         - name: RELATED_IMAGE_SPIRE_AGENT
-          value: ghcr.io/spiffe/spire-agent:1.14.7
+          value: quay.io/rh-ee-nhegde/spire-agent:v-pqc
         - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
-          value: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
+          value: quay.io/rh-ee-nhegde/spiffe-csi-driver:v-pqc
         - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
-          value: ghcr.io/spiffe/oidc-discovery-provider:1.14.7
+          value: quay.io/rh-ee-nhegde/spire-oidc-discovery-provider:v-pqc
         - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-          value: ghcr.io/spiffe/spire-controller-manager:0.6.4
+          value: quay.io/rh-ee-nhegde/spiffe-spire-controller-manager:v-pqc
         - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
           value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.15.0
         - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
