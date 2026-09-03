@@ -278,7 +278,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 	}
 
 	if tlsCfg := pkgtls.GetInjectableTLSConfigForOperand(tlsConfig); tlsCfg != nil {
-		serverConfig["tls_config"] = tlsCfg
+		serverConfig[utils.TLSConfigKey] = tlsCfg
 	}
 
 	// Only add jwt_key_type if it's explicitly set

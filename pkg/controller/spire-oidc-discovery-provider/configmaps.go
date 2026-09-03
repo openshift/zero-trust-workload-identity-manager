@@ -132,7 +132,7 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim 
 	}
 
 	if tlsCfg := pkgtls.GetInjectableTLSConfigForOperand(tlsConfig); tlsCfg != nil {
-		oidcConfig["tls_config"] = tlsCfg
+		oidcConfig[utils.TLSConfigKey] = tlsCfg
 	}
 
 	oidcJSON, err := json.MarshalIndent(oidcConfig, "", "  ")

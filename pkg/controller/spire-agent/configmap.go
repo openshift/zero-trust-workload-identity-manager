@@ -156,7 +156,7 @@ func generateAgentConfig(cfg *v1alpha1.SpireAgent, ztwim *v1alpha1.ZeroTrustWork
 	}
 
 	if tlsCfg := pkgtls.GetInjectableTLSConfigForOperand(tlsConfig); tlsCfg != nil {
-		agentConf["agent"].(map[string]interface{})["tls_config"] = tlsCfg
+		agentConf["agent"].(map[string]interface{})[utils.TLSConfigKey] = tlsCfg
 	}
 
 	return agentConf
