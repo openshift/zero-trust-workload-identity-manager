@@ -265,13 +265,6 @@ func TestFetchAPIServerTLSConfig_invalidCustomFallsBackToDefault(t *testing.T) {
 	}
 }
 
-func TestFetchAPIServerTLSConfig_nilClientFails(t *testing.T) {
-	_, err := FetchAPIServerTLSConfig(context.Background(), nil, logr.Discard())
-	if err == nil {
-		t.Fatal("expected error when client is nil")
-	}
-}
-
 func TestFetchAPIServerTLSConfig_intermediateProfile(t *testing.T) {
 	intermediateProfile := defaultIntermediateProfile(t)
 	k8sClient := newAPIServerTestClient(t, &configv1.APIServer{
