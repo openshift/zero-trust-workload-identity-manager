@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: spire-upstream-ca
+  namespace: {{ .Namespace }}
+spec:
+  isCA: true
+  commonName: spire-e2e-upstream-ca
+  secretName: spire-upstream-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: spire-selfsigned-issuer
+    kind: Issuer
+    group: cert-manager.io

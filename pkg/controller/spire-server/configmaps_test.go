@@ -2024,3 +2024,55 @@ func TestGenerateServerConfMap_CertManagerDefaults(t *testing.T) {
 		t.Errorf("Expected default issuer_group %q, got %v", "cert-manager.io", pd["issuer_group"])
 	}
 }
+
+func TestGenerateServerConfMap_CertManagerIssuerKind(t *testing.T) {
+	config := createValidConfig()
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{
+		CertManager: &v1alpha1.UpstreamAuthorityCertManager{
+			Namespace:   "zero-trust-workload-identity-manager",
+			IssuerName:  "spire-ca-issuer",
+			IssuerKind:  "Issuer",
+			IssuerGroup: "cert-manager.io",
+		},
+	}
+
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "example.org",
+			BundleConfigMap: "spire-bundle",
+			ClusterName:     "test-cluster",
+		},
+	}
+
+	confMap := generateServerConfMap(config, ztwim)
+
+	plugins, ok := confMap["plugins"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Failed to get plugins section")
+	}
+	ua, ok := plugins["UpstreamAuthority"].([]map[string]interface{})
+	if !ok || len(ua) == 0 {
+		t.Fatal("Expected UpstreamAuthority plugin block")
+	}
+	cmPlugin, ok := ua[0]["cert-manager"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected cert-manager plugin")
+	}
+	pd, ok := cmPlugin["plugin_data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected plugin_data in cert-manager plugin")
+	}
+
+	if pd["issuer_kind"] != "Issuer" {
+		t.Errorf("Expected issuer_kind %q, got %v", "Issuer", pd["issuer_kind"])
+	}
+	if pd["issuer_name"] != "spire-ca-issuer" {
+		t.Errorf("Expected issuer_name %q, got %v", "spire-ca-issuer", pd["issuer_name"])
+	}
+	if pd["issuer_group"] != "cert-manager.io" {
+		t.Errorf("Expected issuer_group %q, got %v", "cert-manager.io", pd["issuer_group"])
+	}
+	if pd["namespace"] != "zero-trust-workload-identity-manager" {
+		t.Errorf("Expected namespace %q, got %v", "zero-trust-workload-identity-manager", pd["namespace"])
+	}
+}

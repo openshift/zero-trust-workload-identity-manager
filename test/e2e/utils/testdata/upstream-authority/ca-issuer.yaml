@@ -1,0 +1,8 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: spire-ca-issuer
+  namespace: {{ .Namespace }}
+spec:
+  ca:
+    secretName: spire-upstream-ca

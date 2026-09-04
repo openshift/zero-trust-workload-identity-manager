@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"fmt"
@@ -40,6 +41,7 @@ import (
 var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	var testCtx context.Context
 	var appDomain string
+	var trustDomain string
 	var clusterName string
 	var bundleConfigMap string
 	var jwtIssuer string
@@ -55,6 +57,15 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 
 		// declare shared variables for tests
 		appDomain = fmt.Sprintf("apps.%s", baseDomain)
+		// SPIRE's cert-manager plugin puts the trust domain into a Kubernetes label value,
+		// which is limited to 63 characters. CI Hive clusters often have longer app domains.
+		if len(appDomain) > 63 {
+			trustDomain = "e2e.test"
+			fmt.Fprintf(GinkgoWriter, "trust domain override: apps domain length %d exceeds 63-char K8s label limit; using %q\n",
+				len(appDomain), trustDomain)
+		} else {
+			trustDomain = appDomain
+		}
 		jwtIssuer = fmt.Sprintf("https://oidc-discovery.%s", appDomain)
 		clusterName = "test01"
 		bundleConfigMap = "spire-bundle"
@@ -108,7 +119,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				},
 				Spec: operatorv1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
 					BundleConfigMap: bundleConfigMap,
-					TrustDomain:     appDomain,
+					TrustDomain:     trustDomain,
 					ClusterName:     clusterName,
 				},
 			}
@@ -178,7 +189,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 					DefaultX509Validity: metav1.Duration{Duration: utils.DefaultX509SVIDTTL},
 					DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
 					CASubject: operatorv1alpha1.CASubject{
-						CommonName:   appDomain,
+						CommonName:   trustDomain,
 						Country:      "US",
 						Organization: "RH",
 					},
@@ -499,7 +510,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				Expect(err).NotTo(HaveOccurred(), "failed to read and parse svid.pem from pod")
 
 				By("Verifying SPIFFE ID in URI SAN")
-				expectedSPIFFEID := fmt.Sprintf("spiffe://%s/ns/%s/sa/%s", appDomain, f.Namespace, f.SAName)
+				expectedSPIFFEID := fmt.Sprintf("spiffe://%s/ns/%s/sa/%s", trustDomain, f.Namespace, f.SAName)
 				Expect(cert.URIs).NotTo(BeEmpty(), "certificate must contain at least one URI SAN")
 				Expect(cert.URIs[0].String()).To(Equal(expectedSPIFFEID),
 					"SVID SPIFFE ID must match expected value")
@@ -532,7 +543,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				By("Verifying bundle certificates are CAs with CertSign KeyUsage")
 				for i, ca := range bundleCerts {
 					Expect(ca.IsCA).To(BeTrue(), "bundle certificate [%d] must be a CA", i)
-					Expect(ca.KeyUsage & x509.KeyUsageCertSign).NotTo(BeZero(),
+					Expect(ca.KeyUsage&x509.KeyUsageCertSign).NotTo(BeZero(),
 						"bundle certificate [%d] KeyUsage must include CertSign", i)
 					fmt.Fprintf(GinkgoWriter, "bundle cert [%d]: Subject=%s, IsCA=%v, KeyUsage=%d\n",
 						i, ca.Subject, ca.IsCA, ca.KeyUsage)
@@ -670,7 +681,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to update ClusterSPIFFEID template")
 
 			By("Waiting for SVID to reflect the updated SPIFFE ID")
-			expectedNewSPIFFEID := fmt.Sprintf("spiffe://%s/updated/ns/%s/sa/%s", appDomain, f.Namespace, f.SAName)
+			expectedNewSPIFFEID := fmt.Sprintf("spiffe://%s/updated/ns/%s/sa/%s", trustDomain, f.Namespace, f.SAName)
 			Eventually(func() string {
 				_, _, _, cert, parseErr := utils.ReadAndParseSVIDCertificate(testCtx, f.Namespace, f.PodName, f.AppContainer)
 				if parseErr != nil || len(cert.URIs) == 0 {
@@ -1929,6 +1940,171 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				return !strings.Contains(cm.Data[utils.SpireServerConfigKey], driftMarker)
 			}).WithPolling(utils.ShortInterval).WithTimeout(utils.ShortTimeout).Should(BeTrue(),
 				"ConfigMap drift should be corrected when CreateOnlyMode is False")
+		})
+	})
+
+	Context("UpstreamAuthority cert-manager", func() {
+		BeforeAll(func() {
+			utils.NoteCertManagerIssuedAfter(time.Now())
+			setupCtx, cancel := context.WithTimeout(context.Background(), utils.UpstreamCASetupTimeout)
+			DeferCleanup(cancel)
+
+			By("Installing cert-manager Operator if it is not already present")
+			utils.InstallCertManager(setupCtx, k8sClient, clientset)
+
+			By("Creating a namespaced CA Issuer for SPIRE UpstreamAuthority")
+			utils.CreateSpireUpstreamCAIssuer(setupCtx, k8sClient, utils.OperatorNamespace)
+
+			By("Patching SpireServer with cert-manager upstreamAuthority")
+			server := &operatorv1alpha1.SpireServer{}
+			server.Name = "cluster"
+			err := utils.UpdateCRWithRetry(setupCtx, k8sClient, server, func() {
+				server.Spec.UpstreamAuthority = &operatorv1alpha1.UpstreamAuthorityConfig{
+					CertManager: &operatorv1alpha1.UpstreamAuthorityCertManager{
+						Namespace:   utils.OperatorNamespace,
+						IssuerName:  utils.CertManagerIssuerName,
+						IssuerKind:  "Issuer",
+						IssuerGroup: "cert-manager.io",
+					},
+				}
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch SpireServer upstreamAuthority")
+
+			By("Wiping the SPIRE server PVC so the new upstream CA is used")
+			utils.WipeSpireServerPVC(setupCtx, clientset, utils.OperatorNamespace)
+
+			By("Waiting for SpireServer to become Ready with the upstream CA")
+			utils.WaitForSpireServerConditions(setupCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"Ready":                    metav1.ConditionTrue,
+				"StatefulSetAvailable":     metav1.ConditionTrue,
+				"ServerConfigMapAvailable": metav1.ConditionTrue,
+				"RBACAvailable":            metav1.ConditionTrue,
+			}, 2*utils.DefaultTimeout)
+			utils.WaitForStatefulSetReady(setupCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, 2*utils.DefaultTimeout)
+
+			By("Restarting SPIRE agents so they trust the new upstream CA")
+			utils.RestartSpireAgents(setupCtx, clientset, utils.OperatorNamespace)
+			utils.WaitForSpireAgentsSynced(setupCtx, clientset, utils.OperatorNamespace, 2*utils.DefaultTimeout)
+			utils.WaitForDaemonSetAvailable(setupCtx, clientset, utils.SpiffeCSIDriverDaemonSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("SpireServer should become Ready after switching to cert-manager upstreamAuthority", func() {
+			By("Verifying SpireServer conditions remain True")
+			utils.WaitForSpireServerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"Ready":                metav1.ConditionTrue,
+				"StatefulSetAvailable": metav1.ConditionTrue,
+			}, utils.DefaultTimeout)
+
+			By("Waiting for SPIRE Server StatefulSet to be Ready")
+			utils.WaitForStatefulSetReady(testCtx, clientset, utils.SpireServerStatefulSetName, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
+
+		It("server.conf should contain the cert-manager UpstreamAuthority plugin", func() {
+			By("Reading cert-manager plugin_data from the spire-server ConfigMap")
+			var pd *utils.CertManagerPluginData
+			Eventually(func() error {
+				var err error
+				pd, err = utils.GetCertManagerPluginData(testCtx, clientset, utils.OperatorNamespace)
+				return err
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(Succeed())
+
+			Expect(pd.IssuerName).To(Equal(utils.CertManagerIssuerName))
+			Expect(pd.IssuerKind).To(Equal("Issuer"))
+			Expect(pd.IssuerGroup).To(Equal("cert-manager.io"))
+			Expect(pd.Namespace).To(Equal(utils.OperatorNamespace))
+		})
+
+		It("ClusterRole should allow certificaterequests when cert-manager UA is set", func() {
+			By("Checking the spire-server ClusterRole for cert-manager.io certificaterequests")
+			Eventually(func() bool {
+				ok, err := utils.ClusterRoleHasCertManagerCertificateRequests(testCtx, clientset)
+				if err != nil {
+					fmt.Fprintf(GinkgoWriter, "get ClusterRole: %v\n", err)
+					return false
+				}
+				return ok
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"spire-server ClusterRole should grant certificaterequests")
+		})
+
+		It("SPIRE should create an issued CertificateRequest against the Issuer", func() {
+			By("Waiting for SPIRE's CertificateRequest to be issued (object may already be deleted)")
+			Eventually(func() bool {
+				return utils.HasIssuedCertificateRequest(testCtx, k8sClient, clientset, utils.OperatorNamespace, utils.CertManagerIssuerName)
+			}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.DefaultInterval).Should(BeTrue(),
+				"SPIRE should create an issued CertificateRequest for issuer %s", utils.CertManagerIssuerName)
+		})
+
+		It("workload SVID should chain to the cert-manager Issuer CA", Label("attestation"), func() {
+			By("Loading the cert-manager Issuer CA certificate")
+			issuerCA, err := utils.IssuerCACert(testCtx, clientset, utils.OperatorNamespace)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse Issuer CA from Secret")
+			Expect(issuerCA.IsCA).To(BeTrue(), "Issuer CA must have IsCA=true")
+
+			By("Setting up an attestation workload")
+			f := utils.SetupAttestationTest(testCtx, k8sClient, clientset, "upstream-ca", nil)
+
+			By("Reading the workload SVID")
+			svidPEM, _, _, svidCert, err := utils.ReadAndParseSVIDCertificate(testCtx, f.Namespace, f.PodName, f.AppContainer)
+			Expect(err).NotTo(HaveOccurred(), "failed to read svid.pem")
+
+			By("Reading bundle.pem for intermediates")
+			bundlePEM, err := utils.ReadBundlePEM(testCtx, f.Namespace, f.PodName, f.AppContainer)
+			Expect(err).NotTo(HaveOccurred(), "failed to read bundle.pem")
+			bundleCerts, err := utils.ParseAllPEMCertificates(bundlePEM)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse bundle.pem")
+
+			intermediates := x509.NewCertPool()
+			svidCerts, err := utils.ParseAllPEMCertificates(svidPEM)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse svid.pem chain")
+			for _, c := range svidCerts {
+				if !bytes.Equal(c.Raw, svidCert.Raw) {
+					intermediates.AddCert(c)
+				}
+			}
+			for _, c := range bundleCerts {
+				intermediates.AddCert(c)
+			}
+			roots := x509.NewCertPool()
+			roots.AddCert(issuerCA)
+
+			By("Verifying svid.pem chains through SPIRE to the cert-manager Issuer CA")
+			_, err = svidCert.Verify(x509.VerifyOptions{
+				Roots:         roots,
+				Intermediates: intermediates,
+				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+			})
+			Expect(err).NotTo(HaveOccurred(), "svid.pem must chain to the cert-manager Issuer CA")
+		})
+
+		It("issuerKind ClusterIssuer should be written to server.conf", func() {
+			By("Creating a self-signed ClusterIssuer")
+			utils.CreateSelfSignedClusterIssuer(testCtx, k8sClient, utils.CertManagerClusterIssuerName)
+
+			By("Patching SpireServer issuerKind to ClusterIssuer")
+			server := &operatorv1alpha1.SpireServer{}
+			server.Name = "cluster"
+			err := utils.UpdateCRWithRetry(testCtx, k8sClient, server, func() {
+				if server.Spec.UpstreamAuthority == nil || server.Spec.UpstreamAuthority.CertManager == nil {
+					Fail("expected cert-manager upstreamAuthority to already be set")
+				}
+				server.Spec.UpstreamAuthority.CertManager.IssuerKind = "ClusterIssuer"
+				server.Spec.UpstreamAuthority.CertManager.IssuerName = utils.CertManagerClusterIssuerName
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to patch issuerKind to ClusterIssuer")
+
+			By("Waiting for server.conf issuer_kind to become ClusterIssuer")
+			Eventually(func() string {
+				pd, err := utils.GetCertManagerPluginData(testCtx, clientset, utils.OperatorNamespace)
+				if err != nil {
+					return ""
+				}
+				return pd.IssuerKind
+			}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.ShortInterval).Should(Equal("ClusterIssuer"))
+
+			pd, err := utils.GetCertManagerPluginData(testCtx, clientset, utils.OperatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pd.IssuerName).To(Equal(utils.CertManagerClusterIssuerName))
 		})
 	})
 })
