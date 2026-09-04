@@ -221,6 +221,10 @@ func CreateFederationSpireServer(ctx context.Context, k8sClient client.Client, t
 			Datastore: operatorv1alpha1.DataStore{
 				DatabaseType:     "sqlite3",
 				ConnectionString: "/run/spire/data/datastore.sqlite3",
+				MaxOpenConns:     100,
+				MaxIdleConns:     2,
+				ConnMaxLifetime:  3600,
+				DisableMigration: "false",
 			},
 			Federation: &operatorv1alpha1.FederationConfig{
 				BundleEndpoint: operatorv1alpha1.BundleEndpointConfig{
