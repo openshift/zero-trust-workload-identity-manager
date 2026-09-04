@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -28,6 +29,7 @@ import (
 
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -49,8 +51,10 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	ztwimController "github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/zero-trust-workload-identity-manager"
 
+	configv1 "github.com/openshift/api/config/v1"
 	securityv1 "github.com/openshift/api/security/v1"
-
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
+	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 	ctrlmgr "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -133,6 +137,51 @@ func main() {
 		webhookTLSOpts = append(webhookTLSOpts, disableHTTP2)
 	}
 
+	config := ctrl.GetConfigOrDie()
+
+	// Increase QPS and Burst to allow more concurrent API calls
+	config.QPS = 50    // Default is usually 5, increase as needed
+	config.Burst = 100 // Default is usually 10, increase as needed
+
+	// Add OpenShift SCC scheme
+	if err := securityv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add securityv1 scheme")
+	}
+	if err := ctrlmgr.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add spiffev1alpha1 scheme")
+	}
+
+	if err := routev1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add routev1 scheme")
+	}
+
+	// Add OperatorCondition scheme for OLM integration
+	if err := operatorv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add operatorv1 scheme")
+	}
+
+	// Add configv1 scheme for tls profile watcher
+	if err := configv1.AddToScheme(scheme); err != nil {
+		exitOnError(err, "unable to add configv1 scheme")
+	}
+
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
+	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
+	exitOnError(err, "unable to create Kubernetes client")
+
+	tlsConfig, err := pkgtls.FetchAPIServerTLSConfig(ctx, k8sClient, setupLog)
+	if err != nil {
+		pkgtls.ReportTLSResolutionFailure(ctx, k8sClient, setupLog, err)
+		exitOnError(err, "unable to resolve TLS configuration")
+	}
+
+	if tlsConfig.Resolved.OperatorTLSConfig != nil {
+		metricsTLSOpts = append(metricsTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)
+		webhookTLSOpts = append(webhookTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)
+	}
+
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: webhookTLSOpts,
 	})
@@ -185,28 +234,6 @@ func main() {
 		})
 		metricsServerOptions.TLSOpts = metricsTLSOpts
 	}
-	config := ctrl.GetConfigOrDie()
-
-	// Increase QPS and Burst to allow more concurrent API calls
-	config.QPS = 50    // Default is usually 5, increase as needed
-	config.Burst = 100 // Default is usually 10, increase as needed
-
-	// Add OpenShift SCC scheme
-	if err := securityv1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add securityv1 scheme")
-	}
-	if err := ctrlmgr.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add spiffev1alpha1 scheme")
-	}
-
-	if err := routev1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add routev1 scheme")
-	}
-
-	// Add OperatorCondition scheme for OLM integration
-	if err := operatorv1.AddToScheme(scheme); err != nil {
-		exitOnError(err, "unable to add operatorv1 scheme")
-	}
 
 	// Create unified cache builder to prevent race conditions between manager and reconciler caches
 	cacheBuilder, err := customClient.NewCacheBuilder()
@@ -234,19 +261,36 @@ func main() {
 	})
 	exitOnError(err, "unable to start manager")
 
+	// Set up the TLS security profile watcher controller.
+	// This will trigger a graceful shutdown when the TLS profile changes.
+	if err := (&openshifttls.SecurityProfileWatcher{
+		Client:                    mgr.GetClient(),
+		InitialTLSProfileSpec:     tlsConfig.InitialTLSProfileSpec,
+		InitialTLSAdherencePolicy: tlsConfig.InitialTLSAdherencePolicy,
+		OnProfileChange: func(_ context.Context, oldTLSProfileSpec, newTLSProfileSpec configv1.TLSProfileSpec) {
+			setupLog.Info("TLS profile has changed, initiating a shutdown to reload it", "oldProfile", oldTLSProfileSpec, "newProfile", newTLSProfileSpec)
+			cancel()
+		},
+		OnAdherencePolicyChange: func(_ context.Context, _, _ configv1.TLSAdherencePolicy) {
+			// ZTWIM ignores tlsAdherence; profile application is unchanged.
+		},
+	}).SetupWithManager(mgr); err != nil {
+		exitOnError(err, "unable to create TLS security profile watcher controller")
+	}
+
 	ztwimControllerManager, err := ztwimController.New(mgr)
 	exitOnError(err, "unable to set up ztwim controller manager")
 	if err = ztwimControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup ztwim controller manager")
 	}
 
-	spireServerControllerManager, err := spireServerController.New(mgr)
+	spireServerControllerManager, err := spireServerController.New(mgr, tlsConfig.Resolved.OperandTLSConfig)
 	exitOnError(err, "unable to set up spire server controller manager")
 	if err = spireServerControllerManager.SetupWithManager(mgr); err != nil {
 		exitOnError(err, "unable to setup spire server controller manager")
 	}
 
-	spireAgentControllerManager, err := spireAgentController.New(mgr)
+	spireAgentControllerManager, err := spireAgentController.New(mgr, tlsConfig.Resolved.OperandTLSConfig)
 	if err != nil {
 		exitOnError(err, "unable to set up spire agent controller manager")
 	}
@@ -262,7 +306,7 @@ func main() {
 		exitOnError(err, "unable to setup spiffe csi driver controller manager")
 	}
 
-	spireOIDCDiscoveryProviderControllerManager, err := spireOIDCDiscoveryProviderController.New(mgr)
+	spireOIDCDiscoveryProviderControllerManager, err := spireOIDCDiscoveryProviderController.New(mgr, tlsConfig.Resolved.OperandTLSConfig)
 	if err != nil {
 		exitOnError(err, "unable to set up spire OIDC discovery provider controller manager")
 	}
@@ -280,7 +324,7 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
-	err = mgr.Start(ctrl.SetupSignalHandler())
+	err = mgr.Start(ctx)
 	exitOnError(err, "problem running manager")
 }
 

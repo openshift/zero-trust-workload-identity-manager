@@ -17,11 +17,12 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 )
 
 // reconcileConfigMap reconciles the OIDC Discovery Provider ConfigMap
-func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) (string, error) {
-	cm, err := generateOIDCConfigMapFromCR(oidc, ztwim)
+func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, tlsConfig *pkgtls.OperandTLSConfig, createOnlyMode bool) (string, error) {
+	cm, err := generateOIDCConfigMapFromCR(oidc, ztwim, tlsConfig)
 	if err != nil {
 		r.log.Error(err, "failed to generate OIDC ConfigMap from CR")
 		statusMgr.AddCondition(ConfigMapAvailable, "SpireOIDCConfigMapCreationFailed",
@@ -85,7 +86,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileConfigMap(ctx context.Co
 }
 
 // generateOIDCConfigMapFromCR creates a ConfigMap for the spire oidc discovery provider from the CR spec
-func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, error) {
+func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, tlsConfig *pkgtls.OperandTLSConfig) (*corev1.ConfigMap, error) {
 	if dp == nil {
 		return nil, errors.New("spire OIDC Discovery Provider Config is nil")
 	}
@@ -128,6 +129,10 @@ func generateOIDCConfigMapFromCR(dp *v1alpha1.SpireOIDCDiscoveryProvider, ztwim 
 			"socket_path":  "/spiffe-workload-api/" + agentSocketName,
 			"trust_domain": trustDomain,
 		},
+	}
+
+	if tlsCfg := pkgtls.GetInjectableTLSConfigForOperand(tlsConfig); tlsCfg != nil {
+		oidcConfig[utils.TLSConfigKey] = tlsCfg
 	}
 
 	oidcJSON, err := json.MarshalIndent(oidcConfig, "", "  ")

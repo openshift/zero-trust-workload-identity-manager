@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 )
 
 const (
@@ -52,10 +53,11 @@ type SpireAgentReconciler struct {
 	eventRecorder record.EventRecorder
 	log           logr.Logger
 	scheme        *runtime.Scheme
+	tlsConfig     *pkgtls.OperandTLSConfig
 }
 
 // New returns a new Reconciler instance.
-func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
+func New(mgr ctrl.Manager, tlsConfig *pkgtls.OperandTLSConfig) (*SpireAgentReconciler, error) {
 	c, err := customClient.NewCustomClient(mgr)
 	if err != nil {
 		return nil, err
@@ -66,6 +68,7 @@ func New(mgr ctrl.Manager) (*SpireAgentReconciler, error) {
 		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
 		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
 		scheme:        mgr.GetScheme(),
+		tlsConfig:     tlsConfig,
 	}, nil
 }
 
@@ -148,7 +151,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Reconcile ConfigMap
-	configHash, err := r.reconcileConfigMap(ctx, &agent, statusMgr, &ztwim, createOnlyMode)
+	configHash, err := r.reconcileConfigMap(ctx, &agent, statusMgr, &ztwim, r.tlsConfig, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

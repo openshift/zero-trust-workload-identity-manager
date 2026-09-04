@@ -211,21 +211,21 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-06-03T12:11:19Z"
+    createdAt: "2026-09-02T16:01:27Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "true"
-    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/tls-profiles: "true"
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     operatorframework.io/suggested-namespace: zero-trust-workload-identity-manager
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.39.0
+    operators.operatorframework.io/builder: operator-sdk-v1.42.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/openshift/zero-trust-workload-identity-manager
     support: Red Hat, Inc.
@@ -432,6 +432,14 @@ spec:
           - delete
           - get
           - list
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - apiservers
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - coordination.k8s.io
           resources:
@@ -724,15 +732,15 @@ spec:
                 - name: OPERATOR_VERSION
                   value: 1.1.0
                 - name: RELATED_IMAGE_SPIRE_SERVER
-                  value: ghcr.io/spiffe/spire-server:1.14.7
+                  value: quay.io/rh-ee-nhegde/spire-server:v-pqc
                 - name: RELATED_IMAGE_SPIRE_AGENT
-                  value: ghcr.io/spiffe/spire-agent:1.14.7
+                  value: quay.io/rh-ee-nhegde/spire-agent:v-pqc
                 - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
-                  value: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
+                  value: quay.io/rh-ee-nhegde/spiffe-csi-driver:v-pqc
                 - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
-                  value: ghcr.io/spiffe/oidc-discovery-provider:1.14.7
+                  value: quay.io/rh-ee-nhegde/spire-oidc-discovery-provider:v-pqc
                 - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-                  value: ghcr.io/spiffe/spire-controller-manager:0.6.4
+                  value: quay.io/rh-ee-nhegde/spiffe-spire-controller-manager:v-pqc
                 - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.15.0
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
@@ -815,15 +823,15 @@ spec:
   provider:
     name: Red Hat
   relatedImages:
-  - image: ghcr.io/spiffe/spire-server:1.14.7
+  - image: quay.io/rh-ee-nhegde/spire-server:v-pqc
     name: spire-server
-  - image: ghcr.io/spiffe/spire-agent:1.14.7
+  - image: quay.io/rh-ee-nhegde/spire-agent:v-pqc
     name: spire-agent
-  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
+  - image: quay.io/rh-ee-nhegde/spiffe-csi-driver:v-pqc
     name: spiffe-csi-driver
-  - image: ghcr.io/spiffe/oidc-discovery-provider:1.14.7
+  - image: quay.io/rh-ee-nhegde/spire-oidc-discovery-provider:v-pqc
     name: spire-oidc-discovery-provider
-  - image: ghcr.io/spiffe/spire-controller-manager:0.6.4
+  - image: quay.io/rh-ee-nhegde/spiffe-spire-controller-manager:v-pqc
     name: spire-controller-manager
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.15.0
     name: node-driver-registrar
