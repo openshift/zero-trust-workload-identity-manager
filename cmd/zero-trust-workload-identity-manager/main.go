@@ -29,6 +29,7 @@ import (
 
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -167,8 +168,14 @@ func main() {
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
-	tlsConfig, err := pkgtls.FetchAPIServerTLSConfig(ctx, config, scheme, setupLog)
-	exitOnError(err, "unable to resolve TLS configuration")
+	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
+	exitOnError(err, "unable to create Kubernetes client")
+
+	tlsConfig, err := pkgtls.FetchAPIServerTLSConfig(ctx, k8sClient, setupLog)
+	if err != nil {
+		pkgtls.ReportTLSResolutionFailure(ctx, k8sClient, setupLog, err)
+		exitOnError(err, "unable to resolve TLS configuration")
+	}
 
 	if tlsConfig.Resolved.OperatorTLSConfig != nil {
 		metricsTLSOpts = append(metricsTLSOpts, tlsConfig.Resolved.OperatorTLSConfig)

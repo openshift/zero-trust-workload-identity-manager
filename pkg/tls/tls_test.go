@@ -127,10 +127,8 @@ func newAPIServerTLSConfigTestServer(t *testing.T, apiServer *configv1.APIServer
 }
 
 func TestFetchAPIServerTLSConfig_honorsProfileRegardlessOfAdherence(t *testing.T) {
-	scheme := testScheme(t)
 	intermediateProfile := defaultIntermediateProfile(t)
-
-	srv := newAPIServerTLSConfigTestServer(t, &configv1.APIServer{
+	k8sClient := newAPIServerTestClient(t, &configv1.APIServer{
 		ObjectMeta: metav1.ObjectMeta{Name: openshifttls.APIServerName},
 		Spec: configv1.APIServerSpec{
 			TLSAdherence: configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly,
@@ -139,16 +137,8 @@ func TestFetchAPIServerTLSConfig_honorsProfileRegardlessOfAdherence(t *testing.T
 			},
 		},
 	}, http.StatusOK)
-	defer srv.Close()
 
-	cfg := &rest.Config{
-		Host: srv.URL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-
-	result, err := FetchAPIServerTLSConfig(context.Background(), cfg, scheme, logr.Discard())
+	result, err := FetchAPIServerTLSConfig(context.Background(), k8sClient, logr.Discard())
 	if err != nil {
 		t.Fatalf("FetchAPIServerTLSConfig() error = %v", err)
 	}
@@ -226,11 +216,9 @@ func TestGetOperandTLSConfig(t *testing.T) {
 }
 
 func TestFetchAPIServerTLSConfig_oldProfilePreservesResolvedInitialSpec(t *testing.T) {
-	scheme := testScheme(t)
 	oldProfile := configv1.TLSProfiles[configv1.TLSProfileOldType]
 	defaultProfile := defaultIntermediateProfile(t)
-
-	srv := newAPIServerTLSConfigTestServer(t, &configv1.APIServer{
+	k8sClient := newAPIServerTestClient(t, &configv1.APIServer{
 		ObjectMeta: metav1.ObjectMeta{Name: openshifttls.APIServerName},
 		Spec: configv1.APIServerSpec{
 			TLSSecurityProfile: &configv1.TLSSecurityProfile{
@@ -238,16 +226,8 @@ func TestFetchAPIServerTLSConfig_oldProfilePreservesResolvedInitialSpec(t *testi
 			},
 		},
 	}, http.StatusOK)
-	defer srv.Close()
 
-	cfg := &rest.Config{
-		Host: srv.URL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-
-	result, err := FetchAPIServerTLSConfig(context.Background(), cfg, scheme, logr.Discard())
+	result, err := FetchAPIServerTLSConfig(context.Background(), k8sClient, logr.Discard())
 	if err != nil {
 		t.Fatalf("FetchAPIServerTLSConfig() error = %v", err)
 	}
@@ -262,10 +242,9 @@ func TestFetchAPIServerTLSConfig_oldProfilePreservesResolvedInitialSpec(t *testi
 	}
 }
 
-func TestFetchAPIServerTLSConfig_invalidCustomFails(t *testing.T) {
-	scheme := testScheme(t)
-
-	srv := newAPIServerTLSConfigTestServer(t, &configv1.APIServer{
+func TestFetchAPIServerTLSConfig_invalidCustomFallsBackToDefault(t *testing.T) {
+	defaultProfile := defaultIntermediateProfile(t)
+	k8sClient := newAPIServerTestClient(t, &configv1.APIServer{
 		ObjectMeta: metav1.ObjectMeta{Name: openshifttls.APIServerName},
 		Spec: configv1.APIServerSpec{
 			TLSSecurityProfile: &configv1.TLSSecurityProfile{
@@ -273,35 +252,29 @@ func TestFetchAPIServerTLSConfig_invalidCustomFails(t *testing.T) {
 			},
 		},
 	}, http.StatusOK)
-	defer srv.Close()
 
-	cfg := &rest.Config{
-		Host: srv.URL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
+	result, err := FetchAPIServerTLSConfig(context.Background(), k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("FetchAPIServerTLSConfig() error = %v", err)
 	}
-
-	_, err := FetchAPIServerTLSConfig(context.Background(), cfg, scheme, logr.Discard())
-	if err == nil {
-		t.Fatal("expected error for invalid custom profile")
+	if !reflect.DeepEqual(result.InitialTLSProfileSpec, defaultProfile) {
+		t.Fatalf("InitialTLSProfileSpec = %#v, want default Intermediate %#v", result.InitialTLSProfileSpec, defaultProfile)
+	}
+	if result.Resolved.OperatorTLSConfig == nil || result.Resolved.OperandTLSConfig == nil {
+		t.Fatal("expected operator and operand TLS config from default profile")
 	}
 }
 
-func TestFetchAPIServerTLSConfig_clientCreationError(t *testing.T) {
-	scheme := testScheme(t)
-
-	_, err := FetchAPIServerTLSConfig(context.Background(), nil, scheme, logr.Discard())
+func TestFetchAPIServerTLSConfig_nilClientFails(t *testing.T) {
+	_, err := FetchAPIServerTLSConfig(context.Background(), nil, logr.Discard())
 	if err == nil {
-		t.Fatal("expected error when rest config is nil, got nil")
+		t.Fatal("expected error when client is nil")
 	}
 }
 
 func TestFetchAPIServerTLSConfig_intermediateProfile(t *testing.T) {
-	scheme := testScheme(t)
 	intermediateProfile := defaultIntermediateProfile(t)
-
-	srv := newAPIServerTLSConfigTestServer(t, &configv1.APIServer{
+	k8sClient := newAPIServerTestClient(t, &configv1.APIServer{
 		ObjectMeta: metav1.ObjectMeta{Name: openshifttls.APIServerName},
 		Spec: configv1.APIServerSpec{
 			TLSSecurityProfile: &configv1.TLSSecurityProfile{
@@ -309,16 +282,8 @@ func TestFetchAPIServerTLSConfig_intermediateProfile(t *testing.T) {
 			},
 		},
 	}, http.StatusOK)
-	defer srv.Close()
 
-	cfg := &rest.Config{
-		Host: srv.URL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-
-	result, err := FetchAPIServerTLSConfig(context.Background(), cfg, scheme, logr.Discard())
+	result, err := FetchAPIServerTLSConfig(context.Background(), k8sClient, logr.Discard())
 	if err != nil {
 		t.Fatalf("FetchAPIServerTLSConfig() error = %v", err)
 	}
@@ -334,20 +299,10 @@ func TestFetchAPIServerTLSConfig_intermediateProfile(t *testing.T) {
 }
 
 func TestFetchAPIServerTLSConfig_notFoundSeedsDefaultBaseline(t *testing.T) {
-	scheme := testScheme(t)
 	defaultProfile := defaultIntermediateProfile(t)
+	k8sClient := newAPIServerTestClient(t, nil, http.StatusNotFound)
 
-	srv := newAPIServerTLSConfigTestServer(t, nil, http.StatusNotFound)
-	defer srv.Close()
-
-	cfg := &rest.Config{
-		Host: srv.URL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-
-	result, err := FetchAPIServerTLSConfig(context.Background(), cfg, scheme, logr.Discard())
+	result, err := FetchAPIServerTLSConfig(context.Background(), k8sClient, logr.Discard())
 	if err != nil {
 		t.Fatalf("FetchAPIServerTLSConfig() error = %v", err)
 	}
@@ -363,19 +318,9 @@ func TestFetchAPIServerTLSConfig_notFoundSeedsDefaultBaseline(t *testing.T) {
 }
 
 func TestFetchAPIServerTLSConfig_getFailureReturnsError(t *testing.T) {
-	scheme := testScheme(t)
+	k8sClient := newAPIServerTestClient(t, nil, http.StatusForbidden)
 
-	srv := newAPIServerTLSConfigTestServer(t, nil, http.StatusForbidden)
-	defer srv.Close()
-
-	cfg := &rest.Config{
-		Host: srv.URL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-
-	_, err := FetchAPIServerTLSConfig(context.Background(), cfg, scheme, logr.Discard())
+	_, err := FetchAPIServerTLSConfig(context.Background(), k8sClient, logr.Discard())
 	if err == nil {
 		t.Fatal("expected error when APIServer fetch fails with non-404 error")
 	}

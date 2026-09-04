@@ -120,6 +120,11 @@ func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
 	}, nil
 }
 
+// NewCustomClientFromClient wraps a plain client for use before the manager starts.
+func NewCustomClientFromClient(c client.Client) CustomCtrlClient {
+	return &customCtrlClientImpl{Client: c}
+}
+
 func (c *customCtrlClientImpl) Get(
 	ctx context.Context, key client.ObjectKey, obj client.Object,
 ) error {

@@ -16,15 +16,14 @@ package tls
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,12 +51,8 @@ type TLSConfig struct {
 }
 
 // FetchAPIServerTLSConfig fetches operator TLS settings from apiservers/cluster.
-func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, scheme *runtime.Scheme, setupLog logr.Logger) (*TLSConfig, error) {
-	k8sClient, err := client.New(restConfig, client.Options{Scheme: scheme})
-	if err != nil {
-		return nil, fmt.Errorf("unable to create Kubernetes client: %w", err)
-	}
-
+func FetchAPIServerTLSConfig(ctx context.Context, k8sClient client.Client, setupLog logr.Logger) (*TLSConfig, error) {
+	var err error
 	tlsConfig := &TLSConfig{
 		Resolved: &Resolved{
 			OperatorTLSConfig: nil,
@@ -69,9 +64,9 @@ func FetchAPIServerTLSConfig(ctx context.Context, restConfig *rest.Config, schem
 
 	tlsConfig.InitialTLSProfileSpec, err = openshifttls.FetchAPIServerTLSProfile(ctx, k8sClient)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// 404 error: continue with default profile spec.
-			setupLog.Info("APIServer CR not found. Continuing with default profile.", "name", openshifttls.APIServerName)
+		if apierrors.IsNotFound(err) || errors.Is(err, openshifttls.ErrCustomProfileNil) {
+			// 404 error or invalid custom profile error falls back to default profile. Same as openshift-apiserver behaviour.
+			setupLog.Info("Issue with fetching tlsProfile. Continuing with default profile.", "name", openshifttls.APIServerName)
 			// Assign default spec which is intermediate
 			tlsConfig.InitialTLSProfileSpec = *configv1.TLSProfiles[libgocrypto.DefaultTLSProfileType]
 			tlsConfig.Resolved.OperatorTLSConfig = getOperatorTLSConfig(tlsConfig.InitialTLSProfileSpec, setupLog)
