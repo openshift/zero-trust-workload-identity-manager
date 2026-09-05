@@ -168,17 +168,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 	Context("Bidirectional Federation", func() {
 		It("applies bidirectional ClusterFederatedTrustDomain", func() {
 			By("Creating ClusterFederatedTrustDomain on Cluster A pointing to Cluster B")
-			cftdA := &spiffev1alpha1.ClusterFederatedTrustDomain{
-				ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-b"},
-				Spec: spiffev1alpha1.ClusterFederatedTrustDomainSpec{
-					TrustDomain:       trustDomainB,
-					BundleEndpointURL: fmt.Sprintf("https://%s:%d", bundleRouteB, utils.FederationRoutePort),
-					BundleEndpointProfile: spiffev1alpha1.BundleEndpointProfile{
-						Type:             spiffev1alpha1.HTTPSSPIFFEProfileType,
-						EndpointSPIFFEID: fmt.Sprintf("spiffe://%s/spire/server", trustDomainB),
-					},
-				},
-			}
+			cftdA := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-b", trustDomainB, bundleRouteB)
 			Expect(k8sClient.Create(testCtx, cftdA)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster A")
 			DeferCleanup(func(ctx context.Context) {
@@ -186,17 +176,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			})
 
 			By("Creating ClusterFederatedTrustDomain on Cluster B pointing to Cluster A")
-			cftdB := &spiffev1alpha1.ClusterFederatedTrustDomain{
-				ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-a"},
-				Spec: spiffev1alpha1.ClusterFederatedTrustDomainSpec{
-					TrustDomain:       trustDomainA,
-					BundleEndpointURL: fmt.Sprintf("https://%s:%d", bundleRouteA, utils.FederationRoutePort),
-					BundleEndpointProfile: spiffev1alpha1.BundleEndpointProfile{
-						Type:             spiffev1alpha1.HTTPSSPIFFEProfileType,
-						EndpointSPIFFEID: fmt.Sprintf("spiffe://%s/spire/server", trustDomainA),
-					},
-				},
-			}
+			cftdB := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-a", trustDomainA, bundleRouteA)
 			Expect(k8sClientB.Create(testCtx, cftdB)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster B")
 			DeferCleanup(func(ctx context.Context) {
@@ -393,17 +373,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 				"mTLS should fail after federated trust is removed")
 
 			By("Re-creating ClusterFederatedTrustDomain to restore state")
-			cftdRestore := &spiffev1alpha1.ClusterFederatedTrustDomain{
-				ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-b"},
-				Spec: spiffev1alpha1.ClusterFederatedTrustDomainSpec{
-					TrustDomain:       trustDomainB,
-					BundleEndpointURL: fmt.Sprintf("https://%s:%d", bundleRouteB, utils.FederationRoutePort),
-					BundleEndpointProfile: spiffev1alpha1.BundleEndpointProfile{
-						Type:             spiffev1alpha1.HTTPSSPIFFEProfileType,
-						EndpointSPIFFEID: fmt.Sprintf("spiffe://%s/spire/server", trustDomainB),
-					},
-				},
-			}
+			cftdRestore := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-b", trustDomainB, bundleRouteB)
 			Expect(k8sClient.Create(testCtx, cftdRestore)).To(Succeed())
 		})
 	})

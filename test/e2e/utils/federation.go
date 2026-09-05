@@ -183,7 +183,7 @@ func CreateFederationClusterSPIFFEID(ctx context.Context, k8sClient client.Clien
 			NamespaceSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"kubernetes.io/metadata.name": namespace},
 			},
-			ClassName: "zero-trust-workload-identity-manager-spire",
+			ClassName: SpireControllerManagerClass,
 		},
 	}
 	Expect(k8sClient.Create(ctx, cspiffeID)).To(Succeed(), "failed to create ClusterSPIFFEID %s", name)
@@ -292,6 +292,55 @@ func CreateFederationZTWIM(ctx context.Context, k8sClient client.Client, trustDo
 	Expect(k8sClient.Create(ctx, ztwim)).To(Succeed(), "failed to create ZeroTrustWorkloadIdentityManager")
 }
 
+// NewFederationClusterFederatedTrustDomain builds a ClusterFederatedTrustDomain for cross-cluster federation.
+func NewFederationClusterFederatedTrustDomain(name, remoteTrustDomain, bundleRouteHost string) *spiffev1alpha1.ClusterFederatedTrustDomain {
+	return &spiffev1alpha1.ClusterFederatedTrustDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: spiffev1alpha1.ClusterFederatedTrustDomainSpec{
+			TrustDomain:       remoteTrustDomain,
+			BundleEndpointURL: fmt.Sprintf("https://%s:%d", bundleRouteHost, FederationRoutePort),
+			BundleEndpointProfile: spiffev1alpha1.BundleEndpointProfile{
+				Type:             spiffev1alpha1.HTTPSSPIFFEProfileType,
+				EndpointSPIFFEID: fmt.Sprintf("spiffe://%s/spire/server", remoteTrustDomain),
+			},
+			ClassName: SpireControllerManagerClass,
+		},
+	}
+}
+
+// RefreshServerFederatedBundle triggers an immediate bundle fetch for a remote trust domain.
+func RefreshServerFederatedBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig, remoteTrustDomain string) error {
+	podName, err := GetSpireServerPodName(ctx, clientset)
+	if err != nil {
+		return err
+	}
+	command := []string{
+		"/opt/spire/bin/spire-server", "federation", "refresh",
+		"-id", fmt.Sprintf("spiffe://%s", remoteTrustDomain),
+		"-socketPath", SpireServerAPISocket,
+	}
+	if kubeconfig == "" {
+		_, err = execInPodCapture(ctx, OperatorNamespace, podName, "spire-server", command)
+	} else {
+		_, err = execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-server", command)
+	}
+	return err
+}
+
+// serverBundleListContainsTrustDomain reports whether bundle list output references a trust domain.
+func serverBundleListContainsTrustDomain(output, trustDomain string) bool {
+	candidates := []string{
+		trustDomain,
+		fmt.Sprintf("spiffe://%s", trustDomain),
+	}
+	for _, candidate := range candidates {
+		if strings.Contains(output, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetSpireServerPodName returns the name of the first running SPIRE server pod.
 func GetSpireServerPodName(ctx context.Context, clientset kubernetes.Interface) (string, error) {
 	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
@@ -344,14 +393,18 @@ func execInPodCaptureWithKubeconfig(ctx context.Context, kubeconfig, namespace, 
 func WaitForServerFederatedBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig, remoteTrustDomain string, timeout time.Duration) {
 	By(fmt.Sprintf("Waiting for federated bundle %s on SPIRE server", remoteTrustDomain))
 	Eventually(func() bool {
+		if err := RefreshServerFederatedBundle(ctx, clientset, kubeconfig, remoteTrustDomain); err != nil {
+			fmt.Fprintf(GinkgoWriter, "spire-server bundle refresh for %s failed: %v\n", remoteTrustDomain, err)
+		}
+
 		output, err := ListServerFederatedBundles(ctx, clientset, kubeconfig)
 		if err != nil {
 			fmt.Fprintf(GinkgoWriter, "spire-server bundle list failed: %v\n", err)
 			return false
 		}
-		hasBundle := strings.Contains(output, remoteTrustDomain)
+		hasBundle := serverBundleListContainsTrustDomain(output, remoteTrustDomain)
 		if !hasBundle {
-			fmt.Fprintf(GinkgoWriter, "SPIRE server does not yet have bundle for %s\n", remoteTrustDomain)
+			fmt.Fprintf(GinkgoWriter, "SPIRE server does not yet have bundle for %s; bundle list output:\n%s\n", remoteTrustDomain, output)
 		}
 		return hasBundle
 	}).WithTimeout(timeout).WithPolling(30 * time.Second).Should(BeTrue(),

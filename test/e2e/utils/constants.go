@@ -67,6 +67,7 @@ const (
 	FederationBundlePropagation = 3 * time.Minute
 	FederationRouteName         = "spire-server-federation"
 	FederationRoutePort         = 443
+	SpireControllerManagerClass = "zero-trust-workload-identity-manager-spire"
 	SpireServerAPISocket        = "/tmp/spire-server/private/api.sock"
 	SpireAgentWorkloadSocket    = "/tmp/spire-agent/public/spire-agent.sock"
 	MTLSServerRoutePort         = 443
