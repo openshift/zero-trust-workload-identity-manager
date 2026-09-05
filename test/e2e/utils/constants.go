@@ -67,6 +67,9 @@ const (
 	FederationBundlePropagation = 3 * time.Minute
 	FederationRouteName         = "spire-server-federation"
 	FederationRoutePort         = 443
+	SpireServerAPISocket        = "/tmp/spire-server/private/api.sock"
+	SpireAgentWorkloadSocket    = "/tmp/spire-agent/public/spire-agent.sock"
+	MTLSServerRoutePort         = 443
 
 	MTLSServerImage     = "registry.access.redhat.com/ubi9/ubi-minimal:latest"
 	MTLSServerPort      = 8443

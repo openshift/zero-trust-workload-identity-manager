@@ -20,15 +20,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	routev1 "github.com/openshift/api/route/v1"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -136,6 +139,13 @@ func NewMTLSClientPod(name, namespace, saName string) *corev1.Pod {
 	}
 }
 
+// FederationSpiffeHelperConfig returns spiffe-helper config for cross-cluster federation mTLS tests.
+func FederationSpiffeHelperConfig() SpiffeHelperConfig {
+	cfg := DefaultAttestationSpiffeHelperConfig()
+	cfg.IncludeFederatedDomains = true
+	return cfg
+}
+
 // SetupFederationNamespace creates a namespace with proper labels for ClusterSPIFFEID matching
 // and the required resources (ServiceAccount, spiffe-helper ConfigMap).
 func SetupFederationNamespace(ctx context.Context, k8sClient client.Client, namespace, saName string) {
@@ -157,7 +167,7 @@ func SetupFederationNamespace(ctx context.Context, k8sClient client.Client, name
 	By(fmt.Sprintf("Creating spiffe-helper ConfigMap in %s", namespace))
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: SpiffeHelperConfigMapName, Namespace: namespace},
-		Data:       map[string]string{"helper.conf": DefaultAttestationSpiffeHelperConfig().String()},
+		Data:       map[string]string{"helper.conf": FederationSpiffeHelperConfig().String()},
 	}
 	Expect(k8sClient.Create(ctx, cm)).To(Succeed(), "failed to create spiffe-helper ConfigMap in %s", namespace)
 }
@@ -280,6 +290,100 @@ func CreateFederationZTWIM(ctx context.Context, k8sClient client.Client, trustDo
 		},
 	}
 	Expect(k8sClient.Create(ctx, ztwim)).To(Succeed(), "failed to create ZeroTrustWorkloadIdentityManager")
+}
+
+// GetSpireServerPodName returns the name of the first running SPIRE server pod.
+func GetSpireServerPodName(ctx context.Context, clientset kubernetes.Interface) (string, error) {
+	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: SpireServerPodLabel,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(pods.Items) == 0 {
+		return "", fmt.Errorf("no SPIRE server pods found in namespace %s", OperatorNamespace)
+	}
+	return pods.Items[0].Name, nil
+}
+
+// ListServerFederatedBundles lists federated bundles from a SPIRE server pod.
+func ListServerFederatedBundles(ctx context.Context, clientset kubernetes.Interface, kubeconfig string) (string, error) {
+	podName, err := GetSpireServerPodName(ctx, clientset)
+	if err != nil {
+		return "", err
+	}
+
+	command := []string{
+		"/opt/spire/bin/spire-server", "bundle", "list",
+		"-format", "spiffe",
+		"-socketPath", SpireServerAPISocket,
+	}
+	if kubeconfig == "" {
+		return execInPodCapture(ctx, OperatorNamespace, podName, "spire-server", command)
+	}
+	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-server", command)
+}
+
+func execInPodCapture(ctx context.Context, namespace, podName, containerName string, command []string) (string, error) {
+	stdout, stderr, err := ExecInPod(ctx, namespace, podName, containerName, command)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
+	}
+	return stdout, nil
+}
+
+func execInPodCaptureWithKubeconfig(ctx context.Context, kubeconfig, namespace, podName, containerName string, command []string) (string, error) {
+	stdout, stderr, err := ExecInPodWithKubeconfig(ctx, kubeconfig, namespace, podName, containerName, command)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
+	}
+	return stdout, nil
+}
+
+// WaitForServerFederatedBundle waits until the SPIRE server has fetched a remote trust domain bundle.
+func WaitForServerFederatedBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig, remoteTrustDomain string, timeout time.Duration) {
+	By(fmt.Sprintf("Waiting for federated bundle %s on SPIRE server", remoteTrustDomain))
+	Eventually(func() bool {
+		output, err := ListServerFederatedBundles(ctx, clientset, kubeconfig)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "spire-server bundle list failed: %v\n", err)
+			return false
+		}
+		hasBundle := strings.Contains(output, remoteTrustDomain)
+		if !hasBundle {
+			fmt.Fprintf(GinkgoWriter, "SPIRE server does not yet have bundle for %s\n", remoteTrustDomain)
+		}
+		return hasBundle
+	}).WithTimeout(timeout).WithPolling(30 * time.Second).Should(BeTrue(),
+		"SPIRE server should have federated bundle for %s", remoteTrustDomain)
+}
+
+// CreateMTLSServerRoute exposes the mTLS server Service on Cluster B via passthrough TLS.
+func CreateMTLSServerRoute(ctx context.Context, k8sClient client.Client, namespace, routeName, serviceName string) *routev1.Route {
+	By(fmt.Sprintf("Creating passthrough Route %s/%s for mTLS server", namespace, routeName))
+	route := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      routeName,
+			Namespace: namespace,
+		},
+		Spec: routev1.RouteSpec{
+			To: routev1.RouteTargetReference{
+				Kind:   "Service",
+				Name:   serviceName,
+				Weight: ptr.To(int32(100)),
+			},
+			Port: &routev1.RoutePort{
+				TargetPort: intstr.FromString("tls"),
+			},
+			TLS: &routev1.TLSConfig{
+				Termination:                   routev1.TLSTerminationPassthrough,
+				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+			},
+			WildcardPolicy: routev1.WildcardPolicyNone,
+		},
+	}
+	Expect(k8sClient.Create(ctx, route)).To(Succeed(), "failed to create mTLS server route")
+	return route
 }
 
 // AttemptMTLSConnection executes an openssl s_client command from the client pod to test mTLS.

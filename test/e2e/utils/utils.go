@@ -938,11 +938,12 @@ func WaitForUpgradeableStatus(ctx context.Context, k8sClient client.Client, name
 
 // SpiffeHelperConfig holds configuration for the spiffe-helper sidecar (helper.conf format).
 type SpiffeHelperConfig struct {
-	AgentAddress       string
-	CertDir            string
-	SvidFileName       string
-	SvidKeyFileName    string
-	SvidBundleFileName string
+	AgentAddress              string
+	CertDir                   string
+	SvidFileName              string
+	SvidKeyFileName           string
+	SvidBundleFileName        string
+	IncludeFederatedDomains   bool
 }
 
 // DefaultAttestationSpiffeHelperConfig returns the default config for E2E attestation tests.
@@ -958,12 +959,16 @@ func DefaultAttestationSpiffeHelperConfig() SpiffeHelperConfig {
 
 // String returns the config as a TOML-like string for helper.conf.
 func (c SpiffeHelperConfig) String() string {
-	return fmt.Sprintf(`agent_address = %q
+	config := fmt.Sprintf(`agent_address = %q
 cert_dir = %q
 svid_file_name = %q
 svid_key_file_name = %q
 svid_bundle_file_name = %q
 `, c.AgentAddress, c.CertDir, c.SvidFileName, c.SvidKeyFileName, c.SvidBundleFileName)
+	if c.IncludeFederatedDomains {
+		config += "include_federated_domains = true\n"
+	}
+	return config
 }
 
 // NewAttestationPod builds a standard attestation pod with a spiffe-helper sidecar and an app

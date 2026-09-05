@@ -45,7 +45,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		appsDomainB    string
 		bundleRouteA   string
 		bundleRouteB   string
-		clusterSvcIPB  string
+		mtlsServerHost string
 	)
 
 	BeforeAll(func() {
@@ -205,56 +205,11 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		})
 
 		It("exchanges trust bundles over HTTPS federation", func() {
-			By("Waiting for federation bundles to propagate")
-			time.Sleep(utils.FederationBundlePropagation)
+			By("Verifying federated bundle on Cluster A SPIRE server")
+			utils.WaitForServerFederatedBundle(testCtx, clientset, "", trustDomainB, utils.FederationTimeout)
 
-			By("Verifying federated bundle on Cluster A agent")
-			Eventually(func() bool {
-				pods, err := clientset.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
-					LabelSelector: utils.SpireAgentPodLabel,
-				})
-				if err != nil || len(pods.Items) == 0 {
-					return false
-				}
-				agentPod := pods.Items[0].Name
-				stdout, _, err := utils.ExecInPod(testCtx, utils.OperatorNamespace, agentPod, "spire-agent",
-					[]string{"/opt/spire/bin/spire-agent", "api", "fetch", "bundle",
-						"-socketPath", "unix:///tmp/spire-agent/public/spire-agent.sock"})
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "spire-agent bundle fetch on A failed: %v\n", err)
-					return false
-				}
-				hasFederatedBundle := strings.Contains(stdout, trustDomainB)
-				if !hasFederatedBundle {
-					fmt.Fprintf(GinkgoWriter, "Cluster A agent does not yet have bundle from B\n")
-				}
-				return hasFederatedBundle
-			}).WithTimeout(utils.FederationTimeout).WithPolling(30*time.Second).Should(BeTrue(),
-				"Cluster A should have federated bundle from Cluster B")
-
-			By("Verifying federated bundle on Cluster B agent")
-			Eventually(func() bool {
-				pods, err := clientsetB.CoreV1().Pods(utils.OperatorNamespace).List(testCtx, metav1.ListOptions{
-					LabelSelector: utils.SpireAgentPodLabel,
-				})
-				if err != nil || len(pods.Items) == 0 {
-					return false
-				}
-				agentPod := pods.Items[0].Name
-				stdout, _, err := utils.ExecInPodOnClusterB(testCtx, utils.OperatorNamespace, agentPod, "spire-agent",
-					[]string{"/opt/spire/bin/spire-agent", "api", "fetch", "bundle",
-						"-socketPath", "unix:///tmp/spire-agent/public/spire-agent.sock"})
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "spire-agent bundle fetch on B failed: %v\n", err)
-					return false
-				}
-				hasFederatedBundle := strings.Contains(stdout, trustDomainA)
-				if !hasFederatedBundle {
-					fmt.Fprintf(GinkgoWriter, "Cluster B agent does not yet have bundle from A\n")
-				}
-				return hasFederatedBundle
-			}).WithTimeout(utils.FederationTimeout).WithPolling(30*time.Second).Should(BeTrue(),
-				"Cluster B should have federated bundle from Cluster A")
+			By("Verifying federated bundle on Cluster B SPIRE server")
+			utils.WaitForServerFederatedBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), trustDomainA, utils.FederationTimeout)
 		})
 	})
 
@@ -340,17 +295,19 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			}
 			Expect(k8sClientB.Create(testCtx, svc)).To(Succeed())
 
-			By("Getting Cluster B service ClusterIP for direct access")
+			By("Creating a Route for the mTLS server on Cluster B")
+			mtlsRoute := utils.CreateMTLSServerRoute(testCtx, k8sClientB, utils.MTLSTestNamespaceB, utils.MTLSServerRouteName, "mtls-server")
 			Eventually(func() string {
-				s := &corev1.Service{}
-				if err := k8sClientB.Get(testCtx, client.ObjectKeyFromObject(svc), s); err != nil {
+				route := &routev1.Route{}
+				if err := k8sClientB.Get(testCtx, client.ObjectKeyFromObject(mtlsRoute), route); err != nil {
 					return ""
 				}
-				return s.Spec.ClusterIP
-			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).ShouldNot(BeEmpty())
-			s := &corev1.Service{}
-			Expect(k8sClientB.Get(testCtx, client.ObjectKeyFromObject(svc), s)).To(Succeed())
-			clusterSvcIPB = s.Spec.ClusterIP
+				return route.Spec.Host
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).ShouldNot(BeEmpty(),
+				"mTLS server route should have a host on Cluster B")
+			Expect(k8sClientB.Get(testCtx, client.ObjectKeyFromObject(mtlsRoute), mtlsRoute)).To(Succeed())
+			mtlsServerHost = mtlsRoute.Spec.Host
+			fmt.Fprintf(GinkgoWriter, "Cluster B mTLS server route: %s\n", mtlsServerHost)
 
 			By("Setting up mTLS test namespace on Cluster A (client)")
 			utils.SetupFederationNamespace(testCtx, k8sClient, utils.MTLSTestNamespaceA, utils.MTLSClientSAName)
@@ -375,23 +332,16 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		})
 
 		It("establishes cross-cluster mTLS between client and server", func() {
-			By("Attempting mTLS connection from Cluster A client to Cluster B server via route")
-			serverEndpoint := bundleRouteB
-			if serverEndpoint == "" {
-				// Fallback: if federation route is same-cluster accessible, use service IP
-				serverEndpoint = clusterSvcIPB
-			}
+			Expect(mtlsServerHost).NotTo(BeEmpty(), "mTLS server route host must be set")
 
-			// The client pod on Cluster A connects to the server on Cluster B.
-			// Since the clusters are separate, use the Route host (publicly accessible).
-			// The Route host resolves externally and the server's SPIRE cert covers it.
+			By("Attempting mTLS connection from Cluster A client to Cluster B server via route")
 			Eventually(func() error {
 				stdout, stderr, err := utils.AttemptMTLSConnection(
 					testCtx,
 					utils.MTLSTestNamespaceA,
 					utils.MTLSClientPodName,
-					bundleRouteB,
-					utils.FederationRoutePort,
+					mtlsServerHost,
+					utils.MTLSServerRoutePort,
 				)
 				if err != nil {
 					fmt.Fprintf(GinkgoWriter, "mTLS attempt failed: stdout=%s stderr=%s err=%v\n",
@@ -426,8 +376,8 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					testCtx,
 					utils.MTLSTestNamespaceA,
 					utils.MTLSClientPodName,
-					bundleRouteB,
-					utils.FederationRoutePort,
+					mtlsServerHost,
+					utils.MTLSServerRoutePort,
 				)
 				if err != nil {
 					fmt.Fprintf(GinkgoWriter, "[EXPECTED] mTLS connection failed as expected: %v\n", err)
