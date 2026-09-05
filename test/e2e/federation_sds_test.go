@@ -166,22 +166,39 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 	})
 
 	Context("Bidirectional Federation", func() {
-		It("applies bidirectional ClusterFederatedTrustDomain", func() {
+		BeforeAll(func() {
 			By("Creating ClusterFederatedTrustDomain on Cluster A pointing to Cluster B")
 			cftdA := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-b", trustDomainB, bundleRouteB)
 			Expect(k8sClient.Create(testCtx, cftdA)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster A")
-			DeferCleanup(func(ctx context.Context) {
-				_ = k8sClient.Delete(ctx, cftdA)
-			})
 
 			By("Creating ClusterFederatedTrustDomain on Cluster B pointing to Cluster A")
 			cftdB := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-a", trustDomainA, bundleRouteA)
 			Expect(k8sClientB.Create(testCtx, cftdB)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster B")
+
 			DeferCleanup(func(ctx context.Context) {
-				_ = k8sClientB.Delete(ctx, cftdB)
+				_ = k8sClient.Delete(ctx, &spiffev1alpha1.ClusterFederatedTrustDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-b"},
+				})
+				_ = k8sClientB.Delete(ctx, &spiffev1alpha1.ClusterFederatedTrustDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-a"},
+				})
 			})
+		})
+
+		It("applies bidirectional ClusterFederatedTrustDomain", func() {
+			By("Verifying ClusterFederatedTrustDomain exists on Cluster A")
+			cftdA := &spiffev1alpha1.ClusterFederatedTrustDomain{}
+			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: "federation-cluster-b"}, cftdA)).To(Succeed())
+			Expect(cftdA.Spec.TrustDomain).To(Equal(trustDomainB))
+			Expect(cftdA.Spec.ClassName).To(Equal(utils.SpireControllerManagerClass))
+
+			By("Verifying ClusterFederatedTrustDomain exists on Cluster B")
+			cftdB := &spiffev1alpha1.ClusterFederatedTrustDomain{}
+			Expect(k8sClientB.Get(testCtx, types.NamespacedName{Name: "federation-cluster-a"}, cftdB)).To(Succeed())
+			Expect(cftdB.Spec.TrustDomain).To(Equal(trustDomainA))
+			Expect(cftdB.Spec.ClassName).To(Equal(utils.SpireControllerManagerClass))
 		})
 
 		It("exchanges trust bundles over HTTPS federation", func() {
