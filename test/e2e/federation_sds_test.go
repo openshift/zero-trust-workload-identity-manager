@@ -221,6 +221,12 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 			By("Verifying federated bundle on Cluster B SPIRE server")
 			utils.WaitForServerFederatedBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), trustDomainA, utils.FederationTimeout)
+
+			By("Verifying federated bundle on Cluster A SPIRE agent")
+			utils.WaitForAgentFederatedBundle(testCtx, clientset, "", trustDomainB, utils.FederationTimeout)
+
+			By("Verifying federated bundle on Cluster B SPIRE agent")
+			utils.WaitForAgentFederatedBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), trustDomainA, utils.FederationTimeout)
 		})
 	})
 
@@ -270,6 +276,10 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 	Context("Cross-cluster mTLS proof", func() {
 		BeforeAll(func() {
+			By("Waiting for SPIRE agents to sync federated bundles before mTLS workloads start")
+			utils.WaitForAgentFederatedBundle(testCtx, clientset, "", trustDomainB, utils.FederationTimeout)
+			utils.WaitForAgentFederatedBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), trustDomainA, utils.FederationTimeout)
+
 			By("Setting up mTLS test namespace on Cluster B (server)")
 			utils.SetupFederationNamespace(testCtx, k8sClientB, utils.MTLSTestNamespaceB, utils.MTLSServerSAName)
 			DeferCleanup(func(ctx context.Context) {
@@ -290,6 +300,8 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			Expect(k8sClientB.Create(testCtx, serverPod)).To(Succeed())
 			utils.WaitForPodReady(testCtx, clientsetB, utils.MTLSServerPodName, utils.MTLSTestNamespaceB, utils.DefaultTimeout)
 			utils.WaitForSVIDsReadyOnClusterB(testCtx, utils.MTLSTestNamespaceB, utils.MTLSServerPodName, "tls-server", utils.DefaultTimeout)
+			utils.WaitForWorkloadFederatedCAs(testCtx, utils.MTLSTestNamespaceB, utils.MTLSServerPodName, "tls-server",
+				os.Getenv("KUBECONFIG_CLUSTER_B"), trustDomainA, utils.FederationTimeout)
 
 			By("Creating a Service for the mTLS server on Cluster B")
 			svc := &corev1.Service{
@@ -340,6 +352,8 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			Expect(k8sClient.Create(testCtx, clientPod)).To(Succeed())
 			utils.WaitForPodReady(testCtx, clientset, utils.MTLSClientPodName, utils.MTLSTestNamespaceA, utils.DefaultTimeout)
 			utils.WaitForSVIDsReady(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", utils.DefaultTimeout)
+			utils.WaitForWorkloadFederatedCAs(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client",
+				"", trustDomainB, utils.FederationTimeout)
 		})
 
 		It("establishes cross-cluster mTLS between client and server", func() {
@@ -363,7 +377,8 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					return fmt.Errorf("openssl not available in client pod: %s", stdout)
 				}
 				if strings.Contains(stdout, "verify error") || strings.Contains(stdout, "\nEXIT_CODE=1\n") || strings.HasSuffix(strings.TrimSpace(stdout), "EXIT_CODE=1") {
-					return fmt.Errorf("TLS verification error in output: %s", stdout)
+					caCount := utils.WorkloadBundleCACount(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")
+					return fmt.Errorf("TLS verification error (client bundle.pem has %d CA cert(s)): %s", caCount, stdout)
 				}
 				fmt.Fprintf(GinkgoWriter, "[PASS] Cross-cluster mTLS handshake succeeded\n")
 				return nil

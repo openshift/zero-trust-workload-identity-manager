@@ -533,6 +533,94 @@ func WaitForSVIDsReady(ctx context.Context, namespace, podName, containerName st
 		), "SVID files should appear in /certs/ of %s/%s", namespace, podName)
 }
 
+// GetSpireAgentPodName returns the name of the first running SPIRE agent pod.
+func GetSpireAgentPodName(ctx context.Context, clientset kubernetes.Interface) (string, error) {
+	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: SpireAgentPodLabel,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(pods.Items) == 0 {
+		return "", fmt.Errorf("no SPIRE agent pods found in namespace %s", OperatorNamespace)
+	}
+	return pods.Items[0].Name, nil
+}
+
+// WaitForAgentFederatedBundle waits until a SPIRE agent has synced a remote trust domain bundle.
+func WaitForAgentFederatedBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig, remoteTrustDomain string, timeout time.Duration) {
+	By(fmt.Sprintf("Waiting for SPIRE agent to sync federated bundle %s", remoteTrustDomain))
+	Eventually(func() error {
+		return fetchAgentTrustBundle(ctx, clientset, kubeconfig, remoteTrustDomain)
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(Succeed(),
+		"SPIRE agent should have federated bundle for %s", remoteTrustDomain)
+}
+
+func fetchAgentTrustBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig, trustDomain string) error {
+	podName, err := GetSpireAgentPodName(ctx, clientset)
+	if err != nil {
+		return err
+	}
+	checkDir := "/tmp/e2e-federated-bundle-check"
+	command := []string{
+		"sh", "-c",
+		fmt.Sprintf(
+			`rm -rf %s && mkdir -p %s && /opt/spire/bin/spire-agent api fetch bundle -trustDomain %q -socketPath %q -write %s`,
+			checkDir, checkDir, trustDomain, SpireAgentWorkloadSocket, checkDir,
+		),
+	}
+	if kubeconfig == "" {
+		_, err = execInPodCapture(ctx, OperatorNamespace, podName, "spire-agent", command)
+	} else {
+		_, err = execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-agent", command)
+	}
+	return err
+}
+
+// WaitForWorkloadFederatedCAs waits until spiffe-helper bundle.pem contains federated trust CAs.
+func WaitForWorkloadFederatedCAs(ctx context.Context, namespace, podName, containerName, kubeconfig, remoteTrustDomain string, timeout time.Duration) {
+	By(fmt.Sprintf("Waiting for federated CAs for %s in %s/%s bundle.pem", remoteTrustDomain, namespace, podName))
+	Eventually(func() int {
+		bundlePEM, err := readBundlePEMFromPod(ctx, namespace, podName, containerName, kubeconfig)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "read bundle.pem from %s/%s failed: %v\n", namespace, podName, err)
+			return 0
+		}
+		certs, err := ParseAllPEMCertificates(bundlePEM)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "parse bundle.pem from %s/%s failed: %v\n", namespace, podName, err)
+			return 0
+		}
+		if len(certs) < 2 {
+			fmt.Fprintf(GinkgoWriter, "%s/%s bundle.pem has %d CA cert(s), waiting for federated bundle from %s\n",
+				namespace, podName, len(certs), remoteTrustDomain)
+		}
+		return len(certs)
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeNumerically(">=", 2),
+		"bundle.pem in %s/%s should contain local and federated CA certificates", namespace, podName)
+}
+
+func readBundlePEMFromPod(ctx context.Context, namespace, podName, containerName, kubeconfig string) (string, error) {
+	command := []string{"cat", "/certs/bundle.pem"}
+	if kubeconfig == "" {
+		return execInPodCapture(ctx, namespace, podName, containerName, command)
+	}
+	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, namespace, podName, containerName, command)
+}
+
+// WorkloadBundleCACount returns the number of CA certificates in a workload bundle.pem.
+func WorkloadBundleCACount(ctx context.Context, namespace, podName, containerName string) int {
+	bundlePEM, err := readBundlePEMFromPod(ctx, namespace, podName, containerName, "")
+	if err != nil {
+		return 0
+	}
+	certs, err := ParseAllPEMCertificates(bundlePEM)
+	if err != nil {
+		return 0
+	}
+	return len(certs)
+}
+
 // WaitForSVIDsReadyOnClusterB waits until SVID files appear in /certs/ on a Cluster B pod.
 func WaitForSVIDsReadyOnClusterB(ctx context.Context, namespace, podName, containerName string, timeout time.Duration) {
 	By(fmt.Sprintf("Waiting for SVID files in pod %s/%s on Cluster B", namespace, podName))
