@@ -72,7 +72,8 @@ const (
 	SpireAgentWorkloadSocket    = "/tmp/spire-agent/public/spire-agent.sock"
 	MTLSServerRoutePort         = 443
 
-	MTLSServerImage     = "registry.access.redhat.com/ubi9/ubi-minimal:latest"
+	// Full UBI (not ubi-minimal) includes openssl and timeout for mTLS test pods.
+	MTLSServerImage = "registry.access.redhat.com/ubi9/ubi:9.5"
 	MTLSServerPort      = 8443
 	MTLSTestNamespaceA  = "e2e-federation-mtls-a"
 	MTLSTestNamespaceB  = "e2e-federation-mtls-b"

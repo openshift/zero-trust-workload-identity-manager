@@ -359,7 +359,10 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 						strings.TrimSpace(stdout), strings.TrimSpace(stderr), err)
 					return fmt.Errorf("mTLS connection failed: %w", err)
 				}
-				if strings.Contains(stdout, "verify error") || strings.Contains(stdout, "EXIT_CODE=1") {
+				if strings.Contains(stdout, "No such file or directory") && strings.Contains(stdout, "openssl") {
+					return fmt.Errorf("openssl not available in client pod: %s", stdout)
+				}
+				if strings.Contains(stdout, "verify error") || strings.Contains(stdout, "\nEXIT_CODE=1\n") || strings.HasSuffix(strings.TrimSpace(stdout), "EXIT_CODE=1") {
 					return fmt.Errorf("TLS verification error in output: %s", stdout)
 				}
 				fmt.Fprintf(GinkgoWriter, "[PASS] Cross-cluster mTLS handshake succeeded\n")

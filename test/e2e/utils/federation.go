@@ -73,6 +73,10 @@ func NewMTLSServerPod(name, namespace, saName string) *corev1.Pod {
 					Image: MTLSServerImage,
 					Command: []string{"sh", "-c", `
 while [ ! -f /certs/svid.pem ]; do sleep 2; done
+if ! command -v openssl >/dev/null 2>&1; then
+  echo "openssl not found in container image"
+  exit 1
+fi
 echo "Certs available, starting TLS server..."
 exec openssl s_server \
   -cert /certs/svid.pem \
@@ -81,7 +85,7 @@ exec openssl s_server \
   -Verify 1 \
   -accept 8443 \
   -www \
-  -quiet 2>&1 || sleep 3600
+  -quiet
 `},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "certs", MountPath: "/certs"},
