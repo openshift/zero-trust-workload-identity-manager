@@ -219,6 +219,41 @@ func ExecInPod(ctx context.Context, namespace, podName, containerName string, co
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
+// ExecInPodWithKubeconfig runs a command in a pod container targeting a specific cluster
+// via explicit KUBECONFIG path. Returns stdout, stderr, and error.
+func ExecInPodWithKubeconfig(ctx context.Context, kubeconfig, namespace, podName, containerName string, command []string) (stdout, stderr string, err error) {
+	cli := "oc"
+	if _, lookupErr := exec.LookPath("oc"); lookupErr != nil {
+		cli = "kubectl"
+	}
+
+	args := []string{"exec", podName, "-n", namespace, "-c", containerName, "--"}
+	args = append(args, command...)
+
+	cmd := exec.CommandContext(ctx, cli, args...)
+	env := os.Environ()
+	for i, e := range env {
+		if strings.HasPrefix(e, "KUBECONFIG=") {
+			env[i] = "KUBECONFIG=" + kubeconfig
+			break
+		}
+	}
+	if kubeconfig != "" {
+		cmd.Env = append(env, "KUBECONFIG="+kubeconfig)
+	} else {
+		cmd.Env = env
+	}
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	if err = cmd.Run(); err != nil {
+		return stdoutBuf.String(), stderrBuf.String(), fmt.Errorf("exec %s %v: %w", cli, args, err)
+	}
+	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
 // ReadSVIDPEM reads /certs/svid.pem from the given pod container.
 func ReadSVIDPEM(ctx context.Context, namespace, podName, containerName string) (string, error) {
 	stdout, stderr, err := ExecInPod(ctx, namespace, podName, containerName, []string{"cat", "/certs/svid.pem"})
@@ -903,11 +938,12 @@ func WaitForUpgradeableStatus(ctx context.Context, k8sClient client.Client, name
 
 // SpiffeHelperConfig holds configuration for the spiffe-helper sidecar (helper.conf format).
 type SpiffeHelperConfig struct {
-	AgentAddress       string
-	CertDir            string
-	SvidFileName       string
-	SvidKeyFileName    string
-	SvidBundleFileName string
+	AgentAddress              string
+	CertDir                   string
+	SvidFileName              string
+	SvidKeyFileName           string
+	SvidBundleFileName        string
+	IncludeFederatedDomains   bool
 }
 
 // DefaultAttestationSpiffeHelperConfig returns the default config for E2E attestation tests.
@@ -923,12 +959,16 @@ func DefaultAttestationSpiffeHelperConfig() SpiffeHelperConfig {
 
 // String returns the config as a TOML-like string for helper.conf.
 func (c SpiffeHelperConfig) String() string {
-	return fmt.Sprintf(`agent_address = %q
+	config := fmt.Sprintf(`agent_address = %q
 cert_dir = %q
 svid_file_name = %q
 svid_key_file_name = %q
 svid_bundle_file_name = %q
 `, c.AgentAddress, c.CertDir, c.SvidFileName, c.SvidKeyFileName, c.SvidBundleFileName)
+	if c.IncludeFederatedDomains {
+		config += "include_federated_domains = true\n"
+	}
+	return config
 }
 
 // NewAttestationPod builds a standard attestation pod with a spiffe-helper sidecar and an app

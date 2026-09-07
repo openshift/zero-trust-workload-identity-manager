@@ -17,12 +17,15 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	routev1 "github.com/openshift/api/route/v1"
 	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
@@ -35,6 +38,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -44,6 +48,12 @@ var (
 	clientset    kubernetes.Interface
 	apiextClient apiextclient.Interface
 	configClient configv1.ConfigV1Interface
+
+	// Secondary cluster clients for federation tests (nil when KUBECONFIG_CLUSTER_B is unset)
+	cfgB          *rest.Config
+	k8sClientB    client.Client
+	clientsetB    kubernetes.Interface
+	configClientB configv1.ConfigV1Interface
 )
 
 var _ = BeforeSuite(func() {
@@ -59,6 +69,7 @@ var _ = BeforeSuite(func() {
 	utilruntime.Must(operatorv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.AddToScheme(scheme))
 	utilruntime.Must(spiffev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(routev1.Install(scheme))
 
 	// Create controller-runtime client
 	k8sClient, err = client.New(cfg, client.Options{
@@ -77,6 +88,26 @@ var _ = BeforeSuite(func() {
 	// Create OpenShift config client
 	configClient, err = configv1.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred(), "failed to create OpenShift config client")
+
+	// Initialize secondary cluster clients for federation tests if KUBECONFIG_CLUSTER_B is set
+	kubeconfigB := os.Getenv("KUBECONFIG_CLUSTER_B")
+	if kubeconfigB != "" {
+		fmt.Fprintf(GinkgoWriter, "KUBECONFIG_CLUSTER_B is set, initializing Cluster B clients\n")
+
+		cfgB, err = clientcmd.BuildConfigFromFlags("", kubeconfigB)
+		Expect(err).NotTo(HaveOccurred(), "failed to build config from KUBECONFIG_CLUSTER_B")
+
+		k8sClientB, err = client.New(cfgB, client.Options{Scheme: scheme})
+		Expect(err).NotTo(HaveOccurred(), "failed to create Cluster B controller-runtime client")
+
+		clientsetB, err = kubernetes.NewForConfig(cfgB)
+		Expect(err).NotTo(HaveOccurred(), "failed to create Cluster B Kubernetes clientset")
+
+		configClientB, err = configv1.NewForConfig(cfgB)
+		Expect(err).NotTo(HaveOccurred(), "failed to create Cluster B OpenShift config client")
+	} else {
+		fmt.Fprintf(GinkgoWriter, "KUBECONFIG_CLUSTER_B not set, federation tests will be skipped\n")
+	}
 })
 
 // TestE2E runs the e2e test suite
