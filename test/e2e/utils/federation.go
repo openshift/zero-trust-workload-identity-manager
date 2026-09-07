@@ -293,19 +293,58 @@ func CreateFederationZTWIM(ctx context.Context, k8sClient client.Client, trustDo
 }
 
 // NewFederationClusterFederatedTrustDomain builds a ClusterFederatedTrustDomain for cross-cluster federation.
-func NewFederationClusterFederatedTrustDomain(name, remoteTrustDomain, bundleRouteHost string) *spiffev1alpha1.ClusterFederatedTrustDomain {
+// trustDomainBundle must contain the remote trust domain bundle in SPIFFE JWKS format when using https_spiffe,
+// which bootstraps SPIFFE authentication for the first bundle fetch.
+func NewFederationClusterFederatedTrustDomain(name, remoteTrustDomain, bundleRouteHost, trustDomainBundle string) *spiffev1alpha1.ClusterFederatedTrustDomain {
+	spec := spiffev1alpha1.ClusterFederatedTrustDomainSpec{
+		TrustDomain:       remoteTrustDomain,
+		BundleEndpointURL: fmt.Sprintf("https://%s:%d", bundleRouteHost, FederationRoutePort),
+		BundleEndpointProfile: spiffev1alpha1.BundleEndpointProfile{
+			Type:             spiffev1alpha1.HTTPSSPIFFEProfileType,
+			EndpointSPIFFEID: fmt.Sprintf("spiffe://%s/spire/server", remoteTrustDomain),
+		},
+		ClassName:         SpireControllerManagerClass,
+		TrustDomainBundle: trustDomainBundle,
+	}
 	return &spiffev1alpha1.ClusterFederatedTrustDomain{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: spiffev1alpha1.ClusterFederatedTrustDomainSpec{
-			TrustDomain:       remoteTrustDomain,
-			BundleEndpointURL: fmt.Sprintf("https://%s:%d", bundleRouteHost, FederationRoutePort),
-			BundleEndpointProfile: spiffev1alpha1.BundleEndpointProfile{
-				Type:             spiffev1alpha1.HTTPSSPIFFEProfileType,
-				EndpointSPIFFEID: fmt.Sprintf("spiffe://%s/spire/server", remoteTrustDomain),
-			},
-			ClassName: SpireControllerManagerClass,
-		},
+		Spec:       spec,
 	}
+}
+
+// GetServerLocalTrustBundle returns the local SPIRE server trust bundle in SPIFFE JWKS format.
+func GetServerLocalTrustBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig string) string {
+	By("Exporting local SPIRE server trust bundle")
+	var bundle string
+	Eventually(func() error {
+		output, err := showServerLocalTrustBundle(ctx, clientset, kubeconfig)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(output) == "" {
+			return fmt.Errorf("local trust bundle output is empty")
+		}
+		bundle = output
+		return nil
+	}).WithTimeout(DefaultTimeout).WithPolling(DefaultInterval).Should(Succeed(),
+		"local SPIRE server trust bundle should be available")
+	return bundle
+}
+
+func showServerLocalTrustBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig string) (string, error) {
+	podName, err := GetSpireServerPodName(ctx, clientset)
+	if err != nil {
+		return "", err
+	}
+	command := []string{
+		"/opt/spire/bin/spire-server", "bundle", "show",
+		"-format", "spiffe",
+		"-socketPath", SpireServerAPISocket,
+	}
+	if kubeconfig == "" {
+		return execInPodCapture(ctx, OperatorNamespace, podName, "spire-server", command)
+	}
+	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-server", command)
 }
 
 // RefreshServerFederatedBundle triggers an immediate bundle fetch for a remote trust domain.
@@ -393,16 +432,26 @@ func execInPodCaptureWithKubeconfig(ctx context.Context, kubeconfig, namespace, 
 func WaitForServerFederatedBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig, remoteTrustDomain string, timeout time.Duration) {
 	By(fmt.Sprintf("Waiting for federated bundle %s on SPIRE server", remoteTrustDomain))
 	Eventually(func() bool {
-		if err := RefreshServerFederatedBundle(ctx, clientset, kubeconfig, remoteTrustDomain); err != nil {
-			fmt.Fprintf(GinkgoWriter, "spire-server bundle refresh for %s failed: %v\n", remoteTrustDomain, err)
-		}
-
 		output, err := ListServerFederatedBundles(ctx, clientset, kubeconfig)
 		if err != nil {
 			fmt.Fprintf(GinkgoWriter, "spire-server bundle list failed: %v\n", err)
 			return false
 		}
 		hasBundle := serverBundleListContainsTrustDomain(output, remoteTrustDomain)
+		if hasBundle {
+			return true
+		}
+
+		if err := RefreshServerFederatedBundle(ctx, clientset, kubeconfig, remoteTrustDomain); err != nil {
+			fmt.Fprintf(GinkgoWriter, "spire-server bundle refresh for %s failed: %v\n", remoteTrustDomain, err)
+		}
+
+		output, err = ListServerFederatedBundles(ctx, clientset, kubeconfig)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "spire-server bundle list after refresh failed: %v\n", err)
+			return false
+		}
+		hasBundle = serverBundleListContainsTrustDomain(output, remoteTrustDomain)
 		if !hasBundle {
 			fmt.Fprintf(GinkgoWriter, "SPIRE server does not yet have bundle for %s; bundle list output:\n%s\n", remoteTrustDomain, output)
 		}

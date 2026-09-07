@@ -43,9 +43,11 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		trustDomainB   string
 		appsDomainA    string
 		appsDomainB    string
-		bundleRouteA   string
-		bundleRouteB   string
-		mtlsServerHost string
+		bundleRouteA      string
+		bundleRouteB      string
+		bootstrapBundleA  string
+		bootstrapBundleB  string
+		mtlsServerHost    string
 	)
 
 	BeforeAll(func() {
@@ -167,13 +169,21 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 	Context("Bidirectional Federation", func() {
 		BeforeAll(func() {
+			By("Fetching local trust bundle from Cluster A for federation bootstrap")
+			bootstrapBundleA = utils.GetServerLocalTrustBundle(testCtx, clientset, "")
+
+			By("Fetching local trust bundle from Cluster B for federation bootstrap")
+			bootstrapBundleB = utils.GetServerLocalTrustBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"))
+
 			By("Creating ClusterFederatedTrustDomain on Cluster A pointing to Cluster B")
-			cftdA := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-b", trustDomainB, bundleRouteB)
+			cftdA := utils.NewFederationClusterFederatedTrustDomain(
+				"federation-cluster-b", trustDomainB, bundleRouteB, bootstrapBundleB)
 			Expect(k8sClient.Create(testCtx, cftdA)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster A")
 
 			By("Creating ClusterFederatedTrustDomain on Cluster B pointing to Cluster A")
-			cftdB := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-a", trustDomainA, bundleRouteA)
+			cftdB := utils.NewFederationClusterFederatedTrustDomain(
+				"federation-cluster-a", trustDomainA, bundleRouteA, bootstrapBundleA)
 			Expect(k8sClientB.Create(testCtx, cftdB)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster B")
 
@@ -193,12 +203,16 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: "federation-cluster-b"}, cftdA)).To(Succeed())
 			Expect(cftdA.Spec.TrustDomain).To(Equal(trustDomainB))
 			Expect(cftdA.Spec.ClassName).To(Equal(utils.SpireControllerManagerClass))
+			Expect(cftdA.Spec.TrustDomainBundle).NotTo(BeEmpty(),
+				"Cluster A CFTD should bootstrap remote bundle for https_spiffe federation")
 
 			By("Verifying ClusterFederatedTrustDomain exists on Cluster B")
 			cftdB := &spiffev1alpha1.ClusterFederatedTrustDomain{}
 			Expect(k8sClientB.Get(testCtx, types.NamespacedName{Name: "federation-cluster-a"}, cftdB)).To(Succeed())
 			Expect(cftdB.Spec.TrustDomain).To(Equal(trustDomainA))
 			Expect(cftdB.Spec.ClassName).To(Equal(utils.SpireControllerManagerClass))
+			Expect(cftdB.Spec.TrustDomainBundle).NotTo(BeEmpty(),
+				"Cluster B CFTD should bootstrap remote bundle for https_spiffe federation")
 		})
 
 		It("exchanges trust bundles over HTTPS federation", func() {
@@ -390,7 +404,8 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 				"mTLS should fail after federated trust is removed")
 
 			By("Re-creating ClusterFederatedTrustDomain to restore state")
-			cftdRestore := utils.NewFederationClusterFederatedTrustDomain("federation-cluster-b", trustDomainB, bundleRouteB)
+			cftdRestore := utils.NewFederationClusterFederatedTrustDomain(
+				"federation-cluster-b", trustDomainB, bundleRouteB, bootstrapBundleB)
 			Expect(k8sClient.Create(testCtx, cftdRestore)).To(Succeed())
 		})
 	})
