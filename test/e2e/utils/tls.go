@@ -36,11 +36,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/component-base/cli/flag"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
+
+// goInsecureCipherSuites is the set of cipher suite names classified as insecure by crypto/tls
+// (via k8s.io/component-base/cli/flag). Operand configs use IANA names that match this set.
+var goInsecureCipherSuites = sets.NewString(flag.InsecureTLSCipherNames()...)
 
 const (
 	APIServerTLSProfileIntermediate = "Intermediate"
@@ -269,8 +275,8 @@ func validateOperandTLSConfigs(configs []operandTLSConfig, minVersion string, re
 			return fmt.Errorf("%s min TLS version mismatch: got %s want %s", cfg.source, cfg.minTLS, minVersion)
 		}
 		for _, cipher := range cfg.ciphers {
-			if isInsecureOperandCipher(cipher) {
-				return fmt.Errorf("%s must not inject insecure cipher %q", cfg.source, cipher)
+			if isGoInsecureOperandCipher(cipher) {
+				return fmt.Errorf("%s must not inject Go-insecure cipher %q", cfg.source, cipher)
 			}
 		}
 		if !requireCiphers {
@@ -290,14 +296,8 @@ func validateOperandTLSConfigs(configs []operandTLSConfig, minVersion string, re
 	return nil
 }
 
-func isInsecureOperandCipher(cipher string) bool {
-	upper := strings.ToUpper(cipher)
-	for _, marker := range []string{"DES_CBC3", "DES-CBC3", "RC4", "NULL", "EXPORT", "MD5"} {
-		if strings.Contains(upper, marker) {
-			return true
-		}
-	}
-	return false
+func isGoInsecureOperandCipher(cipher string) bool {
+	return goInsecureCipherSuites.Has(cipher)
 }
 
 func logOperandTLSConfigs(configs []operandTLSConfig) {
@@ -316,7 +316,7 @@ func logOperandTLSConfigs(configs []operandTLSConfig) {
 // Validation performed:
 //   - APIServer tlsSecurityProfile.type matches expected (if expectedAPIServerProfile is non-empty)
 //   - All four operand ConfigMaps have correct min_tls_version/minTLSVersion
-//   - No insecure ciphers are present (always checked regardless of requireCiphers)
+//   - No Go-classified insecure ciphers are present (flag.InsecureTLSCipherNames; always checked)
 //   - When requireCiphers=true, cipher_suites must be non-empty and consistent across operands
 func AssertTLSProfileCompliance(ctx context.Context, configClient configv1.ConfigV1Interface,
 	clientset kubernetes.Interface, expectedAPIServerProfile string, minVersion string, requireCiphers bool) {
