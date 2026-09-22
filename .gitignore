@@ -25,3 +25,9 @@
 .env
 bin/
 .idea/
+output/
+
+# Track shared Cursor rules; global ignore often has `.cursor/`
+!/.cursor/
+/.cursor/*
+!/.cursor/rules/
