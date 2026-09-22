@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
+	securityv1 "github.com/openshift/api/security/v1"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
 	operatorv1 "github.com/operator-framework/api/pkg/operators/v1"
@@ -59,6 +60,7 @@ var _ = BeforeSuite(func() {
 	utilruntime.Must(operatorv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.AddToScheme(scheme))
 	utilruntime.Must(spiffev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(securityv1.AddToScheme(scheme))
 
 	// Create controller-runtime client
 	k8sClient, err = client.New(cfg, client.Options{
