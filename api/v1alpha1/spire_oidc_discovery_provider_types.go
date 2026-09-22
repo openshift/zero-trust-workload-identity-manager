@@ -62,6 +62,12 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:default:=1
 	ReplicaCount int `json:"replicaCount,omitempty"`
 
+	// setKeyUse controls whether the "use" parameter is set on the JWKS.
+	// When true, adds "use": "sig" to each key.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:=false
+	SetKeyUse bool `json:"setKeyUse,omitempty"`
+
 	// managedRoute controls whether the operator automatically creates an OpenShift Route
 	// for the OIDC discovery provider endpoints.
 	// "true": The operator creates and maintains an OpenShift Route automatically for OIDC discovery endpoints (*.apps.).
