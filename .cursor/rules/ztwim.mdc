@@ -1,0 +1,134 @@
+---
+description: Zero Trust Workload Identity Manager (ZTWIM) - OpenShift Operator for SPIFFE/SPIRE
+globs:
+alwaysApply: true
+---
+
+# Zero Trust Workload Identity Manager
+
+## Project Type
+Go Kubernetes operator using controller-runtime for OpenShift.
+
+## Build Commands
+```bash
+make build-operator    # Fast build
+make test              # Unit tests
+make lint              # Linter
+make generate          # After API type changes
+make manifests         # After kubebuilder marker changes
+```
+
+## Architecture
+
+### CRD Types (api/v1alpha1/)
+- `ZeroTrustWorkloadIdentityManager` - Main operator config, aggregates status
+- `SpireServer` - SPIRE server configuration
+- `SpireAgent` - SPIRE agent configuration  
+- `SpiffeCSIDriver` - CSI driver configuration
+- `SpireOIDCDiscoveryProvider` - OIDC provider configuration
+
+All CRs are **singletons named "cluster"**.
+
+### Controllers (pkg/controller/)
+- `zero-trust-workload-identity-manager/` - Main aggregating controller
+- `spire-server/` - Manages StatefulSet + ConfigMaps
+- `spire-agent/` - Manages DaemonSet
+- `spiffe-csi-driver/` - Manages CSI DaemonSet
+- `spire-oidc-discovery-provider/` - Manages Deployment
+
+### Shared Code
+- `pkg/controller/status/` - Status condition management
+- `pkg/controller/utils/` - Constants, validation, helpers
+- `pkg/client/` - Custom client with retry logic
+
+## Coding Patterns
+
+### Controller Structure
+```go
+type MyReconciler struct {
+    ctrlClient    customClient.CustomCtrlClient
+    ctx           context.Context
+    eventRecorder record.EventRecorder
+    log           logr.Logger
+    scheme        *runtime.Scheme
+}
+```
+
+### Reconcile Flow
+1. Get CR (return nil if NotFound)
+2. Set initial status: `status.SetInitialReconciliationStatus()`
+3. Create status manager with defer: `statusMgr := status.NewManager()`
+4. Get parent ZTWIM CR
+5. Set owner reference if needed
+6. Check `utils.IsInCreateOnlyMode()`
+7. Validate configuration
+8. Reconcile resources
+
+### Status Conditions
+```go
+statusMgr.AddCondition(conditionType, reason, message, metav1.ConditionTrue)
+```
+
+Reasons: `v1alpha1.ReasonReady`, `ReasonFailed`, `ReasonInProgress`
+
+### Health Checks
+```go
+statusMgr.CheckStatefulSetHealth(ctx, name, namespace, conditionType)
+statusMgr.CheckDaemonSetHealth(ctx, name, namespace, conditionType)
+statusMgr.CheckDeploymentHealth(ctx, name, namespace, conditionType)
+```
+
+## API Conventions
+
+### Field Validation Markers
+```go
+// +kubebuilder:validation:Required
+// +kubebuilder:validation:Optional
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:MaxLength=255
+// +kubebuilder:validation:Pattern=`^[a-z0-9-]+$`
+// +kubebuilder:validation:Enum=option1;option2
+// +kubebuilder:default:="default-value"
+// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="immutable"
+```
+
+### Common Config (embedded in all operand specs)
+```go
+type CommonConfig struct {
+    Labels       map[string]string
+    Resources    *corev1.ResourceRequirements
+    Affinity     *corev1.Affinity
+    Tolerations  []*corev1.Toleration
+    NodeSelector map[string]string
+}
+```
+
+## Important Constants
+
+```go
+// Namespace
+utils.OperatorNamespace = "zero-trust-workload-identity-manager"
+
+// Condition types
+v1alpha1.Ready
+v1alpha1.Degraded
+v1alpha1.Upgradeable
+
+// Condition reasons
+v1alpha1.ReasonReady
+v1alpha1.ReasonFailed
+v1alpha1.ReasonInProgress
+v1alpha1.ReasonOperandsNotReady
+```
+
+## Testing
+- Use envtest for controller tests
+- Test files colocated: `foo.go` → `foo_test.go`
+- Run: `make test`
+
+## Don'ts
+- Don't hardcode namespaces (use `utils.OperatorNamespace`)
+- Don't modify status directly (use `status.Manager`)
+- Don't skip create-only mode checks
+- Don't forget owner references
+- Don't skip `make generate manifests bundle` after API changes

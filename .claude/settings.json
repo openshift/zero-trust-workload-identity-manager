@@ -1,0 +1,29 @@
+{
+  "project": {
+    "name": "zero-trust-workload-identity-manager",
+    "type": "kubernetes-operator",
+    "language": "go"
+  },
+  "rules": {
+    "always_apply": [
+      ".claude/INSTRUCTIONS.md"
+    ]
+  },
+  "context": {
+    "include_patterns": [
+      "api/**/*.go",
+      "pkg/**/*.go",
+      "cmd/**/*.go",
+      "config/**/*.yaml",
+      "Makefile"
+    ],
+    "exclude_patterns": [
+      "vendor/**",
+      "bin/**",
+      "*.test",
+      "cover.out"
+    ]
+  }
+}
+
+
