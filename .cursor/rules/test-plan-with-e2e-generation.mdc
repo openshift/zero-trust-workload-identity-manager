@@ -1,0 +1,520 @@
+---
+alwaysApply: true
+---
+# System Test Case Generation
+
+## Quick Start
+
+This rule produces **traceable, tiered test plans** from an ADR or GitHub PR.
+
+| Mode | Input | Sections to follow |
+| --- | --- | --- |
+| **ADR Mode** | ADR document (+ optional PR/Jira) | A → B → D → E → F → G |
+| **PR Mode** | GitHub PR URL only (no ADR) | A → C → D → E → F → G |
+
+**Core principles:**
+
+- Every test step names a **specific action** and a **specific observable outcome**.
+- No vague verbs ("verify", "ensure", "check") without a named observable (e.g. `Ready=True`, HTTP 200, serial number changed).
+- Before creating any E2E test, **audit existing tests first** (Section G.1).
+- Never log secrets in test output (Section G.4).
+
+---
+
+## A. Inputs and Mode Selection
+
+### A.1 What you need
+
+| Input | Required? | How to obtain |
+| --- | --- | --- |
+| **ADR** | Required for ADR Mode | Google Docs URL, GitHub file URL, local path, or pasted markdown |
+| **PR** | Required for PR Mode | `gh pr view <N> --repo <org/repo> --json title,body,state,labels,files` and `gh pr diff <N> --repo <org/repo>` |
+| **Repo link** | Optional | Fetch repo tree to enrich tests with actual file paths, CRD types, controller structure |
+| **Jira** | Optional | `curl -sS --user "${JIRA_EMAIL}:${JIRA_TOKEN}" -H "Accept: application/json" "${JIRA_URL:-https://issues.redhat.com}/rest/api/2/issue/${KEY}"` |
+
+If `gh` is unavailable, use GitHub REST API. If fetch fails for any source, ask the user to paste the content.
+
+### A.2 Stop conditions
+
+- No ADR AND no PR → **STOP**, ask for one.
+- Only Jira (no ADR, no PR) → **STOP**, request ADR or PR.
+- Jira conflicts with ADR → document under "Source conflicts", follow ADR.
+
+### A.3 Mode selection
+
+| Input provided | Mode |
+| --- | --- |
+| ADR (with or without PR/Jira/Repo) | **ADR Mode** (Section B) |
+| PR only (with or without Repo) | **PR Mode** (Section C) |
+| Jira only | STOP |
+
+---
+
+## B. ADR Mode Workflow
+
+Execute these steps in order:
+
+### B.1 Decompose the ADR
+
+Read the ADR and extract from each section. If a section is missing, note "Section absent" and continue.
+
+| ADR Section | What to extract |
+| --- | --- |
+| Executive Summary | One-sentence scope |
+| What | Components added/changed/removed, K8s resources, APIs, status fields, scope boundary |
+| Why / Goals | Business motivation, positive-path requirements |
+| Non-Goals | Excluded scope — do NOT test unless guarding regression |
+| How | Logic branches, reconcile paths, dependencies, migration, error handling, open questions |
+| Alternatives | Why rejected — guard-rail tests to prevent drift |
+| Risks | Execution risks → regression tests, customer risks → negative-path tests, operational risks → NFT |
+
+### B.2 Produce the decomposition summary
+
+```markdown
+## ADR Decomposition
+
+**Feature:** <one-line>
+**ADR status:** <Proposed / Accepted / Superseded / Not stated>
+**Components in scope:** <CRDs, controllers, APIs, resources>
+
+**Positive-path requirements (from Goals):**
+1. <requirement>
+
+**Explicit non-goals:**
+- <quote or "Section absent">
+
+**Implementation details requiring test coverage (from How):**
+- <logic branch, error path, migration>
+
+**Risks requiring test coverage:**
+- <risk → test implication>
+
+**Open questions:**
+- <unknown or ambiguity>
+```
+
+Do not proceed to test generation until this summary is complete.
+
+### B.3 Extract testable requirements
+
+Transform the decomposition into numbered requirements: `REQ-001`, `REQ-002`, etc. Merge duplicates.
+
+Each requirement must be **specific** (tied to observable behavior), **measurable** (concrete pass/fail), and **scoped** (relevant to the ADR).
+
+| Category | Source | Extract |
+| --- | --- | --- |
+| Functional | What, Goals, How | Expected behavior under valid input |
+| Negative-path | How, Risks | Behavior under invalid input or errors |
+| Regression | Risks, Alternatives | Existing behavior that must NOT change |
+| Security | How, Risks | RBAC, secrets, admission, privilege boundaries |
+| Operational | Risks | Recovery, availability, upgrade safety |
+
+### B.4 Audit existing tests
+
+**Before drafting any E2E/NEG test**, follow Section G.1 (Existing Test Audit). Apply the reusability decision framework to determine whether each test extends an existing spec or needs a new one.
+
+### B.5 Draft test cases
+
+Draft by tier (Section D), traced to REQs. For E2E tests, follow Section G (constants, security, Ginkgo patterns, architecture awareness).
+
+### B.6 Finalize
+
+Build traceability matrix, coverage summary, run quality gates (Section F).
+
+---
+
+## C. PR Mode Workflow
+
+Use when only a GitHub PR URL is provided and no ADR exists. Requirements are inferred from code — mark confidence levels.
+
+### C.1 Analyze the PR
+
+Fetch the PR diff and categorize changed files:
+
+| Category | File patterns | Test implication |
+| --- | --- | --- |
+| CRD types | `api/**/*_types.go` | New/modified fields need E2E validation |
+| Controllers | `pkg/controller/**` | Reconcile logic needs INT + E2E tests |
+| Webhooks | `*_webhook.go` | Admission logic needs negative tests |
+| RBAC | `config/rbac/**` | Security tests (least privilege) |
+| Samples | `config/samples/**` | These become E2E test inputs |
+| Tests | `*_test.go` | Understand existing patterns, don't re-test |
+| Config | `config/manager/**`, `Dockerfile` | Deployment/upgrade tests |
+
+### C.2 Audit existing tests (mandatory)
+
+Follow **Section G.1** to read existing tests. Apply the reusability decision framework. Review **Section G.6** (Architecture Awareness) to avoid invalid test scenarios.
+
+### C.3 Extract testable behaviors
+
+For each meaningful change in the diff, ask:
+
+- What **new behavior** does this introduce? → positive-path test
+- What **input could break** this? → negative-path test
+- What **existing behavior** might this affect? → regression test
+- What **error handling** was added? → error-path test
+
+### C.4 Infer requirements
+
+Use prefix `PR-REQ-` and assign confidence:
+
+- **High** — behavior is explicit in code and PR description
+- **Medium** — behavior is inferred from code patterns
+- **Low** — assumption based on naming/context; needs ADR confirmation
+
+### C.5 Draft test cases and finalize
+
+Draft by tier (Section D), build traceability matrix, run quality gates (Section F).
+
+**Output file:** Save as `output/test-plan-pr-<PR-NUMBER>.md`.
+
+---
+
+## D. Test Tiers and Budget
+
+**Total budget: 10-12 test cases.** Consolidate aggressively. If one E2E test can validate 3 requirements in sequence, write one test with 3 assertion steps, not 3 separate tests.
+
+### D.1 Tier allocation
+
+| Tier | Prefix | Budget | Purpose | Method | Environment |
+| --- | --- | --- | --- | --- | --- |
+| **Unit** | UT | 0-2 | Pure functions, input validation, error branches | White box | Go test, mocks, fakes |
+| **Integration** | INT | 0-2 | Reconciler against envtest, webhook admission, status propagation | Grey box | envtest / fake API server |
+| **E2E** | E2E | 4-5 | Operator behavior from consumer's perspective (happy path, conflict, recovery, edge case) | Black box | Real OpenShift cluster, OLM |
+| **Negative/Destructive** | NEG | 2-3 | Operator resilience: config deletion/corruption, component restart under traffic, operator pod kill | Black box | Real cluster with active workloads |
+| **Manual QE** | MQE | 1-2 | Acceptance, exploratory, upgrade paths, error message clarity | Black box (human) | Real cluster |
+| **Non-Functional** | NFT | 0-1 | Performance, recovery, security, scalability | Black box | Real cluster with tooling |
+
+### D.2 Key rules
+
+- **Shift-left:** UT/INT from ADR "How" (contracts, branches). E2E from "Goals" (black-box outcomes). MQE from human judgment.
+- **No tier duplication:** Don't test the same observable in both E2E and NFT.
+- **NEG structure:** Every NEG test must have a BEFORE check, destructive action, and AFTER check.
+- If you reach 12 tests with uncovered requirements, merge related tests — never exceed 12.
+
+### D.3 NEG scenario menu
+
+Pick 2-3 most impactful for the change:
+
+- Delete operator-managed ConfigMap/Secret → operator recreates with correct values
+- Patch managed resources with wrong values → operator restores on next reconcile
+- Kill operator-managed pods during active traffic → data plane survives
+- Delete operator pod → workloads continue, operator restarts and resumes
+- Delete and recreate operand CR → operator converges to correct state
+
+---
+
+## E. Output Template
+
+Use this template for both ADR and PR mode. Replace `{MODE}` markers as appropriate.
+
+```markdown
+# Test Plan: <Feature Name>
+
+**Sources:** ADR: <link or "N/A">; PR: <URL or "N/A">; Jira: <key or "N/A">
+**Date:** <generation date>
+**Mode:** ADR / PR
+**Scope:** <one-line scope>
+
+## Source Conflicts
+<ADR vs Jira inconsistencies, or "None">
+
+## {ADR: Decomposition / PR: Analysis}
+<From Section B.2 or C.1-C.3>
+
+## Testable Requirements
+
+| ID | Requirement | Category | Source | {PR-only: Confidence} |
+| --- | --- | --- | --- | --- |
+| REQ-001 | <text> | Functional | Goals / diff:file.go:L42 | {High/Medium/Low} |
+
+## Test Cases
+
+### <Tier Name>
+
+#### <PREFIX>-001: <Title>
+**Priority:** Critical / High / Medium
+**Methodology:** White box / Grey box / Black box
+**Requirement(s):** REQ-NNN
+**Traceability:** <ADR section / Jira AC / PR diff location>
+**Preconditions:** <what must be true>
+**Steps:**
+1. <action>
+   - **Expected:** <observable result>
+**Cleanup:** <or "None">
+**Failure Impact:** <what breaks>
+{PR-only: **Assumptions:** <design intent assumed>}
+
+## Traceability Matrix
+
+| Requirement | UT | INT | E2E | NEG | MQE | NFT | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| REQ-001 | - | - | E2E-001 | - | - | - | Covered |
+
+## Uncovered Requirements
+- **REQ-NNN:** <text> — Not covered because <reason>
+
+## Coverage Summary
+
+| Tier | Count | Critical | High | Medium |
+| --- | --- | --- | --- | --- |
+| Unit | N | N | N | N |
+| Integration | N | N | N | N |
+| E2E | N | N | N | N |
+| Negative/Destructive | N | N | N | N |
+| Manual QE | N | N | N | N |
+| Non-Functional | N | N | N | N |
+| **Total** | **N** | **N** | **N** | **N** |
+
+{PR-only:
+## Gaps and Recommendations
+- **Cannot determine without ADR:** <list>
+- **Recommend ADR review for:** <areas where coverage depends on intent>
+- **Existing tests that may need update:** <files>
+}
+
+## Generation Stats
+
+| Metric | Value |
+| --- | --- |
+| Test cases generated | N |
+| Requirements identified | N |
+| Requirements covered | N/total |
+| Approx. output words | N |
+| Estimated output tokens | words x 1.3 |
+```
+
+---
+
+## F. Quality Gates
+
+**All gates must pass** before returning the test plan. Fix and re-verify — never output a failing plan.
+
+| # | Gate | Applies to |
+| --- | --- | --- |
+| 1 | **Budget: 10-12 test cases total.** Consolidate before outputting if over 12. | Both |
+| 2 | ADR fully decomposed; missing sections noted | ADR only |
+| 3 | Every goal and risk maps to at least one REQ | ADR only |
+| 4 | PR diff analyzed, all changed files categorized | PR only |
+| 5 | Every significant code change maps to a requirement with confidence level | PR only |
+| 6 | Assumptions about design intent are explicit | PR only |
+| 7 | Gaps needing ADR confirmation are documented | PR only |
+| 8 | E2E minimum: at least one positive-path and one negative-path test | Both |
+| 9 | NEG minimum: at least 2 destructive tests (config resilience + component restart) | Both |
+| 10 | MQE minimum: at least one acceptance or exploratory test | Both |
+| 11 | Traceability complete: every REQ has a test or "NOT COVERED" justification | Both |
+| 12 | Traceability source: every test cites ADR section or Jira AC — not PRs/commits | ADR only |
+| 13 | No tier duplication: same observable not tested in both E2E and NFT | Both |
+| 14 | No vague steps: every step has concrete action + observable outcome | Both |
+| 15 | Cleanup specified for every test that creates resources | Both |
+| 16 | Priority assigned (Critical / High / Medium) to every test | Both |
+| 17 | Scope respected: no tests for Non-Goals unless regression guard | Both |
+| 18 | No redundancy: two tests covering the same observable must be merged | Both |
+
+---
+
+## G. Codebase-Aware E2E Rules
+
+**This section is mandatory** before generating any E2E, NEG, or attestation test case. Skipping it leads to invalid tests, duplicated code, and security leaks in CI logs.
+
+### G.1 Existing Test Audit (do this first)
+
+Before proposing any new E2E test, you MUST:
+
+**Step 1:** Read `test/e2e/e2e_test.go` to understand the current test hierarchy:
+
+| Context | ~Specs | What it covers |
+| --- | --- | --- |
+| `Installation` | 9 | Operand CR creation, CRD readiness, operator pod recovery, metrics, status aggregation |
+| `OperatorCondition` | 3 | Upgradeable lifecycle (baseline, single failure, concurrent failures) |
+| `SpireAgent attestation` | 8 | SVID validation, rotation, re-attestation, ClusterSPIFFEID update propagation |
+| `Common configurations` | 24 | Per-operand resources, nodeSelector, tolerations, affinity, log level, labels |
+| `CreateOnlyMode` | 2 | Drift detection paused/resumed |
+
+**Step 2:** Read `test/e2e/utils/utils.go` and `test/e2e/utils/constants.go` to catalog available utilities.
+
+**Step 3:** For each proposed test, apply the **reusability decision framework**:
+
+| Priority | Question | Example |
+| --- | --- | --- |
+| **1 (highest)** | Add a `By()` step to an **existing `It`**? | Adding `KeyUsage` check to existing bundle validation |
+| **2** | New `It` in an **existing `Context`** with shared `BeforeAll`? | Adding an SVID field check alongside existing SVID tests |
+| **3** | New `It` with its own `SetupAttestationTest`? | SVID rotation (needs short TTL, separate lifecycle) |
+| **4 (lowest)** | New `Context` with new shared fixture? | Only if multiple new `It` blocks need a shared pod |
+
+**Always pick the highest-priority option that fits.** Justify any lower choice in the test plan.
+
+### G.2 Reusable Utilities
+
+Always use existing utilities from `test/e2e/utils/`. If a utility does not exist, propose adding it to `utils.go` rather than inlining complex logic in `e2e_test.go`.
+
+**Pod/workload setup:**
+
+| Function | Returns | What it does |
+| --- | --- | --- |
+| `SetupAttestationTest(ctx, k8sClient, clientset, prefix, cspiffeIDMutator)` | `AttestationFixture` | Creates namespace, ClusterSPIFFEID, SA, ConfigMap, pod; waits for ready + SVID files; registers DeferCleanup. Pass `nil` mutator for defaults. |
+
+**Certificate helpers:**
+
+| Function | Returns |
+| --- | --- |
+| `ReadAndParseSVIDCertificate(ctx, ns, pod, container)` | `(stdout, block, rest, *x509.Certificate, error)` |
+| `ReadSVIDPEM` / `ReadBundlePEM` | `(string, error)` |
+| `ParsePEMCertificate` (first cert) / `ParseAllPEMCertificates` (all certs) | `(*x509.Certificate, error)` / `([]*x509.Certificate, error)` |
+
+**Other key utilities:**
+
+| Function | Purpose |
+| --- | --- |
+| `ExecInPod(ctx, ns, pod, container, cmd)` | Run command in pod. For shell expansion, wrap in `[]string{"sh", "-c", "cmd string"}` |
+| `UpdateCRWithRetry(ctx, k8sClient, obj, updateFunc)` | Optimistic locking with 5 conflict retries |
+| `WaitForPodReady` / `WaitForDeploymentAvailable` / `WaitForStatefulSetReady` / `WaitForDaemonSetAvailable` | Readiness polling |
+| `WaitFor*RollingUpdate(ctx, clientset, name, ns, initialGen, timeout)` | Generation-based rolling update wait |
+| `WaitForSpireServerConditions` / `...AgentConditions` / `...CSIDriverConditions` / `...OIDCConditions` | CR condition polling |
+| `VerifyContainerResources` / `VerifyPodLabels` / `VerifyPodScheduling` | Post-rollout verification |
+| `PatchSubscriptionEnv` + `WaitForDeploymentEnvVar` | OLM-safe operator config changes |
+
+### G.3 Constants (never hardcode)
+
+Always use constants from `test/e2e/utils/constants.go`:
+
+| Category | Key constants |
+| --- | --- |
+| Timeouts | `DefaultTimeout` (5m), `ShortTimeout` (2m), `DefaultInterval` (10s), `ShortInterval` (5s), `TestContextTimeout` (10m) |
+| Operator | `OperatorNamespace`, `OperatorDeploymentName`, `OperatorLabelSelector` |
+| SPIRE Server | `SpireServerStatefulSetName`, `SpireServerPodLabel`, `SpireServerConfigMapName` |
+| SPIRE Agent | `SpireAgentDaemonSetName`, `SpireAgentPodLabel` |
+| SPIFFE CSI | `SpiffeCSIDriverDaemonSetName`, `SpiffeCSIDriverPodLabel` |
+| OIDC Provider | `SpireOIDCDiscoveryProviderDeploymentName`, `SpireOIDCDiscoveryProviderPodLabel` |
+| Metrics | `OperatorMetricsServiceName`, `OperatorMetricsPort` (8443) |
+| Attestation | `SpiffeHelperImage`, `SpiffeHelperContainerName`, `SpiffeHelperConfigMapName` |
+| SVID | `DefaultX509SVIDTTL` (1h), `ClockSkewTolerance` (1m) |
+
+### G.4 Security Logging Rules
+
+Test output appears in CI logs. Apply these rules:
+
+**NEVER log:** private keys (`svid_key.pem` contents), bearer tokens, Secret `.data` values, credentials.
+
+**Safe to log:** certificate subjects, serial numbers, SPIFFE IDs, `IsCA`/`KeyUsage`, pod/namespace/node names, condition statuses, metrics output.
+
+**Authenticated endpoint pattern** — use `sh -c` so the token is never a separate argument:
+
+```go
+[]string{"sh", "-c",
+    fmt.Sprintf(`TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" && curl -sk -H "Authorization: Bearer ${TOKEN}" https://localhost:%d/metrics`, port)}
+```
+
+### G.5 Pod Security Context (mandatory)
+
+Every container in test pods MUST include:
+
+```go
+SecurityContext: &corev1.SecurityContext{
+    AllowPrivilegeEscalation: ptr.To(false),
+    Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+    RunAsNonRoot:             ptr.To(true),
+    RunAsUser:                ptr.To(int64(1000)),
+    SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+}
+```
+
+Omitting this may cause failures on clusters with restrictive Pod Security Standards.
+
+### G.6 Operator Architecture Awareness
+
+Key behaviors to avoid invalid test scenarios:
+
+**Fallback ClusterSPIFFEID:** The OIDC Discovery Provider creates `zero-trust-workload-identity-manager-spire-default` with `fallback: true`, no `podSelector`, and `namespaceSelector: NotIn [operator-namespace]`. Every pod with the SPIRE CSI driver in any non-operator namespace **will** receive an SVID. Negative tests assuming "no ClusterSPIFFEID = no SVID" are **invalid**.
+Source: `pkg/controller/spire-oidc-discovery-provider/clusterspiffeid.go` → `generateDefaultFallbackClusterSPIFFEID()`.
+
+**Ordered execution:** The suite is `Ordered`. `Installation` context creates operand CRs that later contexts depend on. Place new tests correctly:
+
+- Infrastructure/operand tests → in or after `Installation`
+- Attestation tests → in `SpireAgent attestation`
+- Config mutation tests → in `Common configurations`
+
+**CR naming:** All operand CRs use `Name: "cluster"` (OLM convention).
+
+**OLM env changes:** Use `PatchSubscriptionEnv` + `WaitForDeploymentEnvVar`. Never edit the Deployment directly — OLM will revert it.
+
+**DeferCleanup:** All test-created resources must register cleanup. Errors are logged but not propagated. Runs even on failure, in reverse order.
+
+### G.7 Ginkgo Patterns
+
+**Eventually (positive wait):**
+
+```go
+Eventually(func() T {
+    // fetch, log progress, return value
+}).WithTimeout(utils.DefaultTimeout).WithPolling(utils.DefaultInterval).Should(matcher, "message")
+```
+
+**Consistently (negative assertion)** — use `func(g Gomega)` to capture errors:
+
+```go
+Consistently(func(g Gomega) string {
+    stdout, stderr, err := utils.ExecInPod(ctx, ns, pod, container, cmd)
+    g.Expect(err).NotTo(HaveOccurred(), "exec must succeed (stderr: %s)", stderr)
+    return stdout
+}).WithTimeout(60 * time.Second).WithPolling(10 * time.Second).ShouldNot(
+    ContainSubstring("unexpected"), "message")
+```
+
+**Step reporting:** Every action gets `By("...")`.
+
+**Labels:** Attestation tests use `Label("attestation")`.
+
+**Shared fixtures:**
+
+```go
+Context("SVID validation", func() {
+    var f utils.AttestationFixture
+    BeforeAll(func() {
+        f = utils.SetupAttestationTest(ctx, k8sClient, clientset, "svid-validation", nil)
+    })
+    It("check A", func() { /* use f */ })
+    It("check B", func() { /* use f */ })
+})
+```
+
+---
+
+## H. Reference
+
+### H.1 Methodology definitions
+
+| Methodology | When to use | Example |
+| --- | --- | --- |
+| **Black box** | No code knowledge. Test through K8s API/CLI only. | `kubectl apply` CR → assert Deployment Ready |
+| **White box** | Full code knowledge. Target specific branches. | Unit test for StatefulSet spec builder |
+| **Grey box** | Partial knowledge. External interaction + internal observation. | Create CR, verify reconcile via metrics/logs |
+
+### H.2 Scope boundary rules
+
+- Tests MUST be relevant to the ADR/PR scope.
+- Do NOT test Non-Goals unless guarding regression.
+- Open questions in ADR → at least one MQE exploratory test.
+- Customer risk with behavior change → at least one regression test.
+
+### H.3 Upstream SPIRE test reference
+
+The upstream [spiffe/spire](https://github.com/spiffe/spire) project maintains high testing standards. Use their patterns as a quality bar.
+
+**Test directory structure** (`github.com/spiffe/spire/test/`):
+
+| Directory | Purpose | Key patterns |
+| --- | --- | --- |
+| `test/testca/` | CA and certificate helpers | `testca.New(tb, td)` creates a full CA; `ca.CreateX509SVID(id)` issues SVIDs; functional options: `WithID()`, `WithLifetime()`, `WithKeyUsage()` |
+| `test/testkey/` | Deterministic key generation | `testkey.NewEC256(tb)` for test keys — avoids slow key generation |
+| `test/fakes/` | Mock implementations | Fake datastores, node attestors, workload attestors |
+| `test/spiretest/` | Assertion and test helpers | `spiretest.AssertProtoEqual()`, log matchers, socket API helpers, temp dir management |
+| `test/integration/suites/` | Suite-per-feature integration tests | Each suite has `conf/`, numbered step scripts (`01-run-server`, `02-assert-attestation`), and `teardown` |
+
+**Quality patterns to follow:**
+
+- **Dedicated test helper packages:** Keep test utilities in separate packages (like our `test/e2e/utils/`), not inline in test files.
+- **Functional options for test objects:** SPIRE uses `WithID()`, `WithLifetime()`, `WithKeyUsage()` to customize test certificates. Our equivalent is `cspiffeIDMutator` in `SetupAttestationTest`.
+- **Immediate failure on setup errors:** SPIRE uses `require.NoError(tb, err)` for setup — never ignore errors. Our equivalent: `Expect(err).NotTo(HaveOccurred())` in Ginkgo.
+- **Both positive and negative cert validation:** SPIRE tests both valid chains AND invalid chains (wrong CA, expired certs). Apply the same rigor to our bundle/SVID tests.
+- **Suite-based integration organization:** Each feature gets its own integration suite with config, execution steps, and teardown — mirroring our `Context()` organization in Ginkgo.

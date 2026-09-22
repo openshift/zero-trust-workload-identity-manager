@@ -1,0 +1,122 @@
+---
+description: QE behavioral guidelines for the Zero Trust Workload Identity Manager operator. Reduces common AI mistakes when writing tests, reviewing code, or generating test plans.
+alwaysApply: true
+---
+
+# QE Behavioral Guidelines
+
+Apply these rules to **all** QE tasks: test writing, code review, test plan generation, and debugging. They bias toward precision and traceability over speed.
+
+---
+
+## 1. Ask Before Assuming
+
+**DO** surface confusion early. **DON'T** invent requirements.
+
+| Situation | Action |
+| --- | --- |
+| ADR or PR diff is ambiguous | Ask — don't fabricate requirements |
+| Multiple test approaches exist | Present options — don't pick silently |
+| Scope is unclear | State your interpretation, confirm before proceeding |
+| Something contradicts the ADR | Stop and flag the conflict |
+| PR Mode: design intent unclear from code | Flag it as a gap in the test plan |
+
+---
+
+## 2. Precision Over Volume
+
+**DO** write one test per observable behavior. **DON'T** pad with redundant tests.
+
+- Every test step must name a **specific action** AND a **specific observable outcome**.
+- Never use vague verbs ("verify", "ensure", "check") without a named observable.
+- If multiple tests cover the same observable, consolidate them.
+
+| BAD | GOOD |
+| --- | --- |
+| "Verify the operator works correctly" | "Assert `Ready=True` on SpireServer CR within 60s" |
+| "Check security" | "Exec into spire-server pod; confirm process runs as UID 1000 (non-root)" |
+| "Ensure cleanup happens" | "Delete SpireServer CR; assert finalizer removes spire-agent DaemonSet within 30s" |
+
+**Litmus test:** Would a senior QE engineer call these redundant? If yes, deduplicate.
+
+---
+
+## 3. Surgical Scope
+
+**DO** test only what the change covers. **DON'T** test anything speculative.
+
+- Only test what the ADR's scope covers (or what the PR diff changes).
+- Respect Non-Goals — no tests for excluded behavior unless guarding regression.
+- Match existing test style: Ginkgo v2, `Eventually`/`Consistently`, `DeferCleanup`.
+- Don't refactor existing tests unless asked.
+
+**Validation:** Every test case must trace directly to the ADR's stated goals/risks or the PR's changed behaviors.
+
+---
+
+## 4. OLM Deployment Context
+
+The operator is managed by OLM. **Never assume direct deployment control.**
+
+### Quick reference
+
+| Property | Value |
+| --- | --- |
+| Namespace | `zero-trust-workload-identity-manager` |
+| CSV name pattern | `zero-trust-workload-identity-manager.v<VERSION>` |
+| Operand CRs | SpireServer, SpireAgent, SpiffeCSIDriver, SpireOIDCDiscoveryProvider, ZeroTrustWorkloadIdentityManager |
+| Operand CR name | Always `cluster` (e.g. `oc get spireagent cluster`) |
+
+### DO / DON'T
+
+| DON'T | DO instead |
+| --- | --- |
+| `oc scale deployment` (OLM reverts it) | Patch the CSV: `oc patch csv <name> -n zero-trust-workload-identity-manager --type=json -p '[{"op":"replace","path":"/spec/install/spec/deployments/0/spec/replicas","value":N}]'` |
+| `oc edit deployment` for args/env | Patch the Subscription: `oc patch subscription openshift-zero-trust-workload-identity-manager -n zero-trust-workload-identity-manager --type='merge' -p '{"spec":{"config":{"env":[{"name":"VAR","value":"val"}]}}}'` |
+
+---
+
+## 5. Traceability
+
+**DO** trace every test to a source. **DON'T** create orphan tests.
+
+| Mode | Trace to |
+| --- | --- |
+| ADR Mode | ADR section or Jira acceptance criteria |
+| PR Mode | Specific diff location (`file.go:L42`) or PR description |
+
+- Never trace to commits or unrelated PRs.
+- Every requirement maps to at least one test — or has an explicit "NOT COVERED" with justification.
+- Use stable IDs (`REQ-001`, `PR-REQ-001`, `UT-001`, `E2E-001`) consistent across revisions.
+
+---
+
+## 6. Self-Verify Before Outputting
+
+**DO** run quality gates before returning any output. **DON'T** output a failing plan.
+
+- If a gate fails, fix and re-verify — don't ship it.
+- Count coverage by tier and priority before finishing.
+- For multi-step tasks, state a brief plan with checkpoints:
+
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+---
+
+## Stop Conditions (non-negotiable)
+
+| Condition | Action |
+| --- | --- |
+| No ADR and no PR provided | **STOP** — ask for ADR or PR link |
+| ADR has no "How" section | **WARN** — generate with reduced Tier 1/2 coverage |
+| Jira conflicts with ADR | **Document** conflict, follow ADR, ask user to resolve |
+| More than 3 ambiguous requirements | **STOP** — list ambiguities, ask for clarification |
+| PR-only: more than 3 low-confidence requirements | **WARN** — recommend ADR review |
+
+---
+
+**These guidelines are working if:** test plans have zero vague steps, every test traces to a requirement, no redundant tests exist across tiers, and clarifying questions come before generation — not after mistakes.
