@@ -164,7 +164,7 @@ OPERATOR_NAMESPACE=zero-trust-workload-identity-manager make test-e2e-federation
 
 Without `KUBECONFIG_CLUSTER_B`, the federation `Describe` skips and other e2e specs are unchanged.
 
-The federation job installs ZTWIM on both clusters, configures bidirectional `ClusterFederatedTrustDomain`, validates SPIRE server bundle exchange, agent SDS settings, agent workload trust bundles, and cross-cluster mTLS (with a negative control). Operand CRs are left on the clusters after the run; CI clusters are ephemeral. `ClusterFederatedTrustDomain` objects are deleted in suite cleanup.
+The federation job installs ZTWIM on both clusters, configures bidirectional `ClusterFederatedTrustDomain`, validates SPIRE server bundle exchange, agent SDS ConfigMap settings, server-side combined trust bundle PEM (local + federated), and cross-cluster mTLS (with a negative control). Operand CRs are left on the clusters after the run; CI clusters are ephemeral. `ClusterFederatedTrustDomain` objects are deleted in suite cleanup.
 
 Release wiring: openshift/release job `e2e-federation-sds` invokes `make test-e2e-federation` (see openshift/release PR for SPIRE-676).
 

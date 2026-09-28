@@ -252,9 +252,11 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 				"Cluster B agent SDS should not pin default_bundle_name to local-only")
 		})
 
-		It("exposes federated CAs via SPIRE agent workload API on both clusters", func() {
-			utils.WaitForAgentFederatedTrustBundle(testCtx, clientset, "", 2, utils.DefaultTimeout)
-			utils.WaitForAgentFederatedTrustBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), 2, utils.DefaultTimeout)
+		It("has local and federated CA material on SPIRE server for agent SDS", func() {
+			By("Verifying SPIRE server trust store on Cluster A includes federated CAs")
+			utils.ExpectServerCombinedTrustBundlesPEM(testCtx, clientset, "", 2)
+			By("Verifying SPIRE server trust store on Cluster B includes federated CAs")
+			utils.ExpectServerCombinedTrustBundlesPEM(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), 2)
 		})
 	})
 

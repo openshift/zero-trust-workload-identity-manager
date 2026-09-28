@@ -393,11 +393,6 @@ func GetSpireServerPodName(ctx context.Context, clientset kubernetes.Interface) 
 	return getRunningPodName(ctx, clientset, SpireServerPodLabel, "SPIRE server")
 }
 
-// GetSpireAgentPodName returns the name of a Running SPIRE agent pod.
-func GetSpireAgentPodName(ctx context.Context, clientset kubernetes.Interface) (string, error) {
-	return getRunningPodName(ctx, clientset, SpireAgentPodLabel, "SPIRE agent")
-}
-
 func getRunningPodName(ctx context.Context, clientset kubernetes.Interface, labelSelector, role string) (string, error) {
 	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
@@ -684,41 +679,14 @@ func countPEMCertsFromPod(ctx context.Context, namespace, podName, containerName
 	return len(certs)
 }
 
-// WaitForAgentFederatedTrustBundle waits until the SPIRE agent workload API returns a trust
-// bundle containing local and federated CA certificates.
-func WaitForAgentFederatedTrustBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig string, minCACerts int, timeout time.Duration) {
-	By("Waiting for SPIRE agent workload trust bundle with federated CAs")
-	Eventually(func() error {
-		pem, err := fetchAgentTrustBundlePEM(ctx, clientset, kubeconfig)
-		if err != nil {
-			return err
-		}
-		certs, err := ParseAllPEMCertificates(pem)
-		if err != nil {
-			return err
-		}
-		if len(certs) < minCACerts {
-			return fmt.Errorf("expected at least %d CA certificates from agent API, got %d", minCACerts, len(certs))
-		}
-		return nil
-	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(Succeed(),
-		"SPIRE agent should expose local and federated CAs via the workload API")
-}
-
-func fetchAgentTrustBundlePEM(ctx context.Context, clientset kubernetes.Interface, kubeconfig string) (string, error) {
-	podName, err := GetSpireAgentPodName(ctx, clientset)
-	if err != nil {
-		return "", err
-	}
-	command := []string{
-		"/opt/spire/bin/spire-agent", "api", "fetch", "bundle",
-		"-format", "pem",
-		"-socketPath", SpireAgentWorkloadSocket,
-	}
-	if kubeconfig == "" {
-		return execInPodCapture(ctx, OperatorNamespace, podName, "spire-agent", command)
-	}
-	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-agent", command)
+// ExpectServerCombinedTrustBundlesPEM asserts the SPIRE server exposes local and federated CA PEMs.
+// Agents source federated material from the server for SDS buildAll/ROOTCA handling.
+func ExpectServerCombinedTrustBundlesPEM(ctx context.Context, clientset kubernetes.Interface, kubeconfig string, minCACerts int) {
+	pem := GetServerAllTrustBundlesPEM(ctx, clientset, kubeconfig)
+	certs, err := ParseAllPEMCertificates(pem)
+	Expect(err).NotTo(HaveOccurred(), "SPIRE server combined trust bundle PEM should be parseable")
+	Expect(len(certs)).To(BeNumerically(">=", minCACerts),
+		"SPIRE server should expose at least %d CA certificates (local + federated)", minCACerts)
 }
 
 // IsMTLSExecFailure reports whether an AttemptMTLSConnection error is from oc/kubectl exec rather than TLS verification.
