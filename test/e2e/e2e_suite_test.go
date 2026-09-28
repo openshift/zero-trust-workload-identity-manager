@@ -119,7 +119,7 @@ func TestE2E(t *testing.T) {
 
 	// Suite-level configuration
 	// Suite timeout must allow all test specs to complete; go test -timeout is 45m
-	suiteConfig.Timeout = 40 * time.Minute
+	suiteConfig.Timeout = 45 * time.Minute
 	suiteConfig.FailFast = false       // Continue after first failure to see all issues
 	suiteConfig.FlakeAttempts = 0      // Retry on flaky tests (helpful when deflaking tests)
 	suiteConfig.MustPassRepeatedly = 1 // Must pass repeatedly times (helpful when deflaking tests)

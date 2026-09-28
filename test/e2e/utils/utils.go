@@ -219,6 +219,26 @@ func ExecInPod(ctx context.Context, namespace, podName, containerName string, co
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
+func envWithKubeconfig(env []string, kubeconfig string) []string {
+	if kubeconfig == "" {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	replaced := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "KUBECONFIG=") {
+			out = append(out, "KUBECONFIG="+kubeconfig)
+			replaced = true
+			continue
+		}
+		out = append(out, e)
+	}
+	if !replaced {
+		out = append(out, "KUBECONFIG="+kubeconfig)
+	}
+	return out
+}
+
 // ExecInPodWithKubeconfig runs a command in a pod container targeting a specific cluster
 // via explicit KUBECONFIG path. Returns stdout, stderr, and error.
 func ExecInPodWithKubeconfig(ctx context.Context, kubeconfig, namespace, podName, containerName string, command []string) (stdout, stderr string, err error) {
@@ -231,18 +251,7 @@ func ExecInPodWithKubeconfig(ctx context.Context, kubeconfig, namespace, podName
 	args = append(args, command...)
 
 	cmd := exec.CommandContext(ctx, cli, args...)
-	env := os.Environ()
-	for i, e := range env {
-		if strings.HasPrefix(e, "KUBECONFIG=") {
-			env[i] = "KUBECONFIG=" + kubeconfig
-			break
-		}
-	}
-	if kubeconfig != "" {
-		cmd.Env = append(env, "KUBECONFIG="+kubeconfig)
-	} else {
-		cmd.Env = env
-	}
+	cmd.Env = envWithKubeconfig(os.Environ(), kubeconfig)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf

@@ -30,6 +30,7 @@ import (
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,8 +58,19 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		Expect(k8sClientB).NotTo(BeNil(), "Cluster B client must be initialized")
 		Expect(clientsetB).NotTo(BeNil(), "Cluster B clientset must be initialized")
 
-		testCtx, cancelCtx = context.WithTimeout(context.Background(), 30*time.Minute)
+		testCtx, cancelCtx = context.WithTimeout(context.Background(), 40*time.Minute)
 		DeferCleanup(cancelCtx)
+
+		DeferCleanup(func(ctx context.Context) {
+			cftdA := &spiffev1alpha1.ClusterFederatedTrustDomain{ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-b"}}
+			if err := k8sClient.Delete(ctx, cftdA); err != nil && !apierrors.IsNotFound(err) {
+				fmt.Fprintf(GinkgoWriter, "cleanup: delete federation-cluster-b on Cluster A: %v\n", err)
+			}
+			cftdB := &spiffev1alpha1.ClusterFederatedTrustDomain{ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-a"}}
+			if err := k8sClientB.Delete(ctx, cftdB); err != nil && !apierrors.IsNotFound(err) {
+				fmt.Fprintf(GinkgoWriter, "cleanup: delete federation-cluster-a on Cluster B: %v\n", err)
+			}
+		})
 
 		By("Getting Cluster A apps domain")
 		baseDomainA, err := utils.GetClusterBaseDomain(testCtx, configClient)
@@ -82,7 +94,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			utils.CreateFederationZTWIM(testCtx, k8sClient, trustDomainA, "cluster-a")
 
 			By("Creating SpireServer with federation on Cluster A")
-			utils.CreateFederationSpireServer(testCtx, k8sClient, trustDomainA, appsDomainA)
+			utils.CreateFederationSpireServer(testCtx, k8sClient, appsDomainA)
 
 			By("Creating SpireAgent on Cluster A")
 			utils.CreateFederationSpireAgent(testCtx, k8sClient)
@@ -96,7 +108,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			utils.CreateFederationZTWIM(testCtx, k8sClientB, trustDomainB, "cluster-b")
 
 			By("Creating SpireServer with federation on Cluster B")
-			utils.CreateFederationSpireServer(testCtx, k8sClientB, trustDomainB, appsDomainB)
+			utils.CreateFederationSpireServer(testCtx, k8sClientB, appsDomainB)
 
 			By("Creating SpireAgent on Cluster B")
 			utils.CreateFederationSpireAgent(testCtx, k8sClientB)
@@ -186,15 +198,6 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 				"federation-cluster-a", trustDomainA, bundleRouteA, bootstrapBundleA)
 			Expect(k8sClientB.Create(testCtx, cftdB)).To(Succeed(),
 				"failed to create ClusterFederatedTrustDomain on Cluster B")
-
-			DeferCleanup(func(ctx context.Context) {
-				_ = k8sClient.Delete(ctx, &spiffev1alpha1.ClusterFederatedTrustDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-b"},
-				})
-				_ = k8sClientB.Delete(ctx, &spiffev1alpha1.ClusterFederatedTrustDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-a"},
-				})
-			})
 		})
 
 		It("applies bidirectional ClusterFederatedTrustDomain", func() {
@@ -225,18 +228,17 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 	})
 
 	Context("SDS Configuration", func() {
-		It("injects expected SDS config in spire-agent ConfigMap on both clusters", func() {
+		It("injects federation SDS settings in spire-agent ConfigMap on both clusters", func() {
 			By("Checking spire-agent ConfigMap on Cluster A for SDS config")
 			cmA, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentConfigMapName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred(), "failed to get spire-agent ConfigMap on Cluster A")
 
 			agentConfA := cmA.Data[utils.SpireAgentConfigKey]
 			Expect(agentConfA).NotTo(BeEmpty(), "agent config should not be empty on Cluster A")
-			Expect(agentConfA).To(ContainSubstring("default_all_bundles_name"),
-				"Cluster A agent config should contain default_all_bundles_name")
-			Expect(agentConfA).To(ContainSubstring("ROOTCA"),
-				"Cluster A agent config default_all_bundles_name should be ROOTCA")
-			fmt.Fprintf(GinkgoWriter, "[PASS] Cluster A: SDS default_all_bundles_name=ROOTCA present\n")
+			Expect(agentConfA).To(ContainSubstring(`"default_all_bundles_name": "ROOTCA"`),
+				"Cluster A agent SDS should map ROOTCA to buildAll")
+			Expect(agentConfA).To(ContainSubstring(`"default_bundle_name": "null"`),
+				"Cluster A agent SDS should not pin default_bundle_name to local-only")
 
 			By("Checking spire-agent ConfigMap on Cluster B for SDS config")
 			cmB, err := clientsetB.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentConfigMapName, metav1.GetOptions{})
@@ -244,27 +246,15 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 			agentConfB := cmB.Data[utils.SpireAgentConfigKey]
 			Expect(agentConfB).NotTo(BeEmpty(), "agent config should not be empty on Cluster B")
-			Expect(agentConfB).To(ContainSubstring("default_all_bundles_name"),
-				"Cluster B agent config should contain default_all_bundles_name")
-			Expect(agentConfB).To(ContainSubstring("ROOTCA"),
-				"Cluster B agent config default_all_bundles_name should be ROOTCA")
-			fmt.Fprintf(GinkgoWriter, "[PASS] Cluster B: SDS default_all_bundles_name=ROOTCA present\n")
+			Expect(agentConfB).To(ContainSubstring(`"default_all_bundles_name": "ROOTCA"`),
+				"Cluster B agent SDS should map ROOTCA to buildAll")
+			Expect(agentConfB).To(ContainSubstring(`"default_bundle_name": "null"`),
+				"Cluster B agent SDS should not pin default_bundle_name to local-only")
 		})
 
-		It("serves ROOTCA with local and federated bundles via agent SDS", func() {
-			By("Verifying default_bundle_name is null on Cluster A (routes ROOTCA to buildAll)")
-			cmA, err := clientset.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentConfigMapName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			agentConfA := cmA.Data[utils.SpireAgentConfigKey]
-			Expect(agentConfA).To(ContainSubstring(`"default_bundle_name"`),
-				"should have default_bundle_name key")
-
-			By("Verifying default_bundle_name is null on Cluster B")
-			cmB, err := clientsetB.CoreV1().ConfigMaps(utils.OperatorNamespace).Get(testCtx, utils.SpireAgentConfigMapName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			agentConfB := cmB.Data[utils.SpireAgentConfigKey]
-			Expect(agentConfB).To(ContainSubstring(`"default_bundle_name"`),
-				"should have default_bundle_name key")
+		It("exposes federated CAs via SPIRE agent workload API on both clusters", func() {
+			utils.WaitForAgentFederatedTrustBundle(testCtx, clientset, "", 2, utils.DefaultTimeout)
+			utils.WaitForAgentFederatedTrustBundle(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), 2, utils.DefaultTimeout)
 		})
 	})
 
@@ -342,6 +332,8 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			Expect(k8sClient.Create(testCtx, clientPod)).To(Succeed())
 			utils.WaitForPodReady(testCtx, clientset, utils.MTLSClientPodName, utils.MTLSTestNamespaceA, utils.DefaultTimeout)
 			utils.WaitForSVIDsReady(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", utils.DefaultTimeout)
+			spiffeBundleCAs := utils.WorkloadSPIFFEBundleCACount(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")
+			fmt.Fprintf(GinkgoWriter, "Cluster A client bundle.pem contains %d CA certificate(s) before mtls-ca injection\n", spiffeBundleCAs)
 			utils.PrepareMTLSCombinedCA(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client",
 				"", clientset, "")
 		})
@@ -359,16 +351,16 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					utils.MTLSServerRoutePort,
 				)
 				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "mTLS attempt failed: stdout=%s stderr=%s err=%v\n",
-						strings.TrimSpace(stdout), strings.TrimSpace(stderr), err)
-					return fmt.Errorf("mTLS connection failed: %w", err)
-				}
-				if strings.Contains(stdout, "No such file or directory") && strings.Contains(stdout, "openssl") {
-					return fmt.Errorf("openssl not available in client pod: %s", stdout)
-				}
-				if strings.Contains(stdout, "verify error") || strings.Contains(stdout, "\nEXIT_CODE=1\n") || strings.HasSuffix(strings.TrimSpace(stdout), "EXIT_CODE=1") {
+					if strings.Contains(stdout, "No such file or directory") && strings.Contains(stdout, "openssl") {
+						return fmt.Errorf("openssl not available in client pod: %s", stdout)
+					}
+					if utils.IsMTLSExecFailure(err) {
+						fmt.Fprintf(GinkgoWriter, "mTLS exec failed (retrying): stdout=%s stderr=%s err=%v\n",
+							strings.TrimSpace(stdout), strings.TrimSpace(stderr), err)
+						return fmt.Errorf("mTLS exec failed: %w", err)
+					}
 					caCount := utils.WorkloadBundleCACount(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")
-					return fmt.Errorf("TLS verification error (client bundle.pem has %d CA cert(s)): %s", caCount, stdout)
+					return fmt.Errorf("TLS verification error (client trust store has %d CA cert(s)): %s", caCount, stdout)
 				}
 				fmt.Fprintf(GinkgoWriter, "[PASS] Cross-cluster mTLS handshake succeeded\n")
 				return nil
@@ -376,13 +368,28 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 				"cross-cluster mTLS should succeed with federated trust bundles")
 		})
 
-		It("mTLS fails when federated trust is removed (negative control)", func() {
+		It("mTLS fails without federated trust material (negative control)", func() {
+			DeferCleanup(func(ctx context.Context) {
+				cftdRestore := utils.NewFederationClusterFederatedTrustDomain(
+					"federation-cluster-b", trustDomainB, bundleRouteB, bootstrapBundleB)
+				if err := k8sClient.Create(ctx, cftdRestore); err != nil && !apierrors.IsAlreadyExists(err) {
+					fmt.Fprintf(GinkgoWriter, "restore federation-cluster-b: %v\n", err)
+				}
+				utils.PrepareMTLSCombinedCA(ctx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client",
+					"", clientset, "")
+			})
+
+			By("Deleting ClusterFederatedTrustDomain on Cluster A")
+			cftd := &spiffev1alpha1.ClusterFederatedTrustDomain{
+				ObjectMeta: metav1.ObjectMeta{Name: "federation-cluster-b"},
+			}
+			Expect(k8sClient.Delete(testCtx, cftd)).To(Succeed(),
+				"failed to delete ClusterFederatedTrustDomain on Cluster A")
+
 			By("Removing combined federated CA from client workload")
 			Expect(utils.ClearMTLSCombinedCA(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")).To(Succeed())
 
 			By("Attempting mTLS connection (should fail without federated trust)")
-			// Without mtls-ca.pem the client falls back to bundle.pem, which only
-			// contains the local trust domain CA and cannot verify Cluster B certs.
 			Eventually(func() bool {
 				stdout, _, err := utils.AttemptMTLSConnection(
 					testCtx,
@@ -392,21 +399,21 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					utils.MTLSServerRoutePort,
 				)
 				if err != nil {
-					fmt.Fprintf(GinkgoWriter, "[EXPECTED] mTLS connection failed as expected: %v\n", err)
+					if utils.IsMTLSExecFailure(err) {
+						fmt.Fprintf(GinkgoWriter, "mTLS exec failed (retrying): %v\n", err)
+						return false
+					}
+					fmt.Fprintf(GinkgoWriter, "[EXPECTED] mTLS TLS verification failed: %v\n", err)
 					return true
 				}
-				if strings.Contains(stdout, "verify error") || strings.Contains(stdout, "EXIT_CODE=1") {
-					fmt.Fprintf(GinkgoWriter, "[EXPECTED] TLS verification error (federated CA removed): %s\n", stdout)
+				if strings.Contains(stdout, "verify error") {
+					fmt.Fprintf(GinkgoWriter, "[EXPECTED] TLS verification error: %s\n", stdout)
 					return true
 				}
 				fmt.Fprintf(GinkgoWriter, "mTLS still succeeding unexpectedly: %s\n", stdout)
 				return false
 			}).WithTimeout(utils.FederationTimeout).WithPolling(30*time.Second).Should(BeTrue(),
-				"mTLS should fail when client only trusts the local CA")
-
-			By("Restoring combined CA bundle on client")
-			utils.PrepareMTLSCombinedCA(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client",
-				"", clientset, "")
+				"mTLS should fail when federated trust is removed and only the local CA remains")
 		})
 	})
 })

@@ -132,6 +132,8 @@ E2E_TIMEOUT=60m make test-e2e
 | `ShortTimeout` | 2min | CRD establishment, deployment available |
 | `TestContextTimeout` | 10min | Per-test context deadline |
 | `E2E_TIMEOUT` (Makefile) | 45min | Suite-level go test timeout |
+| `E2E_FEDERATION_TIMEOUT` (Makefile) | 45min | Federation label-filtered e2e timeout |
+| `FederationTimeout` | 10min | Federation bundle exchange / mTLS polling |
 
 ### Test Structure
 
@@ -147,6 +149,24 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
     Context("CreateOnlyMode", func() { /* Create-only mode behavior */ })
 })
 ```
+
+### Federation E2E (two clusters)
+
+Federation tests live in `test/e2e/federation_sds_test.go` with Ginkgo labels `federation` and `sds`. They run only when a second cluster kubeconfig is available.
+
+```bash
+# Cluster A: KUBECONFIG (default). Cluster B: path to second cluster.
+export KUBECONFIG=/path/to/cluster-a/kubeconfig
+export KUBECONFIG_CLUSTER_B=/path/to/cluster-b/kubeconfig
+
+OPERATOR_NAMESPACE=zero-trust-workload-identity-manager make test-e2e-federation
+```
+
+Without `KUBECONFIG_CLUSTER_B`, the federation `Describe` skips and other e2e specs are unchanged.
+
+The federation job installs ZTWIM on both clusters, configures bidirectional `ClusterFederatedTrustDomain`, validates SPIRE server bundle exchange, agent SDS settings, agent workload trust bundles, and cross-cluster mTLS (with a negative control). Operand CRs are left on the clusters after the run; CI clusters are ephemeral. `ClusterFederatedTrustDomain` objects are deleted in suite cleanup.
+
+Release wiring: openshift/release job `e2e-federation-sds` invokes `make test-e2e-federation` (see openshift/release PR for SPIRE-676).
 
 ### Artifacts
 

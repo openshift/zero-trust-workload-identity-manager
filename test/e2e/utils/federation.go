@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,14 +38,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// FederationClusterInfo holds cluster-specific details discovered during federation setup.
-type FederationClusterInfo struct {
-	AppsDomain      string
-	TrustDomain     string
-	BundleEndpoint  string
-	FederationRoute string
-}
 
 // NewMTLSServerPod builds a pod that runs a TLS server using SPIRE-issued certificates.
 // The server uses openssl s_server to listen with mTLS (mutual TLS verification).
@@ -72,7 +65,7 @@ func NewMTLSServerPod(name, namespace, saName string) *corev1.Pod {
 				{
 					Name:  "tls-server",
 					Image: MTLSServerImage,
-					Command: []string{"sh", "-c", `
+					Command: []string{"sh", "-c", fmt.Sprintf(`
 while [ ! -f /certs/svid.pem ]; do sleep 2; done
 if ! command -v openssl >/dev/null 2>&1; then
   echo "openssl not found in container image"
@@ -80,15 +73,15 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 while [ ! -f /certs/mtls-ca.pem ]; do sleep 2; done
 echo "Certs available, starting TLS server..."
-exec openssl s_server \
+openssl s_server \
   -cert /certs/svid.pem \
   -key /certs/svid_key.pem \
   -CAfile /certs/mtls-ca.pem \
   -Verify 1 \
-  -accept 8443 \
+  -accept %d \
   -www \
   -quiet
-`},
+`, MTLSServerPort)},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "certs", MountPath: "/certs"},
 					},
@@ -215,7 +208,8 @@ func WaitForSpireReady(ctx context.Context, k8sClient client.Client, clientset k
 }
 
 // CreateFederationSpireServer creates the SpireServer CR with federation config enabled.
-func CreateFederationSpireServer(ctx context.Context, k8sClient client.Client, trustDomain, appsDomain string) {
+// Trust domain comes from the ZTWIM CR; appsDomain is used for the JWT issuer URL.
+func CreateFederationSpireServer(ctx context.Context, k8sClient client.Client, appsDomain string) {
 	By("Creating SpireServer with federation enabled")
 	spireServer := &operatorv1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
@@ -394,18 +388,32 @@ func serverBundleListContainsTrustDomain(output, trustDomain string) bool {
 	return false
 }
 
-// GetSpireServerPodName returns the name of the first running SPIRE server pod.
+// GetSpireServerPodName returns the name of a Running SPIRE server pod.
 func GetSpireServerPodName(ctx context.Context, clientset kubernetes.Interface) (string, error) {
+	return getRunningPodName(ctx, clientset, SpireServerPodLabel, "SPIRE server")
+}
+
+// GetSpireAgentPodName returns the name of a Running SPIRE agent pod.
+func GetSpireAgentPodName(ctx context.Context, clientset kubernetes.Interface) (string, error) {
+	return getRunningPodName(ctx, clientset, SpireAgentPodLabel, "SPIRE agent")
+}
+
+func getRunningPodName(ctx context.Context, clientset kubernetes.Interface, labelSelector, role string) (string, error) {
 	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
-		LabelSelector: SpireServerPodLabel,
+		LabelSelector: labelSelector,
 	})
 	if err != nil {
 		return "", err
 	}
-	if len(pods.Items) == 0 {
-		return "", fmt.Errorf("no SPIRE server pods found in namespace %s", OperatorNamespace)
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			return pod.Name, nil
+		}
 	}
-	return pods.Items[0].Name, nil
+	if len(pods.Items) > 0 {
+		return pods.Items[0].Name, nil
+	}
+	return "", fmt.Errorf("no %s pods found in namespace %s", role, OperatorNamespace)
 }
 
 // ListServerFederatedBundles lists federated bundles from a SPIRE server pod.
@@ -512,12 +520,38 @@ func AttemptMTLSConnection(ctx context.Context, namespace, podName, serverHost s
 			MTLSCombinedCAPath, serverHost, serverPort,
 		),
 	}
-	return ExecInPod(ctx, namespace, podName, "tls-client", cmd)
+	stdout, stderr, err := ExecInPod(ctx, namespace, podName, "tls-client", cmd)
+	if err != nil {
+		return stdout, stderr, err
+	}
+	exitCode, ok := parseShellExitCode(stdout)
+	if !ok {
+		return stdout, stderr, fmt.Errorf("mTLS check output missing EXIT_CODE marker")
+	}
+	if exitCode != 0 {
+		return stdout, stderr, fmt.Errorf("openssl s_client exited with code %d", exitCode)
+	}
+	return stdout, stderr, nil
+}
+
+func parseShellExitCode(stdout string) (int, bool) {
+	const prefix = "EXIT_CODE="
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			code, err := strconv.Atoi(strings.TrimPrefix(line, prefix))
+			if err != nil {
+				return 0, false
+			}
+			return code, true
+		}
+	}
+	return 0, false
 }
 
 // ClearMTLSCombinedCA removes federated trust material written for cross-cluster mTLS tests.
 func ClearMTLSCombinedCA(ctx context.Context, namespace, podName, containerName string) error {
-	command := []string{"sh", "-c", fmt.Sprintf("rm -f %q %q", MTLSCombinedCAPath, MTLSRemoteCAPath)}
+	command := []string{"sh", "-c", fmt.Sprintf("rm -f %q", MTLSCombinedCAPath)}
 	_, err := execInPodCapture(ctx, namespace, podName, containerName, command)
 	return err
 }
@@ -626,9 +660,19 @@ func PrepareMTLSCombinedCA(ctx context.Context, namespace, podName, containerNam
 	Expect(err).NotTo(HaveOccurred(), "failed to prepare combined CA bundle in %s/%s", namespace, podName)
 }
 
-// WorkloadBundleCACount returns the number of CA certificates in a workload trust bundle file.
+// WorkloadBundleCACount returns the number of CA certificates in the active client trust store
+// (mtls-ca.pem when present, otherwise spiffe-helper bundle.pem).
 func WorkloadBundleCACount(ctx context.Context, namespace, podName, containerName string) int {
 	command := []string{"sh", "-c", fmt.Sprintf(`if [ -f %q ]; then cat %q; else cat /certs/bundle.pem; fi`, MTLSCombinedCAPath, MTLSCombinedCAPath)}
+	return countPEMCertsFromPod(ctx, namespace, podName, containerName, command)
+}
+
+// WorkloadSPIFFEBundleCACount returns CA certificates in spiffe-helper bundle.pem only.
+func WorkloadSPIFFEBundleCACount(ctx context.Context, namespace, podName, containerName string) int {
+	return countPEMCertsFromPod(ctx, namespace, podName, containerName, []string{"cat", "/certs/bundle.pem"})
+}
+
+func countPEMCertsFromPod(ctx context.Context, namespace, podName, containerName string, command []string) int {
 	bundlePEM, err := execInPodCapture(ctx, namespace, podName, containerName, command)
 	if err != nil {
 		return 0
@@ -638,6 +682,51 @@ func WorkloadBundleCACount(ctx context.Context, namespace, podName, containerNam
 		return 0
 	}
 	return len(certs)
+}
+
+// WaitForAgentFederatedTrustBundle waits until the SPIRE agent workload API returns a trust
+// bundle containing local and federated CA certificates.
+func WaitForAgentFederatedTrustBundle(ctx context.Context, clientset kubernetes.Interface, kubeconfig string, minCACerts int, timeout time.Duration) {
+	By("Waiting for SPIRE agent workload trust bundle with federated CAs")
+	Eventually(func() error {
+		pem, err := fetchAgentTrustBundlePEM(ctx, clientset, kubeconfig)
+		if err != nil {
+			return err
+		}
+		certs, err := ParseAllPEMCertificates(pem)
+		if err != nil {
+			return err
+		}
+		if len(certs) < minCACerts {
+			return fmt.Errorf("expected at least %d CA certificates from agent API, got %d", minCACerts, len(certs))
+		}
+		return nil
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(Succeed(),
+		"SPIRE agent should expose local and federated CAs via the workload API")
+}
+
+func fetchAgentTrustBundlePEM(ctx context.Context, clientset kubernetes.Interface, kubeconfig string) (string, error) {
+	podName, err := GetSpireAgentPodName(ctx, clientset)
+	if err != nil {
+		return "", err
+	}
+	command := []string{
+		"/opt/spire/bin/spire-agent", "api", "fetch", "bundle",
+		"-format", "pem",
+		"-socketPath", SpireAgentWorkloadSocket,
+	}
+	if kubeconfig == "" {
+		return execInPodCapture(ctx, OperatorNamespace, podName, "spire-agent", command)
+	}
+	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-agent", command)
+}
+
+// IsMTLSExecFailure reports whether an AttemptMTLSConnection error is from oc/kubectl exec rather than TLS verification.
+func IsMTLSExecFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "exec ")
 }
 
 // WaitForSVIDsReadyOnClusterB waits until SVID files appear in /certs/ on a Cluster B pod.
