@@ -70,6 +70,8 @@ const (
 	SpireServerAPISocket        = "/tmp/spire-server/private/api.sock"
 	SpireAgentWorkloadSocket    = "/tmp/spire-agent/public/spire-agent.sock"
 	MTLSServerRoutePort         = 443
+	// OpenSSL client timeout for cross-cluster route mTLS (seconds).
+	MTLSOpenSSLTimeoutSeconds = 60
 
 	// Pinned UBI9 image (includes openssl and timeout) for in-pod mTLS checks in CI.
 	MTLSServerImage = "registry.access.redhat.com/ubi9/ubi:9.5"

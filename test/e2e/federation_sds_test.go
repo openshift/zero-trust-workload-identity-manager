@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -356,17 +357,21 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					if strings.Contains(stdout, "No such file or directory") && strings.Contains(stdout, "openssl") {
 						return fmt.Errorf("openssl not available in client pod: %s", stdout)
 					}
-					if utils.IsMTLSExecFailure(err) {
-						fmt.Fprintf(GinkgoWriter, "mTLS exec failed (retrying): stdout=%s stderr=%s err=%v\n",
+					if utils.IsMTLSExecFailure(err) || errors.Is(err, utils.ErrMTLSOpenSSLTimeout) {
+						fmt.Fprintf(GinkgoWriter, "mTLS attempt not ready (retrying): stdout=%s stderr=%s err=%v\n",
 							strings.TrimSpace(stdout), strings.TrimSpace(stderr), err)
-						return fmt.Errorf("mTLS exec failed: %w", err)
+						return fmt.Errorf("mTLS attempt not ready: %w", err)
 					}
-					caCount := utils.WorkloadBundleCACount(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")
-					return fmt.Errorf("TLS verification error (client trust store has %d CA cert(s)): %s", caCount, stdout)
+					if utils.IsMTLSTLSVerifyFailure(stdout, err) {
+						caCount := utils.WorkloadBundleCACount(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")
+						return fmt.Errorf("TLS verification error (client trust store has %d CA cert(s)): %s", caCount, stdout)
+					}
+					fmt.Fprintf(GinkgoWriter, "mTLS attempt failed (retrying): %v\n", err)
+					return fmt.Errorf("mTLS attempt failed: %w", err)
 				}
 				fmt.Fprintf(GinkgoWriter, "[PASS] Cross-cluster mTLS handshake succeeded\n")
 				return nil
-			}).WithTimeout(utils.FederationTimeout).WithPolling(30*time.Second).Should(Succeed(),
+			}).WithTimeout(utils.FederationTimeout).WithPolling(15*time.Second).Should(Succeed(),
 				"cross-cluster mTLS should succeed with federated trust bundles")
 		})
 
@@ -401,12 +406,16 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					utils.MTLSServerRoutePort,
 				)
 				if err != nil {
-					if utils.IsMTLSExecFailure(err) {
-						fmt.Fprintf(GinkgoWriter, "mTLS exec failed (retrying): %v\n", err)
+					if utils.IsMTLSExecFailure(err) || errors.Is(err, utils.ErrMTLSOpenSSLTimeout) {
+						fmt.Fprintf(GinkgoWriter, "mTLS attempt not ready (retrying): %v\n", err)
 						return false
 					}
-					fmt.Fprintf(GinkgoWriter, "[EXPECTED] mTLS TLS verification failed: %v\n", err)
-					return true
+					if utils.IsMTLSTLSVerifyFailure(stdout, err) {
+						fmt.Fprintf(GinkgoWriter, "[EXPECTED] mTLS TLS verification failed: %v\n", err)
+						return true
+					}
+					fmt.Fprintf(GinkgoWriter, "mTLS attempt failed (retrying): %v\n", err)
+					return false
 				}
 				if strings.Contains(stdout, "verify error") {
 					fmt.Fprintf(GinkgoWriter, "[EXPECTED] TLS verification error: %s\n", stdout)

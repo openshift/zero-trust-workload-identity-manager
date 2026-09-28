@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -505,14 +506,17 @@ func CreateMTLSServerRoute(ctx context.Context, k8sClient client.Client, namespa
 	return route
 }
 
+// ErrMTLSOpenSSLTimeout indicates openssl s_client was killed by timeout(1) (exit 124).
+var ErrMTLSOpenSSLTimeout = errors.New("openssl s_client timed out")
+
 // AttemptMTLSConnection executes an openssl s_client command from the client pod to test mTLS.
 // Uses the default KUBECONFIG (Cluster A). Returns stdout, stderr, and error.
 func AttemptMTLSConnection(ctx context.Context, namespace, podName, serverHost string, serverPort int) (string, string, error) {
 	cmd := []string{
 		"sh", "-c",
 		fmt.Sprintf(
-			`CAFILE=%q; [ -f "$CAFILE" ] || CAFILE=/certs/bundle.pem; echo "FEDERATION-MTLS-TEST" | timeout 15 openssl s_client -connect %s:%d -cert /certs/svid.pem -key /certs/svid_key.pem -CAfile "$CAFILE" -verify_return_error -quiet 2>&1; echo "EXIT_CODE=$?"`,
-			MTLSCombinedCAPath, serverHost, serverPort,
+			`CAFILE=%q; [ -f "$CAFILE" ] || CAFILE=/certs/bundle.pem; echo "FEDERATION-MTLS-TEST" | timeout %d openssl s_client -connect %s:%d -servername %s -cert /certs/svid.pem -key /certs/svid_key.pem -CAfile "$CAFILE" -verify_return_error -quiet 2>&1; echo "EXIT_CODE=$?"`,
+			MTLSCombinedCAPath, MTLSOpenSSLTimeoutSeconds, serverHost, serverPort, serverHost,
 		),
 	}
 	stdout, stderr, err := ExecInPod(ctx, namespace, podName, "tls-client", cmd)
@@ -522,6 +526,9 @@ func AttemptMTLSConnection(ctx context.Context, namespace, podName, serverHost s
 	exitCode, ok := parseShellExitCode(stdout)
 	if !ok {
 		return stdout, stderr, fmt.Errorf("mTLS check output missing EXIT_CODE marker")
+	}
+	if exitCode == 124 {
+		return stdout, stderr, ErrMTLSOpenSSLTimeout
 	}
 	if exitCode != 0 {
 		return stdout, stderr, fmt.Errorf("openssl s_client exited with code %d", exitCode)
@@ -695,6 +702,15 @@ func IsMTLSExecFailure(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "exec ")
+}
+
+// IsMTLSTLSVerifyFailure reports whether openssl failed certificate verification.
+func IsMTLSTLSVerifyFailure(stdout string, err error) bool {
+	if strings.Contains(stdout, "verify error") {
+		return true
+	}
+	exitCode, ok := parseShellExitCode(stdout)
+	return ok && exitCode == 1 && strings.Contains(stdout, "certificate verify failed")
 }
 
 // WaitForSVIDsReadyOnClusterB waits until SVID files appear in /certs/ on a Cluster B pod.
