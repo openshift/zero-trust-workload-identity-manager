@@ -61,4 +61,29 @@ const (
 	DefaultTimeout     = 5 * time.Minute
 	ShortTimeout       = 2 * time.Minute
 	TestContextTimeout = 10 * time.Minute
+
+	// Federation test constants
+	FederationTimeout   = 10 * time.Minute
+	FederationRouteName = "spire-server-federation"
+	FederationRoutePort         = 443
+	SpireControllerManagerClass = "zero-trust-workload-identity-manager-spire"
+	SpireServerAPISocket        = "/tmp/spire-server/private/api.sock"
+	SpireAgentWorkloadSocket    = "/tmp/spire-agent/public/spire-agent.sock"
+	MTLSServerRoutePort         = 443
+	// OpenSSL client timeout for cross-cluster route mTLS (seconds).
+	MTLSOpenSSLTimeoutSeconds = 60
+
+	// Pinned UBI9 image (includes openssl and timeout) for in-pod mTLS checks in CI.
+	MTLSServerImage = "registry.access.redhat.com/ubi9/ubi:9.5"
+	MTLSServerPort      = 8443
+	MTLSTestNamespaceA  = "e2e-federation-mtls-a"
+	MTLSTestNamespaceB  = "e2e-federation-mtls-b"
+	MTLSServerPodName   = "mtls-server"
+	MTLSClientPodName   = "mtls-client"
+	MTLSServerSAName    = "mtls-server-sa"
+	MTLSClientSAName    = "mtls-client-sa"
+	MTLSServerAppLabel  = "federation-mtls-server"
+	MTLSClientAppLabel  = "federation-mtls-client"
+	MTLSServerRouteName = "mtls-server"
+	MTLSCombinedCAPath = "/certs/mtls-ca.pem"
 )
