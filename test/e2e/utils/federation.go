@@ -80,7 +80,6 @@ openssl s_server \
   -CAfile /certs/mtls-ca.pem \
   -Verify 1 \
   -accept %d \
-  -www \
   -quiet
 `, MTLSServerPort)},
 					VolumeMounts: []corev1.VolumeMount{
@@ -515,7 +514,7 @@ func AttemptMTLSConnection(ctx context.Context, namespace, podName, serverHost s
 	cmd := []string{
 		"sh", "-c",
 		fmt.Sprintf(
-			`CAFILE=%q; [ -f "$CAFILE" ] || CAFILE=/certs/bundle.pem; echo "FEDERATION-MTLS-TEST" | timeout %d openssl s_client -connect %s:%d -servername %s -cert /certs/svid.pem -key /certs/svid_key.pem -CAfile "$CAFILE" -verify_return_error -quiet 2>&1; echo "EXIT_CODE=$?"`,
+			`CAFILE=%q; [ -f "$CAFILE" ] || CAFILE=/certs/bundle.pem; timeout %d openssl s_client -connect %s:%d -servername %s -cert /certs/svid.pem -key /certs/svid_key.pem -CAfile "$CAFILE" -verify_return_error -brief </dev/null 2>&1; echo "EXIT_CODE=$?"`,
 			MTLSCombinedCAPath, MTLSOpenSSLTimeoutSeconds, serverHost, serverPort, serverHost,
 		),
 	}
