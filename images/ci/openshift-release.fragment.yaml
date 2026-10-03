@@ -1,0 +1,25 @@
+# Example openshift/release fragment for ZTWIM operand CI images
+#
+# Apply this (or equivalent) in:
+#   ci-operator/config/openshift/zero-trust-workload-identity-manager/openshift-zero-trust-workload-identity-manager-main.yaml
+# Then regenerate jobs (ci-operator-config / prowgen) in the openshift/release repo.
+#
+# images: (add alongside existing operator Dockerfiles)
+#   - dockerfile_path: images/ci/spire-server.Dockerfile
+#     to: spire-server
+#   - dockerfile_path: images/ci/spire-agent.Dockerfile
+#     to: spire-agent
+#   - dockerfile_path: images/ci/spire-oidc-discovery-provider.Dockerfile
+#     to: spire-oidc-discovery-provider
+#   - dockerfile_path: images/ci/spire-controller-manager.Dockerfile
+#     to: spire-controller-manager
+#
+# operator.substitutions: (add alongside operator image substitution)
+#   - pullspec: ghcr.io/spiffe/spire-server:.*
+#     with: pipeline:spire-server
+#   - pullspec: ghcr.io/spiffe/spire-agent:.*
+#     with: pipeline:spire-agent
+#   - pullspec: ghcr.io/spiffe/oidc-discovery-provider:.*
+#     with: pipeline:spire-oidc-discovery-provider
+#   - pullspec: ghcr.io/spiffe/spire-controller-manager:.*
+#     with: pipeline:spire-controller-manager
