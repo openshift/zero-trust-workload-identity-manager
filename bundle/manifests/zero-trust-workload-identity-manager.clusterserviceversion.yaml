@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-09-02T16:01:27Z"
+    createdAt: "2026-10-05T07:08:00Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -732,15 +732,15 @@ spec:
                 - name: OPERATOR_VERSION
                   value: 1.1.0
                 - name: RELATED_IMAGE_SPIRE_SERVER
-                  value: quay.io/rh-ee-nhegde/spire-server:v-pqc1
+                  value: ghcr.io/spiffe/spire-server:1.14.7
                 - name: RELATED_IMAGE_SPIRE_AGENT
-                  value: quay.io/rh-ee-nhegde/spire-agent:v-pqc1
+                  value: ghcr.io/spiffe/spire-agent:1.14.7
                 - name: RELATED_IMAGE_SPIFFE_CSI_DRIVER
-                  value: quay.io/rh-ee-nhegde/spiffe-csi-driver:v-pqc1
+                  value: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
                 - name: RELATED_IMAGE_SPIRE_OIDC_DISCOVERY_PROVIDER
-                  value: quay.io/rh-ee-nhegde/spire-oidc-discovery-provider:v-pqc1
+                  value: ghcr.io/spiffe/oidc-discovery-provider:1.14.7
                 - name: RELATED_IMAGE_SPIRE_CONTROLLER_MANAGER
-                  value: quay.io/rh-ee-nhegde/spiffe-spire-controller-manager:v-pqc1
+                  value: ghcr.io/spiffe/spire-controller-manager:0.6.4
                 - name: RELATED_IMAGE_NODE_DRIVER_REGISTRAR
                   value: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.15.0
                 - name: RELATED_IMAGE_SPIFFE_CSI_INIT_CONTAINER
@@ -823,15 +823,15 @@ spec:
   provider:
     name: Red Hat
   relatedImages:
-  - image: quay.io/rh-ee-nhegde/spire-server:v-pqc1
+  - image: ghcr.io/spiffe/spire-server:1.14.7
     name: spire-server
-  - image: quay.io/rh-ee-nhegde/spire-agent:v-pqc1
+  - image: ghcr.io/spiffe/spire-agent:1.14.7
     name: spire-agent
-  - image: quay.io/rh-ee-nhegde/spiffe-csi-driver:v-pqc1
+  - image: ghcr.io/spiffe/spiffe-csi-driver:0.2.8
     name: spiffe-csi-driver
-  - image: quay.io/rh-ee-nhegde/spire-oidc-discovery-provider:v-pqc1
+  - image: ghcr.io/spiffe/oidc-discovery-provider:1.14.7
     name: spire-oidc-discovery-provider
-  - image: quay.io/rh-ee-nhegde/spiffe-spire-controller-manager:v-pqc1
+  - image: ghcr.io/spiffe/spire-controller-manager:0.6.4
     name: spire-controller-manager
   - image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.15.0
     name: node-driver-registrar
