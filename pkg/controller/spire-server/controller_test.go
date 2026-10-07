@@ -1591,7 +1591,7 @@ func TestReconcileSpireServerConfigMap_ErrorScenarios(t *testing.T) {
 			}
 
 			statusMgr := status.NewManager(fakeClient)
-			_, err := reconciler.reconcileSpireServerConfigMap(context.Background(), server, statusMgr, ztwim, false)
+			_, err := reconciler.reconcileSpireServerConfigMap(context.Background(), server, statusMgr, ztwim, nil, false)
 
 			if tt.expectError && err == nil {
 				t.Fatal("Expected error but got nil")
