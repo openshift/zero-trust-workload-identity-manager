@@ -1,5 +1,5 @@
 ---
-packageName: zero-trust-workload-identity-manager
+packageName: openshift-zero-trust-workload-identity-manager
 channels:
 - name: stable-v1
   currentCSV: zero-trust-workload-identity-manager.v1.1.2
