@@ -1089,6 +1089,15 @@ func TestStatefulSetNeedsUpdate(t *testing.T) {
 			t.Error("Expected true when init container name doesn't match")
 		}
 	})
+
+	t.Run("Required SCC annotation modified", func(t *testing.T) {
+		desired := createStatefulSet()
+		fetched := createStatefulSet()
+		desired.Spec.Template.Annotations[securityv1.RequiredSCCAnnotation] = RestrictedV2SCCName
+		if !StatefulSetNeedsUpdate(fetched, desired) {
+			t.Error("Expected true when required-scc annotation differs")
+		}
+	})
 }
 
 func TestDeploymentNeedsUpdate(t *testing.T) {
@@ -1194,6 +1203,17 @@ func TestDeploymentNeedsUpdate(t *testing.T) {
 		fetched.Spec.Template.Labels["app"] = "different"
 		if !DeploymentNeedsUpdate(fetched, desired) {
 			t.Error("Expected true when Template.Labels differ")
+		}
+	})
+
+	t.Run("Required SCC annotation modified", func(t *testing.T) {
+		desired := createDeployment()
+		fetched := createDeployment()
+		desired.Spec.Template.Annotations = map[string]string{
+			securityv1.RequiredSCCAnnotation: RestrictedV2SCCName,
+		}
+		if !DeploymentNeedsUpdate(fetched, desired) {
+			t.Error("Expected true when required-scc annotation differs")
 		}
 	})
 

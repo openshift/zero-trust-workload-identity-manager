@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -86,6 +87,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	// Test Pod Template annotations
 	t.Run("Validates Pod Template annotations", func(t *testing.T) {
 		expectedAnnotations := map[string]string{
+			securityv1.RequiredSCCAnnotation:                                    utils.RestrictedV2SCCName,
 			"kubectl.kubernetes.io/default-container":                           "spire-server",
 			spireServerStatefulSetSpireServerConfigHashAnnotationKey:            serverConfigHash,
 			spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey: controllerConfigHash,
@@ -533,6 +535,7 @@ func createReferenceStatefulSet(config *v1alpha1.SpireServerSpec, spireServerCon
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
+						securityv1.RequiredSCCAnnotation:                                    utils.RestrictedV2SCCName,
 						"kubectl.kubernetes.io/default-container":                           "spire-server",
 						spireServerStatefulSetSpireServerConfigHashAnnotationKey:            spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey: SpireControllerManagerConfigMapHash,

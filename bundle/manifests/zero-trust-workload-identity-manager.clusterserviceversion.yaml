@@ -693,6 +693,7 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: zero-trust-workload-identity-manager
+                openshift.io/required-scc: restricted-v2
               labels:
                 name: zero-trust-workload-identity-manager
             spec:
