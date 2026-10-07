@@ -26,6 +26,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
+	configv1 "github.com/openshift/api/config/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -52,6 +53,7 @@ var (
 	}
 
 	cacheResourceWithoutReqSelectors = []client.Object{
+		&configv1.APIServer{},
 		&v1alpha1.ZeroTrustWorkloadIdentityManager{},
 		&v1alpha1.SpireAgent{},
 		&v1alpha1.SpiffeCSIDriver{},
@@ -61,6 +63,7 @@ var (
 	}
 
 	informerResources = []client.Object{
+		&configv1.APIServer{},
 		&corev1.ServiceAccount{},
 		&corev1.Service{},
 		&rbacv1.Role{},
@@ -115,6 +118,11 @@ func NewCustomClient(m manager.Manager) (CustomCtrlClient, error) {
 		Client:    c,
 		apiReader: m.GetAPIReader(),
 	}, nil
+}
+
+// NewCustomClientFromClient wraps a plain client for use before the manager starts.
+func NewCustomClientFromClient(c client.Client) CustomCtrlClient {
+	return &customCtrlClientImpl{Client: c}
 }
 
 func (c *customCtrlClientImpl) Get(

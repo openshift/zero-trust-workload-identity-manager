@@ -1405,7 +1405,7 @@ func TestReconcileConfigMap_AllScenarios(t *testing.T) {
 			}
 
 			statusMgr := status.NewManager(fakeClient)
-			_, err := reconciler.reconcileConfigMap(context.Background(), agent, statusMgr, ztwim, tt.createOnlyMode)
+			_, err := reconciler.reconcileConfigMap(context.Background(), agent, statusMgr, ztwim, nil, tt.createOnlyMode)
 
 			if tt.expectError && err == nil {
 				t.Fatal("Expected error but got nil")
