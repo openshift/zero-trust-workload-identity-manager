@@ -24,7 +24,7 @@ This document links to generic OpenShift/Kubernetes patterns in the Platform eco
 - **E2E Framework**: OpenShift E2E test patterns
 
 **Component Usage**:
-- See `ZTWIM_TESTING.md` for component-specific test suites
+- See `ZTWIM_TEST_IMPLEMENTATION.md` for component-specific test suites; `ZTWIM_TEST_PLAN_HARNESS.md` for ADR-driven test planning
 - Unit tests use counterfeiter-generated fakes with envtest for Kubernetes API server
 - E2E tests use Ginkgo v2 + Gomega against live OpenShift clusters
 
