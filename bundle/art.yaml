@@ -1,0 +1,9 @@
+---
+updates: []
+external-images:
+- name: ubi9
+  search: "registry.access.redhat.com/ubi9:latest"
+  replace: "registry.redhat.io/ubi9@sha256:5858f9ace07316e3b12caab62f6c2481a5030bb6bafdca5a9ea324c321ef36df"
+- name: csi-node-driver-registrar
+  search: "registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.4"
+  replace: "registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9@sha256:c47b8ff5caf919e0462981288e6d17da64aa2aaa546a818fd97d3ae656f9e173"
