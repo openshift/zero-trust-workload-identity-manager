@@ -129,7 +129,13 @@ test: manifests generate fmt vet envtest ## Run tests.
 E2E_TIMEOUT ?= 45m
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
-	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout $(E2E_TIMEOUT)
+	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout $(E2E_TIMEOUT) \
+		-ginkgo.label-filter='!tls'
+
+.PHONY: test-e2e-tls  # On-demand full TLS profile churn + openssl wire (operands must already be Ready).
+test-e2e-tls:
+	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout $(E2E_TIMEOUT) \
+		-ginkgo.label-filter=tls
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
