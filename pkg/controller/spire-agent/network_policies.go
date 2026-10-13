@@ -86,6 +86,29 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 		applied = append(applied, desired.Name)
 	}
 
+	ns := utils.GetOperatorNamespace()
+	proxyPorts := utils.ProxyEgressTCPPorts()
+	proxyEnabled := utils.IsProxyEnabled() && len(proxyPorts) > 0
+	proxyResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, agent, ns, utils.SpireAgentNetworkPolicyProxyEgressName, proxyEnabled,
+		func() *networkingv1.NetworkPolicy {
+			return utils.MultiPortEgressNetworkPolicy(utils.SpireAgentNetworkPolicyProxyEgressName, ns, "spire-agent", proxyPorts, utils.SpireAgentLabels(agent.Spec.Labels))
+		}, createOnlyMode)
+	if err != nil {
+		statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
+			fmt.Sprintf("Failed to reconcile proxy NetworkPolicy: %v", err),
+			metav1.ConditionFalse)
+		return err
+	}
+	if proxyEnabled {
+		if proxyResult.Created {
+			created = true
+		}
+		if proxyResult.Updated {
+			updated = true
+		}
+		applied = append(applied, proxyResult.Name)
+	}
+
 	agent.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
 		ManagementState: v1alpha1.NetworkPolicyManagementManaged,
 		AppliedPolicies: applied,

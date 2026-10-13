@@ -29,6 +29,8 @@
 // bindata/spire-server/spire-server-service-account.yaml
 // bindata/spire-server/spire-server-service.yaml
 // bindata/spire-server/ztwim-sys-spire-server-egress-baseline.yaml
+// bindata/spire-server/ztwim-sys-spire-server-federation-egress.yaml
+// bindata/spire-server/ztwim-sys-spire-server-federation-ingress.yaml
 // bindata/spire-server/ztwim-sys-spire-server-ingress.yaml
 package assets
 
@@ -1199,6 +1201,80 @@ func spireServerZtwimSysSpireServerEgressBaselineYaml() (*asset, error) {
 	return a, nil
 }
 
+var _spireServerZtwimSysSpireServerFederationEgressYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-server-federation-egress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+`)
+
+func spireServerZtwimSysSpireServerFederationEgressYamlBytes() ([]byte, error) {
+	return _spireServerZtwimSysSpireServerFederationEgressYaml, nil
+}
+
+func spireServerZtwimSysSpireServerFederationEgressYaml() (*asset, error) {
+	bytes, err := spireServerZtwimSysSpireServerFederationEgressYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/ztwim-sys-spire-server-federation-egress.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireServerZtwimSysSpireServerFederationIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-server-federation-ingress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+      ports:
+        - port: 8443
+          protocol: TCP
+`)
+
+func spireServerZtwimSysSpireServerFederationIngressYamlBytes() ([]byte, error) {
+	return _spireServerZtwimSysSpireServerFederationIngressYaml, nil
+}
+
+func spireServerZtwimSysSpireServerFederationIngressYaml() (*asset, error) {
+	bytes, err := spireServerZtwimSysSpireServerFederationIngressYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/ztwim-sys-spire-server-federation-ingress.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _spireServerZtwimSysSpireServerIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1331,6 +1407,8 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-server/spire-server-service-account.yaml":                                      spireServerSpireServerServiceAccountYaml,
 	"spire-server/spire-server-service.yaml":                                              spireServerSpireServerServiceYaml,
 	"spire-server/ztwim-sys-spire-server-egress-baseline.yaml":                            spireServerZtwimSysSpireServerEgressBaselineYaml,
+	"spire-server/ztwim-sys-spire-server-federation-egress.yaml":                          spireServerZtwimSysSpireServerFederationEgressYaml,
+	"spire-server/ztwim-sys-spire-server-federation-ingress.yaml":                         spireServerZtwimSysSpireServerFederationIngressYaml,
 	"spire-server/ztwim-sys-spire-server-ingress.yaml":                                    spireServerZtwimSysSpireServerIngressYaml,
 }
 
@@ -1410,14 +1488,16 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"ztwim-sys-spire-oidc-discovery-provider-ingress.yaml": {spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYaml, map[string]*bintree{}},
 	}},
 	"spire-server": {nil, map[string]*bintree{
-		"spire-server-cluster-role-binding.yaml":       {spireServerSpireServerClusterRoleBindingYaml, map[string]*bintree{}},
-		"spire-server-cluster-role.yaml":               {spireServerSpireServerClusterRoleYaml, map[string]*bintree{}},
-		"spire-server-external-cert-role-binding.yaml": {spireServerSpireServerExternalCertRoleBindingYaml, map[string]*bintree{}},
-		"spire-server-external-cert-role.yaml":         {spireServerSpireServerExternalCertRoleYaml, map[string]*bintree{}},
-		"spire-server-service-account.yaml":            {spireServerSpireServerServiceAccountYaml, map[string]*bintree{}},
-		"spire-server-service.yaml":                    {spireServerSpireServerServiceYaml, map[string]*bintree{}},
-		"ztwim-sys-spire-server-egress-baseline.yaml":  {spireServerZtwimSysSpireServerEgressBaselineYaml, map[string]*bintree{}},
-		"ztwim-sys-spire-server-ingress.yaml":          {spireServerZtwimSysSpireServerIngressYaml, map[string]*bintree{}},
+		"spire-server-cluster-role-binding.yaml":         {spireServerSpireServerClusterRoleBindingYaml, map[string]*bintree{}},
+		"spire-server-cluster-role.yaml":                 {spireServerSpireServerClusterRoleYaml, map[string]*bintree{}},
+		"spire-server-external-cert-role-binding.yaml":   {spireServerSpireServerExternalCertRoleBindingYaml, map[string]*bintree{}},
+		"spire-server-external-cert-role.yaml":           {spireServerSpireServerExternalCertRoleYaml, map[string]*bintree{}},
+		"spire-server-service-account.yaml":              {spireServerSpireServerServiceAccountYaml, map[string]*bintree{}},
+		"spire-server-service.yaml":                      {spireServerSpireServerServiceYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-egress-baseline.yaml":    {spireServerZtwimSysSpireServerEgressBaselineYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-federation-egress.yaml":  {spireServerZtwimSysSpireServerFederationEgressYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-federation-ingress.yaml": {spireServerZtwimSysSpireServerFederationIngressYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-ingress.yaml":            {spireServerZtwimSysSpireServerIngressYaml, map[string]*bintree{}},
 	}},
 }}
 
