@@ -25,6 +25,8 @@
 // bindata/spire-server/spire-server-external-cert-role.yaml
 // bindata/spire-server/spire-server-service-account.yaml
 // bindata/spire-server/spire-server-service.yaml
+// bindata/spire-server/ztwim-sys-spire-server-egress-baseline.yaml
+// bindata/spire-server/ztwim-sys-spire-server-ingress.yaml
 package assets
 
 import (
@@ -1012,6 +1014,104 @@ func spireServerSpireServerServiceYaml() (*asset, error) {
 	return a, nil
 }
 
+var _spireServerZtwimSysSpireServerEgressBaselineYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-server-egress-baseline
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 6443
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - port: 5353
+          protocol: TCP
+        - port: 5353
+          protocol: UDP
+`)
+
+func spireServerZtwimSysSpireServerEgressBaselineYamlBytes() ([]byte, error) {
+	return _spireServerZtwimSysSpireServerEgressBaselineYaml, nil
+}
+
+func spireServerZtwimSysSpireServerEgressBaselineYaml() (*asset, error) {
+	bytes, err := spireServerZtwimSysSpireServerEgressBaselineYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/ztwim-sys-spire-server-egress-baseline.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireServerZtwimSysSpireServerIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-server-ingress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: spire-agent
+      ports:
+        - port: 8081
+          protocol: TCP
+    - ports:
+        - port: 9443
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-monitoring
+      ports:
+        - port: 9402
+          protocol: TCP
+        - port: 8082
+          protocol: TCP
+`)
+
+func spireServerZtwimSysSpireServerIngressYamlBytes() ([]byte, error) {
+	return _spireServerZtwimSysSpireServerIngressYaml, nil
+}
+
+func spireServerZtwimSysSpireServerIngressYaml() (*asset, error) {
+	bytes, err := spireServerZtwimSysSpireServerIngressYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/ztwim-sys-spire-server-ingress.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 // Asset loads and returns the asset for the given name.
 // It returns an error if the asset could not be found or
 // could not be loaded.
@@ -1089,6 +1189,8 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-server/spire-server-external-cert-role.yaml":                                   spireServerSpireServerExternalCertRoleYaml,
 	"spire-server/spire-server-service-account.yaml":                                      spireServerSpireServerServiceAccountYaml,
 	"spire-server/spire-server-service.yaml":                                              spireServerSpireServerServiceYaml,
+	"spire-server/ztwim-sys-spire-server-egress-baseline.yaml":                            spireServerZtwimSysSpireServerEgressBaselineYaml,
+	"spire-server/ztwim-sys-spire-server-ingress.yaml":                                    spireServerZtwimSysSpireServerIngressYaml,
 }
 
 // AssetDir returns the file names below a certain
@@ -1170,6 +1272,8 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"spire-server-external-cert-role.yaml":         {spireServerSpireServerExternalCertRoleYaml, map[string]*bintree{}},
 		"spire-server-service-account.yaml":            {spireServerSpireServerServiceAccountYaml, map[string]*bintree{}},
 		"spire-server-service.yaml":                    {spireServerSpireServerServiceYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-egress-baseline.yaml":  {spireServerZtwimSysSpireServerEgressBaselineYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-ingress.yaml":          {spireServerZtwimSysSpireServerIngressYaml, map[string]*bintree{}},
 	}},
 }}
 

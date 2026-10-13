@@ -40,6 +40,9 @@ const (
 	SpireOIDCDiscoveryProviderServiceAccountAssetName = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml"
 	SpireServerServiceAccountAssetName                = "spire-server/spire-server-service-account.yaml"
 
+	SpireServerNetworkPolicyIngressAssetName        = "spire-server/ztwim-sys-spire-server-ingress.yaml"
+	SpireServerNetworkPolicyEgressBaselineAssetName = "spire-server/ztwim-sys-spire-server-egress-baseline.yaml"
+
 	// Service
 	SpireOIDCDiscoveryProviderServiceAssetName    = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml"
 	SpireServerServiceAssetName                   = "spire-server/spire-server-service.yaml"
