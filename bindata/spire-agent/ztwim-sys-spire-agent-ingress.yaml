@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-agent-ingress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-monitoring
+      ports:
+        - port: 9402
+          protocol: TCP

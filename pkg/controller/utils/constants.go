@@ -43,6 +43,11 @@ const (
 	SpireServerNetworkPolicyIngressAssetName        = "spire-server/ztwim-sys-spire-server-ingress.yaml"
 	SpireServerNetworkPolicyEgressBaselineAssetName = "spire-server/ztwim-sys-spire-server-egress-baseline.yaml"
 
+	SpireAgentNetworkPolicyIngressAssetName        = "spire-agent/ztwim-sys-spire-agent-ingress.yaml"
+	SpireAgentNetworkPolicyEgressBaselineAssetName = "spire-agent/ztwim-sys-spire-agent-egress-baseline.yaml"
+
+	SpireOIDCDiscoveryProviderNetworkPolicyIngressAssetName = "spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml"
+
 	// Service
 	SpireOIDCDiscoveryProviderServiceAssetName    = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml"
 	SpireServerServiceAssetName                   = "spire-server/spire-server-service.yaml"
