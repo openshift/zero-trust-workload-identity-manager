@@ -327,6 +327,9 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	// Set CreateOnlyMode condition based on environment variable (simpler than aggregating from operands)
 	setCreateOnlyModeCondition(statusMgr, config.Status.ConditionalStatus.Conditions)
 
+	npAggregate := r.aggregateOperandNetworkPolicies(ctx)
+	statusMgr.AddCondition(v1alpha1.NetworkPoliciesApplied, npAggregate.Reason, npAggregate.Message, npAggregate.Status)
+
 	// Check create-only mode from environment variable for logging and OLM update
 	createOnlyModeEnabled := utils.IsInCreateOnlyMode()
 	r.log.Info("Aggregated operand status", "allReady", result.allReady, "notCreated", result.notCreatedCount, "failed", result.failedCount, "createOnlyModeEnabled", createOnlyModeEnabled, "anyOperandExists", result.anyOperandExists)
