@@ -196,18 +196,14 @@ func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) 
 	}, nil
 }
 
-// setCreateOnlyModeCondition sets the CreateOnlyMode condition on the main CR based on the environment variable
-func setCreateOnlyModeCondition(statusMgr *status.Manager, existingConditions []metav1.Condition) {
-	createOnlyMode := utils.IsInCreateOnlyMode()
-
-	if createOnlyMode {
-		statusMgr.AddCondition(CreateOnlyMode, utils.CreateOnlyModeEnabled,
-			"Create-only mode is enabled: Updates are not reconciled to existing resources",
-			metav1.ConditionTrue)
-	} else {
-		// Only set to False if we previously had it set to True (to show the transition)
-		existingCondition := apimeta.FindStatusCondition(existingConditions, CreateOnlyMode)
-		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+// setCreateOnlyModeCondition sets the CreateOnlyMode condition on the main CR if any operand has it
+func setCreateOnlyModeCondition(statusMgr *status.Manager, anyOperandHasCreateOnlyCondition, anyCreateOnlyModeEnabled bool) {
+	if anyOperandHasCreateOnlyCondition {
+		if anyCreateOnlyModeEnabled {
+			statusMgr.AddCondition(CreateOnlyMode, utils.CreateOnlyModeEnabled,
+				"One or more operands have create-only mode enabled",
+				metav1.ConditionTrue)
+		} else {
 			statusMgr.AddCondition(CreateOnlyMode, utils.CreateOnlyModeDisabled,
 				"Create-only mode is disabled",
 				metav1.ConditionFalse)
@@ -309,16 +305,14 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 			metav1.ConditionFalse)
 	}
 
-	// Set CreateOnlyMode condition based on environment variable (simpler than aggregating from operands)
-	setCreateOnlyModeCondition(statusMgr, config.Status.ConditionalStatus.Conditions)
+	// Set CreateOnlyMode condition if any operand has it
+	setCreateOnlyModeCondition(statusMgr, result.anyOperandHasCreateOnlyCondition, result.anyCreateOnlyModeEnabled)
 
-	// Check create-only mode from environment variable for logging and OLM update
-	createOnlyModeEnabled := utils.IsInCreateOnlyMode()
-	r.log.Info("Aggregated operand status", "allReady", result.allReady, "notCreated", result.notCreatedCount, "failed", result.failedCount, "createOnlyModeEnabled", createOnlyModeEnabled, "anyOperandExists", result.anyOperandExists)
+	r.log.Info("Aggregated operand status", "allReady", result.allReady, "notCreated", result.notCreatedCount, "failed", result.failedCount, "anyCreateOnlyModeEnabled", result.anyCreateOnlyModeEnabled, "anyOperandHasCreateOnlyCondition", result.anyOperandHasCreateOnlyCondition, "anyOperandExists", result.anyOperandExists)
 
 	// Update OperatorCondition for OLM integration (best effort - don't fail reconciliation if it fails)
 	// Upgradeable condition is only set on OperatorCondition, not on ZTWIM CR
-	if err := r.updateOperatorCondition(ctx, createOnlyModeEnabled, result.operandStatuses); err != nil {
+	if err := r.updateOperatorCondition(ctx, result.anyCreateOnlyModeEnabled, result.operandStatuses); err != nil {
 		r.log.Error(err, "failed to update OperatorCondition, continuing (operator may be running outside OLM)")
 	}
 
@@ -327,19 +321,23 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 
 // operandAggregateState holds the aggregate state tracked across all operands
 type operandAggregateState struct {
-	allReady         bool
-	notCreatedCount  int
-	failedCount      int
-	anyOperandExists bool
+	allReady                         bool
+	notCreatedCount                  int
+	failedCount                      int
+	anyCreateOnlyModeEnabled         bool
+	anyOperandHasCreateOnlyCondition bool
+	anyOperandExists                 bool
 }
 
 // operandAggregateResult holds the result of aggregating operand statuses
 type operandAggregateResult struct {
-	operandStatuses  []v1alpha1.OperandStatus
-	allReady         bool
-	notCreatedCount  int
-	failedCount      int
-	anyOperandExists bool
+	operandStatuses                  []v1alpha1.OperandStatus
+	allReady                         bool
+	notCreatedCount                  int
+	failedCount                      int
+	anyCreateOnlyModeEnabled         bool
+	anyOperandHasCreateOnlyCondition bool
+	anyOperandExists                 bool
 }
 
 // processOperandStatus processes a single operand's status and updates aggregate state
@@ -347,6 +345,15 @@ func processOperandStatus(operand v1alpha1.OperandStatus, state *operandAggregat
 	// Check if operand exists
 	if operand.Message != OperandMessageCRNotFound {
 		state.anyOperandExists = true
+
+		// Check if this operand has CreateOnlyMode condition
+		createOnlyCondition := apimeta.FindStatusCondition(operand.Conditions, utils.CreateOnlyModeStatusType)
+		if createOnlyCondition != nil {
+			state.anyOperandHasCreateOnlyCondition = true
+			if createOnlyCondition.Status == metav1.ConditionTrue {
+				state.anyCreateOnlyModeEnabled = true
+			}
+		}
 	}
 
 	// Check if operand is ready
@@ -384,11 +391,13 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) aggregateOperandStatus(ctx 
 	}
 
 	return operandAggregateResult{
-		operandStatuses:  operandStatuses,
-		allReady:         state.allReady,
-		notCreatedCount:  state.notCreatedCount,
-		failedCount:      state.failedCount,
-		anyOperandExists: state.anyOperandExists,
+		operandStatuses:                  operandStatuses,
+		allReady:                         state.allReady,
+		notCreatedCount:                  state.notCreatedCount,
+		failedCount:                      state.failedCount,
+		anyCreateOnlyModeEnabled:         state.anyCreateOnlyModeEnabled,
+		anyOperandHasCreateOnlyCondition: state.anyOperandHasCreateOnlyCondition,
+		anyOperandExists:                 state.anyOperandExists,
 	}
 }
 
@@ -473,19 +482,19 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) getSpireOIDCDiscoveryProvid
 }
 
 // extractKeyConditions extracts key conditions from operand status
-// Includes CreateOnlyMode condition when enabled (for visibility on operand status)
+// Only includes CreateOnlyMode condition when it's enabled (True) - needed for ZTWIM aggregation
 // When operand is not ready, also includes Ready condition and other failed conditions
 func extractKeyConditions(conditions []metav1.Condition, isReady bool) []metav1.Condition {
 	keyConditions := []metav1.Condition{}
 
-	// Include CreateOnlyMode condition only when enabled (for visibility)
-	// ZTWIM now checks the environment variable directly instead of aggregating from operands
+	// Only include CreateOnlyMode condition if it's enabled (True)
+	// When disabled (False), it's just clutter and not needed
 	createOnlyCondition := apimeta.FindStatusCondition(conditions, utils.CreateOnlyModeStatusType)
 	if createOnlyCondition != nil && createOnlyCondition.Status == metav1.ConditionTrue {
 		keyConditions = append(keyConditions, *createOnlyCondition)
 	}
 
-	// If operand is ready, return only the CreateOnlyMode condition if present (reduces clutter)
+	// If operand is ready and no CreateOnlyMode, return empty (reduces clutter)
 	if isReady {
 		return keyConditions
 	}

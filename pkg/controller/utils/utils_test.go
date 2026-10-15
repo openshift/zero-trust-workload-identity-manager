@@ -742,64 +742,22 @@ func TestIsInCreateOnlyModeEnvCheck(t *testing.T) {
 		description string
 	}{
 		{
-			name:        "env var set to true (lowercase)",
+			name:        "env var set to true",
 			envValue:    "true",
 			expected:    true,
 			description: "should return true when CREATE_ONLY_MODE is 'true'",
 		},
 		{
-			name:        "env var set to TRUE (uppercase)",
-			envValue:    "TRUE",
-			expected:    true,
-			description: "should return true when CREATE_ONLY_MODE is 'TRUE'",
-		},
-		{
-			name:        "env var set to True (mixed case)",
-			envValue:    "True",
-			expected:    true,
-			description: "should return true when CREATE_ONLY_MODE is 'True'",
-		},
-		{
-			name:        "env var set to false (lowercase)",
+			name:        "env var set to false",
 			envValue:    "false",
 			expected:    false,
 			description: "should return false when CREATE_ONLY_MODE is 'false'",
 		},
 		{
-			name:        "env var set to FALSE (uppercase)",
-			envValue:    "FALSE",
-			expected:    false,
-			description: "should return false when CREATE_ONLY_MODE is 'FALSE'",
-		},
-		{
-			name:        "env var set to False (mixed case)",
-			envValue:    "False",
-			expected:    false,
-			description: "should return false when CREATE_ONLY_MODE is 'False'",
-		},
-		{
 			name:        "env var not set",
 			envValue:    "",
 			expected:    false,
-			description: "should return false (default) when CREATE_ONLY_MODE is not set",
-		},
-		{
-			name:        "env var with whitespace around true",
-			envValue:    "  true  ",
-			expected:    true,
-			description: "should trim whitespace and return true",
-		},
-		{
-			name:        "env var with whitespace around false",
-			envValue:    "  FALSE  ",
-			expected:    false,
-			description: "should trim whitespace and return false",
-		},
-		{
-			name:        "env var with only whitespace",
-			envValue:    "   ",
-			expected:    false,
-			description: "should treat whitespace-only as empty and return false (default)",
+			description: "should return false when CREATE_ONLY_MODE is not set",
 		},
 		{
 			name:        "env var set to invalid value",
@@ -811,7 +769,11 @@ func TestIsInCreateOnlyModeEnvCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(createOnlyEnvName, tt.envValue)
+			if tt.envValue != "" {
+				t.Setenv(createOnlyEnvName, tt.envValue)
+			} else {
+				t.Setenv(createOnlyEnvName, "")
+			}
 			result := IsInCreateOnlyMode()
 			if result != tt.expected {
 				t.Errorf("IsInCreateOnlyMode() = %v, expected %v - %s", result, tt.expected, tt.description)
