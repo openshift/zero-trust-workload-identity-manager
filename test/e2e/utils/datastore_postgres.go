@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -45,17 +44,6 @@ func PatchSpireServerPostgresDatastore(ctx context.Context, k8sClient client.Cli
 		server.Spec.Datastore.ConnectionString = conn
 	})
 	Expect(err).NotTo(HaveOccurred(), "patch SpireServer postgres datastore")
-}
-
-// WaitForSpireServerReadyAfterDatastoreChange waits for server Ready after datastore migration.
-func WaitForSpireServerReadyAfterDatastoreChange(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
-	WipeSpireServerPVC(ctx, clientset, namespace)
-	WaitForSpireServerConditions(ctx, k8sClient, OperandCRName, map[string]metav1.ConditionStatus{
-		"Ready":                    metav1.ConditionTrue,
-		"StatefulSetAvailable":     metav1.ConditionTrue,
-		"ServerConfigMapAvailable": metav1.ConditionTrue,
-	}, 2*DefaultTimeout)
-	WaitForStatefulSetReady(ctx, clientset, SpireServerStatefulSetName, namespace, 2*DefaultTimeout)
 }
 
 // CleanupPostgresDatastore removes test Postgres resources and restores sqlite on SpireServer.

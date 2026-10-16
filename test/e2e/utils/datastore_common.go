@@ -117,6 +117,17 @@ func WipeSpireServerPVC(ctx context.Context, clientset kubernetes.Interface, nam
 		"SPIRE server PVC should be replaced")
 }
 
+// WaitForSpireServerReadyAfterDatastoreChange wipes server PVC and waits for Ready.
+func WaitForSpireServerReadyAfterDatastoreChange(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
+	WipeSpireServerPVC(ctx, clientset, namespace)
+	WaitForSpireServerConditions(ctx, k8sClient, OperandCRName, map[string]metav1.ConditionStatus{
+		"Ready":                    metav1.ConditionTrue,
+		"StatefulSetAvailable":     metav1.ConditionTrue,
+		"ServerConfigMapAvailable": metav1.ConditionTrue,
+	}, 2*DefaultTimeout)
+	WaitForStatefulSetReady(ctx, clientset, SpireServerStatefulSetName, namespace, 2*DefaultTimeout)
+}
+
 // GetSQLDatastorePluginData reads plugins.DataStore sql plugin_data from server.conf.
 func GetSQLDatastorePluginData(ctx context.Context, clientset kubernetes.Interface, namespace string) (*SQLDatastorePluginData, error) {
 	cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(ctx, SpireServerConfigMapName, metav1.GetOptions{})
