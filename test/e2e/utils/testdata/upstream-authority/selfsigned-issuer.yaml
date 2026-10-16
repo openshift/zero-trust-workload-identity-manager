@@ -1,0 +1,7 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: spire-selfsigned-issuer
+  namespace: {{ .Namespace }}
+spec:
+  selfSigned: {}

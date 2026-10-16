@@ -56,9 +56,27 @@ const (
 	// certificate validity for clock skew compensation.
 	ClockSkewTolerance = 1 * time.Minute
 
-	DefaultInterval    = 10 * time.Second
-	ShortInterval      = 5 * time.Second
-	DefaultTimeout     = 5 * time.Minute
-	ShortTimeout       = 2 * time.Minute
-	TestContextTimeout = 10 * time.Minute
+	SpireServerClusterRoleName = "spire-server"
+	SpireServerPVCName         = "spire-data-spire-server-0"
+	SpireServerPodName         = "spire-server-0"
+
+	CertManagerOperatorNamespace = "cert-manager-operator"
+	CertManagerOperandNamespace  = "cert-manager"
+	CertManagerPackageName       = "openshift-cert-manager-operator"
+	CertManagerCatalogSource     = "redhat-operators"
+	CertManagerOperatorChannel   = "stable-v1"
+	CertManagerOperatorDeployment = "cert-manager-operator-controller-manager"
+
+	CertManagerIssuerName        = "spire-ca-issuer"
+	CertManagerSelfSignedIssuer  = "spire-selfsigned-issuer"
+	CertManagerCACertificateName = "spire-upstream-ca"
+	CertManagerCASecretName      = "spire-upstream-ca"
+	CertManagerClusterIssuerName = "e2e-spire-cluster-issuer"
+
+	DefaultInterval        = 10 * time.Second
+	ShortInterval          = 5 * time.Second
+	DefaultTimeout         = 5 * time.Minute
+	ShortTimeout           = 2 * time.Minute
+	TestContextTimeout     = 10 * time.Minute
+	UpstreamCASetupTimeout = 25 * time.Minute
 )
