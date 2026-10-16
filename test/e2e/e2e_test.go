@@ -1931,4 +1931,6 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				"ConfigMap drift should be corrected when CreateOnlyMode is False")
 		})
 	})
+
+	registerUpstreamVaultE2E()
 })

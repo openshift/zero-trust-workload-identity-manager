@@ -28,62 +28,66 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("UpstreamAuthority Vault", Ordered, Label("upstream-vault"), func() {
-	var testCtx context.Context
-	var npEnabled bool
+// registerUpstreamVaultE2E is invoked from the main Ordered e2e Describe so
+// install/operand setup runs first; Label("upstream-vault") allows focused runs only.
+func registerUpstreamVaultE2E() {
+	Context("UpstreamAuthority Vault", Ordered, Label("upstream-vault"), func() {
+		var testCtx context.Context
+		var npEnabled bool
 
-	BeforeAll(func() {
-		ctx := context.Background()
-		serverCheck := &operatorv1alpha1.SpireServer{}
-		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: utils.OperandCRName}, serverCheck)).To(Succeed())
+		BeforeAll(func() {
+			ctx := context.Background()
+			serverCheck := &operatorv1alpha1.SpireServer{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: utils.OperandCRName}, serverCheck)).To(Succeed())
 
-		npEnabled = utils.SpireServerHasNetworkPoliciesFeature(ctx, k8sClient)
+			npEnabled = utils.SpireServerHasNetworkPoliciesFeature(ctx, k8sClient)
 
-		setupCtx, cancel := context.WithTimeout(ctx, utils.DatastoreSetupTimeout)
-		defer cancel()
+			setupCtx, cancel := context.WithTimeout(ctx, utils.DatastoreSetupTimeout)
+			defer cancel()
 
-		utils.InstallVaultUpstream(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
-		utils.PatchSpireServerVaultUpstream(setupCtx, k8sClient, utils.OperatorNamespace)
-		utils.WaitForSpireServerReadyAfterVaultChange(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
+			utils.InstallVaultUpstream(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
+			utils.PatchSpireServerVaultUpstream(setupCtx, k8sClient, utils.OperatorNamespace)
+			utils.WaitForSpireServerReadyAfterVaultChange(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
+		})
+
+		AfterAll(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
+			defer cancel()
+			utils.CleanupVaultUpstream(ctx, k8sClient, clientset, utils.OperatorNamespace)
+		})
+
+		BeforeEach(func() {
+			var cancel context.CancelFunc
+			testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
+			DeferCleanup(cancel)
+		})
+
+		It("server.conf should contain the vault UpstreamAuthority plugin", func() {
+			var pd *utils.VaultPluginData
+			Eventually(func(g Gomega) {
+				got, err := utils.GetVaultPluginData(testCtx, clientset, utils.OperatorNamespace)
+				g.Expect(err).NotTo(HaveOccurred())
+				pd = got
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(Succeed())
+
+			Expect(pd.VaultAddr).To(ContainSubstring(utils.VaultServiceName))
+			Expect(pd.VaultAddr).To(ContainSubstring("8200"))
+		})
+
+		It("should expose vault egress NetworkPolicy when network policies are enabled", func() {
+			if !npEnabled {
+				Skip("NetworkPoliciesAvailable not reported on SpireServer")
+			}
+			vaultNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
+				utils.SpireServerNetworkPolicyVaultEgressName, utils.DefaultTimeout)
+			Expect(utils.NetworkPolicyHasEgressTCPPort(vaultNP, int32(utils.VaultServicePort))).To(BeTrue())
+		})
+
+		It("workload SVID attestation should succeed with vault upstream CA", Label("attestation"), func() {
+			f := utils.SetupAttestationTest(testCtx, k8sClient, clientset, "vault-svid", nil)
+			_, _, _, cert, err := utils.ReadAndParseSVIDCertificate(testCtx, f.Namespace, f.PodName, f.AppContainer)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cert.NotAfter.After(time.Now())).To(BeTrue())
+		})
 	})
-
-	AfterAll(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
-		defer cancel()
-		utils.CleanupVaultUpstream(ctx, k8sClient, clientset, utils.OperatorNamespace)
-	})
-
-	BeforeEach(func() {
-		var cancel context.CancelFunc
-		testCtx, cancel = context.WithTimeout(context.Background(), utils.TestContextTimeout)
-		DeferCleanup(cancel)
-	})
-
-	It("server.conf should contain the vault UpstreamAuthority plugin", func() {
-		var pd *utils.VaultPluginData
-		Eventually(func(g Gomega) {
-			got, err := utils.GetVaultPluginData(testCtx, clientset, utils.OperatorNamespace)
-			g.Expect(err).NotTo(HaveOccurred())
-			pd = got
-		}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(Succeed())
-
-		Expect(pd.VaultAddr).To(ContainSubstring(utils.VaultServiceName))
-		Expect(pd.VaultAddr).To(ContainSubstring("8200"))
-	})
-
-	It("should expose vault egress NetworkPolicy when network policies are enabled", func() {
-		if !npEnabled {
-			Skip("NetworkPoliciesAvailable not reported on SpireServer")
-		}
-		vaultNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
-			utils.SpireServerNetworkPolicyVaultEgressName, utils.DefaultTimeout)
-		Expect(utils.NetworkPolicyHasEgressTCPPort(vaultNP, int32(utils.VaultServicePort))).To(BeTrue())
-	})
-
-	It("workload SVID attestation should succeed with vault upstream CA", Label("attestation"), func() {
-		f := utils.SetupAttestationTest(testCtx, k8sClient, clientset, "vault-svid", nil)
-		_, _, _, cert, err := utils.ReadAndParseSVIDCertificate(testCtx, f.Namespace, f.PodName, f.AppContainer)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cert.NotAfter.After(time.Now())).To(BeTrue())
-	})
-})
+}
