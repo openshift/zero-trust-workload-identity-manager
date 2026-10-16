@@ -40,6 +40,22 @@ const (
 	SpireOIDCDiscoveryProviderServiceAccountAssetName = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml"
 	SpireServerServiceAccountAssetName                = "spire-server/spire-server-service-account.yaml"
 
+	SpireServerNetworkPolicyIngressAssetName           = "spire-server/ztwim-sys-spire-server-ingress.yaml"
+	SpireServerNetworkPolicyEgressBaselineAssetName    = "spire-server/ztwim-sys-spire-server-egress-baseline.yaml"
+	SpireServerNetworkPolicyFederationIngressAssetName = "spire-server/ztwim-sys-spire-server-federation-ingress.yaml"
+	SpireServerNetworkPolicyFederationEgressAssetName  = "spire-server/ztwim-sys-spire-server-federation-egress.yaml"
+
+	SpireServerNetworkPolicyVaultEgressName    = "ztwim-sys-spire-server-vault-egress"
+	SpireServerNetworkPolicyDatabaseEgressName = "ztwim-sys-spire-server-database-egress"
+	SpireServerNetworkPolicyProxyEgressName    = "ztwim-sys-spire-server-proxy-egress"
+
+	SpireAgentNetworkPolicyIngressAssetName        = "spire-agent/ztwim-sys-spire-agent-ingress.yaml"
+	SpireAgentNetworkPolicyEgressBaselineAssetName = "spire-agent/ztwim-sys-spire-agent-egress-baseline.yaml"
+
+	SpireOIDCDiscoveryProviderNetworkPolicyIngressAssetName = "spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml"
+	SpireAgentNetworkPolicyProxyEgressName                  = "ztwim-sys-spire-agent-proxy-egress"
+	SpireOIDCDiscoveryProviderNetworkPolicyProxyEgressName  = "ztwim-sys-spire-oidc-discovery-provider-proxy-egress"
+
 	// Service
 	SpireOIDCDiscoveryProviderServiceAssetName    = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml"
 	SpireServerServiceAssetName                   = "spire-server/spire-server-service.yaml"
