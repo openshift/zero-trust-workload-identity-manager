@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: e2e-mysql-credentials
+  namespace: {{ .Namespace }}
+  labels:
+    ztwim.e2e/datastore: mysql
+type: Opaque
+stringData:
+  password: spire-e2e
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2e-mysql
+  namespace: {{ .Namespace }}
+  labels:
+    ztwim.e2e/datastore: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e2e-mysql
+  template:
+    metadata:
+      labels:
+        app: e2e-mysql
+        ztwim.e2e/datastore: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: e2e-mysql-credentials
+                  key: password
+            - name: MYSQL_DATABASE
+              value: spire
+            - name: MYSQL_USER
+              value: spire
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: e2e-mysql-credentials
+                  key: password
+          ports:
+            - containerPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e2e-mysql
+  namespace: {{ .Namespace }}
+  labels:
+    ztwim.e2e/datastore: mysql
+spec:
+  selector:
+    app: e2e-mysql
+  ports:
+    - name: mysql
+      port: 3307
+      targetPort: 3306
