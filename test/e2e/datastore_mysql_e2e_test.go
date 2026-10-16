@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("External Postgres datastore", Ordered, Label("datastore-postgres"), func() {
+var _ = Describe("External MySQL datastore", Ordered, Label("datastore-mysql"), func() {
 	var testCtx context.Context
 	var npEnabled bool
 
@@ -42,15 +42,15 @@ var _ = Describe("External Postgres datastore", Ordered, Label("datastore-postgr
 		setupCtx, cancel := context.WithTimeout(ctx, utils.DatastoreSetupTimeout)
 		defer cancel()
 
-		utils.InstallPostgresDatastore(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
-		utils.PatchSpireServerPostgresDatastore(setupCtx, k8sClient, utils.OperatorNamespace)
+		utils.InstallMySQLDatastore(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
+		utils.PatchSpireServerMySQLDatastore(setupCtx, k8sClient, utils.OperatorNamespace)
 		utils.WaitForSpireServerReadyAfterDatastoreChange(setupCtx, k8sClient, clientset, utils.OperatorNamespace)
 	})
 
 	AfterAll(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
 		defer cancel()
-		utils.CleanupPostgresDatastore(ctx, k8sClient, clientset, utils.OperatorNamespace)
+		utils.CleanupMySQLDatastore(ctx, k8sClient, clientset, utils.OperatorNamespace)
 	})
 
 	BeforeEach(func() {
@@ -59,7 +59,7 @@ var _ = Describe("External Postgres datastore", Ordered, Label("datastore-postgr
 		DeferCleanup(cancel)
 	})
 
-	It("server.conf should configure postgres sql DataStore plugin", func() {
+	It("server.conf should configure mysql sql DataStore plugin", func() {
 		var pd *utils.SQLDatastorePluginData
 		Eventually(func(g Gomega) {
 			got, err := utils.GetSQLDatastorePluginData(testCtx, clientset, utils.OperatorNamespace)
@@ -67,8 +67,8 @@ var _ = Describe("External Postgres datastore", Ordered, Label("datastore-postgr
 			pd = got
 		}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(Succeed())
 
-		Expect(pd.DatabaseType).To(Equal("postgres"))
-		Expect(pd.ConnectionString).To(ContainSubstring("port=5433"))
+		Expect(pd.DatabaseType).To(Equal("mysql"))
+		Expect(pd.ConnectionString).To(ContainSubstring(":3307"))
 	})
 
 	It("should expose database egress NetworkPolicy when network policies are enabled", func() {
@@ -77,11 +77,11 @@ var _ = Describe("External Postgres datastore", Ordered, Label("datastore-postgr
 		}
 		dbNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
 			utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
-		Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, utils.PostgresServicePort)).To(BeTrue())
+		Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, utils.MySQLServicePort)).To(BeTrue())
 	})
 
-	It("workload SVID attestation should succeed with postgres datastore", Label("attestation"), func() {
-		f := utils.SetupAttestationTest(testCtx, k8sClient, clientset, "pg-svid", nil)
+	It("workload SVID attestation should succeed with mysql datastore", Label("attestation"), func() {
+		f := utils.SetupAttestationTest(testCtx, k8sClient, clientset, "mysql-svid", nil)
 		_, _, _, cert, err := utils.ReadAndParseSVIDCertificate(testCtx, f.Namespace, f.PodName, f.AppContainer)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cert.NotAfter.After(time.Now())).To(BeTrue())
