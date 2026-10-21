@@ -95,10 +95,10 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		mergeOutcome(vaultResult)
 	}
 
-	dbPort, dbNeeded := utils.DatabaseEgressPort(server.Spec.Datastore.DatabaseType, server.Spec.Datastore.ConnectionString)
+	dbPorts, dbNeeded := utils.DatabaseEgressTCPPorts(ctx, r.ctrlClient, ns, server.Spec.Datastore.DatabaseType, server.Spec.Datastore.ConnectionString)
 	dbResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, server, ns, utils.SpireServerNetworkPolicyDatabaseEgressName, dbNeeded,
 		func() *networkingv1.NetworkPolicy {
-			return utils.PortEgressNetworkPolicy(utils.SpireServerNetworkPolicyDatabaseEgressName, ns, "spire-server", dbPort, utils.SpireServerLabels(server.Spec.Labels))
+			return utils.MultiPortEgressNetworkPolicy(utils.SpireServerNetworkPolicyDatabaseEgressName, ns, "spire-server", dbPorts, utils.SpireServerLabels(server.Spec.Labels))
 		}, createOnlyMode)
 	if err != nil {
 		return r.networkPolicyError(statusMgr, err, "database egress")
