@@ -48,6 +48,6 @@ func PatchSpireServerPostgresDatastore(ctx context.Context, k8sClient client.Cli
 
 // CleanupPostgresDatastore removes test Postgres resources and restores sqlite on SpireServer.
 func CleanupPostgresDatastore(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
-	RestoreSpireServerSQLiteDatastore(ctx, k8sClient)
+	RestoreSpireServerSQLiteAndWait(ctx, k8sClient, clientset, namespace)
 	deleteDatastoreE2EResources(ctx, k8sClient, clientset, namespace, "postgres")
 }
