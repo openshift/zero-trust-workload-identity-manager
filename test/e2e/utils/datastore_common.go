@@ -24,11 +24,13 @@ import (
 	"io"
 	"strings"
 	"text/template"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -64,6 +66,12 @@ func RestoreSpireServerSQLiteDatastore(ctx context.Context, k8sClient client.Cli
 	if err != nil && !apierrors.IsNotFound(err) {
 		Expect(err).NotTo(HaveOccurred(), "failed to restore sqlite datastore on SpireServer")
 	}
+}
+
+// RestoreSpireServerSQLiteAndWait reverts to sqlite and re-syncs SPIRE server and agents (journey AfterAll).
+func RestoreSpireServerSQLiteAndWait(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
+	RestoreSpireServerSQLiteDatastore(ctx, k8sClient)
+	WaitForSpireServerReadyAfterDatastoreChange(ctx, k8sClient, clientset, namespace)
 }
 
 // ClearSpireServerUpstreamAuthority removes upstreamAuthority from SpireServer.
@@ -117,7 +125,7 @@ func WipeSpireServerPVC(ctx context.Context, clientset kubernetes.Interface, nam
 		"SPIRE server PVC should be replaced")
 }
 
-// WaitForSpireServerReadyAfterDatastoreChange wipes server PVC and waits for Ready.
+// WaitForSpireServerReadyAfterDatastoreChange wipes server PVC, waits for Ready, and re-syncs agents after CA rotation.
 func WaitForSpireServerReadyAfterDatastoreChange(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
 	WipeSpireServerPVC(ctx, clientset, namespace)
 	WaitForSpireServerConditions(ctx, k8sClient, OperandCRName, map[string]metav1.ConditionStatus{
@@ -126,6 +134,67 @@ func WaitForSpireServerReadyAfterDatastoreChange(ctx context.Context, k8sClient 
 		"ServerConfigMapAvailable": metav1.ConditionTrue,
 	}, 2*DefaultTimeout)
 	WaitForStatefulSetReady(ctx, clientset, SpireServerStatefulSetName, namespace, 2*DefaultTimeout)
+	RestartSpireAgents(ctx, clientset, namespace)
+	WaitForSpireAgentsSynced(ctx, clientset, namespace, 2*DefaultTimeout)
+}
+
+// RestartSpireAgents deletes agent pods so they rebootstrap against a new server CA.
+func RestartSpireAgents(ctx context.Context, clientset kubernetes.Interface, namespace string) {
+	podClient := clientset.CoreV1().Pods(namespace)
+	old, err := podClient.List(ctx, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
+	Expect(err).NotTo(HaveOccurred())
+	oldNames := map[string]struct{}{}
+	for i := range old.Items {
+		oldNames[old.Items[i].Name] = struct{}{}
+	}
+	_ = podClient.DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
+	Eventually(func() bool {
+		pods, err := podClient.List(ctx, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
+		if err != nil || len(pods.Items) == 0 {
+			return false
+		}
+		for i := range pods.Items {
+			if _, exists := oldNames[pods.Items[i].Name]; exists {
+				return false
+			}
+			if pods.Items[i].Status.Phase != corev1.PodRunning {
+				return false
+			}
+		}
+		return true
+	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(BeTrue())
+	WaitForDaemonSetAvailable(ctx, clientset, SpireAgentDaemonSetName, namespace, DefaultTimeout)
+}
+
+// WaitForSpireAgentsSynced waits until agent logs show successful attestation without CA mismatch errors.
+func WaitForSpireAgentsSynced(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	tail := int64(80)
+	Eventually(func() bool {
+		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
+		if err != nil || len(pods.Items) == 0 {
+			return false
+		}
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			stream, err := clientset.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+				Container: "spire-agent",
+				TailLines: &tail,
+			}).Stream(ctx)
+			if err != nil {
+				return false
+			}
+			b, err := io.ReadAll(stream)
+			_ = stream.Close()
+			if err != nil {
+				return false
+			}
+			logs := string(b)
+			if strings.Contains(logs, "unknown authority") || strings.Contains(logs, "Failed to fetch authorized entries") {
+				return false
+			}
+		}
+		return true
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue())
 }
 
 // GetSQLDatastorePluginData reads plugins.DataStore sql plugin_data from server.conf.

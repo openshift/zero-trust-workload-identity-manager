@@ -51,7 +51,7 @@ func registerExternalMySQLDatastoreE2E() {
 		})
 
 		AfterAll(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), utils.DatastoreSetupTimeout)
 			defer cancel()
 			utils.CleanupMySQLDatastore(ctx, k8sClient, clientset, utils.OperatorNamespace)
 		})
@@ -81,6 +81,7 @@ func registerExternalMySQLDatastoreE2E() {
 			dbNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
 				utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
 			Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, utils.MySQLServicePort)).To(BeTrue())
+			Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, 3306)).To(BeTrue(), "OVN matches Service targetPort for egress")
 		})
 
 		It("workload SVID attestation should succeed with mysql datastore", Label("attestation"), func() {

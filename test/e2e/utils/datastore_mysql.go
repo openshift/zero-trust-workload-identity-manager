@@ -48,6 +48,6 @@ func PatchSpireServerMySQLDatastore(ctx context.Context, k8sClient client.Client
 
 // CleanupMySQLDatastore removes test MySQL resources and restores sqlite.
 func CleanupMySQLDatastore(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
-	RestoreSpireServerSQLiteDatastore(ctx, k8sClient)
+	RestoreSpireServerSQLiteAndWait(ctx, k8sClient, clientset, namespace)
 	deleteDatastoreE2EResources(ctx, k8sClient, clientset, namespace, "mysql")
 }
