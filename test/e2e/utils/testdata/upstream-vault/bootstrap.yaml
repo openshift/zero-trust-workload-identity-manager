@@ -15,15 +15,22 @@ data:
     vault secrets enable -path=pki pki 2>/dev/null || true
     vault secrets tune -max-lease-ttl=87600h pki
     vault write -field=certificate pki/root/generate/internal common_name="SPIRE E2E Root" ttl=87600h >/dev/null
+    printf '%s\n' \
+      'path "pki/root/sign-intermediate" { capabilities = ["create", "update"] }' \
+      'path "pki/sign/*" { capabilities = ["create", "update"] }' \
+      'path "pki/issue/*" { capabilities = ["create", "update"] }' \
+      | vault policy write spire-pki -
     vault auth enable kubernetes 2>/dev/null || true
     vault write auth/kubernetes/config \
       kubernetes_host="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
       token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+      disable_issuer_validation=true
     vault write auth/kubernetes/role/{{ .VaultRole }} \
       bound_service_account_names=spire-server \
       bound_service_account_namespaces={{ .Namespace }} \
-      policies=default \
+      audience=vault \
+      policies=spire-pki \
       ttl=1h
 ---
 apiVersion: batch/v1
@@ -41,11 +48,16 @@ spec:
         ztwim.e2e/datastore: vault
     spec:
       restartPolicy: OnFailure
-      serviceAccountName: default
+      serviceAccountName: e2e-vault-auth-reviewer
       containers:
         - name: bootstrap
           image: hashicorp/vault:1.15
           command: ["/bin/sh", "/scripts/bootstrap.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: scripts
               mountPath: /scripts

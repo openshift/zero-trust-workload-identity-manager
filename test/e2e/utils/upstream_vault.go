@@ -54,6 +54,7 @@ func InstallVaultUpstream(ctx context.Context, k8sClient client.Client, clientse
 	applyTestdataManifest(ctx, k8sClient, testdataVaultStack, datastoreTestdataValues{Namespace: namespace})
 	WaitForDeploymentAvailable(ctx, clientset, VaultServiceName, namespace, DatastoreSetupTimeout)
 
+	_ = clientset.BatchV1().Jobs(namespace).Delete(ctx, "e2e-vault-bootstrap", metav1.DeleteOptions{})
 	applyTestdataManifest(ctx, k8sClient, testdataVaultBootstrap, vaultTestdataValues{
 		Namespace: namespace,
 		VaultRole: VaultK8sAuthRoleName,
