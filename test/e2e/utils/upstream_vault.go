@@ -20,14 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	. "github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -124,6 +121,7 @@ func GetVaultPluginData(ctx context.Context, clientset kubernetes.Interface, nam
 // CleanupVaultUpstream clears upstreamAuthority and removes vault test resources.
 func CleanupVaultUpstream(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace string) {
 	ClearSpireServerUpstreamAuthority(ctx, k8sClient)
+	WaitForSpireServerReadyAfterVaultChange(ctx, k8sClient, clientset, namespace)
 	deleteDatastoreE2EResources(ctx, k8sClient, clientset, namespace, "vault")
 }
 
@@ -137,61 +135,3 @@ func WaitForJobComplete(ctx context.Context, clientset kubernetes.Interface, nam
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(), "Job %s should complete", name)
 }
 
-// RestartSpireAgents deletes agent pods so they rebootstrap against a new server CA.
-func RestartSpireAgents(ctx context.Context, clientset kubernetes.Interface, namespace string) {
-	podClient := clientset.CoreV1().Pods(namespace)
-	old, err := podClient.List(ctx, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
-	Expect(err).NotTo(HaveOccurred())
-	oldNames := map[string]struct{}{}
-	for i := range old.Items {
-		oldNames[old.Items[i].Name] = struct{}{}
-	}
-	_ = podClient.DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
-	Eventually(func() bool {
-		pods, err := podClient.List(ctx, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
-		if err != nil || len(pods.Items) == 0 {
-			return false
-		}
-		for i := range pods.Items {
-			if _, exists := oldNames[pods.Items[i].Name]; exists {
-				return false
-			}
-			if pods.Items[i].Status.Phase != corev1.PodRunning {
-				return false
-			}
-		}
-		return true
-	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(BeTrue())
-	WaitForDaemonSetAvailable(ctx, clientset, SpireAgentDaemonSetName, namespace, DefaultTimeout)
-}
-
-// WaitForSpireAgentsSynced waits until agent logs show successful attestation without CA mismatch errors.
-func WaitForSpireAgentsSynced(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
-	tail := int64(80)
-	Eventually(func() bool {
-		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: SpireAgentPodLabel})
-		if err != nil || len(pods.Items) == 0 {
-			return false
-		}
-		for i := range pods.Items {
-			pod := &pods.Items[i]
-			stream, err := clientset.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-				Container: "spire-agent",
-				TailLines: &tail,
-			}).Stream(ctx)
-			if err != nil {
-				return false
-			}
-			b, err := io.ReadAll(stream)
-			_ = stream.Close()
-			if err != nil {
-				return false
-			}
-			logs := string(b)
-			if strings.Contains(logs, "unknown authority") || strings.Contains(logs, "Failed to fetch authorized entries") {
-				return false
-			}
-		}
-		return true
-	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue())
-}

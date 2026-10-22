@@ -51,7 +51,7 @@ func registerUpstreamVaultE2E() {
 		})
 
 		AfterAll(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), utils.DatastoreSetupTimeout)
 			defer cancel()
 			utils.CleanupVaultUpstream(ctx, k8sClient, clientset, utils.OperatorNamespace)
 		})
