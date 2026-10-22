@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	securityv1 "github.com/openshift/api/security/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -161,6 +162,7 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
+						securityv1.RequiredSCCAnnotation:                                    utils.RestrictedV2SCCName,
 						"kubectl.kubernetes.io/default-container":                           "spire-server",
 						spireServerStatefulSetSpireServerConfigHashAnnotationKey:            spireServerConfigMapHash,
 						spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey: SpireControllerManagerConfigMapHash,

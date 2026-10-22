@@ -104,6 +104,7 @@ const (
 	SpireAgentConfigKey             = "agent.conf"
 	SpireServerConfigKey            = "server.conf"
 	SpireControllerManagerConfigKey = "controller-manager-config.yaml"
+	TLSConfigKey                    = "tls_config"
 
 	// Default Kubelet CA Paths (for OpenShift clusters)
 	// These are used as defaults for 'auto' mode when no explicit paths are provided.
@@ -117,5 +118,6 @@ const (
 	SpireServerExternalCertRoleBindingName = "spire-server-external-cert-reader"
 
 	//Security Context Constraints
-	PrivilegedSCCName = "privileged"
+	PrivilegedSCCName   = "privileged"
+	RestrictedV2SCCName = "restricted-v2"
 )

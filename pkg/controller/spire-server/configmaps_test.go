@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -91,7 +92,7 @@ func TestGenerateSpireServerConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, err := generateSpireServerConfigMap(tt.config, tt.ztwim)
+			cm, err := generateSpireServerConfigMap(tt.config, tt.ztwim, nil)
 
 			// Check error expectations
 			if tt.expectError {
@@ -168,7 +169,7 @@ func TestGenerateServerConfMap(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(validConfig, validZTWIM)
+	confMap := generateServerConfMap(validConfig, validZTWIM, nil)
 
 	// Test server section
 	server, ok := confMap["server"].(map[string]interface{})
@@ -312,7 +313,7 @@ func TestGenerateServerConfMapTTLFields(t *testing.T) {
 				},
 			}
 
-			confMap := generateServerConfMap(config, validZTWIM)
+			confMap := generateServerConfMap(config, validZTWIM, nil)
 
 			server, ok := confMap["server"].(map[string]interface{})
 			if !ok {
@@ -351,7 +352,7 @@ func TestGenerateSpireServerConfigMapWithTTLFields(t *testing.T) {
 		},
 	}
 
-	cm, err := generateSpireServerConfigMap(config, validZTWIM)
+	cm, err := generateSpireServerConfigMap(config, validZTWIM, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -572,7 +573,7 @@ func TestGenerateSpireControllerManagerConfigYaml(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			yamlStr, err := generateSpireControllerManagerConfigYaml(tt.config, tt.ztwim)
+			yamlStr, err := generateSpireControllerManagerConfigYaml(tt.config, tt.ztwim, nil)
 
 			// Check error expectations
 			if tt.expectError {
@@ -950,7 +951,7 @@ func TestGenerateServerConfMapWithKeyTypes(t *testing.T) {
 				},
 			}
 
-			confMap := generateServerConfMap(config, validZTWIM)
+			confMap := generateServerConfMap(config, validZTWIM, nil)
 
 			// Get server section
 			server, ok := confMap["server"].(map[string]interface{})
@@ -1028,7 +1029,7 @@ func TestGenerateSpireServerConfigMapWithKeyTypes(t *testing.T) {
 				},
 			}
 
-			cm, err := generateSpireServerConfigMap(config, validZTWIM)
+			cm, err := generateSpireServerConfigMap(config, validZTWIM, nil)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -1497,7 +1498,7 @@ func TestReconcileSpireServerConfigMap(t *testing.T) {
 			}
 			statusMgr := status.NewManager(fakeClient)
 
-			hash, err := reconciler.reconcileSpireServerConfigMap(context.Background(), server, statusMgr, ztwim, tt.createOnlyMode)
+			hash, err := reconciler.reconcileSpireServerConfigMap(context.Background(), server, statusMgr, ztwim, nil, tt.createOnlyMode)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -1631,7 +1632,7 @@ func TestReconcileSpireControllerManagerConfigMap(t *testing.T) {
 			ztwim := createTestZTWIM()
 			statusMgr := status.NewManager(fakeClient)
 
-			hash, err := reconciler.reconcileSpireControllerManagerConfigMap(context.Background(), server, statusMgr, ztwim, tt.createOnlyMode)
+			hash, err := reconciler.reconcileSpireControllerManagerConfigMap(context.Background(), server, statusMgr, ztwim, nil, tt.createOnlyMode)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -1799,7 +1800,7 @@ func TestGenerateServerConfMap_WithCertManagerUpstreamAuthority(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(config, ztwim)
+	confMap := generateServerConfMap(config, ztwim, nil)
 
 	plugins, ok := confMap["plugins"].(map[string]interface{})
 	if !ok {
@@ -1857,7 +1858,7 @@ func TestGenerateServerConfMap_WithVaultUpstreamAuthority(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(config, ztwim)
+	confMap := generateServerConfMap(config, ztwim, nil)
 
 	plugins, ok := confMap["plugins"].(map[string]interface{})
 	if !ok {
@@ -1914,7 +1915,7 @@ func TestGenerateServerConfMap_WithoutUpstreamAuthority(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(config, ztwim)
+	confMap := generateServerConfMap(config, ztwim, nil)
 
 	plugins, ok := confMap["plugins"].(map[string]interface{})
 	if !ok {
@@ -1949,7 +1950,7 @@ func TestGenerateServerConfMap_VaultWithCACert(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(config, ztwim)
+	confMap := generateServerConfMap(config, ztwim, nil)
 
 	plugins := confMap["plugins"].(map[string]interface{})
 	ua := plugins["UpstreamAuthority"].([]map[string]interface{})
@@ -1981,7 +1982,7 @@ func TestGenerateServerConfMap_VaultWithNamespace(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(config, ztwim)
+	confMap := generateServerConfMap(config, ztwim, nil)
 
 	plugins := confMap["plugins"].(map[string]interface{})
 	ua := plugins["UpstreamAuthority"].([]map[string]interface{})
@@ -2010,7 +2011,7 @@ func TestGenerateServerConfMap_CertManagerDefaults(t *testing.T) {
 		},
 	}
 
-	confMap := generateServerConfMap(config, ztwim)
+	confMap := generateServerConfMap(config, ztwim, nil)
 
 	plugins := confMap["plugins"].(map[string]interface{})
 	ua := plugins["UpstreamAuthority"].([]map[string]interface{})
@@ -2022,5 +2023,125 @@ func TestGenerateServerConfMap_CertManagerDefaults(t *testing.T) {
 	}
 	if pd["issuer_group"] != "cert-manager.io" {
 		t.Errorf("Expected default issuer_group %q, got %v", "cert-manager.io", pd["issuer_group"])
+	}
+}
+
+func tlsHashTestServerZTWIM() *v1alpha1.ZeroTrustWorkloadIdentityManager {
+	return &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "hash.test",
+			ClusterName:     "hash-cluster",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+}
+
+func partialTLSProfileSpec() *configv1.TLSProfileSpec {
+	return &configv1.TLSProfileSpec{
+		MinTLSVersion: configv1.VersionTLS12,
+	}
+}
+
+func fullTLSProfileSpec() *configv1.TLSProfileSpec {
+	return &configv1.TLSProfileSpec{
+		MinTLSVersion: configv1.VersionTLS13,
+		Ciphers: []string{
+			"TLS_AES_128_GCM_SHA256",
+			"ECDHE-RSA-AES128-GCM-SHA256",
+		},
+	}
+}
+
+func serverConfigHash(t *testing.T, config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, tlsProfileSpec *configv1.TLSProfileSpec) string {
+	t.Helper()
+
+	confJSON, err := marshalToJSON(generateServerConfMap(config, ztwim, tlsProfileSpec))
+	if err != nil {
+		t.Fatalf("marshal server config: %v", err)
+	}
+
+	return generateConfigHash(confJSON)
+}
+
+func controllerManagerConfigHash(t *testing.T, config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, tlsProfileSpec *configv1.TLSProfileSpec) string {
+	t.Helper()
+
+	yamlStr, err := generateSpireControllerManagerConfigYaml(config, ztwim, tlsProfileSpec)
+	if err != nil {
+		t.Fatalf("generate controller manager config yaml: %v", err)
+	}
+
+	return generateConfigHashFromString(yamlStr)
+}
+
+func TestSpireServerConfigHashConsistentWithOperandTLSConfig(t *testing.T) {
+	config := createValidConfig()
+	ztwim := tlsHashTestServerZTWIM()
+
+	// Test that hash is consistent as long as the operand TLS config is the same
+	tests := []struct {
+		name           string
+		tlsProfileSpec *configv1.TLSProfileSpec
+	}{
+		{name: "nil operand profile", tlsProfileSpec: nil},
+		{name: "partial operand profile", tlsProfileSpec: partialTLSProfileSpec()},
+		{name: "full operand profile", tlsProfileSpec: fullTLSProfileSpec()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash1 := serverConfigHash(t, config, ztwim, tt.tlsProfileSpec)
+			hash2 := serverConfigHash(t, config, ztwim, tt.tlsProfileSpec)
+			hash3 := serverConfigHash(t, config, ztwim, tt.tlsProfileSpec)
+
+			if hash1 != hash2 || hash2 != hash3 {
+				t.Fatalf("expected identical server config hash, got %q, %q, %q", hash1, hash2, hash3)
+			}
+		})
+	}
+
+	// Test that hash is different if the operand TLS config is different
+	nilHash := serverConfigHash(t, config, ztwim, nil)
+	partialHash := serverConfigHash(t, config, ztwim, partialTLSProfileSpec())
+	fullHash := serverConfigHash(t, config, ztwim, fullTLSProfileSpec())
+
+	if nilHash == partialHash || partialHash == fullHash || nilHash == fullHash {
+		t.Fatalf("expected distinct hashes for nil/partial/full profiles, got nil=%q partial=%q full=%q", nilHash, partialHash, fullHash)
+	}
+}
+
+func TestSpireControllerManagerConfigHashConsistentWithOperandTLSConfig(t *testing.T) {
+	config := createValidConfig()
+	ztwim := tlsHashTestServerZTWIM()
+
+	// Test that hash is consistent as long as the operand TLS config is the same
+	tests := []struct {
+		name           string
+		tlsProfileSpec *configv1.TLSProfileSpec
+	}{
+		{name: "nil operand profile", tlsProfileSpec: nil},
+		{name: "partial operand profile", tlsProfileSpec: partialTLSProfileSpec()},
+		{name: "full operand profile", tlsProfileSpec: fullTLSProfileSpec()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash1 := controllerManagerConfigHash(t, config, ztwim, tt.tlsProfileSpec)
+			hash2 := controllerManagerConfigHash(t, config, ztwim, tt.tlsProfileSpec)
+			hash3 := controllerManagerConfigHash(t, config, ztwim, tt.tlsProfileSpec)
+
+			if hash1 != hash2 || hash2 != hash3 {
+				t.Fatalf("expected identical controller manager config hash, got %q, %q, %q", hash1, hash2, hash3)
+			}
+		})
+	}
+
+	// Test that hash is different if the operand TLS config is different
+	nilHash := controllerManagerConfigHash(t, config, ztwim, nil)
+	partialHash := controllerManagerConfigHash(t, config, ztwim, partialTLSProfileSpec())
+	fullHash := controllerManagerConfigHash(t, config, ztwim, fullTLSProfileSpec())
+
+	if nilHash == partialHash || partialHash == fullHash || nilHash == fullHash {
+		t.Fatalf("expected distinct hashes for nil/partial/full profiles, got nil=%q partial=%q full=%q", nilHash, partialHash, fullHash)
 	}
 }

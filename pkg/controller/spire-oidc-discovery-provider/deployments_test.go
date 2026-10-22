@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -43,6 +44,7 @@ func TestBuildDeployment(t *testing.T) {
 				assert.Equal(t, int32(1), *deployment.Spec.Replicas)
 				// Verify the annotation is on the pod template, not on the deployment itself
 				assert.Equal(t, "test-hash-123", deployment.Spec.Template.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey])
+				assert.Equal(t, utils.RestrictedV2SCCName, deployment.Spec.Template.Annotations[securityv1.RequiredSCCAnnotation])
 				// Verify the deployment itself doesn't have this annotation
 				_, exists := deployment.Annotations[spireOidcDeploymentSpireOidcConfigHashAnnotationKey]
 				assert.False(t, exists, "Deployment annotations should not contain the config hash")

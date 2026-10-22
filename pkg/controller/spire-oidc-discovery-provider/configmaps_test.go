@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -37,7 +38,7 @@ func TestReconcileConfigMap(t *testing.T) {
 		fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-oidc-discovery-provider"))
 		fakeClient.CreateReturns(nil)
 
-		hash, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		hash, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
@@ -61,7 +62,7 @@ func TestReconcileConfigMap(t *testing.T) {
 		fakeClient.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, "spire-oidc-discovery-provider"))
 		fakeClient.CreateReturns(errors.New("create failed"))
 
-		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err == nil {
 			t.Error("Expected error when Create fails")
@@ -78,7 +79,7 @@ func TestReconcileConfigMap(t *testing.T) {
 
 		fakeClient.GetReturns(errors.New("connection refused"))
 
-		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err == nil {
 			t.Error("Expected error when Get fails")
@@ -98,7 +99,7 @@ func TestReconcileConfigMap(t *testing.T) {
 				Name:            "spire-oidc-discovery-provider",
 				Namespace:       utils.GetOperatorNamespace(),
 				ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+				Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 			},
 			Data: map[string]string{
 				"oidc-discovery-provider.conf": "old-config",
@@ -113,7 +114,7 @@ func TestReconcileConfigMap(t *testing.T) {
 		}
 		fakeClient.UpdateReturns(nil)
 
-		hash, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		hash, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
@@ -139,7 +140,7 @@ func TestReconcileConfigMap(t *testing.T) {
 				Name:            "spire-oidc-discovery-provider",
 				Namespace:       utils.GetOperatorNamespace(),
 				ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+				Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 			},
 			Data: map[string]string{
 				"oidc-discovery-provider.conf": "old-config",
@@ -154,7 +155,7 @@ func TestReconcileConfigMap(t *testing.T) {
 		}
 		fakeClient.UpdateReturns(errors.New("update conflict"))
 
-		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err == nil {
 			t.Error("Expected error when Update fails")
@@ -174,7 +175,7 @@ func TestReconcileConfigMap(t *testing.T) {
 				Name:            "spire-oidc-discovery-provider",
 				Namespace:       utils.GetOperatorNamespace(),
 				ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+				Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 			},
 			Data: map[string]string{
 				"oidc-discovery-provider.conf": "old-config",
@@ -188,7 +189,7 @@ func TestReconcileConfigMap(t *testing.T) {
 			return nil
 		}
 
-		hash, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, true)
+		hash, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, true)
 
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
@@ -215,7 +216,7 @@ func TestReconcileConfigMap(t *testing.T) {
 		ztwim := createOIDCTestZTWIM()
 		statusMgr := status.NewManager(fakeClient)
 
-		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err == nil {
 			t.Error("Expected error when SetControllerReference fails")
@@ -230,7 +231,7 @@ func TestReconcileConfigMap(t *testing.T) {
 		ztwim := createOIDCTestZTWIM()
 		statusMgr := status.NewManager(fakeClient)
 
-		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, false)
+		_, err := reconciler.reconcileConfigMap(context.Background(), oidc, statusMgr, ztwim, nil, false)
 
 		if err == nil {
 			t.Error("Expected error when CR is nil")
@@ -242,7 +243,7 @@ func TestReconcileConfigMap(t *testing.T) {
 func TestGenerateOIDCConfigMapFromCR_NilConfig(t *testing.T) {
 	ztwim := createOIDCTestZTWIM()
 
-	_, err := generateOIDCConfigMapFromCR(nil, ztwim)
+	_, err := generateOIDCConfigMapFromCR(nil, ztwim, nil)
 
 	if err == nil {
 		t.Error("Expected error when config is nil")
@@ -307,7 +308,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim, nil)
 
 		// Assert
 		require.NoError(t, err)
@@ -369,7 +370,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim, nil)
 
 		// Assert
 		require.NoError(t, err)
@@ -418,7 +419,7 @@ func TestGenerateOIDCConfigMapFromCR(t *testing.T) {
 		}
 
 		// Act
-		result, err := generateOIDCConfigMapFromCR(cr, ztwim)
+		result, err := generateOIDCConfigMapFromCR(cr, ztwim, nil)
 
 		// Assert
 		require.NoError(t, err)
@@ -466,7 +467,7 @@ func TestOIDCConfigJSONFormatting(t *testing.T) {
 		},
 	}
 
-	result, err := generateOIDCConfigMapFromCR(cr, ztwim)
+	result, err := generateOIDCConfigMapFromCR(cr, ztwim, nil)
 	require.NoError(t, err)
 
 	oidcJSON := result.Data["oidc-discovery-provider.conf"]
@@ -479,4 +480,64 @@ func TestOIDCConfigJSONFormatting(t *testing.T) {
 	var temp interface{}
 	err = json.Unmarshal([]byte(oidcJSON), &temp)
 	assert.NoError(t, err)
+}
+
+func partialTLSProfileSpec() *configv1.TLSProfileSpec {
+	return &configv1.TLSProfileSpec{
+		MinTLSVersion: configv1.VersionTLS12,
+	}
+}
+
+func fullTLSProfileSpec() *configv1.TLSProfileSpec {
+	return &configv1.TLSProfileSpec{
+		MinTLSVersion: configv1.VersionTLS13,
+		Ciphers: []string{
+			"TLS_AES_128_GCM_SHA256",
+			"ECDHE-RSA-AES128-GCM-SHA256",
+		},
+	}
+}
+
+func oidcConfigHash(t *testing.T, cr *v1alpha1.SpireOIDCDiscoveryProvider, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, tlsProfileSpec *configv1.TLSProfileSpec) string {
+	t.Helper()
+
+	cm, err := generateOIDCConfigMapFromCR(cr, ztwim, tlsProfileSpec)
+	require.NoError(t, err)
+
+	return utils.GenerateConfigHashFromString(cm.Data["oidc-discovery-provider.conf"])
+}
+
+func TestOIDCConfigHashConsistentWithOperandTLSConfig(t *testing.T) {
+	cr := createOIDCTestCR()
+	ztwim := createOIDCTestZTWIM()
+
+	// Test that hash is consistent as long as the operand TLS config is the same
+	tests := []struct {
+		name           string
+		tlsProfileSpec *configv1.TLSProfileSpec
+	}{
+		{name: "nil operand profile", tlsProfileSpec: nil},
+		{name: "partial operand profile", tlsProfileSpec: partialTLSProfileSpec()},
+		{name: "full operand profile", tlsProfileSpec: fullTLSProfileSpec()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash1 := oidcConfigHash(t, cr, ztwim, tt.tlsProfileSpec)
+			hash2 := oidcConfigHash(t, cr, ztwim, tt.tlsProfileSpec)
+			hash3 := oidcConfigHash(t, cr, ztwim, tt.tlsProfileSpec)
+
+			assert.Equal(t, hash1, hash2)
+			assert.Equal(t, hash2, hash3)
+		})
+	}
+
+	// Test that hash is different if the operand TLS config is different
+	nilHash := oidcConfigHash(t, cr, ztwim, nil)
+	partialHash := oidcConfigHash(t, cr, ztwim, partialTLSProfileSpec())
+	fullHash := oidcConfigHash(t, cr, ztwim, fullTLSProfileSpec())
+
+	assert.NotEqual(t, nilHash, partialHash)
+	assert.NotEqual(t, partialHash, fullHash)
+	assert.NotEqual(t, nilHash, fullHash)
 }

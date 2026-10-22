@@ -629,6 +629,7 @@ func StatefulSetNeedsUpdate(fetched, desired *appsv1.StatefulSet) bool {
 	}
 
 	for _, key := range []string{
+		securityv1.RequiredSCCAnnotation,
 		"kubectl.kubernetes.io/default-container",
 		"ztwim.openshift.io/spire-server-config-hash",
 		"ztwim.openshift.io/spire-controller-manager-config-hash",
@@ -745,6 +746,9 @@ func DeploymentNeedsUpdate(fetched, desired *appsv1.Deployment) bool {
 		return true
 	}
 	if !equality.Semantic.DeepEqual(ds.Template.Labels, fs.Template.Labels) {
+		return true
+	}
+	if ds.Template.Annotations[securityv1.RequiredSCCAnnotation] != fs.Template.Annotations[securityv1.RequiredSCCAnnotation] {
 		return true
 	}
 	dPod := ds.Template.Spec

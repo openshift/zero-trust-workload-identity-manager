@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/stretchr/testify/assert"
@@ -379,7 +380,7 @@ func TestGenerateAgentConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateAgentConfig(tt.cfg, tt.ztwim)
+			result := generateAgentConfig(tt.cfg, tt.ztwim, nil)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -451,7 +452,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm, hash, err := generateSpireAgentConfigMap(tt.spireAgentConfig, tt.ztwim)
+			cm, hash, err := generateSpireAgentConfigMap(tt.spireAgentConfig, tt.ztwim, nil)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -517,7 +518,7 @@ func TestGenerateSpireAgentConfigMap(t *testing.T) {
 				assert.Contains(t, pluginsSection, "KeyManager")
 
 				// Test that hash is deterministic
-				cm2, hash2, err2 := generateSpireAgentConfigMap(tt.spireAgentConfig, tt.ztwim)
+				cm2, hash2, err2 := generateSpireAgentConfigMap(tt.spireAgentConfig, tt.ztwim, nil)
 				require.NoError(t, err2)
 				assert.Equal(t, hash, hash2)
 				assert.Equal(t, cm.Data[utils.SpireAgentConfigKey], cm2.Data[utils.SpireAgentConfigKey])
@@ -553,13 +554,13 @@ func TestGenerateSpireAgentConfigMapConsistency(t *testing.T) {
 	}
 
 	// Generate the same config multiple times
-	cm1, hash1, err1 := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
+	cm1, hash1, err1 := generateSpireAgentConfigMap(spireAgentConfig, ztwim, nil)
 	require.NoError(t, err1)
 
-	cm2, hash2, err2 := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
+	cm2, hash2, err2 := generateSpireAgentConfigMap(spireAgentConfig, ztwim, nil)
 	require.NoError(t, err2)
 
-	cm3, hash3, err3 := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
+	cm3, hash3, err3 := generateSpireAgentConfigMap(spireAgentConfig, ztwim, nil)
 	require.NoError(t, err3)
 
 	// All results should be identical
@@ -611,7 +612,7 @@ func TestGenerateAgentConfigNilChecks(t *testing.T) {
 					BundleConfigMap: "spire-bundle",
 				},
 			}
-			result := generateAgentConfig(tt.cfg, ztwim)
+			result := generateAgentConfig(tt.cfg, ztwim, nil)
 
 			// Basic validation
 			assert.Contains(t, result, "agent")
@@ -644,7 +645,7 @@ func TestGenerateSpireAgentConfigMapEmptyLabels(t *testing.T) {
 		},
 	}
 
-	cm, hash, err := generateSpireAgentConfigMap(spireAgentConfig, ztwim)
+	cm, hash, err := generateSpireAgentConfigMap(spireAgentConfig, ztwim, nil)
 	require.NoError(t, err)
 	require.NotNil(t, cm)
 	assert.NotEmpty(t, hash)
@@ -988,7 +989,7 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 					BundleConfigMap: "spire-bundle",
 				},
 			}
-			result := generateAgentConfig(tt.cfg, ztwim)
+			result := generateAgentConfig(tt.cfg, ztwim, nil)
 
 			// Get the WorkloadAttestor plugin data
 			plugins := result["plugins"].(map[string]interface{})
@@ -1013,4 +1014,83 @@ func TestGenerateAgentConfigWithVerification(t *testing.T) {
 			}
 		})
 	}
+}
+
+func tlsHashTestAgentCR() *v1alpha1.SpireAgent {
+	return &v1alpha1.SpireAgent{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-hash-test",
+			Namespace: utils.GetOperatorNamespace(),
+		},
+		Spec: v1alpha1.SpireAgentSpec{
+			NodeAttestor: &v1alpha1.NodeAttestor{K8sPSATEnabled: "true"},
+		},
+	}
+}
+
+func tlsHashTestZTWIM() *v1alpha1.ZeroTrustWorkloadIdentityManager {
+	return &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{
+			TrustDomain:     "hash.test",
+			ClusterName:     "hash-cluster",
+			BundleConfigMap: "spire-bundle",
+		},
+	}
+}
+
+func partialTLSProfileSpec() *configv1.TLSProfileSpec {
+	return &configv1.TLSProfileSpec{
+		MinTLSVersion: configv1.VersionTLS12,
+	}
+}
+
+func fullTLSProfileSpec() *configv1.TLSProfileSpec {
+	return &configv1.TLSProfileSpec{
+		MinTLSVersion: configv1.VersionTLS13,
+		Ciphers: []string{
+			"TLS_AES_128_GCM_SHA256",
+			"ECDHE-RSA-AES128-GCM-SHA256",
+		},
+	}
+}
+
+func TestSpireAgentConfigHashConsistentWithOperandTLSConfig(t *testing.T) {
+	agent := tlsHashTestAgentCR()
+	ztwim := tlsHashTestZTWIM()
+
+	tests := []struct {
+		name           string
+		tlsProfileSpec *configv1.TLSProfileSpec
+	}{
+		{name: "nil operand profile", tlsProfileSpec: nil},
+		{name: "partial operand profile", tlsProfileSpec: partialTLSProfileSpec()},
+		{name: "full operand profile", tlsProfileSpec: fullTLSProfileSpec()},
+	}
+
+	// Test  that hash is consistent as long as the operand TLS config is the same
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, hash1, err := generateSpireAgentConfigMap(agent, ztwim, tt.tlsProfileSpec)
+			require.NoError(t, err)
+			_, hash2, err := generateSpireAgentConfigMap(agent, ztwim, tt.tlsProfileSpec)
+			require.NoError(t, err)
+			_, hash3, err := generateSpireAgentConfigMap(agent, ztwim, tt.tlsProfileSpec)
+			require.NoError(t, err)
+
+			assert.Equal(t, hash1, hash2)
+			assert.Equal(t, hash2, hash3)
+		})
+	}
+
+	// Test that hash is different if the operand TLS config is different
+	_, nilHash, err := generateSpireAgentConfigMap(agent, ztwim, nil)
+	require.NoError(t, err)
+	_, partialHash, err := generateSpireAgentConfigMap(agent, ztwim, partialTLSProfileSpec())
+	require.NoError(t, err)
+	_, fullHash, err := generateSpireAgentConfigMap(agent, ztwim, fullTLSProfileSpec())
+	require.NoError(t, err)
+
+	assert.NotEqual(t, nilHash, partialHash)
+	assert.NotEqual(t, partialHash, fullHash)
+	assert.NotEqual(t, nilHash, fullHash)
 }

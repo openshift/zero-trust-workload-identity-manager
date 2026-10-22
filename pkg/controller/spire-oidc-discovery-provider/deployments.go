@@ -3,6 +3,7 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -113,6 +114,7 @@ func generateDeployment(config *v1alpha1.SpireOIDCDiscoveryProvider, spireOidcCo
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
 					Annotations: map[string]string{
+						securityv1.RequiredSCCAnnotation:                    utils.RestrictedV2SCCName,
 						spireOidcDeploymentSpireOidcConfigHashAnnotationKey: spireOidcConfigMapHash,
 					},
 				},

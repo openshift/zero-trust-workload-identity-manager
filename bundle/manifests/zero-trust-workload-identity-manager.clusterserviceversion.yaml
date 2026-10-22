@@ -218,7 +218,7 @@ metadata:
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "true"
-    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/tls-profiles: "true"
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
@@ -432,6 +432,14 @@ spec:
           - delete
           - get
           - list
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - apiservers
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - coordination.k8s.io
           resources:
@@ -697,6 +705,7 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: zero-trust-workload-identity-manager
+                openshift.io/required-scc: restricted-v2
               labels:
                 name: zero-trust-workload-identity-manager
             spec:
