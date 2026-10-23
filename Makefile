@@ -127,10 +127,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 E2E_TIMEOUT ?= 90m
-<<<<<<< HEAD
-=======
 E2E_TEST_FLAGS ?= -v
->>>>>>> 400e7dba (e2e: add make targets for ginkgo label-filter runs)
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
 	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ $(E2E_TEST_FLAGS) -timeout $(E2E_TIMEOUT)
