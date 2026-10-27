@@ -235,7 +235,7 @@ metadata:
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
-  name: zero-trust-workload-identity-manager.v1.0.3
+  name: zero-trust-workload-identity-manager.v1.0.4
   namespace: zero-trust-workload-identity-manager
 spec:
   apiservicedefinitions: {}
@@ -552,7 +552,7 @@ spec:
                 - name: OPERATOR_NAME
                   value: zero-trust-workload-identity-manager
                 - name: OPERATOR_VERSION
-                  value: 1.0.3
+                  value: 1.0.4
                 - name: RELATED_IMAGE_SPIRE_SERVER
                   value: ghcr.io/spiffe/spire-server:1.13.6
                 - name: RELATED_IMAGE_SPIRE_AGENT
@@ -659,4 +659,4 @@ spec:
     name: node-driver-registrar
   - image: registry.access.redhat.com/ubi9:latest
     name: spiffe-csi-init-container
-  version: 1.0.3
+  version: 1.0.4
