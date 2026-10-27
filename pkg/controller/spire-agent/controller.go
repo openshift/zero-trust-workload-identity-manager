@@ -85,11 +85,6 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// Set Ready to false at the start of reconciliation
-	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &agent, func() *v1alpha1.ConditionalStatus {
-		return &agent.Status.ConditionalStatus
-	}, "SpireAgent")
-
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
 		if err := statusMgr.ApplyStatus(ctx, &agent, func() *v1alpha1.ConditionalStatus {

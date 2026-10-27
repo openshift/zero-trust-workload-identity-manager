@@ -95,11 +95,6 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	// Set Ready to false at the start of reconciliation
-	status.SetInitialReconciliationStatus(ctx, r.ctrlClient, &server, func() *v1alpha1.ConditionalStatus {
-		return &server.Status.ConditionalStatus
-	}, "SpireServer")
-
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
 		if err := statusMgr.ApplyStatus(ctx, &server, func() *v1alpha1.ConditionalStatus {

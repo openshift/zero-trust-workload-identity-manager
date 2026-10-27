@@ -536,6 +536,7 @@ spec:
                         - linux
               containers:
               - args:
+                - --leader-elect
                 - --health-probe-bind-address=:8081
                 - --v=$(OPERATOR_LOG_LEVEL)
                 - --metrics-bind-address=$(METRICS_BIND_ADDRESS)
