@@ -40,6 +40,7 @@ const (
 	TLSScannerContainer = "scanner"
 
 	tlsScannerCRBName = "ztwim-e2e-tls-scanner-cluster-admin"
+	tlsScannerSAName  = "ztwim-e2e-tls-scanner"
 
 	// TLSScannerReadyTimeout is how long to wait for the scanner pod to become Ready.
 	TLSScannerReadyTimeout = 5 * time.Minute
@@ -66,12 +67,27 @@ func ScanLimitIPs() int {
 	return n
 }
 
-// EnsureScannerRBAC grants cluster-admin to the default ServiceAccount in
-// OperatorNamespace so the tls-scanner pod can discover and probe endpoints.
-// Idempotent: creates or updates the ClusterRoleBinding.
+// EnsureScannerRBAC creates a dedicated ServiceAccount and grants it cluster-admin
+// so the tls-scanner pod can discover and probe endpoints. Idempotent.
 // Registers DeferCleanup to delete the binding after the suite.
 func EnsureScannerRBAC(ctx context.Context, clientset kubernetes.Interface) {
-	By("Granting cluster-admin to default SA for tls-scanner")
+	By(fmt.Sprintf("Ensuring tls-scanner ServiceAccount %s/%s", OperatorNamespace, tlsScannerSAName))
+
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      tlsScannerSAName,
+			Namespace: OperatorNamespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "ztwim-e2e",
+			},
+		},
+	}
+	_, err := clientset.CoreV1().ServiceAccounts(OperatorNamespace).Create(ctx, sa, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		Expect(err).NotTo(HaveOccurred(), "failed to create ServiceAccount for tls-scanner")
+	}
+
+	By("Granting cluster-admin to tls-scanner ServiceAccount")
 
 	crb := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -88,7 +104,7 @@ func EnsureScannerRBAC(ctx context.Context, clientset kubernetes.Interface) {
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
-				Name:      "default",
+				Name:      tlsScannerSAName,
 				Namespace: OperatorNamespace,
 			},
 		},
@@ -108,10 +124,14 @@ func EnsureScannerRBAC(ctx context.Context, clientset kubernetes.Interface) {
 	}
 
 	DeferCleanup(func(cleanupCtx context.Context) {
-		_ = clientset.RbacV1().ClusterRoleBindings().Delete(cleanupCtx, tlsScannerCRBName, metav1.DeleteOptions{})
+		err := clientset.RbacV1().ClusterRoleBindings().Delete(cleanupCtx, tlsScannerCRBName, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterRoleBinding %s", tlsScannerCRBName)
 	})
 
-	fmt.Fprintf(GinkgoWriter, "ClusterRoleBinding %s created/updated\n", tlsScannerCRBName)
+	fmt.Fprintf(GinkgoWriter, "ClusterRoleBinding %s created/updated for SA %s\n", tlsScannerCRBName, tlsScannerSAName)
 }
 
 // RunTLSScanner creates an in-cluster tls-scanner pod, waits for the scan to
@@ -169,7 +189,7 @@ exit ${SCAN_EXIT_CODE}`, scanArgs)
 			},
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: "default",
+			ServiceAccountName: tlsScannerSAName,
 			RestartPolicy:      corev1.RestartPolicyNever,
 			Containers: []corev1.Container{{
 				Name:    TLSScannerContainer,
@@ -291,9 +311,8 @@ exit ${SCAN_EXIT_CODE}`, scanArgs)
 	}
 
 	if exitCode != 0 {
-		// Grab last lines of output for diagnostic.
 		tail, _, _ := ExecInPod(ctx, ns, TLSScannerPodName, TLSScannerContainer,
-			[]string{"tail", "-20", "/results/output.log"})
+			[]string{"sh", "-c", "tail -20 /results/scan.log 2>/dev/null || tail -20 /results/output.log"})
 		return fmt.Errorf("tls-scanner exited with code %d for profile %s:\n%s",
 			exitCode, profileType, strings.TrimSpace(tail))
 	}

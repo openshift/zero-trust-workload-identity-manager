@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocpconfigv1 "github.com/openshift/api/config/v1"
 	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 	pkgtls "github.com/openshift/zero-trust-workload-identity-manager/pkg/tls"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -100,6 +101,26 @@ func GetAPIServerTLSProfileType(ctx context.Context, configClient configv1.Confi
 		return "", nil
 	}
 	return string(apiServer.Spec.TLSSecurityProfile.Type), nil
+}
+
+// ExpectedOperandTLSForLiveAPIServer resolves operand TLS expectations from the
+// current APIServer cluster config using the same GetTLSProfileSpec path as the operator.
+func ExpectedOperandTLSForLiveAPIServer(ctx context.Context, configClient configv1.ConfigV1Interface) (minVersion string, requireCiphers bool, ok bool, err error) {
+	apiServer, err := configClient.APIServers().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return "", false, false, fmt.Errorf("failed to get APIServer cluster config: %w", err)
+	}
+	profileSpec, err := openshifttls.GetTLSProfileSpec(apiServer.Spec.TLSSecurityProfile)
+	if err != nil {
+		return "", false, false, fmt.Errorf("failed to resolve APIServer TLS profile spec: %w", err)
+	}
+	tlsCfg := pkgtls.GetTLSConfigForSpiffeSpire(&profileSpec)
+	if tlsCfg == nil {
+		return "", false, false, nil
+	}
+	mv := fmt.Sprint(tlsCfg["min_tls_version"])
+	ciphers, _ := tlsCfg["cipher_suites"].([]string)
+	return mv, len(ciphers) > 0, true, nil
 }
 
 // SavedProfileType returns the profile type string for a saved *TLSSecurityProfile.
@@ -191,7 +212,18 @@ func RestoreAPIServerTLSSecurityProfile(ctx context.Context, configClient config
 	} else {
 		profile["type"] = string(saved.Type)
 		subKey := strings.ToLower(string(saved.Type))
-		profile[subKey] = map[string]interface{}{}
+		if saved.Type == ocpconfigv1.TLSProfileCustomType && saved.Custom != nil {
+			customPatch := map[string]interface{}{}
+			if saved.Custom.MinTLSVersion != "" {
+				customPatch["minTLSVersion"] = string(saved.Custom.MinTLSVersion)
+			}
+			if len(saved.Custom.Ciphers) > 0 {
+				customPatch["ciphers"] = append([]string(nil), saved.Custom.Ciphers...)
+			}
+			profile["custom"] = customPatch
+		} else {
+			profile[subKey] = map[string]interface{}{}
+		}
 		patchSpec = map[string]interface{}{
 			"tlsSecurityProfile": profile,
 		}
