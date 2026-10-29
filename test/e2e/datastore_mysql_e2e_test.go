@@ -74,15 +74,12 @@ func registerExternalMySQLDatastoreE2E() {
 			Expect(pd.ConnectionString).To(ContainSubstring(":3307"))
 		})
 
-		It("should use allow-all egress add-on instead of database egress NetworkPolicy", func() {
+		It("should use allow-all egress add-on without port-scoped database egress NetworkPolicies", func() {
 			if !npEnabled {
 				Skip("NetworkPoliciesAvailable not reported on SpireServer")
 			}
-			utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace,
-				utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
-			allowAll := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
-				utils.SpireServerNetworkPolicyEgressAllowAllName, utils.DefaultTimeout)
-			Expect(utils.NetworkPolicyAllowsAllEgress(allowAll)).To(BeTrue())
+			utils.ExpectSpireServerPortScopedEgressPoliciesAbsent(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
+			utils.ExpectSpireServerAllowAllEgressAddon(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 
 		It("workload SVID attestation should succeed with mysql datastore", Label("attestation"), func() {
