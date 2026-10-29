@@ -1100,6 +1100,12 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
+              setKeyUse:
+                default: false
+                description: |-
+                  setKeyUse controls whether the "use" parameter is set on the JWKS.
+                  When true, adds "use": "sig" to each key.
+                type: boolean
               tolerations:
                 description: |-
                   tolerations define the pod tolerations.
