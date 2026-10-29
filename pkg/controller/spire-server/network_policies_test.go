@@ -110,7 +110,7 @@ func TestReconcileNetworkPolicies_FederationCreatesPolicies(t *testing.T) {
 	}
 }
 
-func TestReconcileNetworkPolicies_DatabaseEgressWhenPostgres(t *testing.T) {
+func TestReconcileNetworkPolicies_PostgresUsesAllowAllBaselineOnly(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 
 	fc := &fakes.FakeCustomCtrlClient{}
@@ -131,37 +131,23 @@ func TestReconcileNetworkPolicies_DatabaseEgressWhenPostgres(t *testing.T) {
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
-	expectedCreates := len(spireServerBaselineNetworkPolicyAssets) + 1
-	if fc.CreateCallCount() != expectedCreates {
-		t.Fatalf("expected %d creates, got %d", expectedCreates, fc.CreateCallCount())
+	if fc.CreateCallCount() != len(spireServerBaselineNetworkPolicyAssets) {
+		t.Fatalf("expected %d creates, got %d", len(spireServerBaselineNetworkPolicyAssets), fc.CreateCallCount())
 	}
 }
 
-func TestReconcileNetworkPolicies_ProxyEgress(t *testing.T) {
+func TestSpireServerEgressPolicies_BaselineAndAllowAllAddon(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
-	t.Setenv("HTTP_PROXY", "http://proxy.example.com:3128")
-
-	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
-	fc.CreateReturns(nil)
-	fc.StatusUpdateWithRetryReturns(nil)
-	reconciler := newNetworkPolicyTestReconciler(fc)
-	statusMgr := status.NewManager(fc)
-
-	server := &v1alpha1.SpireServer{
-		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
-		Spec: v1alpha1.SpireServerSpec{
-			CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "true"},
-			Datastore:    v1alpha1.DataStore{DatabaseType: "sqlite3"},
-		},
+	baseline := networkPolicyFromAsset(utils.SpireServerNetworkPolicyEgressBaselineAssetName, nil)
+	if utils.NetworkPolicyAllowsAllEgress(baseline) {
+		t.Fatal("expected spire-server egress baseline to remain port-scoped")
 	}
-
-	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
-		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	if !utils.NetworkPolicyHasEgressTCPPort(baseline, 6443) {
+		t.Fatal("expected spire-server egress baseline to allow Kubernetes API egress")
 	}
-	expectedCreates := len(spireServerBaselineNetworkPolicyAssets) + 1
-	if fc.CreateCallCount() != expectedCreates {
-		t.Fatalf("expected %d creates, got %d", expectedCreates, fc.CreateCallCount())
+	allowAll := networkPolicyFromAsset(utils.SpireServerNetworkPolicyEgressAllowAllAssetName, nil)
+	if !utils.NetworkPolicyAllowsAllEgress(allowAll) {
+		t.Fatal("expected spire-server egress allow-all add-on")
 	}
 }
 

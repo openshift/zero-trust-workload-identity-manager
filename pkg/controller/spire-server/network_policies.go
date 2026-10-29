@@ -19,11 +19,18 @@ import (
 var spireServerBaselineNetworkPolicyAssets = []string{
 	utils.SpireServerNetworkPolicyIngressAssetName,
 	utils.SpireServerNetworkPolicyEgressBaselineAssetName,
+	utils.SpireServerNetworkPolicyEgressAllowAllAssetName,
 }
 
 var spireServerFederationNetworkPolicyAssets = []string{
 	utils.SpireServerNetworkPolicyFederationIngressAssetName,
-	utils.SpireServerNetworkPolicyFederationEgressAssetName,
+}
+
+var spireServerLegacyPortScopedEgressNetworkPolicyNames = []string{
+	utils.SpireServerNetworkPolicyFederationEgressName,
+	utils.SpireServerNetworkPolicyVaultEgressName,
+	utils.SpireServerNetworkPolicyDatabaseEgressName,
+	utils.SpireServerNetworkPolicyProxyEgressName,
 }
 
 func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
@@ -78,46 +85,10 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		}
 	}
 
-	vaultConfigured := server.Spec.UpstreamAuthority != nil && server.Spec.UpstreamAuthority.Vault != nil
-	var vaultPort int32
-	if vaultConfigured {
-		vaultPort = utils.VaultEgressPort(server.Spec.UpstreamAuthority.Vault.VaultAddr)
-	}
-	vaultResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, server, ns, utils.SpireServerNetworkPolicyVaultEgressName, vaultConfigured && vaultPort > 0,
-		func() *networkingv1.NetworkPolicy {
-			np := utils.PortEgressNetworkPolicy(utils.SpireServerNetworkPolicyVaultEgressName, ns, "spire-server", vaultPort, utils.SpireServerLabels(server.Spec.Labels))
-			return np
-		}, createOnlyMode)
-	if err != nil {
-		return r.networkPolicyError(statusMgr, err, "vault egress")
-	}
-	if vaultConfigured && vaultPort > 0 {
-		mergeOutcome(vaultResult)
-	}
-
-	dbPorts, dbNeeded := utils.DatabaseEgressTCPPorts(ctx, r.ctrlClient, ns, server.Spec.Datastore.DatabaseType, server.Spec.Datastore.ConnectionString)
-	dbResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, server, ns, utils.SpireServerNetworkPolicyDatabaseEgressName, dbNeeded,
-		func() *networkingv1.NetworkPolicy {
-			return utils.MultiPortEgressNetworkPolicy(utils.SpireServerNetworkPolicyDatabaseEgressName, ns, "spire-server", dbPorts, utils.SpireServerLabels(server.Spec.Labels))
-		}, createOnlyMode)
-	if err != nil {
-		return r.networkPolicyError(statusMgr, err, "database egress")
-	}
-	if dbNeeded {
-		mergeOutcome(dbResult)
-	}
-
-	proxyPorts := utils.ProxyEgressTCPPorts()
-	proxyEnabled := utils.IsProxyEnabled() && len(proxyPorts) > 0
-	proxyResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, server, ns, utils.SpireServerNetworkPolicyProxyEgressName, proxyEnabled,
-		func() *networkingv1.NetworkPolicy {
-			return utils.MultiPortEgressNetworkPolicy(utils.SpireServerNetworkPolicyProxyEgressName, ns, "spire-server", proxyPorts, utils.SpireServerLabels(server.Spec.Labels))
-		}, createOnlyMode)
-	if err != nil {
-		return r.networkPolicyError(statusMgr, err, "proxy egress")
-	}
-	if proxyEnabled {
-		mergeOutcome(proxyResult)
+	for _, name := range spireServerLegacyPortScopedEgressNetworkPolicyNames {
+		if err := utils.DeleteNetworkPolicyIfExists(ctx, r.ctrlClient, ns, name); err != nil {
+			return r.networkPolicyError(statusMgr, err, "legacy egress cleanup")
+		}
 	}
 
 	server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{

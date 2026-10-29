@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,6 +82,31 @@ func ApplyNetworkPolicy(
 		return NetworkPolicyApplyResult{Name: desired.Name, Updated: true}, nil
 	}
 	return NetworkPolicyApplyResult{Name: desired.Name}, nil
+}
+
+// NetworkPolicyAllowsAllEgress reports whether any egress rule allows all destinations and ports.
+func NetworkPolicyAllowsAllEgress(np *networkingv1.NetworkPolicy) bool {
+	for _, rule := range np.Spec.Egress {
+		if len(rule.To) == 0 && len(rule.Ports) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// NetworkPolicyHasEgressTCPPort returns true if any egress rule exposes port on TCP.
+func NetworkPolicyHasEgressTCPPort(np *networkingv1.NetworkPolicy, port int32) bool {
+	for _, rule := range np.Spec.Egress {
+		for _, p := range rule.Ports {
+			if p.Protocol != nil && *p.Protocol != corev1.ProtocolTCP {
+				continue
+			}
+			if p.Port != nil && p.Port.IntVal == port {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // DeleteNetworkPolicyIfExists removes a NetworkPolicy when present.
