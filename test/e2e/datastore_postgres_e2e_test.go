@@ -74,14 +74,15 @@ func registerExternalPostgresDatastoreE2E() {
 			Expect(pd.ConnectionString).To(ContainSubstring("port=5433"))
 		})
 
-		It("should expose database egress NetworkPolicy when network policies are enabled", func() {
+		It("should use allow-all egress add-on instead of database egress NetworkPolicy", func() {
 			if !npEnabled {
 				Skip("NetworkPoliciesAvailable not reported on SpireServer")
 			}
-			dbNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
+			utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace,
 				utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
-			Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, utils.PostgresServicePort)).To(BeTrue())
-			Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, 5432)).To(BeTrue(), "OVN matches Service targetPort for egress")
+			allowAll := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
+				utils.SpireServerNetworkPolicyEgressAllowAllName, utils.DefaultTimeout)
+			Expect(utils.NetworkPolicyAllowsAllEgress(allowAll)).To(BeTrue())
 		})
 
 		It("workload SVID attestation should succeed with postgres datastore", Label("attestation"), func() {
