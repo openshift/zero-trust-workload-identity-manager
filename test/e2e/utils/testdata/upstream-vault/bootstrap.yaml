@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e2e-vault-bootstrap
+  namespace: {{ .Namespace }}
+  labels:
+    ztwim.e2e/datastore: vault
+data:
+  bootstrap.sh: |
+    #!/bin/sh
+    set -euo pipefail
+    export VAULT_ADDR=http://e2e-vault.{{ .Namespace }}.svc:8200
+    export VAULT_TOKEN=root
+    until vault status >/dev/null 2>&1; do sleep 2; done
+    vault secrets enable -path=pki pki 2>/dev/null || true
+    vault secrets tune -max-lease-ttl=87600h pki
+    vault write -field=certificate pki/root/generate/internal common_name="SPIRE E2E Root" ttl=87600h >/dev/null
+    printf '%s\n' \
+      'path "pki/root/sign-intermediate" { capabilities = ["create", "update"] }' \
+      'path "pki/sign/*" { capabilities = ["create", "update"] }' \
+      'path "pki/issue/*" { capabilities = ["create", "update"] }' \
+      | vault policy write spire-pki -
+    vault auth enable kubernetes 2>/dev/null || true
+    vault write auth/kubernetes/config \
+      kubernetes_host="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
+      token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+      disable_issuer_validation=true
+    vault write auth/kubernetes/role/{{ .VaultRole }} \
+      bound_service_account_names=spire-server \
+      bound_service_account_namespaces={{ .Namespace }} \
+      audience=vault \
+      policies=spire-pki \
+      ttl=1h
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e2e-vault-bootstrap
+  namespace: {{ .Namespace }}
+  labels:
+    ztwim.e2e/datastore: vault
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        ztwim.e2e/datastore: vault
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: e2e-vault-auth-reviewer
+      containers:
+        - name: bootstrap
+          image: hashicorp/vault:1.15
+          command: ["/bin/sh", "/scripts/bootstrap.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: e2e-vault-bootstrap
+            defaultMode: 0555
