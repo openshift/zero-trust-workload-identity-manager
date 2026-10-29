@@ -27,6 +27,8 @@ const (
 	CreateOnlyModeEnvVar             = "CREATE_ONLY_MODE"
 
 	SpireServerStatefulSetName               = "spire-server"
+	SpireServerPVCName                       = "spire-data-spire-server-0"
+	SpireServerPodName                       = "spire-server-0"
 	SpireServerPodLabel                      = "app.kubernetes.io/name=spire-server"
 	SpireServerConfigMapName                 = "spire-server"
 	SpireServerConfigKey                     = "server.conf"
@@ -56,9 +58,23 @@ const (
 	// certificate validity for clock skew compensation.
 	ClockSkewTolerance = 1 * time.Minute
 
-	DefaultInterval    = 10 * time.Second
-	ShortInterval      = 5 * time.Second
-	DefaultTimeout     = 5 * time.Minute
-	ShortTimeout       = 2 * time.Minute
-	TestContextTimeout = 10 * time.Minute
+	DefaultInterval        = 10 * time.Second
+	ShortInterval            = 5 * time.Second
+	DefaultTimeout           = 5 * time.Minute
+	ShortTimeout             = 2 * time.Minute
+	TestContextTimeout       = 10 * time.Minute
+	DatastoreSetupTimeout    = 25 * time.Minute
+	UpstreamCASetupTimeout   = 25 * time.Minute
+
+	PostgresServiceName = "e2e-postgres"
+	PostgresServicePort = 5433
+	PostgresPassword    = "spire-e2e"
+
+	MySQLServiceName = "e2e-mysql"
+	MySQLServicePort = 3307
+
+	VaultServiceName         = "e2e-vault"
+	VaultServicePort         = 8200
+	VaultK8sAuthRoleName     = "spire-server"
+	VaultBootstrapConfigName = "e2e-vault-bootstrap"
 )

@@ -1,0 +1,19 @@
+# Default-deny ingress and egress for the ZTWIM operator controller pod.
+# Allow rules are provided by ztwim-op-allow.yaml (policies are unioned).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/created-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: ztwim-op-default-deny
+  namespace: system
+spec:
+  podSelector:
+    matchLabels:
+      name: zero-trust-workload-identity-manager
+  policyTypes:
+    - Ingress
+    - Egress
