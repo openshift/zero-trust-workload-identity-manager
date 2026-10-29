@@ -1944,7 +1944,12 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 	})
 
 	Context("UpstreamAuthority cert-manager", func() {
+		var npEnabled bool
+
 		BeforeAll(func() {
+			ctx := context.Background()
+			npEnabled = utils.SpireServerHasNetworkPoliciesFeature(ctx, k8sClient)
+
 			utils.NoteCertManagerIssuedAfter(time.Now())
 			setupCtx, cancel := context.WithTimeout(context.Background(), utils.UpstreamCASetupTimeout)
 			DeferCleanup(cancel)
@@ -2025,6 +2030,14 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				return ok
 			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
 				"spire-server ClusterRole should grant certificaterequests")
+		})
+
+		It("should use allow-all egress add-on without port-scoped upstream egress NetworkPolicies", func() {
+			if !npEnabled {
+				Skip("NetworkPoliciesAvailable not reported on SpireServer")
+			}
+			utils.ExpectSpireServerPortScopedEgressPoliciesAbsent(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
+			utils.ExpectSpireServerAllowAllEgressAddon(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 
 		It("SPIRE should create an issued CertificateRequest against the Issuer", func() {
