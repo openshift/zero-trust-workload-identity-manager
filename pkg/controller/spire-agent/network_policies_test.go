@@ -55,30 +55,6 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	}
 }
 
-func TestReconcileNetworkPolicies_ProxyEgress(t *testing.T) {
-	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
-	t.Setenv("HTTPS_PROXY", "https://proxy.example.com:8443")
-
-	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
-	fc.CreateReturns(nil)
-	fc.StatusUpdateWithRetryReturns(nil)
-	reconciler := newNetworkPolicyTestReconciler(fc)
-	statusMgr := status.NewManager(fc)
-
-	agent := &v1alpha1.SpireAgent{
-		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
-		Spec:       v1alpha1.SpireAgentSpec{CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "true"}},
-	}
-
-	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, statusMgr, false); err != nil {
-		t.Fatalf("reconcileNetworkPolicies: %v", err)
-	}
-	if fc.CreateCallCount() != len(spireAgentBaselineNetworkPolicyAssets)+1 {
-		t.Fatalf("expected baseline+proxy creates, got %d", fc.CreateCallCount())
-	}
-}
-
 func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 

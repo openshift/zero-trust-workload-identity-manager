@@ -36,6 +36,7 @@ import (
 const (
 	SpireServerNetworkPolicyIngressName           = "ztwim-sys-spire-server-ingress"
 	SpireServerNetworkPolicyEgressBaselineName    = "ztwim-sys-spire-server-egress-baseline"
+	SpireServerNetworkPolicyEgressAllowAllName    = "ztwim-sys-spire-server-egress-allow-all"
 	SpireServerNetworkPolicyFederationIngressName = "ztwim-sys-spire-server-federation-ingress"
 	SpireServerNetworkPolicyFederationEgressName  = "ztwim-sys-spire-server-federation-egress"
 	SpireServerNetworkPolicyVaultEgressName       = "ztwim-sys-spire-server-vault-egress"
@@ -44,6 +45,7 @@ const (
 
 	SpireAgentNetworkPolicyIngressName        = "ztwim-sys-spire-agent-ingress"
 	SpireAgentNetworkPolicyEgressBaselineName = "ztwim-sys-spire-agent-egress-baseline"
+	SpireAgentNetworkPolicyEgressAllowAllName = "ztwim-sys-spire-agent-egress-allow-all"
 	SpireAgentNetworkPolicyProxyEgressName    = "ztwim-sys-spire-agent-proxy-egress"
 
 	SpireOIDCNetworkPolicyIngressName = "ztwim-sys-spire-oidc-discovery-provider-ingress"
@@ -74,6 +76,16 @@ func WaitForNetworkPolicyAbsent(ctx context.Context, clientset kubernetes.Interf
 		return apierrors.IsNotFound(err)
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
 		"NetworkPolicy %s/%s should be absent within %v", namespace, name, timeout)
+}
+
+// NetworkPolicyAllowsAllEgress reports whether any egress rule allows all destinations and ports.
+func NetworkPolicyAllowsAllEgress(np *networkingv1.NetworkPolicy) bool {
+	for _, rule := range np.Spec.Egress {
+		if len(rule.To) == 0 && len(rule.Ports) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // NetworkPolicyHasEgressTCPPort returns true if any egress rule exposes port on TCP.

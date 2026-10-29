@@ -42,8 +42,11 @@ const (
 
 	SpireServerNetworkPolicyIngressAssetName           = "spire-server/ztwim-sys-spire-server-ingress.yaml"
 	SpireServerNetworkPolicyEgressBaselineAssetName    = "spire-server/ztwim-sys-spire-server-egress-baseline.yaml"
+	SpireServerNetworkPolicyEgressAllowAllAssetName   = "spire-server/ztwim-sys-spire-server-egress-allow-all.yaml"
+	SpireServerNetworkPolicyEgressAllowAllName        = "ztwim-sys-spire-server-egress-allow-all"
 	SpireServerNetworkPolicyFederationIngressAssetName = "spire-server/ztwim-sys-spire-server-federation-ingress.yaml"
 	SpireServerNetworkPolicyFederationEgressAssetName  = "spire-server/ztwim-sys-spire-server-federation-egress.yaml"
+	SpireServerNetworkPolicyFederationEgressName     = "ztwim-sys-spire-server-federation-egress"
 
 	SpireServerNetworkPolicyVaultEgressName    = "ztwim-sys-spire-server-vault-egress"
 	SpireServerNetworkPolicyDatabaseEgressName = "ztwim-sys-spire-server-database-egress"
@@ -51,6 +54,8 @@ const (
 
 	SpireAgentNetworkPolicyIngressAssetName        = "spire-agent/ztwim-sys-spire-agent-ingress.yaml"
 	SpireAgentNetworkPolicyEgressBaselineAssetName = "spire-agent/ztwim-sys-spire-agent-egress-baseline.yaml"
+	SpireAgentNetworkPolicyEgressAllowAllAssetName = "spire-agent/ztwim-sys-spire-agent-egress-allow-all.yaml"
+	SpireAgentNetworkPolicyEgressAllowAllName      = "ztwim-sys-spire-agent-egress-allow-all"
 
 	SpireOIDCDiscoveryProviderNetworkPolicyIngressAssetName = "spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml"
 	SpireAgentNetworkPolicyProxyEgressName                  = "ztwim-sys-spire-agent-proxy-egress"
