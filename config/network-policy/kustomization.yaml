@@ -1,2 +1,3 @@
 resources:
-- allow-metrics-traffic.yaml
+- ztwim-op-default-deny.yaml
+- ztwim-op-allow.yaml
