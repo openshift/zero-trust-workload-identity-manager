@@ -233,20 +233,6 @@ func GetSQLDatastorePluginData(ctx context.Context, clientset kubernetes.Interfa
 	return &SQLDatastorePluginData{DatabaseType: dbType, ConnectionString: conn}, nil
 }
 
-// SpireServerHasNetworkPoliciesFeature returns true when NetworkPoliciesAvailable is reported.
-func SpireServerHasNetworkPoliciesFeature(ctx context.Context, k8sClient client.Client) bool {
-	server := &operatorv1alpha1.SpireServer{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: OperandCRName}, server); err != nil {
-		return false
-	}
-	for _, c := range server.Status.Conditions {
-		if c.Type == operatorv1alpha1.NetworkPoliciesAvailable {
-			return true
-		}
-	}
-	return false
-}
-
 func applyDatastoreTestdata(ctx context.Context, k8sClient client.Client, path string, namespace string) {
 	applyTestdataManifest(ctx, k8sClient, path, datastoreTestdataValues{Namespace: namespace})
 }
