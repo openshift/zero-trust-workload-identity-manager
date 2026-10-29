@@ -219,8 +219,7 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyFederationIngressName, utils.DefaultTimeout)
-		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyFederationEgressName, utils.DefaultTimeout)
+		utils.ExpectSpireServerFederationIngressWithoutLegacyEgress(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
 
 		// Federation cannot be cleared once set (CEL); NP removal on disable is covered in unit tests.
 	})
@@ -258,11 +257,8 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
-		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyVaultEgressName, utils.DefaultTimeout)
-
-		egressNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyEgressAllowAllName, utils.DefaultTimeout)
-		Expect(utils.NetworkPolicyAllowsAllEgress(egressNP)).To(BeTrue())
+		utils.ExpectSpireServerPortScopedEgressPoliciesAbsent(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
+		utils.ExpectSpireServerAllowAllEgressAddon(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
 	})
 
 	It("J7: no network policies target SPIFFE CSI driver pods", func() {
