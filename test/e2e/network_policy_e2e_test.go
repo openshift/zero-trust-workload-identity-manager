@@ -75,22 +75,38 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 		utils.WaitForOperandNetworkPoliciesCondition(testCtx, k8sClient, "SpireOIDCDiscoveryProvider", utils.OperandCRName,
 			metav1.ConditionTrue, "", utils.DefaultTimeout)
 
-		serverBaselines := []string{
+		serverPolicies := []string{
 			utils.SpireServerNetworkPolicyIngressName,
 			utils.SpireServerNetworkPolicyEgressBaselineName,
+			utils.SpireServerNetworkPolicyEgressAllowAllName,
 		}
-		for _, name := range serverBaselines {
+		for _, name := range serverPolicies {
 			np := utils.WaitForNetworkPolicy(testCtx, clientset, ns, name, utils.DefaultTimeout)
 			utils.ExpectNetworkPolicyOwner(np, "SpireServer", utils.OperandCRName)
+			switch name {
+			case utils.SpireServerNetworkPolicyEgressBaselineName:
+				Expect(utils.NetworkPolicyAllowsAllEgress(np)).To(BeFalse())
+				Expect(utils.NetworkPolicyHasEgressTCPPort(np, 6443)).To(BeTrue())
+			case utils.SpireServerNetworkPolicyEgressAllowAllName:
+				Expect(utils.NetworkPolicyAllowsAllEgress(np)).To(BeTrue())
+			}
 		}
 
-		agentBaselines := []string{
+		agentPolicies := []string{
 			utils.SpireAgentNetworkPolicyIngressName,
 			utils.SpireAgentNetworkPolicyEgressBaselineName,
+			utils.SpireAgentNetworkPolicyEgressAllowAllName,
 		}
-		for _, name := range agentBaselines {
+		for _, name := range agentPolicies {
 			np := utils.WaitForNetworkPolicy(testCtx, clientset, ns, name, utils.DefaultTimeout)
 			utils.ExpectNetworkPolicyOwner(np, "SpireAgent", utils.OperandCRName)
+			switch name {
+			case utils.SpireAgentNetworkPolicyEgressBaselineName:
+				Expect(utils.NetworkPolicyAllowsAllEgress(np)).To(BeFalse())
+				Expect(utils.NetworkPolicyHasEgressTCPPort(np, 8081)).To(BeTrue())
+			case utils.SpireAgentNetworkPolicyEgressAllowAllName:
+				Expect(utils.NetworkPolicyAllowsAllEgress(np)).To(BeTrue())
+			}
 		}
 
 		oidcNP := utils.WaitForNetworkPolicy(testCtx, clientset, ns, utils.SpireOIDCNetworkPolicyIngressName, utils.DefaultTimeout)
@@ -100,7 +116,7 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 		Expect(k8sClient.Get(testCtx, client.ObjectKey{Name: utils.OperandCRName}, server)).To(Succeed())
 		Expect(server.Status.NetworkPolicy).NotTo(BeNil())
 		Expect(server.Status.NetworkPolicy.ManagementState).To(Equal(operatorv1alpha1.NetworkPolicyManagementManaged))
-		for _, name := range serverBaselines {
+		for _, name := range serverPolicies {
 			Expect(server.Status.NetworkPolicy.AppliedPolicies).To(ContainElement(name))
 		}
 	})
@@ -204,12 +220,12 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 		}
 
 		utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyFederationIngressName, utils.DefaultTimeout)
-		utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyFederationEgressName, utils.DefaultTimeout)
+		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyFederationEgressName, utils.DefaultTimeout)
 
 		// Federation cannot be cleared once set (CEL); NP removal on disable is covered in unit tests.
 	})
 
-	It("J6: database and vault egress ports and cleanup", func() {
+	It("J6: allow-all egress baseline with postgres and vault spec (no port-scoped egress policies)", func() {
 		server := &operatorv1alpha1.SpireServer{}
 		Expect(k8sClient.Get(testCtx, client.ObjectKey{Name: utils.OperandCRName}, server)).To(Succeed())
 
@@ -242,24 +258,11 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		dbNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
-		Expect(utils.NetworkPolicyHasEgressTCPPort(dbNP, 15432)).To(BeTrue())
-
-		vaultNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyVaultEgressName, utils.DefaultTimeout)
-		Expect(utils.NetworkPolicyHasEgressTCPPort(vaultNP, 18200)).To(BeTrue())
-
-		err = utils.UpdateCRWithRetry(testCtx, k8sClient, server, func() {
-			server.Spec.UpstreamAuthority = nil
-		})
-		Expect(err).NotTo(HaveOccurred())
+		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
 		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyVaultEgressName, utils.DefaultTimeout)
 
-		err = utils.UpdateCRWithRetry(testCtx, k8sClient, server, func() {
-			server.Spec.Datastore.DatabaseType = "sqlite3"
-			server.Spec.Datastore.ConnectionString = "/run/spire/data/datastore.sqlite3"
-		})
-		Expect(err).NotTo(HaveOccurred())
-		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyDatabaseEgressName, utils.DefaultTimeout)
+		egressNP := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyEgressAllowAllName, utils.DefaultTimeout)
+		Expect(utils.NetworkPolicyAllowsAllEgress(egressNP)).To(BeTrue())
 	})
 
 	It("J7: no network policies target SPIFFE CSI driver pods", func() {
@@ -284,7 +287,7 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 		}
 	})
 
-	It("J8: proxy egress policies when HTTP_PROXY is set on Subscription", func() {
+	It("J8: no port-scoped proxy egress policies (allow-all baseline covers proxy)", func() {
 		if os.Getenv("RUN_PROXY_NP_E2E") != "true" {
 			Skip("set RUN_PROXY_NP_E2E=true to run proxy NetworkPolicy e2e (mutates Subscription env)")
 		}
@@ -304,9 +307,8 @@ var _ = Describe("SPIRE-220 operand NetworkPolicies", Ordered, Label("network-po
 
 		utils.WaitForDeploymentAvailable(testCtx, clientset, utils.OperatorDeploymentName, utils.OperatorNamespace, utils.DefaultTimeout)
 
-		serverProxy := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyProxyEgressName, utils.DefaultTimeout)
-		Expect(utils.NetworkPolicyHasEgressTCPPort(serverProxy, 3128)).To(BeTrue())
-		Expect(utils.NetworkPolicyHasEgressTCPPort(serverProxy, 8443)).To(BeTrue())
+		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireServerNetworkPolicyProxyEgressName, utils.DefaultTimeout)
+		utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace, utils.SpireAgentNetworkPolicyProxyEgressName, utils.DefaultTimeout)
 	})
 
 	It("NEG-001: invalid managedNetworkPolicy value is rejected", func() {

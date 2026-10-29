@@ -20,6 +20,10 @@ var spireOIDCBaselineNetworkPolicyAssets = []string{
 	utils.SpireOIDCDiscoveryProviderNetworkPolicyIngressAssetName,
 }
 
+var spireOIDCLegacyPortScopedEgressNetworkPolicyNames = []string{
+	utils.SpireOIDCDiscoveryProviderNetworkPolicyProxyEgressName,
+}
+
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager, createOnlyMode bool) error {
 	if !utils.ManagedNetworkPolicyEnabled(oidc.Spec.ManagedNetworkPolicy) {
 		oidc.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
@@ -86,26 +90,13 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 	}
 
 	ns := utils.GetOperatorNamespace()
-	proxyPorts := utils.ProxyEgressTCPPorts()
-	proxyEnabled := utils.IsProxyEnabled() && len(proxyPorts) > 0
-	proxyResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, oidc, ns, utils.SpireOIDCDiscoveryProviderNetworkPolicyProxyEgressName, proxyEnabled,
-		func() *networkingv1.NetworkPolicy {
-			return utils.MultiPortEgressNetworkPolicy(utils.SpireOIDCDiscoveryProviderNetworkPolicyProxyEgressName, ns, "spiffe-oidc-discovery-provider", proxyPorts, utils.SpireOIDCDiscoveryProviderLabels(oidc.Spec.Labels))
-		}, createOnlyMode)
-	if err != nil {
-		statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
-			fmt.Sprintf("Failed to reconcile proxy NetworkPolicy: %v", err),
-			metav1.ConditionFalse)
-		return err
-	}
-	if proxyEnabled {
-		if proxyResult.Created {
-			created = true
+	for _, name := range spireOIDCLegacyPortScopedEgressNetworkPolicyNames {
+		if err := utils.DeleteNetworkPolicyIfExists(ctx, r.ctrlClient, ns, name); err != nil {
+			statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
+				fmt.Sprintf("Failed to remove legacy NetworkPolicy %s: %v", name, err),
+				metav1.ConditionFalse)
+			return err
 		}
-		if proxyResult.Updated {
-			updated = true
-		}
-		applied = append(applied, proxyResult.Name)
 	}
 
 	oidc.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{

@@ -19,6 +19,11 @@ import (
 var spireAgentBaselineNetworkPolicyAssets = []string{
 	utils.SpireAgentNetworkPolicyIngressAssetName,
 	utils.SpireAgentNetworkPolicyEgressBaselineAssetName,
+	utils.SpireAgentNetworkPolicyEgressAllowAllAssetName,
+}
+
+var spireAgentLegacyPortScopedEgressNetworkPolicyNames = []string{
+	utils.SpireAgentNetworkPolicyProxyEgressName,
 }
 
 func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {
@@ -87,26 +92,13 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 	}
 
 	ns := utils.GetOperatorNamespace()
-	proxyPorts := utils.ProxyEgressTCPPorts()
-	proxyEnabled := utils.IsProxyEnabled() && len(proxyPorts) > 0
-	proxyResult, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, agent, ns, utils.SpireAgentNetworkPolicyProxyEgressName, proxyEnabled,
-		func() *networkingv1.NetworkPolicy {
-			return utils.MultiPortEgressNetworkPolicy(utils.SpireAgentNetworkPolicyProxyEgressName, ns, "spire-agent", proxyPorts, utils.SpireAgentLabels(agent.Spec.Labels))
-		}, createOnlyMode)
-	if err != nil {
-		statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
-			fmt.Sprintf("Failed to reconcile proxy NetworkPolicy: %v", err),
-			metav1.ConditionFalse)
-		return err
-	}
-	if proxyEnabled {
-		if proxyResult.Created {
-			created = true
+	for _, name := range spireAgentLegacyPortScopedEgressNetworkPolicyNames {
+		if err := utils.DeleteNetworkPolicyIfExists(ctx, r.ctrlClient, ns, name); err != nil {
+			statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
+				fmt.Sprintf("Failed to remove legacy NetworkPolicy %s: %v", name, err),
+				metav1.ConditionFalse)
+			return err
 		}
-		if proxyResult.Updated {
-			updated = true
-		}
-		applied = append(applied, proxyResult.Name)
 	}
 
 	agent.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
