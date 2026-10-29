@@ -18,6 +18,7 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
@@ -43,6 +44,7 @@ const (
 func init() {
 	// Register core, storage and rbac schemes
 	_ = corev1.AddToScheme(scheme)
+	_ = networkingv1.AddToScheme(scheme)
 	_ = rbacv1.AddToScheme(scheme)
 	_ = storagev1.AddToScheme(scheme)
 	_ = admissionregistrationv1.AddToScheme(scheme)
@@ -96,6 +98,18 @@ func DecodeRoleBindingObjBytes(objBytes []byte) *rbacv1.RoleBinding {
 		panic(err)
 	}
 	return obj.(*rbacv1.RoleBinding)
+}
+
+func DecodeNetworkPolicyObjBytes(objBytes []byte) *networkingv1.NetworkPolicy {
+	obj, err := runtime.Decode(codecs.UniversalDecoder(networkingv1.SchemeGroupVersion), objBytes)
+	if err != nil {
+		panic(err)
+	}
+	return obj.(*networkingv1.NetworkPolicy)
+}
+
+func ManagedNetworkPolicyEnabled(value string) bool {
+	return value != "false"
 }
 
 func DecodeServiceObjBytes(objBytes []byte) *corev1.Service {
