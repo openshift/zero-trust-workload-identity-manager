@@ -129,6 +129,31 @@ func NetworkPolicySelectsPodLabels(np *networkingv1.NetworkPolicy, labels map[st
 	return true
 }
 
+// ExpectSpireServerAllowAllEgressAddon waits for the allow-all add-on and verifies it permits all egress.
+func ExpectSpireServerAllowAllEgressAddon(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	allowAll := WaitForNetworkPolicy(ctx, clientset, namespace, SpireServerNetworkPolicyEgressAllowAllName, timeout)
+	Expect(NetworkPolicyAllowsAllEgress(allowAll)).To(BeTrue())
+}
+
+// ExpectSpireServerPortScopedEgressPoliciesAbsent waits until legacy port-scoped egress policies are removed.
+func ExpectSpireServerPortScopedEgressPoliciesAbsent(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	legacy := []string{
+		SpireServerNetworkPolicyDatabaseEgressName,
+		SpireServerNetworkPolicyVaultEgressName,
+		SpireServerNetworkPolicyProxyEgressName,
+		SpireServerNetworkPolicyFederationEgressName,
+	}
+	for _, name := range legacy {
+		WaitForNetworkPolicyAbsent(ctx, clientset, namespace, name, timeout)
+	}
+}
+
+// ExpectSpireServerFederationIngressWithoutLegacyEgress waits for federation ingress and absence of federation egress NP.
+func ExpectSpireServerFederationIngressWithoutLegacyEgress(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	WaitForNetworkPolicy(ctx, clientset, namespace, SpireServerNetworkPolicyFederationIngressName, timeout)
+	WaitForNetworkPolicyAbsent(ctx, clientset, namespace, SpireServerNetworkPolicyFederationEgressName, timeout)
+}
+
 // WaitForOperandNetworkPoliciesCondition waits for NetworkPoliciesAvailable on an operand CR.
 func WaitForOperandNetworkPoliciesCondition(ctx context.Context, k8sClient client.Client, kind string, name string,
 	status metav1.ConditionStatus, reason string, timeout time.Duration) {
@@ -184,4 +209,18 @@ func findCondition(conditions []metav1.Condition, typ string) (*metav1.Condition
 		}
 	}
 	return nil, nil
+}
+
+// SpireServerHasNetworkPoliciesFeature returns true when NetworkPoliciesAvailable is reported on SpireServer.
+func SpireServerHasNetworkPoliciesFeature(ctx context.Context, k8sClient client.Client) bool {
+	server := &operatorv1alpha1.SpireServer{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: OperandCRName}, server); err != nil {
+		return false
+	}
+	for _, c := range server.Status.Conditions {
+		if c.Type == operatorv1alpha1.NetworkPoliciesAvailable {
+			return true
+		}
+	}
+	return false
 }

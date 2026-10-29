@@ -125,6 +125,14 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			By("Waiting for SPIRE ready on Cluster B")
 			utils.WaitForSpireReady(testCtx, k8sClientB, clientsetB, utils.FederationTimeout)
 		})
+
+		It("should reconcile federation ingress and allow-all egress without port-scoped policies on Cluster A", func() {
+			if !utils.SpireServerHasNetworkPoliciesFeature(testCtx, k8sClient) {
+				Skip("NetworkPoliciesAvailable not reported on SpireServer")
+			}
+			utils.ExpectSpireServerFederationIngressWithoutLegacyEgress(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
+			utils.ExpectSpireServerAllowAllEgressAddon(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
+		})
 	})
 
 	Context("Federation Routes", func() {
