@@ -398,6 +398,33 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		})
 	})
 
+	// TLS baseline sanity runs immediately after operands are Ready so we fail
+	// fast if injected TLS does not match the cluster APIServer profile.
+	// Ordered: a failure here skips later specs by design (security gate).
+	// No profile patching and no wire probes.
+	Context("TLS baseline sanity", func() {
+		It("operand ConfigMaps match the cluster APIServer TLS profile", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
+			defer cancel()
+
+			if !utils.IsAPIServerClusterAccessible(ctx, configClient) {
+				Skip("cluster APIServer config not accessible; TLS sanity requires OpenShift")
+			}
+
+			profileType, err := utils.GetAPIServerTLSProfileType(ctx, configClient)
+			Expect(err).NotTo(HaveOccurred(), "failed to read APIServer tlsSecurityProfile.type")
+
+			minVersion, requireCiphers, ok := utils.ExpectedOperandTLSForAPIServerProfile(profileType)
+			if !ok {
+				Skip(fmt.Sprintf("unsupported APIServer TLS profile for sanity: %q", profileType))
+			}
+			fmt.Fprintf(GinkgoWriter, "TLS sanity: APIServer profile=%q → operand min=%s requireCiphers=%v\n",
+				profileType, minVersion, requireCiphers)
+
+			utils.AssertTLSProfileCompliance(ctx, configClient, clientset, "", minVersion, requireCiphers)
+		})
+	})
+
 	Context("OperatorCondition", func() {
 		It("Upgradeable should be True when all operands are ready", func() {
 			By("Verifying Upgradeable condition details")
@@ -532,7 +559,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				By("Verifying bundle certificates are CAs with CertSign KeyUsage")
 				for i, ca := range bundleCerts {
 					Expect(ca.IsCA).To(BeTrue(), "bundle certificate [%d] must be a CA", i)
-					Expect(ca.KeyUsage & x509.KeyUsageCertSign).NotTo(BeZero(),
+					Expect(ca.KeyUsage&x509.KeyUsageCertSign).NotTo(BeZero(),
 						"bundle certificate [%d] KeyUsage must include CertSign", i)
 					fmt.Fprintf(GinkgoWriter, "bundle cert [%d]: Subject=%s, IsCA=%v, KeyUsage=%d\n",
 						i, ca.Subject, ca.IsCA, ca.KeyUsage)
