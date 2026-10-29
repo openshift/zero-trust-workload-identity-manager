@@ -129,6 +129,31 @@ func NetworkPolicySelectsPodLabels(np *networkingv1.NetworkPolicy, labels map[st
 	return true
 }
 
+// ExpectSpireServerAllowAllEgressAddon waits for the allow-all add-on and verifies it permits all egress.
+func ExpectSpireServerAllowAllEgressAddon(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	allowAll := WaitForNetworkPolicy(ctx, clientset, namespace, SpireServerNetworkPolicyEgressAllowAllName, timeout)
+	Expect(NetworkPolicyAllowsAllEgress(allowAll)).To(BeTrue())
+}
+
+// ExpectSpireServerPortScopedEgressPoliciesAbsent waits until legacy port-scoped egress policies are removed.
+func ExpectSpireServerPortScopedEgressPoliciesAbsent(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	legacy := []string{
+		SpireServerNetworkPolicyDatabaseEgressName,
+		SpireServerNetworkPolicyVaultEgressName,
+		SpireServerNetworkPolicyProxyEgressName,
+		SpireServerNetworkPolicyFederationEgressName,
+	}
+	for _, name := range legacy {
+		WaitForNetworkPolicyAbsent(ctx, clientset, namespace, name, timeout)
+	}
+}
+
+// ExpectSpireServerFederationIngressWithoutLegacyEgress waits for federation ingress and absence of federation egress NP.
+func ExpectSpireServerFederationIngressWithoutLegacyEgress(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	WaitForNetworkPolicy(ctx, clientset, namespace, SpireServerNetworkPolicyFederationIngressName, timeout)
+	WaitForNetworkPolicyAbsent(ctx, clientset, namespace, SpireServerNetworkPolicyFederationEgressName, timeout)
+}
+
 // WaitForOperandNetworkPoliciesCondition waits for NetworkPoliciesAvailable on an operand CR.
 func WaitForOperandNetworkPoliciesCondition(ctx context.Context, k8sClient client.Client, kind string, name string,
 	status metav1.ConditionStatus, reason string, timeout time.Duration) {

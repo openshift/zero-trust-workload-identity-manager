@@ -74,15 +74,12 @@ func registerUpstreamVaultE2E() {
 			Expect(pd.VaultAddr).To(ContainSubstring("8200"))
 		})
 
-		It("should use allow-all egress add-on instead of vault egress NetworkPolicy", func() {
+		It("should use allow-all egress add-on without port-scoped vault egress NetworkPolicies", func() {
 			if !npEnabled {
 				Skip("NetworkPoliciesAvailable not reported on SpireServer")
 			}
-			utils.WaitForNetworkPolicyAbsent(testCtx, clientset, utils.OperatorNamespace,
-				utils.SpireServerNetworkPolicyVaultEgressName, utils.DefaultTimeout)
-			allowAll := utils.WaitForNetworkPolicy(testCtx, clientset, utils.OperatorNamespace,
-				utils.SpireServerNetworkPolicyEgressAllowAllName, utils.DefaultTimeout)
-			Expect(utils.NetworkPolicyAllowsAllEgress(allowAll)).To(BeTrue())
+			utils.ExpectSpireServerPortScopedEgressPoliciesAbsent(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
+			utils.ExpectSpireServerAllowAllEgressAddon(testCtx, clientset, utils.OperatorNamespace, utils.DefaultTimeout)
 		})
 
 		It("workload SVID attestation should succeed with vault upstream CA", Label("attestation"), func() {
