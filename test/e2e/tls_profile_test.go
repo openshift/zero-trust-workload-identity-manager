@@ -37,6 +37,7 @@ type tlsProfileCase struct {
 }
 
 var tlsProfileCases = []tlsProfileCase{
+	// Baseline first (no APIServer patch): operand ConfigMaps vs live cluster profile.
 	{name: "PROFILE-DEFAULT", patchType: "", assertAPIServer: ""},
 	{name: "PROFILE-INTERMEDIATE", patchType: utils.APIServerTLSProfileIntermediate, assertAPIServer: utils.APIServerTLSProfileIntermediate},
 	{name: "PROFILE-MODERN", patchType: utils.APIServerTLSProfileModern, assertAPIServer: utils.APIServerTLSProfileModern, checkSPIFFEID: true},
@@ -95,8 +96,17 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 			rolloutCtx, cancel := context.WithTimeout(context.Background(), utils.TLSProfileApplyTimeout)
 			defer cancel()
 
-			exp, ok := utils.ExpectedOperandTLSForAPIServerProfile(tc.patchType)
-			Expect(ok).To(BeTrue(), "profile %q must be mapped for full TLS suite", tc.patchType)
+			var exp utils.OperandTLSExpectations
+			var ok bool
+			if tc.patchType == "" {
+				var err error
+				exp, ok, err = utils.ExpectedOperandTLSForLiveAPIServer(rolloutCtx, configClient)
+				Expect(err).NotTo(HaveOccurred(), "failed to resolve live APIServer TLS expectations")
+				Expect(ok).To(BeTrue(), "live APIServer TLS profile must map to operand expectations")
+			} else {
+				exp, ok = utils.ExpectedOperandTLSForAPIServerProfile(tc.patchType)
+				Expect(ok).To(BeTrue(), "profile %q must be mapped for full TLS suite", tc.patchType)
+			}
 
 			utils.ApplyTLSProfileAndWaitForRollout(rolloutCtx, configClient, k8sClient, clientset,
 				tc.patchType, exp)
@@ -106,16 +116,14 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 			utils.AssertTLSProfileCompliance(assertCtx, configClient, clientset,
 				tc.assertAPIServer, exp)
 
-			// Run tls-scanner to validate wire-level TLS compliance.
-			scannerProfileType := tc.assertAPIServer
-			if scannerProfileType == "" {
-				// PROFILE-DEFAULT maps to Intermediate for scanner expectations.
-				scannerProfileType = utils.APIServerTLSProfileIntermediate
+			if tc.patchType == "" {
+				By("PROFILE-DEFAULT: skipping tls-scanner (ConfigMap-only baseline; wire scan on explicit profiles)")
+			} else {
+				scannerCtx, scannerCancel := context.WithTimeout(context.Background(), utils.TLSScannerRunTimeout+utils.TLSScannerReadyTimeout)
+				defer scannerCancel()
+				Expect(utils.RunTLSScanner(scannerCtx, clientset, tc.patchType)).
+					To(Succeed(), "tls-scanner failed for profile %s", tc.name)
 			}
-			scannerCtx, scannerCancel := context.WithTimeout(context.Background(), utils.TLSScannerRunTimeout+utils.TLSScannerReadyTimeout)
-			defer scannerCancel()
-			Expect(utils.RunTLSScanner(scannerCtx, clientset, scannerProfileType)).
-				To(Succeed(), "tls-scanner failed for profile %s", tc.name)
 
 			if tc.checkSPIFFEID {
 				spiffeCtx, spiffeCancel := context.WithTimeout(context.Background(), utils.TestContextTimeout)
