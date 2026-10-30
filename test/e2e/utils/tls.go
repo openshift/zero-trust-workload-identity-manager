@@ -103,24 +103,86 @@ func GetAPIServerTLSProfileType(ctx context.Context, configClient configv1.Confi
 	return string(apiServer.Spec.TLSSecurityProfile.Type), nil
 }
 
+// OperandTLSExpectations holds expected TLS injection for SPIRE operands (snake_case configs)
+// and spire-controller-manager (camelCase tlsConfig), matching pkg/tls helpers used by the operator.
+type OperandTLSExpectations struct {
+	SpireMinVersion     string
+	SpireRequireCiphers bool
+	SpireCiphers        []string
+
+	ScmMinVersion     string
+	ScmRequireCiphers bool
+	ScmCiphers        []string
+}
+
+// PrimaryMinVersion returns the SPIRE min version for logging when both paths match.
+func (e OperandTLSExpectations) PrimaryMinVersion() string {
+	if e.SpireMinVersion != "" {
+		return e.SpireMinVersion
+	}
+	return e.ScmMinVersion
+}
+
+func operandTLSExpectationsFromSpec(spec *ocpconfigv1.TLSProfileSpec) (OperandTLSExpectations, bool) {
+	if spec == nil {
+		return OperandTLSExpectations{}, false
+	}
+
+	spireCfg := pkgtls.GetTLSConfigForSpiffeSpire(spec)
+	scmCfg := pkgtls.GetTLSConfigForSCM(spec)
+	if spireCfg == nil && scmCfg == nil {
+		return OperandTLSExpectations{}, false
+	}
+
+	var exp OperandTLSExpectations
+	if spireCfg != nil {
+		exp.SpireMinVersion = fmt.Sprint(spireCfg["min_tls_version"])
+		if ciphers, ok := spireCfg["cipher_suites"].([]string); ok {
+			exp.SpireCiphers = ciphers
+			exp.SpireRequireCiphers = len(ciphers) > 0
+		}
+	}
+	if scmCfg != nil {
+		exp.ScmMinVersion = fmt.Sprint(scmCfg["minTLSVersion"])
+		if ciphers, ok := scmCfg["cipherSuites"].([]string); ok {
+			exp.ScmCiphers = ciphers
+			exp.ScmRequireCiphers = len(ciphers) > 0
+		}
+	}
+	return exp, true
+}
+
+func tlsProfileSpecForAPIServerProfile(profileType string) (*ocpconfigv1.TLSProfileSpec, bool) {
+	switch profileType {
+	case "", APIServerTLSProfileIntermediate:
+		return ocpconfigv1.TLSProfiles[ocpconfigv1.TLSProfileIntermediateType], true
+	case APIServerTLSProfileModern:
+		return ocpconfigv1.TLSProfiles[ocpconfigv1.TLSProfileModernType], true
+	case APIServerTLSProfileOld:
+		return ocpconfigv1.TLSProfiles[ocpconfigv1.TLSProfileOldType], true
+	case APIServerTLSProfileCustom:
+		return E2ECustomTLSProfileSpec(), true
+	default:
+		return nil, false
+	}
+}
+
 // ExpectedOperandTLSForLiveAPIServer resolves operand TLS expectations from the
-// current APIServer cluster config using the same GetTLSProfileSpec path as the operator.
-func ExpectedOperandTLSForLiveAPIServer(ctx context.Context, configClient configv1.ConfigV1Interface) (minVersion string, requireCiphers bool, ok bool, err error) {
+// current APIServer cluster config using GetTLSConfigForSpiffeSpire and GetTLSConfigForSCM.
+func ExpectedOperandTLSForLiveAPIServer(ctx context.Context, configClient configv1.ConfigV1Interface) (OperandTLSExpectations, bool, error) {
 	apiServer, err := configClient.APIServers().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
-		return "", false, false, fmt.Errorf("failed to get APIServer cluster config: %w", err)
+		return OperandTLSExpectations{}, false, fmt.Errorf("failed to get APIServer cluster config: %w", err)
 	}
 	profileSpec, err := openshifttls.GetTLSProfileSpec(apiServer.Spec.TLSSecurityProfile)
 	if err != nil {
-		return "", false, false, fmt.Errorf("failed to resolve APIServer TLS profile spec: %w", err)
+		return OperandTLSExpectations{}, false, fmt.Errorf("failed to resolve APIServer TLS profile spec: %w", err)
 	}
-	tlsCfg := pkgtls.GetTLSConfigForSpiffeSpire(&profileSpec)
-	if tlsCfg == nil {
-		return "", false, false, nil
+	exp, ok := operandTLSExpectationsFromSpec(&profileSpec)
+	if !ok {
+		return OperandTLSExpectations{}, false, nil
 	}
-	mv := fmt.Sprint(tlsCfg["min_tls_version"])
-	ciphers, _ := tlsCfg["cipher_suites"].([]string)
-	return mv, len(ciphers) > 0, true, nil
+	return exp, true, nil
 }
 
 // SavedProfileType returns the profile type string for a saved *TLSSecurityProfile.
@@ -132,37 +194,14 @@ func SavedProfileType(saved *ocpconfigv1.TLSSecurityProfile) string {
 	return string(saved.Type)
 }
 
-// ExpectedOperandTLSForAPIServerProfile derives operand expectations from the same
-// pkg/tls injection the operator uses. It resolves a profile type string to the
-// expected minVersion and whether ciphers must be present.
-func ExpectedOperandTLSForAPIServerProfile(profileType string) (minVersion string, requireCiphers bool, ok bool) {
-	var spec *ocpconfigv1.TLSProfileSpec
-	switch profileType {
-	case "", APIServerTLSProfileIntermediate:
-		s := ocpconfigv1.TLSProfiles[ocpconfigv1.TLSProfileIntermediateType]
-		spec = s
-	case APIServerTLSProfileModern:
-		s := ocpconfigv1.TLSProfiles[ocpconfigv1.TLSProfileModernType]
-		spec = s
-	case APIServerTLSProfileOld:
-		s := ocpconfigv1.TLSProfiles[ocpconfigv1.TLSProfileOldType]
-		spec = s
-	case APIServerTLSProfileCustom:
-		// Well-known Custom spec used by the e2e TLS profile suite.
-		// Must match E2ECustomTLSProfileSpec().
-		spec = E2ECustomTLSProfileSpec()
-	default:
-		return "", false, false
+// ExpectedOperandTLSForAPIServerProfile derives operand expectations from
+// GetTLSConfigForSpiffeSpire (server, agent, OIDC) and GetTLSConfigForSCM (controller-manager).
+func ExpectedOperandTLSForAPIServerProfile(profileType string) (OperandTLSExpectations, bool) {
+	spec, ok := tlsProfileSpecForAPIServerProfile(profileType)
+	if !ok {
+		return OperandTLSExpectations{}, false
 	}
-
-	tlsCfg := pkgtls.GetTLSConfigForSpiffeSpire(spec)
-	if tlsCfg == nil {
-		return "", false, false
-	}
-
-	mv := fmt.Sprint(tlsCfg["min_tls_version"])
-	ciphers, _ := tlsCfg["cipher_suites"].([]string)
-	return mv, len(ciphers) > 0, true
+	return operandTLSExpectationsFromSpec(spec)
 }
 
 func patchAPIServerTLSProfile(ctx context.Context, configClient configv1.ConfigV1Interface, profileType string) error {
@@ -410,15 +449,23 @@ func readControllerManagerOperandTLS(ctx context.Context, clientset kubernetes.I
 	return minTLS, ciphers, nil
 }
 
-func validateOperandTLSConfigs(configs []operandTLSConfig, minVersion string, requireCiphers bool) error {
+func validateOperandTLSConfigs(configs []operandTLSConfig, exp OperandTLSExpectations) error {
 	if len(configs) == 0 {
 		return fmt.Errorf("no operand TLS configs collected")
 	}
 
-	var reference []string
-	for i, cfg := range configs {
-		if cfg.minTLS != minVersion {
-			return fmt.Errorf("%s min TLS version mismatch: got %s want %s", cfg.source, cfg.minTLS, minVersion)
+	for _, cfg := range configs {
+		isSCM := cfg.source == SpireControllerManagerConfigMapName
+		wantMin, requireCiphers, wantCiphers, fieldMin, fieldCiphers := spireTLSExpectationFields(exp)
+		if isSCM {
+			wantMin, requireCiphers, wantCiphers, fieldMin, fieldCiphers = scmTLSExpectationFields(exp)
+		}
+		if wantMin == "" && !requireCiphers {
+			return fmt.Errorf("%s: no TLS expectations from pkg/tls for this operand", cfg.source)
+		}
+
+		if wantMin != "" && cfg.minTLS != wantMin {
+			return fmt.Errorf("%s %s mismatch: got %s want %s", cfg.source, fieldMin, cfg.minTLS, wantMin)
 		}
 		for _, cipher := range cfg.ciphers {
 			if isGoInsecureOperandCipher(cipher) {
@@ -429,17 +476,21 @@ func validateOperandTLSConfigs(configs []operandTLSConfig, minVersion string, re
 			continue
 		}
 		if len(cfg.ciphers) == 0 {
-			return fmt.Errorf("%s cipher_suites must be non-empty", cfg.source)
+			return fmt.Errorf("%s %s must be non-empty", cfg.source, fieldCiphers)
 		}
-		if i == 0 {
-			reference = cfg.ciphers
-			continue
-		}
-		if !slices.Equal(cfg.ciphers, reference) {
-			return fmt.Errorf("%s cipher_suites must match %s", cfg.source, configs[0].source)
+		if len(wantCiphers) > 0 && !slices.Equal(cfg.ciphers, wantCiphers) {
+			return fmt.Errorf("%s %s mismatch: got %v want %v", cfg.source, fieldCiphers, cfg.ciphers, wantCiphers)
 		}
 	}
 	return nil
+}
+
+func spireTLSExpectationFields(exp OperandTLSExpectations) (min string, requireCiphers bool, ciphers []string, minField, cipherField string) {
+	return exp.SpireMinVersion, exp.SpireRequireCiphers, exp.SpireCiphers, "min_tls_version", "cipher_suites"
+}
+
+func scmTLSExpectationFields(exp OperandTLSExpectations) (min string, requireCiphers bool, ciphers []string, minField, cipherField string) {
+	return exp.ScmMinVersion, exp.ScmRequireCiphers, exp.ScmCiphers, "tlsConfig.minTLSVersion", "tlsConfig.cipherSuites"
 }
 
 func isGoInsecureOperandCipher(cipher string) bool {
@@ -461,12 +512,14 @@ func logOperandTLSConfigs(configs []operandTLSConfig) {
 //
 // Validation performed:
 //   - APIServer tlsSecurityProfile.type matches expected (if expectedAPIServerProfile is non-empty)
-//   - All four operand ConfigMaps have correct min_tls_version/minTLSVersion
+//   - SPIRE server, agent, and OIDC configs match GetTLSConfigForSpiffeSpire expectations
+//   - spire-controller-manager tlsConfig matches GetTLSConfigForSCM expectations
 //   - No Go-classified insecure ciphers are present (flag.InsecureTLSCipherNames; always checked)
-//   - When requireCiphers=true, cipher_suites must be non-empty and consistent across operands
+//   - When requireCiphers=true for an operand group, cipher lists must match the pkg/tls helper output
 func AssertTLSProfileCompliance(ctx context.Context, configClient configv1.ConfigV1Interface,
-	clientset kubernetes.Interface, expectedAPIServerProfile string, minVersion string, requireCiphers bool) {
-	By(fmt.Sprintf("Asserting TLS profile compliance (APIServer profile=%q, min=%s)", expectedAPIServerProfile, minVersion))
+	clientset kubernetes.Interface, expectedAPIServerProfile string, exp OperandTLSExpectations) {
+	By(fmt.Sprintf("Asserting TLS profile compliance (APIServer profile=%q, spire min=%s, scm min=%s)",
+		expectedAPIServerProfile, exp.SpireMinVersion, exp.ScmMinVersion))
 
 	if expectedAPIServerProfile != "" {
 		profileType, err := GetAPIServerTLSProfileType(ctx, configClient)
@@ -477,7 +530,7 @@ func AssertTLSProfileCompliance(ctx context.Context, configClient configv1.Confi
 
 	configs, err := collectOperandTLSConfigs(ctx, clientset)
 	Expect(err).NotTo(HaveOccurred(), "failed to read operand TLS ConfigMaps")
-	Expect(validateOperandTLSConfigs(configs, minVersion, requireCiphers)).To(Succeed())
+	Expect(validateOperandTLSConfigs(configs, exp)).To(Succeed())
 	logOperandTLSConfigs(configs)
 }
 
@@ -527,24 +580,24 @@ func waitForAllSpireAgentPodsReady(ctx context.Context, clientset kubernetes.Int
 		"all spire-agent pods should become ready within %v", TLSProfileRolloutTimeout)
 }
 
-func waitForFourConfigMapsTLS(ctx context.Context, clientset kubernetes.Interface, minVersion string, requireCiphers bool) {
-	By(fmt.Sprintf("Waiting for four ConfigMaps to contain tls_config with min version %s", minVersion))
+func waitForFourConfigMapsTLS(ctx context.Context, clientset kubernetes.Interface, exp OperandTLSExpectations) {
+	By(fmt.Sprintf("Waiting for four ConfigMaps TLS (spire min=%s, scm min=%s)", exp.SpireMinVersion, exp.ScmMinVersion))
 	Eventually(func() error {
 		configs, err := collectOperandTLSConfigs(ctx, clientset)
 		if err != nil {
 			return err
 		}
-		return validateOperandTLSConfigs(configs, minVersion, requireCiphers)
+		return validateOperandTLSConfigs(configs, exp)
 	}).WithTimeout(TLSProfileRolloutTimeout).WithPolling(DefaultInterval).Should(Succeed(),
-		"four ConfigMaps should reflect min TLS version %s within %v", minVersion, TLSProfileRolloutTimeout)
+		"four ConfigMaps should reflect expected TLS within %v", TLSProfileRolloutTimeout)
 }
 
 // WaitForTLSProfileRolloutComplete blocks until operands and ConfigMaps reflect the expected TLS profile.
 func WaitForTLSProfileRolloutComplete(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface,
-	minVersion string, requireCiphers bool) {
-	By(fmt.Sprintf("Waiting for full TLS profile rollout (min version %s)", minVersion))
+	exp OperandTLSExpectations) {
+	By(fmt.Sprintf("Waiting for full TLS profile rollout (spire min=%s, scm min=%s)", exp.SpireMinVersion, exp.ScmMinVersion))
 	assertAllOperandsPodsReady(ctx, k8sClient, clientset, TLSProfileRolloutTimeout)
-	waitForFourConfigMapsTLS(ctx, clientset, minVersion, requireCiphers)
+	waitForFourConfigMapsTLS(ctx, clientset, exp)
 	WaitForPodReady(ctx, clientset, SpireServerPodName, OperatorNamespace, TLSProfileRolloutTimeout)
 	waitForAllSpireAgentPodsReady(ctx, clientset)
 }
@@ -707,7 +760,7 @@ func nodeNotReadyForTLS(node corev1.Node) string {
 // again until pools and nodes are ready.
 func ApplyTLSProfileAndWaitForRollout(ctx context.Context, configClient configv1.ConfigV1Interface,
 	k8sClient client.Client, clientset kubernetes.Interface, profileType string,
-	minVersion string, requireCiphers bool) {
+	exp OperandTLSExpectations) {
 	WaitForClusterMachinesReady(ctx, k8sClient, clientset)
 	if profileType == APIServerTLSProfileCustom {
 		By("Applying APIServer TLS profile Custom")
@@ -718,7 +771,7 @@ func ApplyTLSProfileAndWaitForRollout(ctx context.Context, configClient configv1
 	} else {
 		By("Skipping APIServer TLS profile patch (PROFILE-DEFAULT / current baseline)")
 	}
-	WaitForTLSProfileRolloutComplete(ctx, k8sClient, clientset, minVersion, requireCiphers)
+	WaitForTLSProfileRolloutComplete(ctx, k8sClient, clientset, exp)
 	WaitForClusterMachinesReady(ctx, k8sClient, clientset)
 }
 

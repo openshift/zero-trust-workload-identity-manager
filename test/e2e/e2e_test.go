@@ -414,15 +414,15 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			profileType, err := utils.GetAPIServerTLSProfileType(ctx, configClient)
 			Expect(err).NotTo(HaveOccurred(), "failed to read APIServer tlsSecurityProfile.type")
 
-			minVersion, requireCiphers, ok, err := utils.ExpectedOperandTLSForLiveAPIServer(ctx, configClient)
+			exp, ok, err := utils.ExpectedOperandTLSForLiveAPIServer(ctx, configClient)
 			Expect(err).NotTo(HaveOccurred(), "failed to resolve live APIServer TLS profile for operand expectations")
 			if !ok {
 				Skip(fmt.Sprintf("no operand TLS expectations for live APIServer profile: %q", profileType))
 			}
-			fmt.Fprintf(GinkgoWriter, "TLS sanity: APIServer profile=%q → operand min=%s requireCiphers=%v\n",
-				profileType, minVersion, requireCiphers)
+			fmt.Fprintf(GinkgoWriter, "TLS sanity: APIServer profile=%q → spire min=%s scm min=%s requireCiphers(spire=%v scm=%v)\n",
+				profileType, exp.SpireMinVersion, exp.ScmMinVersion, exp.SpireRequireCiphers, exp.ScmRequireCiphers)
 
-			utils.AssertTLSProfileCompliance(ctx, configClient, clientset, "", minVersion, requireCiphers)
+			utils.AssertTLSProfileCompliance(ctx, configClient, clientset, "", exp)
 		})
 	})
 

@@ -95,16 +95,16 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 			rolloutCtx, cancel := context.WithTimeout(context.Background(), utils.TLSProfileApplyTimeout)
 			defer cancel()
 
-			minVersion, requireCiphers, ok := utils.ExpectedOperandTLSForAPIServerProfile(tc.patchType)
+			exp, ok := utils.ExpectedOperandTLSForAPIServerProfile(tc.patchType)
 			Expect(ok).To(BeTrue(), "profile %q must be mapped for full TLS suite", tc.patchType)
 
 			utils.ApplyTLSProfileAndWaitForRollout(rolloutCtx, configClient, k8sClient, clientset,
-				tc.patchType, minVersion, requireCiphers)
+				tc.patchType, exp)
 
 			assertCtx, assertCancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
 			defer assertCancel()
 			utils.AssertTLSProfileCompliance(assertCtx, configClient, clientset,
-				tc.assertAPIServer, minVersion, requireCiphers)
+				tc.assertAPIServer, exp)
 
 			// Run tls-scanner to validate wire-level TLS compliance.
 			scannerProfileType := tc.assertAPIServer
@@ -195,7 +195,7 @@ func restoreSavedAPIServerTLSProfile(saved *ocpconfigv1.TLSSecurityProfile) {
 	Expect(utils.RestoreAPIServerTLSSecurityProfile(ctx, configClient, saved)).To(Succeed(),
 		"failed to restore original APIServer TLS profile after TLS profile case")
 
-	minVersion, requireCiphers, _ := utils.ExpectedOperandTLSForAPIServerProfile(utils.SavedProfileType(saved))
-	utils.WaitForTLSProfileRolloutComplete(ctx, k8sClient, clientset, minVersion, requireCiphers)
+	exp, _ := utils.ExpectedOperandTLSForAPIServerProfile(utils.SavedProfileType(saved))
+	utils.WaitForTLSProfileRolloutComplete(ctx, k8sClient, clientset, exp)
 	utils.WaitForClusterMachinesReady(ctx, k8sClient, clientset)
 }
