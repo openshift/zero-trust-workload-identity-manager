@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocpconfigv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/test/e2e/utils"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -134,9 +135,8 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 	}
 
 	// ERR-001: invalid Custom TLS profiles must be rejected by APIServer admission.
-	// Uses JSON Patch (replace) so the invalid shape fully replaces any existing
-	// profile — merge patch would silently merge into an active Custom profile,
-	// turning some of these into no-ops.
+	// Uses JSON Patch add on tlsSecurityProfile so invalid shapes reach admission whether
+	// the field is unset (focused run) or already set (full suite after profile churn).
 	Context("ERR-001: invalid Custom profiles rejected by admission", func() {
 		type invalidCustomCase struct {
 			name  string
@@ -169,11 +169,11 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 				Expect(err).NotTo(HaveOccurred(), "failed to read APIServer profile before invalid patch")
 				fmt.Fprintf(GinkgoWriter, "profile before invalid patch: %q\n", profileBefore)
 
-				// JSON Patch replaces the entire tlsSecurityProfile object so the
-				// invalid shape reaches admission even when a valid Custom profile
-				// is already active (e.g. from a prior test run).
+				// JSON Patch add creates tlsSecurityProfile when absent (focused runs) or
+				// replaces the whole object when present (RFC 6902), so admission always
+				// validates the invalid Custom shape — unlike merge patch no-ops.
 				patchJSON := fmt.Sprintf(
-					`[{"op":"replace","path":"/spec/tlsSecurityProfile","value":%s}]`,
+					`[{"op":"add","path":"/spec/tlsSecurityProfile","value":%s}]`,
 					ic.value,
 				)
 
@@ -181,7 +181,9 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 				_, err = configClient.APIServers().Patch(ctx, "cluster",
 					types.JSONPatchType, []byte(patchJSON), metav1.PatchOptions{})
 				Expect(err).To(HaveOccurred(),
-					"APIServer admission must reject invalid Custom profile: %s", ic.name)
+					"APIServer patch must fail for invalid Custom profile: %s", ic.name)
+				Expect(isAPIServerAdmissionRejection(err)).To(BeTrue(),
+					"expected admission/validation rejection, got: %v", err)
 				fmt.Fprintf(GinkgoWriter, "admission rejected as expected: %v\n", err)
 
 				By("Verifying APIServer profile is unchanged after rejected patch")
@@ -197,13 +199,30 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 	})
 })
 
+// isAPIServerAdmissionRejection reports whether err is an API validation/admission failure
+// rather than transport, auth, or JSON Patch path errors (e.g. replace on missing path).
+func isAPIServerAdmissionRejection(err error) bool {
+	if err == nil {
+		return false
+	}
+	return apierrors.IsInvalid(err) || apierrors.IsForbidden(err) || apierrors.IsBadRequest(err)
+}
+
 func restoreSavedAPIServerTLSProfile(saved *ocpconfigv1.TLSSecurityProfile) {
 	ctx, cancel := context.WithTimeout(context.Background(), utils.TLSProfileRestoreTimeout)
 	defer cancel()
 	Expect(utils.RestoreAPIServerTLSSecurityProfile(ctx, configClient, saved)).To(Succeed(),
 		"failed to restore original APIServer TLS profile after TLS profile case")
 
-	exp, _ := utils.ExpectedOperandTLSForAPIServerProfile(utils.SavedProfileType(saved))
+	exp, ok, err := utils.ExpectedOperandTLSForLiveAPIServer(ctx, configClient)
+	Expect(err).NotTo(HaveOccurred(), "failed to resolve operand TLS expectations after APIServer restore")
+	Expect(ok).To(BeTrue(), "restored APIServer TLS profile must map to operand expectations")
+
 	utils.WaitForTLSProfileRolloutComplete(ctx, k8sClient, clientset, exp)
+
+	assertCtx, assertCancel := context.WithTimeout(ctx, utils.DefaultTimeout)
+	defer assertCancel()
+	utils.AssertTLSProfileCompliance(assertCtx, configClient, clientset, utils.SavedProfileType(saved), exp)
+
 	utils.WaitForClusterMachinesReady(ctx, k8sClient, clientset)
 }
