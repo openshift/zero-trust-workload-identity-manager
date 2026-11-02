@@ -53,7 +53,7 @@ type ControllerManagerConfig struct {
 	// is otherwise idle. This impacts how quickly SPIRE state will converge
 	// after CRDs are removed or SPIRE state is mutated out from underneath
 	// the controller.
-	GCInterval time.Duration `json:"gcInterval"`
+	GCInterval time.Duration `json:"gcInterval,omitempty"`
 
 	// SPIREServerSocketPath is the path to the SPIRE Server API socket
 	SPIREServerSocketPath string `json:"spireServerSocketPath"`
@@ -66,6 +66,27 @@ type ControllerManagerConfig struct {
 
 	// Grpc is the grpc configuration for the controller manager communication with SPIRE Server API
 	Grpc *spireapi.GrpcConfig `json:"grpc,omitempty"`
+
+	// TLSConfig configures TLS security settings for terminating endpoints such
+	// as the admission webhook server.
+	// +optional
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
+}
+
+// TLSConfig configures TLS security settings for terminating endpoints.
+type TLSConfig struct {
+	// MinTLSVersion is the minimum TLS version in Kubernetes-style naming
+	// (for example "VersionTLS12"). Values below VersionTLS12 are rejected.
+	// +optional
+	MinTLSVersion string `json:"minTLSVersion,omitempty"`
+
+	// CipherSuites is the list of allowed cipher suites in IANA naming.
+	// +optional
+	CipherSuites []string `json:"cipherSuites,omitempty"`
+
+	// CurvePreferences is the ordered list of allowed key exchange curves or groups.
+	// +optional
+	CurvePreferences []string `json:"curvePreferences,omitempty"`
 }
 
 // ControllerManagerConfigurationSpec defines the desired state of GenericControllerManagerConfiguration.
@@ -132,6 +153,24 @@ type ControllerManagerConfigurationSpec struct {
 	// specified will also be handled by this controller.
 	// +optional
 	WatchClassless bool `json:"watchClassless,omitempty"`
+
+	// ClusterSPIFFEIDLabelSelector if specified, restricts the ClusterSPIFFEID
+	// informer cache to only objects matching the given labels. When empty, all
+	// ClusterSPIFFEID objects are cached (default behavior).
+	// Useful in SPIRE setups to limit the controller manager cache
+	// to only the targeted ClusterSPIFFEIDs it needs to reconcile.
+	// +optional
+	ClusterSPIFFEIDLabelSelector map[string]string `json:"clusterSPIFFEIDLabelSelector,omitempty"`
+
+	// FilterByClassName, if set, restricts the ClusterSPIFFEID informer cache
+	// to objects labeled with this controller's ClassName, using the
+	// well-known "spire.spiffe.io/class-name" label. It is shorthand for
+	// adding {"spire.spiffe.io/class-name": ClassName} to
+	// ClusterSPIFFEIDLabelSelector. If ClusterSPIFFEIDLabelSelector already
+	// sets that label to a different value, this value takes precedence.
+	// Requires ClassName to be set.
+	// +optional
+	FilterByClassName bool `json:"filterByClassName,omitempty"`
 
 	// If specified, uses a different parent id template for linking pods to nodes
 	// +optional
