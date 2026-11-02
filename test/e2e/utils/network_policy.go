@@ -27,20 +27,27 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	SpireServerNetworkPolicyIngressName        = "ztwim-sys-spire-server-ingress"
-	SpireServerNetworkPolicyEgressAllowAllName = "ztwim-sys-spire-server-egress-allow-all"
+	SpireServerNetworkPolicyIngressName           = "ztwim-sys-spire-server-ingress"
+	SpireServerNetworkPolicyEgressAllowAllName    = "ztwim-sys-spire-server-egress-allow-all"
 	SpireServerNetworkPolicyFederationIngressName = "ztwim-sys-spire-server-federation-ingress"
 
-	SpireAgentNetworkPolicyIngressName     = "ztwim-sys-spire-agent-ingress"
+	SpireAgentNetworkPolicyIngressName        = "ztwim-sys-spire-agent-ingress"
 	SpireAgentNetworkPolicyEgressAllowAllName = "ztwim-sys-spire-agent-egress-allow-all"
 
 	SpireOIDCNetworkPolicyIngressName = "ztwim-sys-spire-oidc-discovery-provider-ingress"
+
+	// Legacy names from earlier SPIRE-220 drafts; operator does not reconcile these policies.
+	SpireServerNetworkPolicyFederationEgressName = "ztwim-sys-spire-server-federation-egress"
+	SpireServerNetworkPolicyVaultEgressName      = "ztwim-sys-spire-server-vault-egress"
+	SpireServerNetworkPolicyDatabaseEgressName   = "ztwim-sys-spire-server-database-egress"
+	SpireServerNetworkPolicyProxyEgressName      = "ztwim-sys-spire-server-proxy-egress"
 
 	OperandCRName = "cluster"
 )
@@ -58,6 +65,15 @@ func WaitForNetworkPolicy(ctx context.Context, clientset kubernetes.Interface, n
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(Succeed(),
 		"NetworkPolicy %s/%s should exist within %v", namespace, name, timeout)
 	return np
+}
+
+// WaitForNetworkPolicyAbsent waits until a NetworkPolicy is deleted.
+func WaitForNetworkPolicyAbsent(ctx context.Context, clientset kubernetes.Interface, namespace, name string, timeout time.Duration) {
+	Eventually(func() bool {
+		_, err := clientset.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+		return apierrors.IsNotFound(err)
+	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"NetworkPolicy %s/%s should be absent within %v", namespace, name, timeout)
 }
 
 // NetworkPolicyAllowsAllEgress reports whether any egress rule allows all destinations and ports.
@@ -109,6 +125,44 @@ func NetworkPolicySelectsPodLabels(np *networkingv1.NetworkPolicy, labels map[st
 		}
 	}
 	return true
+}
+
+// ExpectSpireServerAllowAllEgressAddon waits for allow-all egress and verifies it permits all egress.
+func ExpectSpireServerAllowAllEgressAddon(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	allowAll := WaitForNetworkPolicy(ctx, clientset, namespace, SpireServerNetworkPolicyEgressAllowAllName, timeout)
+	Expect(NetworkPolicyAllowsAllEgress(allowAll)).To(BeTrue())
+}
+
+// ExpectSpireServerPortScopedEgressPoliciesAbsent waits until legacy port-scoped egress policies are absent.
+func ExpectSpireServerPortScopedEgressPoliciesAbsent(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	for _, name := range []string{
+		SpireServerNetworkPolicyDatabaseEgressName,
+		SpireServerNetworkPolicyVaultEgressName,
+		SpireServerNetworkPolicyProxyEgressName,
+		SpireServerNetworkPolicyFederationEgressName,
+	} {
+		WaitForNetworkPolicyAbsent(ctx, clientset, namespace, name, timeout)
+	}
+}
+
+// ExpectSpireServerFederationIngressWithoutLegacyEgress waits for federation ingress only.
+func ExpectSpireServerFederationIngressWithoutLegacyEgress(ctx context.Context, clientset kubernetes.Interface, namespace string, timeout time.Duration) {
+	WaitForNetworkPolicy(ctx, clientset, namespace, SpireServerNetworkPolicyFederationIngressName, timeout)
+	WaitForNetworkPolicyAbsent(ctx, clientset, namespace, SpireServerNetworkPolicyFederationEgressName, timeout)
+}
+
+// SpireServerHasNetworkPoliciesFeature returns true when NetworkPoliciesAvailable is reported on SpireServer.
+func SpireServerHasNetworkPoliciesFeature(ctx context.Context, k8sClient client.Client) bool {
+	server := &operatorv1alpha1.SpireServer{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: OperandCRName}, server); err != nil {
+		return false
+	}
+	for _, c := range server.Status.Conditions {
+		if c.Type == operatorv1alpha1.NetworkPoliciesAvailable {
+			return true
+		}
+	}
+	return false
 }
 
 // WaitForOperandNetworkPoliciesCondition waits for NetworkPoliciesAvailable on an operand CR.
