@@ -1,6 +1,6 @@
 module github.com/openshift/zero-trust-workload-identity-manager
 
-go 1.26.5
+go 1.26.10
 
 require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
@@ -14,7 +14,7 @@ require (
 	github.com/openshift/controller-runtime-common v0.0.0-20260804161605-f9e4228f21e6
 	github.com/openshift/library-go v0.0.0-20260720185249-0595e37fe20f
 	github.com/operator-framework/api v0.27.0
-	github.com/spiffe/spire-controller-manager v0.7.0
+	github.com/spiffe/spire-controller-manager v0.7.1
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.36.3
 	k8s.io/apiextensions-apiserver v0.36.2
