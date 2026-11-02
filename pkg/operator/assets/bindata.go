@@ -7,6 +7,7 @@
 // bindata/spire-agent/spire-agent-cluster-role.yaml
 // bindata/spire-agent/spire-agent-service-account.yaml
 // bindata/spire-agent/spire-agent-service.yaml
+// bindata/spire-agent/ztwim-sys-spire-agent-ingress.yaml
 // bindata/spire-bundle/spire-bundle-role-binding.yaml
 // bindata/spire-bundle/spire-bundle-role.yaml
 // bindata/spire-controller-manager/spire-controller-manager-cluster-role-binding.yaml
@@ -19,6 +20,7 @@
 // bindata/spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml
 // bindata/spire-oidc-discovery-provider/spire-oidc-external-cert-role-binding.yaml
 // bindata/spire-oidc-discovery-provider/spire-oidc-external-cert-role.yaml
+// bindata/spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml
 // bindata/spire-server/spire-server-cluster-role-binding.yaml
 // bindata/spire-server/spire-server-cluster-role.yaml
 // bindata/spire-server/spire-server-external-cert-role-binding.yaml
@@ -310,6 +312,45 @@ func spireAgentSpireAgentServiceYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "spire-agent/spire-agent-service.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireAgentZtwimSysSpireAgentIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-agent-ingress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-monitoring
+      ports:
+        - port: 9402
+          protocol: TCP
+`)
+
+func spireAgentZtwimSysSpireAgentIngressYamlBytes() ([]byte, error) {
+	return _spireAgentZtwimSysSpireAgentIngressYaml, nil
+}
+
+func spireAgentZtwimSysSpireAgentIngressYaml() (*asset, error) {
+	bytes, err := spireAgentZtwimSysSpireAgentIngressYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-agent/ztwim-sys-spire-agent-ingress.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -800,6 +841,45 @@ func spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml() (*asset, error) {
 	return a, nil
 }
 
+var _spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-oidc-discovery-provider-ingress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spiffe-oidc-discovery-provider
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+      ports:
+        - port: 8443
+          protocol: TCP
+`)
+
+func spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYamlBytes() ([]byte, error) {
+	return _spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYaml, nil
+}
+
+func spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYaml() (*asset, error) {
+	bytes, err := spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _spireServerSpireServerClusterRoleBindingYaml = []byte(`kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -1123,6 +1203,7 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-agent/spire-agent-cluster-role.yaml":                                           spireAgentSpireAgentClusterRoleYaml,
 	"spire-agent/spire-agent-service-account.yaml":                                        spireAgentSpireAgentServiceAccountYaml,
 	"spire-agent/spire-agent-service.yaml":                                                spireAgentSpireAgentServiceYaml,
+	"spire-agent/ztwim-sys-spire-agent-ingress.yaml":                                      spireAgentZtwimSysSpireAgentIngressYaml,
 	"spire-bundle/spire-bundle-role-binding.yaml":                                         spireBundleSpireBundleRoleBindingYaml,
 	"spire-bundle/spire-bundle-role.yaml":                                                 spireBundleSpireBundleRoleYaml,
 	"spire-controller-manager/spire-controller-manager-cluster-role-binding.yaml":         spireControllerManagerSpireControllerManagerClusterRoleBindingYaml,
@@ -1135,6 +1216,7 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-oidc-discovery-provider/spire-oidc-discovery-provider-service.yaml":            spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml,
 	"spire-oidc-discovery-provider/spire-oidc-external-cert-role-binding.yaml":            spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml,
 	"spire-oidc-discovery-provider/spire-oidc-external-cert-role.yaml":                    spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml,
+	"spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml":  spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYaml,
 	"spire-server/spire-server-cluster-role-binding.yaml":                                 spireServerSpireServerClusterRoleBindingYaml,
 	"spire-server/spire-server-cluster-role.yaml":                                         spireServerSpireServerClusterRoleYaml,
 	"spire-server/spire-server-external-cert-role-binding.yaml":                           spireServerSpireServerExternalCertRoleBindingYaml,
@@ -1197,6 +1279,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"spire-agent-cluster-role.yaml":         {spireAgentSpireAgentClusterRoleYaml, map[string]*bintree{}},
 		"spire-agent-service-account.yaml":      {spireAgentSpireAgentServiceAccountYaml, map[string]*bintree{}},
 		"spire-agent-service.yaml":              {spireAgentSpireAgentServiceYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-agent-ingress.yaml":    {spireAgentZtwimSysSpireAgentIngressYaml, map[string]*bintree{}},
 	}},
 	"spire-bundle": {nil, map[string]*bintree{
 		"spire-bundle-role-binding.yaml": {spireBundleSpireBundleRoleBindingYaml, map[string]*bintree{}},
@@ -1211,10 +1294,11 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"spire-controller-manager-webhook-validating-webhook.yaml":   {spireControllerManagerSpireControllerManagerWebhookValidatingWebhookYaml, map[string]*bintree{}},
 	}},
 	"spire-oidc-discovery-provider": {nil, map[string]*bintree{
-		"spire-oidc-discovery-provider-service-account.yaml": {spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceAccountYaml, map[string]*bintree{}},
-		"spire-oidc-discovery-provider-service.yaml":         {spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml, map[string]*bintree{}},
-		"spire-oidc-external-cert-role-binding.yaml":         {spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml, map[string]*bintree{}},
-		"spire-oidc-external-cert-role.yaml":                 {spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml, map[string]*bintree{}},
+		"spire-oidc-discovery-provider-service-account.yaml":   {spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceAccountYaml, map[string]*bintree{}},
+		"spire-oidc-discovery-provider-service.yaml":           {spireOidcDiscoveryProviderSpireOidcDiscoveryProviderServiceYaml, map[string]*bintree{}},
+		"spire-oidc-external-cert-role-binding.yaml":           {spireOidcDiscoveryProviderSpireOidcExternalCertRoleBindingYaml, map[string]*bintree{}},
+		"spire-oidc-external-cert-role.yaml":                   {spireOidcDiscoveryProviderSpireOidcExternalCertRoleYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-oidc-discovery-provider-ingress.yaml": {spireOidcDiscoveryProviderZtwimSysSpireOidcDiscoveryProviderIngressYaml, map[string]*bintree{}},
 	}},
 	"spire-server": {nil, map[string]*bintree{
 		"spire-server-cluster-role-binding.yaml":       {spireServerSpireServerClusterRoleBindingYaml, map[string]*bintree{}},
