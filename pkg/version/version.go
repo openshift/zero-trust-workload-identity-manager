@@ -11,9 +11,9 @@ var (
 	OperatorVersion string = "1.1.3"
 
 	// Per-component versions (used for app.kubernetes.io/version labels)
-	SpiffeCsiVersion                  string = "0.2.8"
-	SpireAgentVersion                 string = "1.14.7"
-	SpireControllerManagerVersion     string = "0.6.4"
-	SpireOIDCDiscoveryProviderVersion string = "1.14.7"
-	SpireServerVersion                string = "1.14.7"
+	SpiffeCsiVersion                  string = "0.2.13"
+	SpireAgentVersion                 string = "1.14.9"
+	SpireControllerManagerVersion     string = "0.6.6"
+	SpireOIDCDiscoveryProviderVersion string = "1.14.9"
+	SpireServerVersion                string = "1.14.9"
 )
