@@ -1,6 +1,4 @@
-# This NetworkPolicy allows ingress traffic
-# with Pods running on namespaces labeled with 'metrics: enabled'. Only Pods on those
-# namespaces are able to gathering data from the metrics endpoint.
+# Explicit allow rules for the ZTWIM operator: Kubernetes API egress and Prometheus metrics ingress.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -9,20 +7,24 @@ metadata:
     app.kubernetes.io/created-by: zero-trust-workload-identity-manager
     app.kubernetes.io/part-of: zero-trust-workload-identity-manager
     app.kubernetes.io/managed-by: kustomize
-  name: allow-metrics-traffic
+  name: ztwim-op-allow
   namespace: system
 spec:
   podSelector:
     matchLabels:
-      control-plane: controller-manager
+      name: zero-trust-workload-identity-manager
   policyTypes:
     - Ingress
+    - Egress
   ingress:
-    # This allows ingress traffic from any namespace with the label metrics: enabled
     - from:
-      - namespaceSelector:
-          matchLabels:
-            metrics: enabled  # Only from namespaces with this label
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-monitoring
       ports:
         - port: 8443
+          protocol: TCP
+  egress:
+    - ports:
+        - port: 6443
           protocol: TCP
