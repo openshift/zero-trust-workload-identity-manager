@@ -976,6 +976,17 @@ spec:
                 maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
+              managedNetworkPolicy:
+                default: "true"
+                description: |-
+                  managedNetworkPolicy controls whether the operator creates and reconciles
+                  operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
+                  "true": The operator manages NetworkPolicies automatically.
+                  "false": Administrators supply and maintain their own NetworkPolicies.
+                enum:
+                - "true"
+                - "false"
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string

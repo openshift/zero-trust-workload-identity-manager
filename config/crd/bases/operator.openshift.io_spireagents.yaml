@@ -986,6 +986,17 @@ spec:
                 - warn
                 - error
                 type: string
+              managedNetworkPolicy:
+                default: "true"
+                description: |-
+                  managedNetworkPolicy controls whether the operator creates and reconciles
+                  operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
+                  "true": The operator manages NetworkPolicies automatically.
+                  "false": Administrators supply and maintain their own NetworkPolicies.
+                enum:
+                - "true"
+                - "false"
+                type: string
               nodeAttestor:
                 description: nodeAttestor specifies the configuration for the Node
                   Attestor.
@@ -1268,6 +1279,29 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              networkPolicy:
+                description: networkPolicy holds observed NetworkPolicy reconciliation
+                  state when managedNetworkPolicy is enabled.
+                properties:
+                  appliedPolicies:
+                    description: appliedPolicies lists fixed-name NetworkPolicy resources
+                      last applied by the operator.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  managementState:
+                    allOf:
+                    - enum:
+                      - Managed
+                      - Unmanaged
+                    - enum:
+                      - Managed
+                      - Unmanaged
+                    description: managementState reflects whether the operator manages
+                      ztwim-sys-* policies for this operand.
+                    type: string
+                type: object
             type: object
         type: object
         x-kubernetes-validations:
