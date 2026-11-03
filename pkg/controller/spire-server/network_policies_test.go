@@ -103,13 +103,23 @@ func TestReconcileNetworkPolicies_UpdatesStalePolicy(t *testing.T) {
 	stale := staleServerIngressNetworkPolicy(server)
 
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+	ingressName := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[0], server.Spec.Labels).Name
+	egressDesired := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[1], server.Spec.Labels)
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		*np = *stale
-		return nil
+		switch key.Name {
+		case ingressName:
+			*np = *stale
+			return nil
+		case egressDesired.Name:
+			*np = *egressDesired
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
 	}
 	fc.UpdateReturns(nil)
 
@@ -148,13 +158,23 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	stale := staleServerIngressNetworkPolicy(server)
 
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+	ingressName := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[0], server.Spec.Labels).Name
+	egressDesired := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[1], server.Spec.Labels)
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		*np = *stale
-		return nil
+		switch key.Name {
+		case ingressName:
+			*np = *stale
+			return nil
+		case egressDesired.Name:
+			*np = *egressDesired
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
 	}
 
 	reconciler := newNetworkPolicyTestReconciler(fc)
@@ -190,8 +210,8 @@ func TestReconcileNetworkPolicies_PostgresUsesAllowAllEgressOnly(t *testing.T) {
 	server := &v1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec: v1alpha1.SpireServerSpec{
-			CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "true"},
-			Datastore:    v1alpha1.DataStore{DatabaseType: "postgres"},
+			ManagedNetworkPolicy: "true",
+			Datastore:            v1alpha1.DataStore{DatabaseType: "postgres"},
 		},
 	}
 
@@ -200,6 +220,34 @@ func TestReconcileNetworkPolicies_PostgresUsesAllowAllEgressOnly(t *testing.T) {
 	}
 	if fc.CreateCallCount() != len(spireServerBaselineNetworkPolicyAssets) {
 		t.Fatalf("expected %d creates, got %d", len(spireServerBaselineNetworkPolicyAssets), fc.CreateCallCount())
+	}
+}
+
+func TestReconcileNetworkPolicies_FederationCreatesPolicies(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
+	fc.CreateReturns(nil)
+	fc.StatusUpdateWithRetryReturns(nil)
+	reconciler := newNetworkPolicyTestReconciler(fc)
+	statusMgr := status.NewManager(fc)
+
+	server := &v1alpha1.SpireServer{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec: v1alpha1.SpireServerSpec{
+			ManagedNetworkPolicy: "true",
+			Federation:           &v1alpha1.FederationConfig{},
+			Datastore:            v1alpha1.DataStore{DatabaseType: "sqlite3"},
+		},
+	}
+
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	expectedCreates := len(spireServerBaselineNetworkPolicyAssets) + len(spireServerFederationNetworkPolicyAssets)
+	if fc.CreateCallCount() != expectedCreates {
+		t.Fatalf("expected %d creates, got %d", expectedCreates, fc.CreateCallCount())
 	}
 }
 

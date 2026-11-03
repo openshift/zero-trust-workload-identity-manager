@@ -21,6 +21,10 @@ var spireServerBaselineNetworkPolicyAssets = []string{
 	utils.SpireServerNetworkPolicyEgressAllowAllAssetName,
 }
 
+var spireServerFederationNetworkPolicyAssets = []string{
+	utils.SpireServerNetworkPolicyFederationIngressAssetName,
+}
+
 func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
 	if !utils.ManagedNetworkPolicyEnabled(server.Spec.ManagedNetworkPolicy) {
 		server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
@@ -32,10 +36,23 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		return nil
 	}
 
-	applied := make([]string, 0, len(spireServerBaselineNetworkPolicyAssets))
+	ns := utils.GetOperatorNamespace()
+	applied := make([]string, 0, len(spireServerBaselineNetworkPolicyAssets)+len(spireServerFederationNetworkPolicyAssets))
 	created := false
 	updated := false
 	driftSkipped := false
+
+	mergeOutcome := func(result utils.NetworkPolicyApplyResult) {
+		if result.Name != "" {
+			applied = append(applied, result.Name)
+		}
+		if result.Created {
+			created = true
+		}
+		if result.Updated {
+			updated = true
+		}
+	}
 
 	for _, assetName := range spireServerBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, server.Spec.Labels)
@@ -86,6 +103,28 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			updated = true
 		}
 		applied = append(applied, desired.Name)
+	}
+
+	federationEnabled := server.Spec.Federation != nil
+	for _, assetName := range spireServerFederationNetworkPolicyAssets {
+		desired := networkPolicyFromAsset(assetName, server.Spec.Labels)
+		result, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, server, ns, desired.Name, federationEnabled, func() *networkingv1.NetworkPolicy {
+			return networkPolicyFromAsset(assetName, server.Spec.Labels)
+		}, createOnlyMode)
+		if err != nil {
+			statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
+				fmt.Sprintf("Failed to reconcile federation NetworkPolicy: %v", err),
+				metav1.ConditionFalse)
+			return err
+		}
+		if federationEnabled {
+			mergeOutcome(result)
+		} else if result.Name != "" {
+			// Federation disabled: policy removed if it existed; do not list it as applied.
+			if result.Updated {
+				updated = true
+			}
+		}
 	}
 
 	server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
