@@ -2,6 +2,7 @@ package spire_server
 
 import (
 	"context"
+	"slices"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,8 +17,13 @@ var spireServerBaselineNetworkPolicyAssets = []string{
 	utils.SpireServerNetworkPolicyEgressAllowAllAssetName,
 }
 
+var spireServerFederationNetworkPolicyAssets = []string{
+	utils.SpireServerNetworkPolicyFederationIngressAssetName,
+}
+
 func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, createOnlyMode bool) error {
-	applied := utils.BaselineNetworkPolicyLastApplied(server.Status.NetworkPolicy, len(spireServerBaselineNetworkPolicyAssets))
+	maxPolicies := len(spireServerBaselineNetworkPolicyAssets) + len(spireServerFederationNetworkPolicyAssets)
+	applied := utils.BaselineNetworkPolicyLastApplied(server.Status.NetworkPolicy, maxPolicies)
 	if !utils.ManagedNetworkPolicyEnabled(server.Spec.ManagedNetworkPolicy) {
 		r.log.V(1).Info("Operand NetworkPolicy management is disabled")
 		server.Status.NetworkPolicy = utils.NetworkPolicyStatusWith(v1alpha1.NetworkPolicyManagementUnmanaged, applied)
@@ -52,6 +58,33 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			}
 			applied = utils.RecordNetworkPolicyApplied(applied, result.Name, result.CreationTimestamp, false)
 		}
+	}
+
+	federationEnabled := server.Spec.Federation != nil
+	federationNPName := networkPolicyFromAsset(spireServerFederationNetworkPolicyAssets[0], server.Spec.Labels).Name
+	for _, assetName := range spireServerFederationNetworkPolicyAssets {
+		result, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, server, ns, federationNPName, federationEnabled, func() *networkingv1.NetworkPolicy {
+			return networkPolicyFromAsset(assetName, server.Spec.Labels)
+		}, createOnlyMode)
+		if err != nil {
+			r.log.Error(err, "failed to reconcile federation NetworkPolicy", "name", federationNPName)
+			return err
+		}
+		if federationEnabled {
+			if result.Created {
+				r.log.Info("Created NetworkPolicy", "name", result.Name, "namespace", ns)
+				applied = utils.RecordNetworkPolicyApplied(applied, result.Name, metav1.Now(), true)
+			} else if result.Updated {
+				r.log.Info("Updated NetworkPolicy", "name", result.Name, "namespace", ns)
+				applied = utils.RecordNetworkPolicyApplied(applied, result.Name, metav1.Now(), true)
+			} else {
+				applied = utils.RecordNetworkPolicyApplied(applied, result.Name, result.CreationTimestamp, false)
+			}
+		}
+	}
+
+	if !federationEnabled {
+		applied = slices.DeleteFunc(applied, func(policy v1alpha1.AppliedNetworkPolicy) bool { return policy.Name == federationNPName })
 	}
 
 	return nil
