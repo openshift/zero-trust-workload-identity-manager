@@ -40,9 +40,13 @@ const (
 	SpireOIDCDiscoveryProviderServiceAccountAssetName = "spire-oidc-discovery-provider/spire-oidc-discovery-provider-service-account.yaml"
 	SpireServerServiceAccountAssetName                = "spire-server/spire-server-service-account.yaml"
 
-	SpireServerNetworkPolicyIngressAssetName = "spire-server/ztwim-sys-spire-server-ingress.yaml"
+	SpireServerNetworkPolicyIngressAssetName        = "spire-server/ztwim-sys-spire-server-ingress.yaml"
+	SpireServerNetworkPolicyEgressAllowAllAssetName = "spire-server/ztwim-sys-spire-server-egress-allow-all.yaml"
+	SpireServerNetworkPolicyEgressAllowAllName      = "ztwim-sys-spire-server-egress-allow-all"
 
-	SpireAgentNetworkPolicyIngressAssetName = "spire-agent/ztwim-sys-spire-agent-ingress.yaml"
+	SpireAgentNetworkPolicyIngressAssetName        = "spire-agent/ztwim-sys-spire-agent-ingress.yaml"
+	SpireAgentNetworkPolicyEgressAllowAllAssetName = "spire-agent/ztwim-sys-spire-agent-egress-allow-all.yaml"
+	SpireAgentNetworkPolicyEgressAllowAllName      = "ztwim-sys-spire-agent-egress-allow-all"
 
 	SpireOIDCDiscoveryProviderNetworkPolicyIngressAssetName = "spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml"
 

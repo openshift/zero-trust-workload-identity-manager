@@ -7,6 +7,7 @@
 // bindata/spire-agent/spire-agent-cluster-role.yaml
 // bindata/spire-agent/spire-agent-service-account.yaml
 // bindata/spire-agent/spire-agent-service.yaml
+// bindata/spire-agent/ztwim-sys-spire-agent-egress-allow-all.yaml
 // bindata/spire-agent/ztwim-sys-spire-agent-ingress.yaml
 // bindata/spire-bundle/spire-bundle-role-binding.yaml
 // bindata/spire-bundle/spire-bundle-role.yaml
@@ -27,6 +28,7 @@
 // bindata/spire-server/spire-server-external-cert-role.yaml
 // bindata/spire-server/spire-server-service-account.yaml
 // bindata/spire-server/spire-server-service.yaml
+// bindata/spire-server/ztwim-sys-spire-server-egress-allow-all.yaml
 // bindata/spire-server/ztwim-sys-spire-server-ingress.yaml
 package assets
 
@@ -312,6 +314,40 @@ func spireAgentSpireAgentServiceYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "spire-agent/spire-agent-service.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _spireAgentZtwimSysSpireAgentEgressAllowAllYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-agent-egress-allow-all
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Egress
+  egress:
+    # Operator-managed allow-all egress for SPIRE agent pods (single egress NetworkPolicy).
+    - {}
+`)
+
+func spireAgentZtwimSysSpireAgentEgressAllowAllYamlBytes() ([]byte, error) {
+	return _spireAgentZtwimSysSpireAgentEgressAllowAllYaml, nil
+}
+
+func spireAgentZtwimSysSpireAgentEgressAllowAllYaml() (*asset, error) {
+	bytes, err := spireAgentZtwimSysSpireAgentEgressAllowAllYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-agent/ztwim-sys-spire-agent-egress-allow-all.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -1093,6 +1129,40 @@ func spireServerSpireServerServiceYaml() (*asset, error) {
 	return a, nil
 }
 
+var _spireServerZtwimSysSpireServerEgressAllowAllYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-server-egress-allow-all
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Egress
+  egress:
+    # Operator-managed allow-all egress for SPIRE server pods (single egress NetworkPolicy).
+    - {}
+`)
+
+func spireServerZtwimSysSpireServerEgressAllowAllYamlBytes() ([]byte, error) {
+	return _spireServerZtwimSysSpireServerEgressAllowAllYaml, nil
+}
+
+func spireServerZtwimSysSpireServerEgressAllowAllYaml() (*asset, error) {
+	bytes, err := spireServerZtwimSysSpireServerEgressAllowAllYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "spire-server/ztwim-sys-spire-server-egress-allow-all.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _spireServerZtwimSysSpireServerIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1203,6 +1273,7 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-agent/spire-agent-cluster-role.yaml":                                           spireAgentSpireAgentClusterRoleYaml,
 	"spire-agent/spire-agent-service-account.yaml":                                        spireAgentSpireAgentServiceAccountYaml,
 	"spire-agent/spire-agent-service.yaml":                                                spireAgentSpireAgentServiceYaml,
+	"spire-agent/ztwim-sys-spire-agent-egress-allow-all.yaml":                             spireAgentZtwimSysSpireAgentEgressAllowAllYaml,
 	"spire-agent/ztwim-sys-spire-agent-ingress.yaml":                                      spireAgentZtwimSysSpireAgentIngressYaml,
 	"spire-bundle/spire-bundle-role-binding.yaml":                                         spireBundleSpireBundleRoleBindingYaml,
 	"spire-bundle/spire-bundle-role.yaml":                                                 spireBundleSpireBundleRoleYaml,
@@ -1223,6 +1294,7 @@ var _bindata = map[string]func() (*asset, error){
 	"spire-server/spire-server-external-cert-role.yaml":                                   spireServerSpireServerExternalCertRoleYaml,
 	"spire-server/spire-server-service-account.yaml":                                      spireServerSpireServerServiceAccountYaml,
 	"spire-server/spire-server-service.yaml":                                              spireServerSpireServerServiceYaml,
+	"spire-server/ztwim-sys-spire-server-egress-allow-all.yaml":                           spireServerZtwimSysSpireServerEgressAllowAllYaml,
 	"spire-server/ztwim-sys-spire-server-ingress.yaml":                                    spireServerZtwimSysSpireServerIngressYaml,
 }
 
@@ -1275,11 +1347,12 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"spiffe-csi-service-account.yaml":         {spiffeCsiSpiffeCsiServiceAccountYaml, map[string]*bintree{}},
 	}},
 	"spire-agent": {nil, map[string]*bintree{
-		"spire-agent-cluster-role-binding.yaml": {spireAgentSpireAgentClusterRoleBindingYaml, map[string]*bintree{}},
-		"spire-agent-cluster-role.yaml":         {spireAgentSpireAgentClusterRoleYaml, map[string]*bintree{}},
-		"spire-agent-service-account.yaml":      {spireAgentSpireAgentServiceAccountYaml, map[string]*bintree{}},
-		"spire-agent-service.yaml":              {spireAgentSpireAgentServiceYaml, map[string]*bintree{}},
-		"ztwim-sys-spire-agent-ingress.yaml":    {spireAgentZtwimSysSpireAgentIngressYaml, map[string]*bintree{}},
+		"spire-agent-cluster-role-binding.yaml":       {spireAgentSpireAgentClusterRoleBindingYaml, map[string]*bintree{}},
+		"spire-agent-cluster-role.yaml":               {spireAgentSpireAgentClusterRoleYaml, map[string]*bintree{}},
+		"spire-agent-service-account.yaml":            {spireAgentSpireAgentServiceAccountYaml, map[string]*bintree{}},
+		"spire-agent-service.yaml":                    {spireAgentSpireAgentServiceYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-agent-egress-allow-all.yaml": {spireAgentZtwimSysSpireAgentEgressAllowAllYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-agent-ingress.yaml":          {spireAgentZtwimSysSpireAgentIngressYaml, map[string]*bintree{}},
 	}},
 	"spire-bundle": {nil, map[string]*bintree{
 		"spire-bundle-role-binding.yaml": {spireBundleSpireBundleRoleBindingYaml, map[string]*bintree{}},
@@ -1307,6 +1380,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"spire-server-external-cert-role.yaml":         {spireServerSpireServerExternalCertRoleYaml, map[string]*bintree{}},
 		"spire-server-service-account.yaml":            {spireServerSpireServerServiceAccountYaml, map[string]*bintree{}},
 		"spire-server-service.yaml":                    {spireServerSpireServerServiceYaml, map[string]*bintree{}},
+		"ztwim-sys-spire-server-egress-allow-all.yaml": {spireServerZtwimSysSpireServerEgressAllowAllYaml, map[string]*bintree{}},
 		"ztwim-sys-spire-server-ingress.yaml":          {spireServerZtwimSysSpireServerIngressYaml, map[string]*bintree{}},
 	}},
 }}

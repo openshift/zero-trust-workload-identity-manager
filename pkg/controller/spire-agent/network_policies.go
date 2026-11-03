@@ -18,6 +18,7 @@ import (
 
 var spireAgentBaselineNetworkPolicyAssets = []string{
 	utils.SpireAgentNetworkPolicyIngressAssetName,
+	utils.SpireAgentNetworkPolicyEgressAllowAllAssetName,
 }
 
 func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager, createOnlyMode bool) error {

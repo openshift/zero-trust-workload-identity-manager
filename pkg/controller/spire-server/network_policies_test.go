@@ -82,6 +82,40 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	}
 }
 
+func TestReconcileNetworkPolicies_PostgresUsesAllowAllEgressOnly(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
+	fc.CreateReturns(nil)
+	fc.StatusUpdateWithRetryReturns(nil)
+	reconciler := newNetworkPolicyTestReconciler(fc)
+	statusMgr := status.NewManager(fc)
+
+	server := &v1alpha1.SpireServer{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec: v1alpha1.SpireServerSpec{
+			CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "true"},
+			Datastore:    v1alpha1.DataStore{DatabaseType: "postgres"},
+		},
+	}
+
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	if fc.CreateCallCount() != len(spireServerBaselineNetworkPolicyAssets) {
+		t.Fatalf("expected %d creates, got %d", len(spireServerBaselineNetworkPolicyAssets), fc.CreateCallCount())
+	}
+}
+
+func TestSpireServerEgressPolicy_AllowAll(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+	allowAll := networkPolicyFromAsset(utils.SpireServerNetworkPolicyEgressAllowAllAssetName, nil)
+	if len(allowAll.Spec.Egress) != 1 {
+		t.Fatal("expected spire-server egress allow-all policy with one egress rule")
+	}
+}
+
 func TestManagedNetworkPolicyEnabled(t *testing.T) {
 	if !utils.ManagedNetworkPolicyEnabled("") {
 		t.Fatal("empty should default to managed")
