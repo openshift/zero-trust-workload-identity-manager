@@ -15,6 +15,7 @@ import (
 
 var spireServerBaselineNetworkPolicyAssets = []string{
 	utils.SpireServerNetworkPolicyIngressAssetName,
+	utils.SpireServerNetworkPolicyEgressAllowAllAssetName,
 }
 
 func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, createOnlyMode bool) error {

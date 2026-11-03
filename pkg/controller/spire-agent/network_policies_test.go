@@ -101,27 +101,49 @@ func staleAgentIngressNetworkPolicy(agent *v1alpha1.SpireAgent) *networkingv1.Ne
 	return stale
 }
 
+func currentAgentBaselineNetworkPolicy(t *testing.T, reconciler *SpireAgentReconciler, agent *v1alpha1.SpireAgent, assetIndex int) *networkingv1.NetworkPolicy {
+	t.Helper()
+	desired := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[assetIndex], agent.Spec.Labels)
+	existing := desired.DeepCopy()
+	existing.ResourceVersion = "99"
+	if err := controllerutil.SetControllerReference(agent, existing, reconciler.scheme); err != nil {
+		t.Fatalf("SetControllerReference: %v", err)
+	}
+	return existing
+}
+
 func TestReconcileNetworkPolicies_UpdatesStalePolicy(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 
 	agent := &v1alpha1.SpireAgent{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "SpireAgent"},
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec:       v1alpha1.SpireAgentSpec{ManagedNetworkPolicy: "true"},
 	}
 	stale := staleAgentIngressNetworkPolicy(agent)
 
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+	fc.UpdateReturns(nil)
+
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	ingressName := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels).Name
+	egressCurrent := currentAgentBaselineNetworkPolicy(t, reconciler, agent, 1)
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		*np = *stale
-		return nil
+		switch key.Name {
+		case ingressName:
+			*np = *stale
+			return nil
+		case egressCurrent.Name:
+			*np = *egressCurrent
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
 	}
-	fc.UpdateReturns(nil)
-
-	reconciler := newNetworkPolicyTestReconciler(t, fc)
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
@@ -139,6 +161,7 @@ func TestReconcileNetworkPolicies_RepairsMissingOwnerReference(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 
 	agent := &v1alpha1.SpireAgent{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "SpireAgent"},
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-agent"},
 		Spec:       v1alpha1.SpireAgentSpec{ManagedNetworkPolicy: "true"},
 	}
@@ -148,20 +171,26 @@ func TestReconcileNetworkPolicies_RepairsMissingOwnerReference(t *testing.T) {
 	existing.OwnerReferences = nil
 
 	fc := &fakes.FakeCustomCtrlClient{}
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	egressCurrent := currentAgentBaselineNetworkPolicy(t, reconciler, agent, 1)
 	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		if key.Name != desired.Name {
+		switch key.Name {
+		case desired.Name:
+			*np = *existing
+			return nil
+		case egressCurrent.Name:
+			*np = *egressCurrent
+			return nil
+		default:
 			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
 		}
-		*np = *existing
-		return nil
 	}
 	fc.UpdateReturns(nil)
 
-	reconciler := newNetworkPolicyTestReconciler(t, fc)
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
@@ -180,16 +209,25 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	stale := staleAgentIngressNetworkPolicy(agent)
 
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	ingressName := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels).Name
+	egressCurrent := currentAgentBaselineNetworkPolicy(t, reconciler, agent, 1)
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		*np = *stale
-		return nil
+		switch key.Name {
+		case ingressName:
+			*np = *stale
+			return nil
+		case egressCurrent.Name:
+			*np = *egressCurrent
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
 	}
-
-	reconciler := newNetworkPolicyTestReconciler(t, fc)
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, true); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
@@ -218,16 +256,26 @@ func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing
 	stale := staleAgentIngressNetworkPolicy(agent)
 
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	ingressName := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels).Name
+	egressCurrent := currentAgentBaselineNetworkPolicy(t, reconciler, agent, 1)
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		*np = *stale
-		return nil
+		switch key.Name {
+		case ingressName:
+			*np = *stale
+			return nil
+		case egressCurrent.Name:
+			*np = *egressCurrent
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
 	}
 
-	reconciler := newNetworkPolicyTestReconciler(t, fc)
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, true); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
@@ -244,24 +292,26 @@ func TestReconcileNetworkPolicies_NoOpDoesNotRecordLastApplied(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec:       v1alpha1.SpireAgentSpec{ManagedNetworkPolicy: "true"},
 	}
-	reconciler := newNetworkPolicyTestReconciler(t, &fakes.FakeCustomCtrlClient{})
-	desired := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels)
-	existing := desired.DeepCopy()
-	existing.ResourceVersion = "1"
-	if err := controllerutil.SetControllerReference(agent, existing, reconciler.scheme); err != nil {
-		t.Fatalf("SetControllerReference: %v", err)
-	}
-
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	ingressCurrent := currentAgentBaselineNetworkPolicy(t, reconciler, agent, 0)
+	egressCurrent := currentAgentBaselineNetworkPolicy(t, reconciler, agent, 1)
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
 		np, ok := obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return fmt.Errorf("unexpected type %T", obj)
 		}
-		*np = *existing
-		return nil
+		switch key.Name {
+		case ingressCurrent.Name:
+			*np = *ingressCurrent
+			return nil
+		case egressCurrent.Name:
+			*np = *egressCurrent
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
 	}
-	reconciler.ctrlClient = fc
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
