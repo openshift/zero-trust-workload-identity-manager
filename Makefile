@@ -3,7 +3,7 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 1.2.0
+VERSION ?= 1.1.0
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -129,7 +129,19 @@ test: manifests generate fmt vet envtest ## Run tests.
 E2E_TIMEOUT ?= 45m
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
-	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout $(E2E_TIMEOUT)
+	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout $(E2E_TIMEOUT) \
+		-ginkgo.label-filter='!tls'
+
+# TLS profile suite env vars:
+#   TLS_SCANNER_IMAGE  - required; tls-scanner container image
+#                        e.g. registry.ci.openshift.org/tls-scanner/tls-scanner:tls-scanner-tool
+#   SCAN_LIMIT_IPS     - optional; cap tls-scanner endpoint count (e.g. 50)
+#   E2E_TIMEOUT        - optional; override go test -timeout for default e2e (default 45m)
+.PHONY: test-e2e-tls  # On-demand full TLS profile churn + tls-scanner (operands must already be Ready).
+test-e2e-tls:
+	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout 2h50m \
+		-ginkgo.fail-fast \
+		-ginkgo.label-filter=tls
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
