@@ -48,6 +48,7 @@ const (
 	RBACAvailable                    = "RBACAvailable"
 	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
 	RouteAvailable                   = "RouteAvailable"
+	GRPCEndpointAvailable            = "GRPCEndpointAvailable"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
@@ -185,6 +186,11 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// reconcile Route if enabled
 	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile gRPC endpoint Route if configured
+	if err := r.reconcileGRPCEndpoint(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 
