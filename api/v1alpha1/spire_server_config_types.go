@@ -108,6 +108,14 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Optional
 	Federation *FederationConfig `json:"federation,omitempty"`
 
+	// managedRoute exposes the SPIRE server's gRPC port externally through
+	// an operator-managed passthrough Route. "false" leaves exposure to the administrator.
+	// This is distinct from spec.federation.managedRoute, which controls the federation bundle Route.
+	// +kubebuilder:default:="false"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedRoute string `json:"managedRoute,omitempty"`
+
 	// upstreamAuthority configures an external PKI to sign the SPIRE intermediate CA.
 	// When absent, SPIRE uses a self-signed CA.
 	// +kubebuilder:validation:Optional

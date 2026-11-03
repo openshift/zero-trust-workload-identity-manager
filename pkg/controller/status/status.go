@@ -25,26 +25,35 @@ type Condition struct {
 
 // Manager handles status updates for operand resources
 type Manager struct {
-	customClient customClient.CustomCtrlClient
-	conditions   map[string]Condition
+	customClient      customClient.CustomCtrlClient
+	conditions        map[string]Condition
+	removedConditions map[string]struct{}
 }
 
 // NewManager creates a new status manager
 func NewManager(customClient customClient.CustomCtrlClient) *Manager {
 	return &Manager{
-		customClient: customClient,
-		conditions:   make(map[string]Condition),
+		customClient:      customClient,
+		conditions:        make(map[string]Condition),
+		removedConditions: make(map[string]struct{}),
 	}
 }
 
 // AddCondition adds or updates a condition
 func (m *Manager) AddCondition(conditionType, reason, message string, status metav1.ConditionStatus) {
+	delete(m.removedConditions, conditionType)
 	m.conditions[conditionType] = Condition{
 		Type:    conditionType,
 		Status:  status,
 		Reason:  reason,
 		Message: message,
 	}
+}
+
+// RemoveCondition marks a condition to be removed from the resource status on apply.
+func (m *Manager) RemoveCondition(conditionType string) {
+	delete(m.conditions, conditionType)
+	m.removedConditions[conditionType] = struct{}{}
 }
 
 // SetReadyCondition sets the Ready condition based on all other conditions
@@ -62,6 +71,7 @@ func (m *Manager) SetReadyCondition() {
 		"StatefulSetNotReady": true,
 		"DaemonSetNotReady":   true,
 		"DeploymentNotReady":  true,
+		"RouteNotAdmitted":      true,
 	}
 
 	for condType, cond := range m.conditions {
@@ -127,6 +137,10 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 			LastTransitionTime: metav1.Now(),
 		}
 		apimeta.SetStatusCondition(&status.Conditions, newCondition)
+	}
+
+	for conditionType := range m.removedConditions {
+		apimeta.RemoveStatusCondition(&status.Conditions, conditionType)
 	}
 
 	// Only update if status has changed

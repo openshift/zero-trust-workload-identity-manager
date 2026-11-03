@@ -2,19 +2,27 @@ package spire_server
 
 import (
 	"context"
+	"fmt"
 
 	routev1 "github.com/openshift/api/route/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+)
+
+const (
+	grpcEndpointRouteName  = "spire-server-grpc"
+	spireServerServiceName = "spire-server"
 )
 
 // generateFederationRoute creates an OpenShift Route resource for the SPIRE federation endpoint
@@ -83,9 +91,70 @@ func generateFederationRoute(server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroT
 	return route
 }
 
-// checkFederationRouteConflict returns true if desired & current routes have conflicts
-func checkFederationRouteConflict(current, desired *routev1.Route) bool {
+// generateGRPCEndpointRoute creates an OpenShift Route resource for the SPIRE gRPC endpoint.
+func generateGRPCEndpointRoute(server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) *routev1.Route {
+	labels := utils.SpireServerLabels(server.Spec.Labels)
+	grpcHost := grpcEndpointRouteHost(ztwim)
+
+	return &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      grpcEndpointRouteName,
+			Namespace: utils.OperatorNamespace,
+			Labels:    labels,
+		},
+		Spec: routev1.RouteSpec{
+			Host: grpcHost,
+			To: routev1.RouteTargetReference{
+				Kind:   "Service",
+				Name:   spireServerServiceName,
+				Weight: ptr.To(int32(100)),
+			},
+			Port: &routev1.RoutePort{
+				TargetPort: intstr.FromString("grpc"),
+			},
+			TLS: &routev1.TLSConfig{
+				Termination:                   routev1.TLSTerminationPassthrough,
+				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+			},
+			WildcardPolicy: routev1.WildcardPolicyNone,
+		},
+	}
+}
+
+func grpcEndpointRouteHost(ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) string {
+	return fmt.Sprintf("grpc.%s.%s", ztwim.Spec.ClusterName, ztwim.Spec.TrustDomain)
+}
+
+func validateGRPCEndpointRouteHost(host string) []string {
+	return validation.IsDNS1123Subdomain(host)
+}
+
+// routeNeedsUpdate returns true if desired and current routes differ in spec or labels.
+func routeNeedsUpdate(current, desired *routev1.Route) bool {
 	return !equality.Semantic.DeepEqual(current.Spec, desired.Spec) || !equality.Semantic.DeepEqual(current.Labels, desired.Labels)
+}
+
+func routeAdmitted(route *routev1.Route) bool {
+	for _, ingress := range route.Status.Ingress {
+		for _, condition := range ingress.Conditions {
+			if condition.Type == routev1.RouteAdmitted && condition.Status == corev1.ConditionTrue {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func setManagedGRPCRouteStatusFromRoute(route *routev1.Route, statusMgr *status.Manager) {
+	if routeAdmitted(route) {
+		statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteAdmitted",
+			"gRPC endpoint route admitted",
+			metav1.ConditionTrue)
+		return
+	}
+	statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteNotAdmitted",
+		"gRPC endpoint route is not admitted",
+		metav1.ConditionFalse)
 }
 
 // reconcileRoute creates/updates route when managedRoute is enabled else sets status to disabled
@@ -131,7 +200,7 @@ func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1al
 					metav1.ConditionFalse)
 				return err
 			}
-		} else if checkFederationRouteConflict(&existingRoute, route) {
+		} else if routeNeedsUpdate(&existingRoute, route) {
 			if createOnlyMode {
 				r.log.Info("Skipping federation route update due to create-only mode")
 			} else {
@@ -170,5 +239,87 @@ func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1al
 			metav1.ConditionFalse)
 	}
 
+	return nil
+}
+
+// reconcileManagedGRPCRoute creates or updates the gRPC endpoint Route when spec.managedRoute is "true".
+func (r *SpireServerReconciler) reconcileManagedGRPCRoute(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnlyMode bool) error {
+	if !utils.StringToBool(server.Spec.ManagedRoute) {
+		statusMgr.RemoveCondition(ManagedGRPCRouteAvailable)
+		return nil
+	}
+
+	grpcHost := grpcEndpointRouteHost(ztwim)
+	if errs := validateGRPCEndpointRouteHost(grpcHost); len(errs) > 0 {
+		statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteCreationFailed",
+			fmt.Sprintf("gRPC endpoint route host %q is invalid: %s", grpcHost, errs[0]),
+			metav1.ConditionFalse)
+		return nil
+	}
+
+	route := generateGRPCEndpointRoute(server, ztwim)
+
+	var existingRoute routev1.Route
+	err := r.ctrlClient.Get(ctx, types.NamespacedName{
+		Name:      route.Name,
+		Namespace: route.Namespace,
+	}, &existingRoute)
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			if err = r.ctrlClient.Create(ctx, route); err != nil {
+				if conflictErr := utils.HandleCreateConflict(err, route, r.log, statusMgr, ManagedGRPCRouteAvailable); conflictErr != nil {
+					return conflictErr
+				}
+				r.log.Error(err, "Failed to create gRPC endpoint route")
+				statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteCreationFailed",
+					err.Error(),
+					metav1.ConditionFalse)
+				return err
+			}
+
+			setManagedGRPCRouteStatusFromRoute(route, statusMgr)
+			r.log.Info("Created gRPC endpoint route", "Namespace", route.Namespace, "Name", route.Name)
+			return nil
+		}
+
+		r.log.Error(err, "Failed to get existing gRPC endpoint route")
+		statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteCreationFailed",
+			err.Error(),
+			metav1.ConditionFalse)
+		return err
+	}
+
+	if routeNeedsUpdate(&existingRoute, route) {
+		if createOnlyMode {
+			r.log.Info("Skipping gRPC endpoint route update due to create-only mode")
+			setManagedGRPCRouteStatusFromRoute(&existingRoute, statusMgr)
+			return nil
+		}
+
+		if err := utils.CheckResourceConflict(&existingRoute); err != nil {
+			r.log.Error(err, "gRPC endpoint route resource conflict")
+			statusMgr.AddCondition(ManagedGRPCRouteAvailable, "ResourceConflict",
+				err.Error(),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		r.log.Info("Found drift in gRPC endpoint route, updating route")
+		route.ResourceVersion = existingRoute.ResourceVersion
+		if err = r.ctrlClient.Update(ctx, route); err != nil {
+			statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteCreationFailed",
+				err.Error(),
+				metav1.ConditionFalse)
+			return err
+		}
+
+		existingRoute.Spec = route.Spec
+		existingRoute.Labels = route.Labels
+		setManagedGRPCRouteStatusFromRoute(&existingRoute, statusMgr)
+		r.log.Info("Updated gRPC endpoint route", "Namespace", route.Namespace, "Name", route.Name)
+		return nil
+	}
+
+	setManagedGRPCRouteStatusFromRoute(&existingRoute, statusMgr)
 	return nil
 }
