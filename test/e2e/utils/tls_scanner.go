@@ -69,7 +69,7 @@ func ScanLimitIPs() int {
 
 // EnsureScannerRBAC creates a dedicated ServiceAccount and grants it cluster-admin
 // so the tls-scanner pod can discover and probe endpoints. Idempotent.
-// Registers DeferCleanup to delete the binding after the suite.
+// Registers DeferCleanup to delete the binding and ServiceAccount after the suite.
 func EnsureScannerRBAC(ctx context.Context, clientset kubernetes.Interface) {
 	By(fmt.Sprintf("Ensuring tls-scanner ServiceAccount %s/%s", OperatorNamespace, tlsScannerSAName))
 
@@ -125,10 +125,14 @@ func EnsureScannerRBAC(ctx context.Context, clientset kubernetes.Interface) {
 
 	DeferCleanup(func(cleanupCtx context.Context) {
 		err := clientset.RbacV1().ClusterRoleBindings().Delete(cleanupCtx, tlsScannerCRBName, metav1.DeleteOptions{})
-		if apierrors.IsNotFound(err) {
-			return
+		if err != nil && !apierrors.IsNotFound(err) {
+			Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterRoleBinding %s", tlsScannerCRBName)
 		}
-		Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterRoleBinding %s", tlsScannerCRBName)
+
+		err = clientset.CoreV1().ServiceAccounts(OperatorNamespace).Delete(cleanupCtx, tlsScannerSAName, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			Expect(err).NotTo(HaveOccurred(), "failed to delete ServiceAccount %s/%s", OperatorNamespace, tlsScannerSAName)
+		}
 	})
 
 	fmt.Fprintf(GinkgoWriter, "ClusterRoleBinding %s created/updated for SA %s\n", tlsScannerCRBName, tlsScannerSAName)
