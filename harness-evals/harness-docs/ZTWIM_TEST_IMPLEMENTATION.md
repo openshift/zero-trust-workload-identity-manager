@@ -1,5 +1,9 @@
-# ZTWIM Testing Guide
+# ZTWIM Test Implementation Guide
 
+> **Use this doc when:** writing or running unit/E2E tests in the repo (`pkg/controller/`, `test/e2e/`).
+>
+> **Not this doc:** for ADR-driven test *planning*, see [`ZTWIM_TEST_PLAN_HARNESS.md`](ZTWIM_TEST_PLAN_HARNESS.md).
+>
 > For generic testing practices, see the Platform Testing Guide.
 
 ## Test Architecture
