@@ -88,7 +88,7 @@ type SpireOIDCDiscoveryProviderStatus struct {
 	// conditions holds information about the current state of the SPIRE OIDC discovery provider deployment.
 	ConditionalStatus `json:",inline,omitempty"`
 
-	// networkPolicy holds observed NetworkPolicy reconciliation state when managedNetworkPolicy is enabled.
+	// networkPolicy holds observed NetworkPolicy reconciliation state.
 	// +kubebuilder:validation:Optional
 	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
