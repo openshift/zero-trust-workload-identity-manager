@@ -86,14 +86,14 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 	}
 
 	agent.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
-		ManagementState: v1alpha1.NetworkPolicyManagementManaged,
-		AppliedPolicies: applied,
+		ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+		LastAppliedPolicies: applied,
 	}
 
-	reason := v1alpha1.ReasonNetworkPoliciesUpdated
+	reason := v1alpha1.ReasonNetworkPolicyUpdated
 	message := fmt.Sprintf("Applied %d operator NetworkPolicies", len(applied))
 	if created && !updated {
-		reason = v1alpha1.ReasonNetworkPoliciesCreated
+		reason = v1alpha1.ReasonNetworkPolicyCreated
 		message = fmt.Sprintf("Created %d operator NetworkPolicies", len(applied))
 	} else if updated {
 		message = fmt.Sprintf("Updated operator NetworkPolicies (%d total)", len(applied))

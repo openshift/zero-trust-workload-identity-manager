@@ -53,11 +53,11 @@ const (
 
 // SpireServerReconciler reconciles a SpireServer object
 type SpireServerReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
@@ -68,11 +68,11 @@ func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireServe
 		return nil, err
 	}
 	return &SpireServerReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		scheme:         mgr.GetScheme(),
 		tlsProfileSpec: tlsProfileSpec,
 	}, nil
 }

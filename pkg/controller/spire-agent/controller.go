@@ -49,11 +49,11 @@ const spireAgentDaemonSetSpireAgentConfigHashAnnotationKey = "ztwim.openshift.io
 
 // SpireAgentReconciler reconciles a SpireAgent object
 type SpireAgentReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
@@ -64,11 +64,11 @@ func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireAgent
 		return nil, err
 	}
 	return &SpireAgentReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireAgentControllerName),
+		scheme:         mgr.GetScheme(),
 		tlsProfileSpec: tlsProfileSpec,
 	}, nil
 }
