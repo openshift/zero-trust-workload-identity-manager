@@ -31,11 +31,10 @@ const (
 type NetworkPolicyStatus struct {
 	// managementState reflects whether the operator manages ztwim-sys-* policies for this operand.
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Enum=Managed;Unmanaged
 	ManagementState NetworkPolicyManagementState `json:"managementState,omitempty"`
 
-	// appliedPolicies lists fixed-name NetworkPolicy resources last applied by the operator.
+	// lastAppliedPolicies lists fixed-name NetworkPolicy resources last applied by the operator.
 	// +kubebuilder:validation:Optional
 	// +listType=atomic
-	AppliedPolicies []string `json:"appliedPolicies,omitempty"`
+	LastAppliedPolicies []string `json:"lastAppliedPolicies,omitempty"`
 }
