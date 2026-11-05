@@ -86,8 +86,8 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 	}
 
 	server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
-		ManagementState: v1alpha1.NetworkPolicyManagementManaged,
-		AppliedPolicies: applied,
+		ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+		LastAppliedPolicies: applied,
 	}
 
 	reason := v1alpha1.ReasonNetworkPoliciesUpdated

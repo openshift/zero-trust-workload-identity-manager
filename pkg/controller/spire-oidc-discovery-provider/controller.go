@@ -51,11 +51,11 @@ const (
 
 // SpireOidcDiscoveryProviderReconciler reconciles a SpireOidcDiscoveryProvider object
 type SpireOidcDiscoveryProviderReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
@@ -66,11 +66,11 @@ func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireOidcD
 		return nil, err
 	}
 	return &SpireOidcDiscoveryProviderReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		scheme:         mgr.GetScheme(),
 		tlsProfileSpec: tlsProfileSpec,
 	}, nil
 }

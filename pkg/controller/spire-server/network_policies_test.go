@@ -77,7 +77,7 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	if fc.CreateCallCount() != len(spireServerBaselineNetworkPolicyAssets) {
 		t.Fatalf("expected %d creates, got %d", len(spireServerBaselineNetworkPolicyAssets), fc.CreateCallCount())
 	}
-	if server.Status.NetworkPolicy == nil || len(server.Status.NetworkPolicy.AppliedPolicies) != len(spireServerBaselineNetworkPolicyAssets) {
+	if server.Status.NetworkPolicy == nil || len(server.Status.NetworkPolicy.LastAppliedPolicies) != len(spireServerBaselineNetworkPolicyAssets) {
 		t.Fatalf("unexpected applied policies: %+v", server.Status.NetworkPolicy)
 	}
 }
