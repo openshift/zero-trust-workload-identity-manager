@@ -181,6 +181,15 @@ type CommonConfig struct {
 	// +kubebuilder:validation:MaxProperties=50
 	// +mapType=atomic
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// managedNetworkPolicy controls whether the operator creates and reconciles
+	// operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
+	// "true": The operator manages NetworkPolicies automatically.
+	// "false": Administrators supply and maintain their own NetworkPolicies.
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedNetworkPolicy string `json:"managedNetworkPolicy,omitempty"`
 }
 
 func init() {

@@ -937,7 +937,7 @@ func TestReconcileRoute_UpdateSuccess(t *testing.T) {
 			Name:            "spire-oidc-discovery-provider",
 			Namespace:       utils.GetOperatorNamespace(),
 			ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+			Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 		},
 		Spec: routev1.RouteSpec{
 			Host: "old.example.com", // Different host to trigger update
@@ -984,7 +984,7 @@ func TestReconcileRoute_UpdateError(t *testing.T) {
 			Name:            "spire-oidc-discovery-provider",
 			Namespace:       utils.GetOperatorNamespace(),
 			ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+			Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 		},
 		Spec: routev1.RouteSpec{
 			Host: "old.example.com", // Different host to trigger update
@@ -1029,7 +1029,7 @@ func TestReconcileRoute_CreateOnlyMode(t *testing.T) {
 			Name:            "spire-oidc-discovery-provider",
 			Namespace:       utils.GetOperatorNamespace(),
 			ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+			Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 		},
 		Spec: routev1.RouteSpec{
 			Host: "old.example.com", // Different host to trigger update
