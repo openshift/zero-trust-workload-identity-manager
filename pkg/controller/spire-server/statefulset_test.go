@@ -43,7 +43,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 	controllerConfigHash := "test-controller-hash"
 
 	// Call the function
-	statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash)
+	statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash, "", "")
 
 	// Test basic metadata
 	t.Run("Validates StatefulSet metadata", func(t *testing.T) {
@@ -244,7 +244,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			},
 		}
 
-		customStatefulSet := GenerateSpireServerStatefulSet(configWithPersistence, serverConfigHash, controllerConfigHash)
+		customStatefulSet := GenerateSpireServerStatefulSet(configWithPersistence, serverConfigHash, controllerConfigHash, "", "")
 		pvc := customStatefulSet.Spec.VolumeClaimTemplates[0]
 
 		// Check AccessMode
@@ -278,7 +278,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			},
 		}
 
-		rwxStatefulSet := GenerateSpireServerStatefulSet(configWithRWX, serverConfigHash, controllerConfigHash)
+		rwxStatefulSet := GenerateSpireServerStatefulSet(configWithRWX, serverConfigHash, controllerConfigHash, "", "")
 		pvc := rwxStatefulSet.Spec.VolumeClaimTemplates[0]
 
 		if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteMany {
@@ -297,7 +297,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			},
 		}
 
-		storageClassStatefulSet := GenerateSpireServerStatefulSet(configWithCustomStorageClass, serverConfigHash, controllerConfigHash)
+		storageClassStatefulSet := GenerateSpireServerStatefulSet(configWithCustomStorageClass, serverConfigHash, controllerConfigHash, "", "")
 		pvc := storageClassStatefulSet.Spec.VolumeClaimTemplates[0]
 
 		// Verify AccessMode is set correctly
@@ -327,7 +327,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			},
 		}
 
-		statefulSet := GenerateSpireServerStatefulSet(configWithNilLabels, serverConfigHash, controllerConfigHash)
+		statefulSet := GenerateSpireServerStatefulSet(configWithNilLabels, serverConfigHash, controllerConfigHash, "", "")
 
 		// Verify we have all standard labels
 		expectedLabels := utils.SpireServerLabels(nil)
@@ -351,7 +351,7 @@ func TestGenerateSpireServerStatefulSet(t *testing.T) {
 			},
 		}
 
-		statefulSet := GenerateSpireServerStatefulSet(configWithEmptyLabels, serverConfigHash, controllerConfigHash)
+		statefulSet := GenerateSpireServerStatefulSet(configWithEmptyLabels, serverConfigHash, controllerConfigHash, "", "")
 
 		// Verify we have all standard labels
 		expectedLabels := utils.SpireServerLabels(nil)
@@ -398,7 +398,7 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 			},
 		}
 
-		statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash)
+		statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash, "", "")
 		podSpec := statefulSet.Spec.Template.Spec
 
 		// Check that we have 6 volumes (5 base + 1 TLS)
@@ -471,7 +471,7 @@ func TestGenerateSpireServerStatefulSetWithTLSSecret(t *testing.T) {
 			},
 		}
 
-		statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash)
+		statefulSet := GenerateSpireServerStatefulSet(config, serverConfigHash, controllerConfigHash, "", "")
 		podSpec := statefulSet.Spec.Template.Spec
 
 		// Should have 5 volumes (no TLS volume)
@@ -813,7 +813,7 @@ func TestGenerateSpireServerStatefulSetWithFederation(t *testing.T) {
 				Federation: tt.federation,
 			}
 
-			sts := GenerateSpireServerStatefulSet(config, "test-hash", "test-hash")
+			sts := GenerateSpireServerStatefulSet(config, "test-hash", "test-hash", "", "")
 
 			// Check volume count
 			if len(sts.Spec.Template.Spec.Volumes) != tt.expectedVolumeCount {
@@ -947,7 +947,7 @@ func TestReconcileStatefulSet(t *testing.T) {
 			fakeClient.UpdateReturns(tt.updateError)
 
 			statusMgr := status.NewManager(fakeClient)
-			err := reconciler.reconcileStatefulSet(context.Background(), server, statusMgr, tt.createOnlyMode, "server-hash", "controller-hash")
+			err := reconciler.reconcileStatefulSet(context.Background(), server, statusMgr, tt.createOnlyMode, "server-hash", "controller-hash", "", "")
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -985,7 +985,7 @@ func TestGenerateStatefulSet_VaultK8sAuth(t *testing.T) {
 		},
 	}
 
-	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2", "", "")
 
 	var foundVolume bool
 	for _, vol := range sts.Spec.Template.Spec.Volumes {
@@ -1057,7 +1057,7 @@ func TestGenerateStatefulSet_VaultCACert(t *testing.T) {
 		},
 	}
 
-	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2", "", "")
 
 	var foundVolume bool
 	for _, vol := range sts.Spec.Template.Spec.Volumes {
@@ -1110,7 +1110,7 @@ func TestGenerateStatefulSet_CertManager(t *testing.T) {
 		},
 	}
 
-	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2", "", "")
 
 	for _, vol := range sts.Spec.Template.Spec.Volumes {
 		if vol.Name == "vault-token" || vol.Name == "upstream-ca" {
@@ -1127,11 +1127,73 @@ func TestGenerateStatefulSet_NoUpstreamAuthority(t *testing.T) {
 		},
 	}
 
-	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2")
+	sts := GenerateSpireServerStatefulSet(config, "hash1", "hash2", "", "")
 
 	for _, vol := range sts.Spec.Template.Spec.Volumes {
 		if vol.Name == "vault-token" || vol.Name == "upstream-ca" {
 			t.Errorf("Unexpected volume %q when no upstream authority configured", vol.Name)
 		}
+	}
+}
+
+func TestUpstreamSidecarSecurityAndVolumes(t *testing.T) {
+	t.Setenv("RELATED_IMAGE_SPIRE_AGENT", "example.org/spire-agent:test")
+	server := upstreamTestServer()
+	sts := GenerateSpireServerStatefulSet(&server.Spec, "server", "manager", "upstream", "")
+	pod := sts.Spec.Template.Spec
+	if pod.ServiceAccountName != "spire-server" || sts.Spec.Template.Annotations[securityv1.RequiredSCCAnnotation] != utils.RestrictedV2SCCName {
+		t.Fatal("changed service account or SCC")
+	}
+	if pod.ShareProcessNamespace == nil || !*pod.ShareProcessNamespace || pod.HostPID || pod.HostNetwork {
+		t.Fatal("invalid process/network namespace")
+	}
+	if len(pod.Containers) != 3 {
+		t.Fatalf("got %d containers", len(pod.Containers))
+	}
+	agent := pod.Containers[2]
+	if agent.Name != upstreamAgentName || agent.Image != "example.org/spire-agent:test" {
+		t.Fatal("incorrect sidecar image/name")
+	}
+	sc := agent.SecurityContext
+	if sc == nil || !ptr.Deref(sc.ReadOnlyRootFilesystem, false) || ptr.Deref(sc.AllowPrivilegeEscalation, true) || !ptr.Deref(sc.RunAsNonRoot, false) || sc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault || !reflect.DeepEqual(sc.Capabilities.Drop, []corev1.Capability{"ALL"}) || len(sc.Capabilities.Add) != 0 || ptr.Deref(sc.Privileged, false) {
+		t.Fatalf("unsafe security context: %+v", sc)
+	}
+	if sc.RunAsUser != nil || sc.RunAsGroup != nil {
+		t.Fatal("must inherit SCC-assigned UID/GID")
+	}
+	if agent.ReadinessProbe.HTTPGet.Port.IntVal != upstreamAgentHealthPort || agent.LivenessProbe.HTTPGet.Port.IntVal != upstreamAgentHealthPort {
+		t.Fatal("probe/config port mismatch")
+	}
+	volumes := map[string]corev1.Volume{}
+	for _, volume := range pod.Volumes {
+		volumes[volume.Name] = volume
+		if volume.HostPath != nil {
+			t.Fatal("unexpected hostPath")
+		}
+	}
+	token := volumes["upstream-token"].Projected.Sources[0].ServiceAccountToken
+	if token.Audience != "spire-server" || *token.ExpirationSeconds != 600 || token.Path != upstreamAgentTokenName {
+		t.Fatal("incorrect projected token")
+	}
+	if volumes["upstream-bundle"].Secret.SecretName != "upstream-bundle" {
+		t.Fatal("incorrect trust Secret")
+	}
+	for _, mount := range agent.VolumeMounts {
+		switch mount.Name {
+		case "upstream-config", "upstream-bundle", "upstream-token":
+			if !mount.ReadOnly {
+				t.Errorf("%s must be read-only", mount.Name)
+			}
+		default:
+			if mount.ReadOnly || volumes[mount.Name].EmptyDir == nil {
+				t.Errorf("%s must be writable emptyDir", mount.Name)
+			}
+		}
+	}
+	if len(sts.Spec.VolumeClaimTemplates) != 1 {
+		t.Fatal("agent must not add PVCs")
+	}
+	if sts.Spec.Template.Annotations[upstreamAgentConfigHashAnnotation] != "upstream" {
+		t.Fatal("missing rollout hash")
 	}
 }

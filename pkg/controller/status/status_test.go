@@ -9,7 +9,10 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	appsv1 "k8s.io/api/apps/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -394,7 +397,7 @@ func TestApplyStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := &fakes.FakeCustomCtrlClient{}
-			fakeClient.StatusUpdateWithRetryReturns(tt.updateError)
+			fakeClient.StatusUpdateReturns(tt.updateError)
 
 			mgr := NewManager(fakeClient)
 			mgr.AddCondition("TestCondition", "TestReason", "Test message", metav1.ConditionTrue)
@@ -797,5 +800,73 @@ func TestGetStatefulSetStatusMessage_AllScenarios(t *testing.T) {
 				t.Errorf("Expected message to contain '%s', got '%s'", tt.expectedContain, msg)
 			}
 		})
+	}
+}
+
+func TestConditionRemovalRetriesPreserveConcurrentConditions(t *testing.T) {
+	fake := &fakes.FakeCustomCtrlClient{}
+	server := &v1alpha1.SpireServer{ObjectMeta: metav1.ObjectMeta{Name: "cluster", ResourceVersion: "1", Generation: 3}}
+	server.Status.Conditions = []metav1.Condition{{Type: "UpstreamAgentAvailable", Status: metav1.ConditionFalse, Reason: "TrustBundleMissing"}}
+	fresh := server.DeepCopy()
+	fresh.ResourceVersion, fresh.Generation = "2", 4
+	fresh.Status.Conditions = append(fresh.Status.Conditions, metav1.Condition{Type: "OtherWriter", Status: metav1.ConditionTrue, Reason: "Preserved"})
+	fake.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+		*obj.(*v1alpha1.SpireServer) = *fresh.DeepCopy()
+		return nil
+	}
+	writes := 0
+	fake.StatusUpdateStub = func(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+		writes++
+		if writes == 1 {
+			return kerrors.NewConflict(schema.GroupResource{Group: "operator.openshift.io", Resource: "spireservers"}, "cluster", errors.New("stale"))
+		}
+		if obj.GetResourceVersion() != "2" {
+			t.Fatal("retry used a stale resourceVersion")
+		}
+		return nil
+	}
+	manager := NewManager(fake)
+	manager.RemoveCondition("UpstreamAgentAvailable")
+	if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 2 || fake.GetCallCount() != 1 {
+		t.Fatal("expected fresh read on conflict")
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, "UpstreamAgentAvailable") != nil {
+		t.Fatal("obsolete condition remains")
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, "OtherWriter") == nil {
+		t.Fatal("concurrent condition lost")
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.Ready).ObservedGeneration != 3 {
+		t.Fatal("claimed observation of a generation never reconciled")
+	}
+	// A new reconciliation at the current generation writes once, then settles.
+	next := NewManager(fake)
+	next.RemoveCondition("UpstreamAgentAvailable")
+	for i := 0; i < 2; i++ {
+		if err := next.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if writes != 3 {
+		t.Fatalf("repeated removal must be a no-op, got %d writes", writes)
+	}
+}
+
+func TestReadyMessageIsStable(t *testing.T) {
+	fake := &fakes.FakeCustomCtrlClient{}
+	server := &v1alpha1.SpireServer{}
+	for i := 0; i < 20; i++ {
+		manager := NewManager(fake)
+		manager.AddCondition("B", "Failure", "second", metav1.ConditionFalse)
+		manager.AddCondition("A", "Failure", "first", metav1.ConditionFalse)
+		if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fake.StatusUpdateCallCount() != 1 {
+		t.Fatal("condition iteration causes status write churn")
 	}
 }
