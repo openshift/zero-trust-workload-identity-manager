@@ -28,6 +28,14 @@ spec:
     size: "2Gi"
     accessMode: ReadWriteOnce
     storageClass: ""
+  # gRPC endpoint configuration (optional)
+  # Exposes the upstream SPIRE server gRPC API through a passthrough Route at
+  # grpc.<clusterName>.<trustDomain>.
+  grpcEndpoint:
+    # ManagedRoute enables automatic Route creation for the gRPC endpoint.
+    # "true": automatic OpenShift passthrough Route (default)
+    # "false": manual configuration via custom routes/ingress
+    managedRoute: "true"
   # Federation configuration (optional)
   # This example shows how to configure SPIRE Server for federation
   federation:

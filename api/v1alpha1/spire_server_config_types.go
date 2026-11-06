@@ -108,12 +108,28 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Optional
 	Federation *FederationConfig `json:"federation,omitempty"`
 
+	// grpcEndpoint exposes the SPIRE server's gRPC API.
+	// When absent, no externally reachable gRPC endpoint is created.
+	// +kubebuilder:validation:Optional
+	GRPCEndpoint *GRPCEndpointConfig `json:"grpcEndpoint,omitempty"`
+
 	// upstreamAuthority configures an external PKI to sign the SPIRE intermediate CA.
 	// When absent, SPIRE uses a self-signed CA.
 	// +kubebuilder:validation:Optional
 	UpstreamAuthority *UpstreamAuthorityConfig `json:"upstreamAuthority,omitempty"`
 
 	CommonConfig `json:",inline"`
+}
+
+// GRPCEndpointConfig defines upstream SPIRE server gRPC endpoint exposure.
+type GRPCEndpointConfig struct {
+	// managedRoute enables or disables automatic Route creation for the gRPC endpoint.
+	// "true": Allows automatic exposure of the gRPC endpoint through a managed OpenShift Route.
+	// "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress.
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedRoute string `json:"managedRoute,omitempty"`
 }
 
 // FederationConfig defines federation bundle endpoint and federated trust domains

@@ -1240,6 +1240,22 @@ spec:
                 required:
                 - bundleEndpoint
                 type: object
+              grpcEndpoint:
+                description: |-
+                  grpcEndpoint exposes the SPIRE server's gRPC API.
+                  When absent, no externally reachable gRPC endpoint is created.
+                properties:
+                  managedRoute:
+                    default: "true"
+                    description: |-
+                      managedRoute enables or disables automatic Route creation for the gRPC endpoint.
+                      "true": Allows automatic exposure of the gRPC endpoint through a managed OpenShift Route.
+                      "false": Allows administrators to manually configure exposure using custom OpenShift Routes or ingress.
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                type: object
               jwtIssuer:
                 description: |-
                   jwtIssuer is the JWT issuer url.
