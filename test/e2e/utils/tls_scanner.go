@@ -116,11 +116,18 @@ func EnsureScannerRBAC(ctx context.Context, clientset kubernetes.Interface) {
 		Expect(err).NotTo(HaveOccurred(), "failed to create ClusterRoleBinding for tls-scanner")
 	} else {
 		Expect(err).NotTo(HaveOccurred(), "failed to get ClusterRoleBinding for tls-scanner")
-		existing.RoleRef = crb.RoleRef
-		existing.Subjects = crb.Subjects
-		existing.Labels = crb.Labels
-		_, err = clientset.RbacV1().ClusterRoleBindings().Update(ctx, existing, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred(), "failed to update ClusterRoleBinding for tls-scanner")
+		// roleRef is immutable on ClusterRoleBinding; recreate if it does not match.
+		if existing.RoleRef != crb.RoleRef {
+			err = clientset.RbacV1().ClusterRoleBindings().Delete(ctx, tlsScannerCRBName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterRoleBinding %s with mismatched roleRef", tlsScannerCRBName)
+			_, err = clientset.RbacV1().ClusterRoleBindings().Create(ctx, crb, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to recreate ClusterRoleBinding for tls-scanner")
+		} else {
+			existing.Subjects = crb.Subjects
+			existing.Labels = crb.Labels
+			_, err = clientset.RbacV1().ClusterRoleBindings().Update(ctx, existing, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to update ClusterRoleBinding for tls-scanner")
+		}
 	}
 
 	DeferCleanup(func(cleanupCtx context.Context) {

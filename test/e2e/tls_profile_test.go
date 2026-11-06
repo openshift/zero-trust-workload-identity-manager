@@ -91,8 +91,6 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 	})
 
 	for _, tc := range tlsProfileCases {
-		tc := tc
-
 		It(tc.name+": applies profile and validates ConfigMaps and tls-scanner compliance", func() {
 			rolloutCtx, cancel := context.WithTimeout(context.Background(), utils.TLSProfileApplyTimeout)
 			defer cancel()
@@ -158,8 +156,6 @@ var _ = Describe("TLS Profile Compliance", Label("tls"), Ordered, func() {
 		}
 
 		for _, ic := range invalidCases {
-			ic := ic
-
 			It(ic.name, func() {
 				ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultTimeout)
 				defer cancel()
