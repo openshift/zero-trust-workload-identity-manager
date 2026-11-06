@@ -104,8 +104,8 @@ type WorkloadAttestors struct {
 
 // WorkloadAttestorsVerification configures kubelet TLS certificate verification.
 // +kubebuilder:validation:Optional
-// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertBasePath) && self.hostCertBasePath != '')",message="hostCertBasePath is required when type is 'hostCert'"
-// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertFileName) && self.hostCertFileName != '')",message="hostCertFileName is required when type is 'hostCert'"
+// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertBasePath) && self.hostCertBasePath != ”)",message="hostCertBasePath is required when type is 'hostCert'"
+// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertFileName) && self.hostCertFileName != ”)",message="hostCertFileName is required when type is 'hostCert'"
 type WorkloadAttestorsVerification struct {
 	// type specifies the kubelet certificate verification mode.
 	// - skip: Skip TLS verification entirely.
@@ -138,6 +138,11 @@ type WorkloadAttestorsVerification struct {
 type SpireAgentStatus struct {
 	// conditions holds information about the current state of the SPIRE agent deployment.
 	ConditionalStatus `json:",inline,omitempty"`
+
+	// networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
+	// Populated when spec.managedNetworkPolicy is "true" or unset; omitted when unmanaged ("false").
+	// +kubebuilder:validation:Optional
+	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
 
 // GetConditionalStatus returns the conditional status of the SpireAgent
