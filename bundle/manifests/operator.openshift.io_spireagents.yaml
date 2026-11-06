@@ -1280,8 +1280,9 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               networkPolicy:
-                description: networkPolicy holds observed NetworkPolicy reconciliation
-                  state.
+                description: |-
+                  networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
+                  Populated when spec.managedNetworkPolicy is "true" or unset; omitted when unmanaged ("false").
                 properties:
                   lastAppliedPolicies:
                     description: lastAppliedPolicies lists fixed-name NetworkPolicy
@@ -1291,8 +1292,9 @@ spec:
                     type: array
                     x-kubernetes-list-type: atomic
                   managementState:
-                    description: managementState reflects whether the operator manages
-                      ztwim-sys-* policies for this operand.
+                    description: |-
+                      managementState reflects whether the operator manages ztwim-sys-* policies for this operand.
+                      Managed corresponds to spec.managedNetworkPolicy "true" (or unset/default); Unmanaged corresponds to "false".
                     enum:
                     - Managed
                     - Unmanaged

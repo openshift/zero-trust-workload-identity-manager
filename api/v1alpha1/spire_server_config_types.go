@@ -479,7 +479,8 @@ type SpireServerStatus struct {
 	// conditions holds information about the current state of the SPIRE server resources.
 	ConditionalStatus `json:",inline,omitempty"`
 
-	// networkPolicy holds observed NetworkPolicy reconciliation state.
+	// networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
+	// Populated when spec.managedNetworkPolicy is "true" or unset; omitted when unmanaged ("false").
 	// +kubebuilder:validation:Optional
 	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
