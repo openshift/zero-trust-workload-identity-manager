@@ -230,7 +230,7 @@ type ServingCertConfig struct {
 }
 
 // FederatesWithConfig represents a remote trust domain to federate with
-// +kubebuilder:validation:XValidation:rule="self.bundleEndpointProfile == 'https_spiffe' ? has(self.endpointSpiffeId) && self.endpointSpiffeId != '' : true",message="endpointSpiffeId is required when bundleEndpointProfile is https_spiffe"
+// +kubebuilder:validation:XValidation:rule="self.bundleEndpointProfile == 'https_spiffe' ? has(self.endpointSpiffeId) && self.endpointSpiffeId != ” : true",message="endpointSpiffeId is required when bundleEndpointProfile is https_spiffe"
 type FederatesWithConfig struct {
 	// trustDomain is the federated trust domain name
 	// +kubebuilder:validation:Required
@@ -479,7 +479,8 @@ type SpireServerStatus struct {
 	// conditions holds information about the current state of the SPIRE server resources.
 	ConditionalStatus `json:",inline,omitempty"`
 
-	// networkPolicy holds observed NetworkPolicy reconciliation state.
+	// networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
+	// Populated when spec.managedNetworkPolicy is "true" or unset; omitted when unmanaged ("false").
 	// +kubebuilder:validation:Optional
 	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
