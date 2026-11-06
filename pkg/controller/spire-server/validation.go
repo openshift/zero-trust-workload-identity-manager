@@ -1,10 +1,15 @@
 package spire_server
 
 import (
+	"bytes"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -164,17 +169,36 @@ func validateUpstreamAuthority(ua *v1alpha1.UpstreamAuthorityConfig) error {
 		return nil
 	}
 
-	cmSet := ua.CertManager != nil
-	vaultSet := ua.Vault != nil
-
-	if cmSet == vaultSet {
-		return fmt.Errorf("exactly one of certManager or vault must be set")
+	count := 0
+	for _, configured := range []bool{ua.CertManager != nil, ua.Vault != nil, ua.Spire != nil} {
+		if configured {
+			count++
+		}
 	}
-
-	if cmSet {
+	if count != 1 {
+		return fmt.Errorf("exactly one of certManager, vault or spire must be set")
+	}
+	if ua.CertManager != nil {
 		return validateUpstreamAuthorityCertManager(ua.CertManager)
 	}
-	return validateUpstreamAuthorityVault(ua.Vault)
+	if ua.Vault != nil {
+		return validateUpstreamAuthorityVault(ua.Vault)
+	}
+	if errs := validation.IsDNS1123Subdomain(ua.Spire.ServerAddress); len(errs) != 0 {
+		return fmt.Errorf("spire.serverAddress must be a DNS hostname")
+	}
+	for _, label := range strings.Split(ua.Spire.ServerAddress, ".") {
+		if len(label) > 63 {
+			return fmt.Errorf("spire.serverAddress labels must not exceed 63 characters")
+		}
+	}
+	if ua.Spire.ServerPort < 0 || ua.Spire.ServerPort > 65535 {
+		return fmt.Errorf("spire.serverPort must be between 1 and 65535")
+	}
+	if errs := validation.IsDNS1123Subdomain(ua.Spire.TrustBundleSecret); len(errs) != 0 {
+		return fmt.Errorf("spire.trustBundleSecret must be a Secret name")
+	}
+	return nil
 }
 
 func validateUpstreamAuthorityCertManager(cm *v1alpha1.UpstreamAuthorityCertManager) error {
@@ -354,5 +378,26 @@ func validateFederatedTrustDomain(fedTrust *v1alpha1.FederatesWithConfig, index 
 		}
 	}
 
+	return nil
+}
+
+func validateUpstreamTrustBundle(bundle []byte) error {
+	remaining := bytes.TrimSpace(bundle)
+	if len(remaining) == 0 {
+		return fmt.Errorf("no certificates found")
+	}
+	for len(remaining) > 0 {
+		if !bytes.HasPrefix(remaining, []byte("-----BEGIN CERTIFICATE-----")) {
+			return fmt.Errorf("expected PEM certificate")
+		}
+		block, rest := pem.Decode(remaining)
+		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			return fmt.Errorf("expected PEM certificate")
+		}
+		if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+			return fmt.Errorf("invalid X.509 certificate")
+		}
+		remaining = bytes.TrimSpace(rest)
+	}
 	return nil
 }

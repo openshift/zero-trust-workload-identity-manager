@@ -28,11 +28,13 @@ const (
 	spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey = "ztwim.openshift.io/spire-controller-manager-config-hash"
 	spireServerHealthPort                                               = "server-healthz"
 	spireCtrlMgrHealthPort                                              = "ctrlmgr-healthz"
+	upstreamAgentConfigHashAnnotation                                   = "ztwim.openshift.io/upstream-agent-config-hash"
+	upstreamAgentBundleHashAnnotation                                   = "ztwim.openshift.io/upstream-agent-bundle-hash"
 )
 
 // reconcileStatefulSet reconciles the Spire Server StatefulSet
-func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, spireServerConfigMapHash, spireControllerManagerConfigMapHash string) error {
-	sts := GenerateSpireServerStatefulSet(&server.Spec, spireServerConfigMapHash, spireControllerManagerConfigMapHash)
+func (r *SpireServerReconciler) reconcileStatefulSet(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool, spireServerConfigMapHash, spireControllerManagerConfigMapHash, upstreamConfigHash, upstreamBundleHash string) error {
+	sts := GenerateSpireServerStatefulSet(&server.Spec, spireServerConfigMapHash, spireControllerManagerConfigMapHash, upstreamConfigHash, upstreamBundleHash)
 	if err := controllerutil.SetControllerReference(server, sts, r.scheme); err != nil {
 		r.log.Error(err, "failed to set controller reference on spire server stateful set resource")
 		statusMgr.AddCondition(StatefulSetAvailable, "SpireServerStatefulSetGenerationFailed",
@@ -90,7 +92,7 @@ const (
 
 func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 	spireServerConfigMapHash string,
-	SpireControllerManagerConfigMapHash string) *appsv1.StatefulSet {
+	SpireControllerManagerConfigMapHash, upstreamConfigHash, upstreamBundleHash string) *appsv1.StatefulSet {
 
 	// Generate standardized labels once and reuse them
 	labels := utils.SpireServerLabels(config.Labels)
@@ -264,12 +266,20 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 
 	if config.UpstreamAuthority != nil {
 		addUpstreamAuthorityToStatefulSet(sts, config.UpstreamAuthority)
+		if config.UpstreamAuthority.Spire != nil {
+			sts.Spec.Template.Annotations[upstreamAgentConfigHashAnnotation] = upstreamConfigHash
+			sts.Spec.Template.Annotations[upstreamAgentBundleHashAnnotation] = upstreamBundleHash
+		}
 	}
 
 	return sts
 }
 
 func addUpstreamAuthorityToStatefulSet(sts *appsv1.StatefulSet, ua *v1alpha1.UpstreamAuthorityConfig) {
+	if ua.Spire != nil {
+		addUpstreamAgentToStatefulSet(sts, ua.Spire)
+		return
+	}
 	if ua.Vault == nil {
 		return
 	}
@@ -377,4 +387,41 @@ func addFederationConfigurationToStatefulSet(sts *appsv1.StatefulSet, federation
 			},
 		)
 	}
+}
+
+// All containers inherit the same namespace-allocated UID from restricted-v2.
+// Unix path attestation requires that identity and the shared process namespace.
+func addUpstreamAgentToStatefulSet(sts *appsv1.StatefulSet, upstream *v1alpha1.UpstreamAuthoritySpire) {
+	pod := &sts.Spec.Template.Spec
+	pod.ShareProcessNamespace = ptr.To(true)
+	pod.Containers[0].VolumeMounts = append(pod.Containers[0].VolumeMounts,
+		corev1.VolumeMount{Name: "upstream-socket", MountPath: upstreamAgentSocketDir, ReadOnly: true})
+	pod.Volumes = append(pod.Volumes,
+		corev1.Volume{Name: "upstream-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		corev1.Volume{Name: "upstream-data", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		corev1.Volume{Name: "upstream-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		corev1.Volume{Name: "upstream-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: upstreamAgentName}}}},
+		corev1.Volume{Name: "upstream-bundle", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: upstream.TrustBundleSecret, Items: []corev1.KeyToPath{{Key: upstreamAgentBundleKey, Path: upstreamAgentBundleKey}}}}},
+		corev1.Volume{Name: "upstream-token", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{Sources: []corev1.VolumeProjection{{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "spire-server", ExpirationSeconds: ptr.To(int64(600)), Path: upstreamAgentTokenName}}}}}},
+	)
+	pod.Containers = append(pod.Containers, corev1.Container{
+		Name: upstreamAgentName, Image: utils.GetSpireAgentImage(), ImagePullPolicy: corev1.PullIfNotPresent,
+		Args: []string{"-config", upstreamAgentConfigDir + "/" + upstreamAgentConfigKey},
+		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true), AllowPrivilegeEscalation: ptr.To(false), RunAsNonRoot: ptr.To(true),
+			Capabilities:   &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+		},
+		Ports:          []corev1.ContainerPort{{Name: "upstream-health", ContainerPort: upstreamAgentHealthPort, Protocol: corev1.ProtocolTCP}},
+		LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/live", Port: intstr.FromInt32(upstreamAgentHealthPort), Scheme: corev1.URISchemeHTTP}}, InitialDelaySeconds: 15, PeriodSeconds: 60, TimeoutSeconds: 3, FailureThreshold: 2},
+		ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/ready", Port: intstr.FromInt32(upstreamAgentHealthPort), Scheme: corev1.URISchemeHTTP}}, InitialDelaySeconds: 5, PeriodSeconds: 5},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "upstream-socket", MountPath: upstreamAgentSocketDir},
+			{Name: "upstream-data", MountPath: upstreamAgentDataDir},
+			{Name: "upstream-tmp", MountPath: "/tmp"},
+			{Name: "upstream-config", MountPath: upstreamAgentConfigDir, ReadOnly: true},
+			{Name: "upstream-bundle", MountPath: upstreamAgentBundleDir, ReadOnly: true},
+			{Name: "upstream-token", MountPath: upstreamAgentTokenDir, ReadOnly: true},
+		},
+	})
 }
