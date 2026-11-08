@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -25,8 +26,10 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -217,6 +220,103 @@ func ExecInPod(ctx context.Context, namespace, podName, containerName string, co
 		return stdoutBuf.String(), stderrBuf.String(), fmt.Errorf("exec %s %v: %w", cli, args, err)
 	}
 	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
+// ParseProcStatusUIDGIDs parses /proc/self/status content and returns effective UID and group IDs.
+// It expects lines like:
+// Uid:    0   0   0   0
+// Gid:    0   0   0   0
+// Groups: 0
+func ParseProcStatusUIDGIDs(content string) (int, []int, error) {
+	var (
+		effectiveUID int
+		gids         []int
+		uidSeen      bool
+		groupsSeen   bool
+	)
+
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		switch {
+		case strings.HasPrefix(line, "Uid:"):
+			fields := strings.Fields(line)
+			// fields: ["Uid:", real, effective, saved, fs]
+			if len(fields) < 3 {
+				return 0, nil, fmt.Errorf("Uid line malformed: %q", line)
+			}
+			val, err := strconv.Atoi(fields[2]) // effective UID
+			if err != nil {
+				return 0, nil, fmt.Errorf("failed to parse effective UID from %q: %w", line, err)
+			}
+			effectiveUID = val
+			uidSeen = true
+		case strings.HasPrefix(line, "Groups:"):
+			fields := strings.Fields(line)
+			// fields: ["Groups:", gid1, gid2, ...]
+			if len(fields) < 2 {
+				return 0, nil, fmt.Errorf("Groups line malformed: %q", line)
+			}
+			for _, g := range fields[1:] {
+				val, err := strconv.Atoi(g)
+				if err != nil {
+					return 0, nil, fmt.Errorf("failed to parse group from %q: %w", line, err)
+				}
+				gids = append(gids, val)
+			}
+			groupsSeen = true
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, nil, fmt.Errorf("failed to scan proc status: %w", err)
+	}
+	if !uidSeen {
+		return 0, nil, fmt.Errorf("Uid line not found in proc status")
+	}
+	if !groupsSeen {
+		return 0, nil, fmt.Errorf("Groups line not found in proc status")
+	}
+	if len(gids) == 0 {
+		return 0, nil, fmt.Errorf("no groups parsed from proc status")
+	}
+	return effectiveUID, gids, nil
+}
+
+// ParseSupplementalRange parses the namespace supplemental groups annotation value (format: "start/size")
+// and returns start and size as integers.
+func ParseSupplementalRange(ann string) (int, int, error) {
+	ann = strings.TrimSpace(ann)
+	if ann == "" {
+		return 0, 0, fmt.Errorf("supplemental groups annotation is empty")
+	}
+
+	parts := strings.SplitN(ann, "/", 2)
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid supplemental groups annotation format: %q", ann)
+	}
+
+	start, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse start from %q: %w", ann, err)
+	}
+	if start < 0 {
+		return 0, 0, fmt.Errorf("supplemental groups annotation start must be non-negative: %q", ann)
+	}
+
+	size, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse size from %q: %w", ann, err)
+	}
+	if size <= 0 {
+		return 0, 0, fmt.Errorf("supplemental groups annotation size must be positive: %q", ann)
+	}
+
+	// Check for integer overflow when computing range end (start + size)
+	if start > math.MaxInt-size {
+		return 0, 0, fmt.Errorf("supplemental groups range end overflows int: start=%d, size=%d", start, size)
+	}
+
+	return start, size, nil
 }
 
 // ReadSVIDPEM reads /certs/svid.pem from the given pod container.
@@ -899,6 +999,38 @@ func WaitForUpgradeableStatus(ctx context.Context, k8sClient client.Client, name
 		return true
 	}).WithTimeout(timeout).WithPolling(ShortInterval).Should(BeTrue(),
 		"Upgradeable condition should have status '%v' within %v", expectedStatus, timeout)
+}
+
+// GetReadySpireAgentPod returns the first ready spire-agent pod in the operator namespace.
+// Returns nil if no ready pod is found.
+func GetReadySpireAgentPod(ctx context.Context, clientset kubernetes.Interface) (*corev1.Pod, error) {
+	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: SpireAgentPodLabel,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list spire-agent pods: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no spire-agent pods found")
+	}
+
+	for i := range pods.Items {
+		if IsPodReady(&pods.Items[i]) {
+			return &pods.Items[i], nil
+		}
+	}
+	return nil, fmt.Errorf("no ready spire-agent pod found (pods=%d)", len(pods.Items))
+}
+
+// GetProcStatusFromPod executes grep on /proc/self/status in a pod and returns UID and Groups.
+// Returns effective UID and list of group IDs.
+func GetProcStatusFromPod(ctx context.Context, namespace, podName, containerName string) (int, []int, error) {
+	stdout, stderr, err := ExecInPod(ctx, namespace, podName, containerName,
+		[]string{"sh", "-c", "grep -E '^(Uid|Gid|Groups)' /proc/self/status"})
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read /proc/self/status (stderr: %s): %w", strings.TrimSpace(stderr), err)
+	}
+	return ParseProcStatusUIDGIDs(stdout)
 }
 
 // SpiffeHelperConfig holds configuration for the spiffe-helper sidecar (helper.conf format).

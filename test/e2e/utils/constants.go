@@ -32,6 +32,7 @@ const (
 	SpireServerConfigKey                     = "server.conf"
 	SpireAgentDaemonSetName                  = "spire-agent"
 	SpireAgentPodLabel                       = "app.kubernetes.io/name=spire-agent"
+	SpireAgentContainerName                  = "spire-agent"
 	SpireAgentConfigMapName                  = "spire-agent"
 	SpireAgentConfigKey                      = "agent.conf"
 	SpiffeCSIDriverDaemonSetName             = "spire-spiffe-csi-driver"
