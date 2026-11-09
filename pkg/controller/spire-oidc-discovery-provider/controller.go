@@ -217,7 +217,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) handleCreateOnlyMode(oidc *v1alph
 			"Create-Only Mode is active: Updates are not reconciled to existing resources",
 			metav1.ConditionTrue)
 	} else {
-		existingCondition := apimeta.FindStatusCondition(oidc.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		existingCondition := apimeta.FindStatusCondition(oidc.Status.Conditions, utils.CreateOnlyModeStatusType)
 		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
 			statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeDisabled,
 				"Create-only mode is disabled",
@@ -228,7 +228,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) handleCreateOnlyMode(oidc *v1alph
 }
 
 // validateConfiguration validates the SpireOIDCDiscoveryProvider configuration
-func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
+func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(_ context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, statusMgr *status.Manager) error {
 	// Validate common configuration
 	if err := r.validateCommonConfig(oidc, statusMgr); err != nil {
 		return err
@@ -249,7 +249,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) validateConfiguration(ctx context
 	}
 
 	// Only set to true if the condition previously existed as false
-	existingCondition := apimeta.FindStatusCondition(oidc.Status.ConditionalStatus.Conditions, ConfigurationValid)
+	existingCondition := apimeta.FindStatusCondition(oidc.Status.Conditions, ConfigurationValid)
 	if existingCondition != nil && existingCondition.Status == metav1.ConditionFalse {
 		statusMgr.AddCondition(ConfigurationValid, v1alpha1.ReasonReady,
 			"Configuration validation passed",

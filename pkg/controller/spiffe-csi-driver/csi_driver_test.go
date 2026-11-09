@@ -48,8 +48,8 @@ func TestGetSpiffeCSIDriver(t *testing.T) {
 
 		// CRITICAL: Check for the security label from asset file
 		// This label is required for pod security admission to work correctly
-		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; !ok || val != "restricted" {
-			t.Errorf("Expected security label 'security.openshift.io/csi-ephemeral-volume-profile=restricted', got '%s=%s'", "security.openshift.io/csi-ephemeral-volume-profile", val)
+		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; !ok || val != csiEphemeralVolumeProfileRestricted {
+			t.Errorf("Expected security label 'security.openshift.io/csi-ephemeral-volume-profile=%s', got '%s=%s'", csiEphemeralVolumeProfileRestricted, "security.openshift.io/csi-ephemeral-volume-profile", val)
 			t.Error("This label MUST be preserved from the asset file for pod security admission to work")
 		}
 	})
@@ -83,8 +83,8 @@ func TestGetSpiffeCSIDriver(t *testing.T) {
 		}
 
 		// CRITICAL: Check that the security label from asset file is preserved
-		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; !ok || val != "restricted" {
-			t.Errorf("Expected security label 'security.openshift.io/csi-ephemeral-volume-profile=restricted', got '%s=%s'", "security.openshift.io/csi-ephemeral-volume-profile", val)
+		if val, ok := csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"]; !ok || val != csiEphemeralVolumeProfileRestricted {
+			t.Errorf("Expected security label 'security.openshift.io/csi-ephemeral-volume-profile=%s', got '%s=%s'", csiEphemeralVolumeProfileRestricted, "security.openshift.io/csi-ephemeral-volume-profile", val)
 			t.Error("This label MUST be preserved from the asset file even when custom labels are provided")
 		}
 	})

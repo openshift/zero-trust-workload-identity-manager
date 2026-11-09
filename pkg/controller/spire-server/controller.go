@@ -49,6 +49,7 @@ const (
 	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
 	RouteAvailable                   = "RouteAvailable"
 	UpstreamAgentAvailable           = "UpstreamAgentAvailable"
+	spireServerPodName               = "spire-server-0"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
@@ -276,7 +277,7 @@ func (r *SpireServerReconciler) handleCreateOnlyMode(server *v1alpha1.SpireServe
 			"Create-Only Mode is active: Updates are not reconciled to existing resources",
 			metav1.ConditionTrue)
 	} else {
-		existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
+		existingCondition := apimeta.FindStatusCondition(server.Status.Conditions, utils.CreateOnlyModeStatusType)
 		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
 			statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeDisabled,
 				"Create-only mode is disabled",
@@ -287,7 +288,7 @@ func (r *SpireServerReconciler) handleCreateOnlyMode(server *v1alpha1.SpireServe
 }
 
 // validateConfiguration validates the SpireServer configuration
-func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) error {
+func (r *SpireServerReconciler) validateConfiguration(_ context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) error {
 	// Validate common configuration (affinity, tolerations, node selector, resources, labels)
 	if err := r.validateCommonConfig(server, statusMgr); err != nil {
 		return err
@@ -328,7 +329,7 @@ func (r *SpireServerReconciler) validateConfiguration(ctx context.Context, serve
 	}
 
 	// Only set to true if the condition previously existed as false
-	existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, ConfigurationValid)
+	existingCondition := apimeta.FindStatusCondition(server.Status.Conditions, ConfigurationValid)
 	if existingCondition != nil && existingCondition.Status == metav1.ConditionFalse {
 		statusMgr.AddCondition(ConfigurationValid, v1alpha1.ReasonReady,
 			"Configuration validation passed",
@@ -381,7 +382,7 @@ func needsUpdate(current, desired appsv1.StatefulSet) bool {
 }
 
 // handleTTLValidation performs TTL validation and handles warnings, events, and status updates
-func (r *SpireServerReconciler) handleTTLValidation(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
+func (r *SpireServerReconciler) handleTTLValidation(_ context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) error {
 	ttlValidationResult := validateTTLDurationsWithWarnings(&server.Spec)
 
 	if ttlValidationResult.Error != nil {
@@ -467,7 +468,7 @@ func (r *SpireServerReconciler) readUpstreamTrustBundle(ctx context.Context, ser
 
 func (r *SpireServerReconciler) mapUpstreamPod(_ context.Context, obj client.Object) []reconcile.Request {
 	owner := metav1.GetControllerOf(obj)
-	if obj.GetNamespace() != utils.GetOperatorNamespace() || obj.GetName() != "spire-server-0" || owner == nil || owner.Kind != "StatefulSet" || owner.Name != "spire-server" {
+	if obj.GetNamespace() != utils.GetOperatorNamespace() || obj.GetName() != spireServerPodName || owner == nil || owner.Kind != "StatefulSet" || owner.Name != "spire-server" {
 		return nil
 	}
 	return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: "cluster"}}}
@@ -490,10 +491,10 @@ func (r *SpireServerReconciler) reconcileUpstreamAgentAvailability(ctx context.C
 		}
 	}
 	var pod corev1.Pod
-	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "spire-server-0", Namespace: utils.GetOperatorNamespace()}, &pod); err != nil {
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: spireServerPodName, Namespace: utils.GetOperatorNamespace()}, &pod); err != nil {
 		return client.IgnoreNotFound(err)
 	}
-	if pod.Name != "spire-server-0" || pod.Namespace != utils.GetOperatorNamespace() || !metav1.IsControlledBy(&pod, &sts) || !pod.DeletionTimestamp.IsZero() || pod.Labels[appsv1.ControllerRevisionHashLabelKey] != sts.Status.UpdateRevision {
+	if pod.Name != spireServerPodName || pod.Namespace != utils.GetOperatorNamespace() || !metav1.IsControlledBy(&pod, &sts) || !pod.DeletionTimestamp.IsZero() || pod.Labels[appsv1.ControllerRevisionHashLabelKey] != sts.Status.UpdateRevision {
 		return nil
 	}
 	for key, value := range expected {

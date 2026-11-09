@@ -104,8 +104,8 @@ type WorkloadAttestors struct {
 
 // WorkloadAttestorsVerification configures kubelet TLS certificate verification.
 // +kubebuilder:validation:Optional
-// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertBasePath) && self.hostCertBasePath != '')",message="hostCertBasePath is required when type is 'hostCert'"
-// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertFileName) && self.hostCertFileName != '')",message="hostCertFileName is required when type is 'hostCert'"
+// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertBasePath) && self.hostCertBasePath != ”)",message="hostCertBasePath is required when type is 'hostCert'"
+// +kubebuilder:validation:XValidation:rule="self.type != 'hostCert' || (has(self.hostCertFileName) && self.hostCertFileName != ”)",message="hostCertFileName is required when type is 'hostCert'"
 type WorkloadAttestorsVerification struct {
 	// type specifies the kubelet certificate verification mode.
 	// - skip: Skip TLS verification entirely.

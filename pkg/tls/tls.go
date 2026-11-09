@@ -60,7 +60,7 @@ func FetchAPIServerTLSConfig(ctx context.Context, k8sClient client.Client, setup
 			profile.InitialTLSProfileSpec = *configv1.TLSProfiles[libgocrypto.DefaultTLSProfileType]
 			profile.OperatorGoTLSConfig = operatorGoTLSConfig(profile.InitialTLSProfileSpec, setupLog)
 		} else {
-			// Non-404 error: return error, do not proceed. Never start with unkonwn tlsProfile.
+			// Non-404 error: return error, do not proceed. Never start with unknown tlsProfile.
 			return nil, fmt.Errorf("error while fetching %q: %w", openshifttls.APIServerName, err)
 		}
 	} else {

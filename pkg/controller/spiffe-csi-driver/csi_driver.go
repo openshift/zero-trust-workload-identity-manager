@@ -17,6 +17,7 @@ import (
 )
 
 // Constants for status conditions are defined in controller.go
+const csiEphemeralVolumeProfileRestricted = "restricted"
 
 // reconcileCSIDriver reconciles the Spiffe CSI Driver resource
 func (r *SpiffeCsiReconciler) reconcileCSIDriver(ctx context.Context, driver *v1alpha1.SpiffeCSIDriver, statusMgr *status.Manager, createOnlyMode bool) error {
@@ -124,6 +125,6 @@ func getSpiffeCSIDriver(pluginName string, customLabels map[string]string) *stor
 
 	// Set labels
 	csiDriver.Labels = utils.SpiffeCSIDriverLabels(customLabels)
-	csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"] = "restricted"
+	csiDriver.Labels["security.openshift.io/csi-ephemeral-volume-profile"] = csiEphemeralVolumeProfileRestricted
 	return csiDriver
 }

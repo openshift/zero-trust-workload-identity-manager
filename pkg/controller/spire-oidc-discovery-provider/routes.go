@@ -86,7 +86,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileRoute(ctx context.Contex
 			}
 		} else {
 			// Route exists and is up to date - only update status if it's currently not ready
-			existingCondition := apimeta.FindStatusCondition(oidc.Status.ConditionalStatus.Conditions, RouteAvailable)
+			existingCondition := apimeta.FindStatusCondition(oidc.Status.Conditions, RouteAvailable)
 			if existingCondition == nil || existingCondition.Status != metav1.ConditionTrue {
 				statusMgr.AddCondition(RouteAvailable, "ManagedRouteReady",
 					"Spire OIDC Managed Route is ready",
