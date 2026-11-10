@@ -92,7 +92,7 @@ var _ = BeforeSuite(func() {
 	// Initialize secondary cluster clients for federation tests if KUBECONFIG_CLUSTER_B is set
 	kubeconfigB := os.Getenv("KUBECONFIG_CLUSTER_B")
 	if kubeconfigB != "" {
-		fmt.Fprintf(GinkgoWriter, "KUBECONFIG_CLUSTER_B is set, initializing Cluster B clients\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "KUBECONFIG_CLUSTER_B is set, initializing Cluster B clients\n")
 
 		cfgB, err = clientcmd.BuildConfigFromFlags("", kubeconfigB)
 		Expect(err).NotTo(HaveOccurred(), "failed to build config from KUBECONFIG_CLUSTER_B")
@@ -106,7 +106,7 @@ var _ = BeforeSuite(func() {
 		configClientB, err = configv1.NewForConfig(cfgB)
 		Expect(err).NotTo(HaveOccurred(), "failed to create Cluster B OpenShift config client")
 	} else {
-		fmt.Fprintf(GinkgoWriter, "KUBECONFIG_CLUSTER_B not set, federation tests will be skipped\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "KUBECONFIG_CLUSTER_B not set, federation tests will be skipped\n")
 	}
 })
 
@@ -117,9 +117,17 @@ func TestE2E(t *testing.T) {
 	// Configure Ginkgo for e2e tests
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 
-	// Suite-level configuration
-	// Suite timeout must allow all test specs to complete; go test -timeout is 45m
-	suiteConfig.Timeout = 45 * time.Minute
+	// Suite-level configuration.
+	// Default e2e (label filter !tls) stays at 40m under the 45m go test timeout.
+	// The tls suite waits for Machine Config rolls. Cluster-bot keeps the cluster for about 3h,
+	// so this stays under the 2h50m go test timeout used by make test-e2e-tls.
+	suiteConfig.Timeout = 40 * time.Minute
+	if Label("tls").MatchesLabelFilter(GinkgoLabelFilter()) {
+		suiteConfig.Timeout = 2*time.Hour + 40*time.Minute
+	}
+	if Label("federation").MatchesLabelFilter(GinkgoLabelFilter()) {
+		suiteConfig.Timeout = 45 * time.Minute
+	}
 	suiteConfig.FailFast = false       // Continue after first failure to see all issues
 	suiteConfig.FlakeAttempts = 0      // Retry on flaky tests (helpful when deflaking tests)
 	suiteConfig.MustPassRepeatedly = 1 // Must pass repeatedly times (helpful when deflaking tests)
