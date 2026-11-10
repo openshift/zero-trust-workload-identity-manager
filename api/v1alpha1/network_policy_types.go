@@ -6,14 +6,18 @@ const NetworkPoliciesAvailable = "NetworkPoliciesAvailable"
 // NetworkPoliciesApplied is the ZTWIM condition type reporting aggregate operand network policy readiness.
 const NetworkPoliciesApplied = "NetworkPoliciesApplied"
 
-// Network policy condition reasons (operands).
+// Operand condition reasons (condition type NetworkPoliciesAvailable on SpireServer, SpireAgent, SpireOIDCDiscoveryProvider).
 const (
-	ReasonNetworkPoliciesCreated       = "NetworkPoliciesCreated"
-	ReasonNetworkPoliciesUpdated       = "NetworkPoliciesUpdated"
+	ReasonNetworkPolicyCreated         = "NetworkPolicyCreated"
+	ReasonNetworkPolicyUpdated         = "NetworkPolicyUpdated"
 	ReasonManagedNetworkPolicyDisabled = "ManagedNetworkPolicyDisabled"
 	ReasonNetworkPolicyCreationFailed  = "NetworkPolicyCreationFailed"
 	ReasonNetworkPolicyUpdateFailed    = "NetworkPolicyUpdateFailed"
 	ReasonNetworkPolicyDeletionFailed  = "NetworkPolicyDeletionFailed"
+)
+
+// ZTWIM aggregate condition reasons (condition type NetworkPoliciesApplied on ZeroTrustWorkloadIdentityManager).
+const (
 	ReasonOperandsNetworkPoliciesReady = "OperandsNetworkPoliciesReady"
 	ReasonOperandNetworkPolicyFailed   = "OperandNetworkPolicyFailed"
 )
