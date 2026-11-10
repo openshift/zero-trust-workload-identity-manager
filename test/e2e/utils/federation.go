@@ -18,7 +18,6 @@ package utils
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -72,12 +71,12 @@ if ! command -v openssl >/dev/null 2>&1; then
   echo "openssl not found in container image"
   exit 1
 fi
-while [ ! -f /certs/mtls-ca.pem ]; do sleep 2; done
+while [ ! -f /certs/bundle.pem ]; do sleep 2; done
 echo "Certs available, starting TLS server..."
 openssl s_server \
   -cert /certs/svid.pem \
   -key /certs/svid_key.pem \
-  -CAfile /certs/mtls-ca.pem \
+  -CAfile /certs/bundle.pem \
   -Verify 1 \
   -accept %d \
   -quiet
@@ -171,9 +170,14 @@ func SetupFederationNamespace(ctx context.Context, k8sClient client.Client, name
 	Expect(k8sClient.Create(ctx, cm)).To(Succeed(), "failed to create spiffe-helper ConfigMap in %s", namespace)
 }
 
+// FederationWorkloadSPIFFEID returns the SPIFFE ID for a federation mTLS workload entry.
+func FederationWorkloadSPIFFEID(trustDomain, namespace, serviceAccount string) string {
+	return fmt.Sprintf("spiffe://%s/ns/%s/sa/%s", trustDomain, namespace, serviceAccount)
+}
+
 // CreateFederationClusterSPIFFEID creates a ClusterSPIFFEID for a federation test namespace.
-func CreateFederationClusterSPIFFEID(ctx context.Context, k8sClient client.Client, name, namespace, appLabel string) {
-	By(fmt.Sprintf("Creating ClusterSPIFFEID %s for namespace %s", name, namespace))
+func CreateFederationClusterSPIFFEID(ctx context.Context, k8sClient client.Client, name, namespace, appLabel, peerTrustDomain string) {
+	By(fmt.Sprintf("Creating ClusterSPIFFEID %s for namespace %s with federatesWith=%s", name, namespace, peerTrustDomain))
 	cspiffeID := &spiffev1alpha1.ClusterSPIFFEID{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: spiffev1alpha1.ClusterSPIFFEIDSpec{
@@ -182,7 +186,8 @@ func CreateFederationClusterSPIFFEID(ctx context.Context, k8sClient client.Clien
 			NamespaceSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"kubernetes.io/metadata.name": namespace},
 			},
-			ClassName: SpireControllerManagerClass,
+			FederatesWith: []string{peerTrustDomain},
+			ClassName:     SpireControllerManagerClass,
 		},
 	}
 	Expect(k8sClient.Create(ctx, cspiffeID)).To(Succeed(), "failed to create ClusterSPIFFEID %s", name)
@@ -207,45 +212,71 @@ func WaitForSpireReady(ctx context.Context, k8sClient client.Client, clientset k
 	WaitForDaemonSetAvailable(ctx, clientset, SpireAgentDaemonSetName, OperatorNamespace, timeout)
 }
 
-// CreateFederationSpireServer creates the SpireServer CR with federation config enabled.
-// Trust domain comes from the ZTWIM CR; appsDomain is used for the JWT issuer URL.
-func CreateFederationSpireServer(ctx context.Context, k8sClient client.Client, appsDomain string) {
-	By("Creating SpireServer with federation enabled")
+func federationSpireServerBaseSpec(appsDomain string) operatorv1alpha1.SpireServerSpec {
+	return operatorv1alpha1.SpireServerSpec{
+		JwtIssuer:           fmt.Sprintf("https://oidc-discovery.%s", appsDomain),
+		CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
+		DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
+		DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
+		CAKeyType:           "rsa-2048",
+		CASubject: operatorv1alpha1.CASubject{
+			CommonName:   "SPIRE CA",
+			Country:      "US",
+			Organization: "E2E Test",
+		},
+		Persistence: operatorv1alpha1.Persistence{
+			Size:       "1Gi",
+			AccessMode: "ReadWriteOnce",
+		},
+		Datastore: operatorv1alpha1.DataStore{
+			DatabaseType:     "sqlite3",
+			ConnectionString: "/run/spire/data/datastore.sqlite3",
+			MaxOpenConns:     100,
+			MaxIdleConns:     2,
+			ConnMaxLifetime:  3600,
+			DisableMigration: "false",
+		},
+	}
+}
+
+// CreateFederationSpireServerBase creates SpireServer without federation (guide Phase 2.2).
+func CreateFederationSpireServerBase(ctx context.Context, k8sClient client.Client, appsDomain string) {
+	By("Creating SpireServer (base stack, federation not yet enabled)")
 	spireServer := &operatorv1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
-		Spec: operatorv1alpha1.SpireServerSpec{
-			JwtIssuer:           fmt.Sprintf("https://oidc-discovery.%s", appsDomain),
-			CAValidity:          metav1.Duration{Duration: 24 * time.Hour},
-			DefaultX509Validity: metav1.Duration{Duration: 1 * time.Hour},
-			DefaultJWTValidity:  metav1.Duration{Duration: 5 * time.Minute},
-			CAKeyType:           "rsa-2048",
-			CASubject: operatorv1alpha1.CASubject{
-				CommonName:   "SPIRE CA",
-				Country:      "US",
-				Organization: "E2E Test",
-			},
-			Persistence: operatorv1alpha1.Persistence{
-				Size:       "1Gi",
-				AccessMode: "ReadWriteOnce",
-			},
-			Datastore: operatorv1alpha1.DataStore{
-				DatabaseType:     "sqlite3",
-				ConnectionString: "/run/spire/data/datastore.sqlite3",
-				MaxOpenConns:     100,
-				MaxIdleConns:     2,
-				ConnMaxLifetime:  3600,
-				DisableMigration: "false",
-			},
-			Federation: &operatorv1alpha1.FederationConfig{
-				BundleEndpoint: operatorv1alpha1.BundleEndpointConfig{
-					Profile:     operatorv1alpha1.HttpsSpiffeProfile,
-					RefreshHint: 300,
-				},
-				ManagedRoute: "true",
+		Spec:       federationSpireServerBaseSpec(appsDomain),
+	}
+	Expect(k8sClient.Create(ctx, spireServer)).To(Succeed(), "failed to create SpireServer")
+}
+
+// FederationPeerBundleEndpointURL builds the remote federation endpoint URL (guide Step 2.3).
+func FederationPeerBundleEndpointURL(peerAppsDomain string) string {
+	return fmt.Sprintf("https://federation.%s", peerAppsDomain)
+}
+
+// EnableSpireServerFederation enables https_spiffe federation and declares the peer trust domain on SpireServer (guide Step 2.3).
+func EnableSpireServerFederation(ctx context.Context, k8sClient client.Client, peerTrustDomain, peerAppsDomain string) {
+	By(fmt.Sprintf("Enabling SpireServer federation with peer trust domain %s", peerTrustDomain))
+	spireServer := &operatorv1alpha1.SpireServer{}
+	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, spireServer)).To(Succeed(),
+		"failed to get SpireServer for federation enablement")
+
+	spireServer.Spec.Federation = &operatorv1alpha1.FederationConfig{
+		BundleEndpoint: operatorv1alpha1.BundleEndpointConfig{
+			Profile:     operatorv1alpha1.HttpsSpiffeProfile,
+			RefreshHint: 300,
+		},
+		ManagedRoute: "true",
+		FederatesWith: []operatorv1alpha1.FederatesWithConfig{
+			{
+				TrustDomain:           peerTrustDomain,
+				BundleEndpointUrl:     FederationPeerBundleEndpointURL(peerAppsDomain),
+				BundleEndpointProfile: operatorv1alpha1.HttpsSpiffeProfile,
+				EndpointSpiffeId:      fmt.Sprintf("spiffe://%s/spire/server", peerTrustDomain),
 			},
 		},
 	}
-	Expect(k8sClient.Create(ctx, spireServer)).To(Succeed(), "failed to create SpireServer with federation config")
+	Expect(k8sClient.Update(ctx, spireServer)).To(Succeed(), "failed to enable SpireServer federation")
 }
 
 // CreateFederationSpireAgent creates the SpireAgent CR for federation testing.
@@ -514,8 +545,8 @@ func AttemptMTLSConnection(ctx context.Context, namespace, podName, serverHost s
 	cmd := []string{
 		"sh", "-c",
 		fmt.Sprintf(
-			`CAFILE=%q; [ -f "$CAFILE" ] || CAFILE=/certs/bundle.pem; timeout %d openssl s_client -connect %s:%d -servername %s -cert /certs/svid.pem -key /certs/svid_key.pem -CAfile "$CAFILE" -verify_return_error -brief </dev/null 2>&1; echo "EXIT_CODE=$?"`,
-			MTLSCombinedCAPath, MTLSOpenSSLTimeoutSeconds, serverHost, serverPort, serverHost,
+			`timeout %d openssl s_client -connect %s:%d -servername %s -cert /certs/svid.pem -key /certs/svid_key.pem -CAfile /certs/bundle.pem -verify_return_error -brief </dev/null 2>&1; echo "EXIT_CODE=$?"`,
+			MTLSOpenSSLTimeoutSeconds, serverHost, serverPort, serverHost,
 		),
 	}
 	stdout, stderr, err := ExecInPod(ctx, namespace, podName, "tls-client", cmd)
@@ -550,13 +581,6 @@ func parseShellExitCode(stdout string) (int, bool) {
 	return 0, false
 }
 
-// ClearMTLSCombinedCA removes federated trust material written for cross-cluster mTLS tests.
-func ClearMTLSCombinedCA(ctx context.Context, namespace, podName, containerName string) error {
-	command := []string{"sh", "-c", fmt.Sprintf("rm -f %q", MTLSCombinedCAPath)}
-	_, err := execInPodCapture(ctx, namespace, podName, containerName, command)
-	return err
-}
-
 // ExecInPodOnClusterB runs a command in a pod on Cluster B by setting KUBECONFIG_CLUSTER_B.
 func ExecInPodOnClusterB(ctx context.Context, namespace, podName, containerName string, command []string) (string, string, error) {
 	kubeconfigB := os.Getenv("KUBECONFIG_CLUSTER_B")
@@ -568,21 +592,101 @@ func ExecInPodOnClusterB(ctx context.Context, namespace, podName, containerName 
 
 // WaitForSVIDsReady waits until SVID files appear in /certs/ of the specified pod container
 // using the default KUBECONFIG (Cluster A).
-func WaitForSVIDsReady(ctx context.Context, namespace, podName, containerName string, timeout time.Duration) {
-	By(fmt.Sprintf("Waiting for SVID files in pod %s/%s", namespace, podName))
-	Eventually(func() string {
-		stdout, _, err := ExecInPod(ctx, namespace, podName, containerName, []string{"ls", "/certs/"})
+func WaitForSVIDsReady(ctx context.Context, namespace, podName, containerName, expectedSPIFFEID string, timeout time.Duration) {
+	waitForSVIDsInPod(ctx, namespace, podName, containerName, expectedSPIFFEID, timeout, false)
+}
+
+// ExpectServerEntryFederatesWith asserts a SPIRE server entry federates with the peer trust domain (guide Step 5.4).
+func ExpectServerEntryFederatesWith(ctx context.Context, clientset kubernetes.Interface, kubeconfig, spiffeID, peerTrustDomain string, timeout time.Duration) {
+	By(fmt.Sprintf("Verifying SPIRE entry %s federates with %s", spiffeID, peerTrustDomain))
+	Eventually(func() bool {
+		output, err := showServerEntry(ctx, clientset, kubeconfig, spiffeID)
 		if err != nil {
-			fmt.Fprintf(GinkgoWriter, "exec ls /certs/ in %s/%s failed: %v\n", namespace, podName, err)
-			return ""
+			_, _ = fmt.Fprintf(GinkgoWriter, "spire-server entry show for %s failed: %v\n", spiffeID, err)
+			return false
 		}
-		return stdout
-	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(
-		And(
-			ContainSubstring("svid.pem"),
-			ContainSubstring("svid_key.pem"),
-			ContainSubstring("bundle.pem"),
-		), "SVID files should appear in /certs/ of %s/%s", namespace, podName)
+		return strings.Contains(output, peerTrustDomain)
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeTrue(),
+		"SPIRE entry %s should list FederatesWith including %s", spiffeID, peerTrustDomain)
+}
+
+func showServerEntry(ctx context.Context, clientset kubernetes.Interface, kubeconfig, spiffeID string) (string, error) {
+	podName, err := GetSpireServerPodName(ctx, clientset)
+	if err != nil {
+		return "", err
+	}
+	command := []string{
+		"/opt/spire/bin/spire-server", "entry", "show",
+		"-spiffeID", spiffeID,
+		"-socketPath", SpireServerAPISocket,
+	}
+	if kubeconfig == "" {
+		return execInPodCapture(ctx, OperatorNamespace, podName, "spire-server", command)
+	}
+	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-server", command)
+}
+
+// WaitForWorkloadFederatedBundle waits until spiffe-helper bundle.pem includes federated CA material.
+func WaitForWorkloadFederatedBundle(ctx context.Context, namespace, podName, containerName string, minCACerts int, timeout time.Duration, onClusterB bool) {
+	By(fmt.Sprintf("Waiting for bundle.pem in %s/%s to contain at least %d CA certificate(s)", namespace, podName, minCACerts))
+	Eventually(func() int {
+		if onClusterB {
+			return workloadSPIFFEBundleCACountOnClusterB(ctx, namespace, podName, containerName)
+		}
+		return WorkloadSPIFFEBundleCACount(ctx, namespace, podName, containerName)
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(BeNumerically(">=", minCACerts),
+		"bundle.pem in %s/%s should include local and federated CAs", namespace, podName)
+}
+
+func workloadSPIFFEBundleCACountOnClusterB(ctx context.Context, namespace, podName, containerName string) int {
+	stdout, _, err := ExecInPodOnClusterB(ctx, namespace, podName, containerName, []string{"cat", "/certs/bundle.pem"})
+	if err != nil {
+		return 0
+	}
+	certs, err := ParseAllPEMCertificates(stdout)
+	if err != nil {
+		return 0
+	}
+	return len(certs)
+}
+
+func waitForSVIDsInPod(ctx context.Context, namespace, podName, containerName, expectedSPIFFEID string, timeout time.Duration, onClusterB bool) {
+	By(fmt.Sprintf("Waiting for SVID files in pod %s/%s", namespace, podName))
+	Eventually(func() error {
+		var stdout string
+		var err error
+		if onClusterB {
+			stdout, _, err = ExecInPodOnClusterB(ctx, namespace, podName, containerName, []string{"ls", "/certs/"})
+		} else {
+			stdout, _, err = ExecInPod(ctx, namespace, podName, containerName, []string{"ls", "/certs/"})
+		}
+		if err != nil {
+			return fmt.Errorf("ls /certs/: %w", err)
+		}
+		if !strings.Contains(stdout, "svid.pem") || !strings.Contains(stdout, "svid_key.pem") || !strings.Contains(stdout, "bundle.pem") {
+			return fmt.Errorf("SVID files not ready yet")
+		}
+		return expectSVIDURISANInPod(ctx, namespace, podName, containerName, expectedSPIFFEID, onClusterB)
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(Succeed(),
+		"SVID files and URI SAN should be ready in %s/%s", namespace, podName)
+}
+
+func expectSVIDURISANInPod(ctx context.Context, namespace, podName, containerName, expectedSPIFFEID string, onClusterB bool) error {
+	cmd := []string{"openssl", "x509", "-in", "/certs/svid.pem", "-noout", "-ext", "subjectAltName"}
+	var stdout string
+	var err error
+	if onClusterB {
+		stdout, _, err = ExecInPodOnClusterB(ctx, namespace, podName, containerName, cmd)
+	} else {
+		stdout, _, err = ExecInPod(ctx, namespace, podName, containerName, cmd)
+	}
+	if err != nil {
+		return fmt.Errorf("read SVID URI SAN: %w", err)
+	}
+	if !strings.Contains(stdout, expectedSPIFFEID) {
+		return fmt.Errorf("SVID URI SAN missing %q: %s", expectedSPIFFEID, stdout)
+	}
+	return nil
 }
 
 // GetServerAllTrustBundlesPEM exports local and federated trust bundles from a SPIRE server in PEM format.
@@ -640,32 +744,9 @@ func listServerTrustBundlesPEM(ctx context.Context, clientset kubernetes.Interfa
 	return execInPodCaptureWithKubeconfig(ctx, kubeconfig, OperatorNamespace, podName, "spire-server", command)
 }
 
-// PrepareMTLSCombinedCA writes a CA file containing local and federated trust bundles for cross-cluster mTLS.
-func PrepareMTLSCombinedCA(ctx context.Context, namespace, podName, containerName, podKubeconfig string, serverClientset kubernetes.Interface, serverKubeconfig string) {
-	By(fmt.Sprintf("Preparing combined CA bundle in %s/%s from SPIRE server trust bundles", namespace, podName))
-	allBundlesPEM := GetServerAllTrustBundlesPEM(ctx, serverClientset, serverKubeconfig)
-	bundleB64 := base64.StdEncoding.EncodeToString([]byte(allBundlesPEM))
-	command := []string{
-		"sh", "-c",
-		fmt.Sprintf(
-			`echo %q | base64 -d > %q && test -s %q`,
-			bundleB64, MTLSCombinedCAPath, MTLSCombinedCAPath,
-		),
-	}
-	var err error
-	if podKubeconfig == "" {
-		_, err = execInPodCapture(ctx, namespace, podName, containerName, command)
-	} else {
-		_, err = execInPodCaptureWithKubeconfig(ctx, podKubeconfig, namespace, podName, containerName, command)
-	}
-	Expect(err).NotTo(HaveOccurred(), "failed to prepare combined CA bundle in %s/%s", namespace, podName)
-}
-
-// WorkloadBundleCACount returns the number of CA certificates in the active client trust store
-// (mtls-ca.pem when present, otherwise spiffe-helper bundle.pem).
+// WorkloadBundleCACount returns the number of CA certificates in spiffe-helper bundle.pem.
 func WorkloadBundleCACount(ctx context.Context, namespace, podName, containerName string) int {
-	command := []string{"sh", "-c", fmt.Sprintf(`if [ -f %q ]; then cat %q; else cat /certs/bundle.pem; fi`, MTLSCombinedCAPath, MTLSCombinedCAPath)}
-	return countPEMCertsFromPod(ctx, namespace, podName, containerName, command)
+	return WorkloadSPIFFEBundleCACount(ctx, namespace, podName, containerName)
 }
 
 // WorkloadSPIFFEBundleCACount returns CA certificates in spiffe-helper bundle.pem only.
@@ -713,21 +794,8 @@ func IsMTLSTLSVerifyFailure(stdout string, err error) bool {
 }
 
 // WaitForSVIDsReadyOnClusterB waits until SVID files appear in /certs/ on a Cluster B pod.
-func WaitForSVIDsReadyOnClusterB(ctx context.Context, namespace, podName, containerName string, timeout time.Duration) {
-	By(fmt.Sprintf("Waiting for SVID files in pod %s/%s on Cluster B", namespace, podName))
-	Eventually(func() string {
-		stdout, _, err := ExecInPodOnClusterB(ctx, namespace, podName, containerName, []string{"ls", "/certs/"})
-		if err != nil {
-			fmt.Fprintf(GinkgoWriter, "exec ls /certs/ in %s/%s (Cluster B) failed: %v\n", namespace, podName, err)
-			return ""
-		}
-		return stdout
-	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(
-		And(
-			ContainSubstring("svid.pem"),
-			ContainSubstring("svid_key.pem"),
-			ContainSubstring("bundle.pem"),
-		), "SVID files should appear in /certs/ of %s/%s on Cluster B", namespace, podName)
+func WaitForSVIDsReadyOnClusterB(ctx context.Context, namespace, podName, containerName, expectedSPIFFEID string, timeout time.Duration) {
+	waitForSVIDsInPod(ctx, namespace, podName, containerName, expectedSPIFFEID, timeout, true)
 }
 
 // restrictedSecurityContext returns the standard restricted PSA-compatible security context.

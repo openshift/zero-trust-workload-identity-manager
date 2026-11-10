@@ -37,6 +37,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Federation SDS E2E automates https_spiffe federation and cross-cluster workload mTLS.
+// Scope: default SPIRE CA, CFTD, ClusterSPIFFEID federatesWith, bundle.pem mTLS (guide Phase 3–5).
+// OIDC is out of scope for this suite. Trust domains use cluster-{a,b}.apps.<base> for two-cluster isolation.
+// Reference: https://github.com/sayak-redhat/redhat-openshift-onboarding/blob/main/SPIRE-Federation-https_spiffe-Guide-4.18.md
 var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func() {
 	var (
 		testCtx        context.Context
@@ -90,12 +94,12 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 	})
 
 	Context("Infrastructure", func() {
-		It("configures federation on Cluster A (ZTWIM + SpireServer with federation spec)", func() {
+		It("deploys base SPIRE stack on Cluster A", func() {
 			By("Creating ZeroTrustWorkloadIdentityManager on Cluster A")
 			utils.CreateFederationZTWIM(testCtx, k8sClient, trustDomainA, "cluster-a")
 
-			By("Creating SpireServer with federation on Cluster A")
-			utils.CreateFederationSpireServer(testCtx, k8sClient, appsDomainA)
+			By("Creating SpireServer on Cluster A")
+			utils.CreateFederationSpireServerBase(testCtx, k8sClient, appsDomainA)
 
 			By("Creating SpireAgent on Cluster A")
 			utils.CreateFederationSpireAgent(testCtx, k8sClient)
@@ -104,12 +108,12 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			utils.CreateFederationSpiffeCSIDriver(testCtx, k8sClient)
 		})
 
-		It("configures federation on Cluster B (ZTWIM + SpireServer with federation spec)", func() {
+		It("deploys base SPIRE stack on Cluster B", func() {
 			By("Creating ZeroTrustWorkloadIdentityManager on Cluster B")
 			utils.CreateFederationZTWIM(testCtx, k8sClientB, trustDomainB, "cluster-b")
 
-			By("Creating SpireServer with federation on Cluster B")
-			utils.CreateFederationSpireServer(testCtx, k8sClientB, appsDomainB)
+			By("Creating SpireServer on Cluster B")
+			utils.CreateFederationSpireServerBase(testCtx, k8sClientB, appsDomainB)
 
 			By("Creating SpireAgent on Cluster B")
 			utils.CreateFederationSpireAgent(testCtx, k8sClientB)
@@ -124,6 +128,24 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 			By("Waiting for SPIRE ready on Cluster B")
 			utils.WaitForSpireReady(testCtx, k8sClientB, clientsetB, utils.FederationTimeout)
+		})
+
+		It("enables https_spiffe federation on both SpireServers", func() {
+			By("Enabling federation on Cluster A (peer Cluster B)")
+			utils.EnableSpireServerFederation(testCtx, k8sClient, trustDomainB, appsDomainB)
+
+			By("Enabling federation on Cluster B (peer Cluster A)")
+			utils.EnableSpireServerFederation(testCtx, k8sClientB, trustDomainA, appsDomainA)
+
+			By("Waiting for SpireServer after federation enablement on Cluster A")
+			utils.WaitForSpireServerConditions(testCtx, k8sClient, "cluster", map[string]metav1.ConditionStatus{
+				"Ready": metav1.ConditionTrue,
+			}, utils.FederationTimeout)
+
+			By("Waiting for SpireServer after federation enablement on Cluster B")
+			utils.WaitForSpireServerConditions(testCtx, k8sClientB, "cluster", map[string]metav1.ConditionStatus{
+				"Ready": metav1.ConditionTrue,
+			}, utils.FederationTimeout)
 		})
 	})
 
@@ -272,7 +294,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 			By("Creating ClusterSPIFFEID for server on Cluster B")
 			utils.CreateFederationClusterSPIFFEID(testCtx, k8sClientB,
-				"federation-mtls-server", utils.MTLSTestNamespaceB, utils.MTLSServerAppLabel)
+				"federation-mtls-server", utils.MTLSTestNamespaceB, utils.MTLSServerAppLabel, trustDomainA)
 			DeferCleanup(func(ctx context.Context) {
 				cspiffeID := &spiffev1alpha1.ClusterSPIFFEID{ObjectMeta: metav1.ObjectMeta{Name: "federation-mtls-server"}}
 				_ = k8sClientB.Delete(ctx, cspiffeID)
@@ -282,9 +304,10 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			serverPod := utils.NewMTLSServerPod(utils.MTLSServerPodName, utils.MTLSTestNamespaceB, utils.MTLSServerSAName)
 			Expect(k8sClientB.Create(testCtx, serverPod)).To(Succeed())
 			utils.WaitForPodReady(testCtx, clientsetB, utils.MTLSServerPodName, utils.MTLSTestNamespaceB, utils.DefaultTimeout)
-			utils.WaitForSVIDsReadyOnClusterB(testCtx, utils.MTLSTestNamespaceB, utils.MTLSServerPodName, "tls-server", utils.DefaultTimeout)
-			utils.PrepareMTLSCombinedCA(testCtx, utils.MTLSTestNamespaceB, utils.MTLSServerPodName, "tls-server",
-				os.Getenv("KUBECONFIG_CLUSTER_B"), clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"))
+			serverSPIFFEID := utils.FederationWorkloadSPIFFEID(trustDomainB, utils.MTLSTestNamespaceB, utils.MTLSServerSAName)
+			utils.WaitForSVIDsReadyOnClusterB(testCtx, utils.MTLSTestNamespaceB, utils.MTLSServerPodName, "tls-server", serverSPIFFEID, utils.DefaultTimeout)
+			utils.ExpectServerEntryFederatesWith(testCtx, clientsetB, os.Getenv("KUBECONFIG_CLUSTER_B"), serverSPIFFEID, trustDomainA, utils.DefaultTimeout)
+			utils.WaitForWorkloadFederatedBundle(testCtx, utils.MTLSTestNamespaceB, utils.MTLSServerPodName, "tls-server", utils.MinWorkloadFederationBundleCAs, utils.FederationTimeout, true)
 
 			By("Creating a Service for the mTLS server on Cluster B")
 			svc := &corev1.Service{
@@ -324,7 +347,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 
 			By("Creating ClusterSPIFFEID for client on Cluster A")
 			utils.CreateFederationClusterSPIFFEID(testCtx, k8sClient,
-				"federation-mtls-client", utils.MTLSTestNamespaceA, utils.MTLSClientAppLabel)
+				"federation-mtls-client", utils.MTLSTestNamespaceA, utils.MTLSClientAppLabel, trustDomainB)
 			DeferCleanup(func(ctx context.Context) {
 				cspiffeID := &spiffev1alpha1.ClusterSPIFFEID{ObjectMeta: metav1.ObjectMeta{Name: "federation-mtls-client"}}
 				_ = k8sClient.Delete(ctx, cspiffeID)
@@ -334,11 +357,10 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			clientPod := utils.NewMTLSClientPod(utils.MTLSClientPodName, utils.MTLSTestNamespaceA, utils.MTLSClientSAName)
 			Expect(k8sClient.Create(testCtx, clientPod)).To(Succeed())
 			utils.WaitForPodReady(testCtx, clientset, utils.MTLSClientPodName, utils.MTLSTestNamespaceA, utils.DefaultTimeout)
-			utils.WaitForSVIDsReady(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", utils.DefaultTimeout)
-			spiffeBundleCAs := utils.WorkloadSPIFFEBundleCACount(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")
-			fmt.Fprintf(GinkgoWriter, "Cluster A client bundle.pem contains %d CA certificate(s) before mtls-ca injection\n", spiffeBundleCAs)
-			utils.PrepareMTLSCombinedCA(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client",
-				"", clientset, "")
+			clientSPIFFEID := utils.FederationWorkloadSPIFFEID(trustDomainA, utils.MTLSTestNamespaceA, utils.MTLSClientSAName)
+			utils.WaitForSVIDsReady(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", clientSPIFFEID, utils.DefaultTimeout)
+			utils.ExpectServerEntryFederatesWith(testCtx, clientset, "", clientSPIFFEID, trustDomainB, utils.DefaultTimeout)
+			utils.WaitForWorkloadFederatedBundle(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", utils.MinWorkloadFederationBundleCAs, utils.FederationTimeout, false)
 		})
 
 		It("establishes cross-cluster mTLS between client and server", func() {
@@ -382,8 +404,6 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 				if err := k8sClient.Create(ctx, cftdRestore); err != nil && !apierrors.IsAlreadyExists(err) {
 					fmt.Fprintf(GinkgoWriter, "restore federation-cluster-b: %v\n", err)
 				}
-				utils.PrepareMTLSCombinedCA(ctx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client",
-					"", clientset, "")
 			})
 
 			By("Deleting ClusterFederatedTrustDomain on Cluster A")
@@ -392,9 +412,6 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			}
 			Expect(k8sClient.Delete(testCtx, cftd)).To(Succeed(),
 				"failed to delete ClusterFederatedTrustDomain on Cluster A")
-
-			By("Removing combined federated CA from client workload")
-			Expect(utils.ClearMTLSCombinedCA(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client")).To(Succeed())
 
 			By("Attempting mTLS connection (should fail without federated trust)")
 			Eventually(func() bool {
