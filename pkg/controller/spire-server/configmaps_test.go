@@ -2145,3 +2145,200 @@ func TestSpireControllerManagerConfigHashConsistentWithOperandTLSConfig(t *testi
 		t.Fatalf("expected distinct hashes for nil/partial/full profiles, got nil=%q partial=%q full=%q", nilHash, partialHash, fullHash)
 	}
 }
+
+func upstreamTestServer() *v1alpha1.SpireServer {
+	config := createValidConfig()
+	config.Persistence = v1alpha1.Persistence{Size: "1Gi", AccessMode: "ReadWriteOnce"}
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{Spire: &v1alpha1.UpstreamAuthoritySpire{ServerAddress: "upstream.example.org", TrustBundleSecret: "upstream-bundle"}}
+	return &v1alpha1.SpireServer{ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "server-uid"}, Spec: *config}
+}
+
+func upstreamTestParent() *v1alpha1.ZeroTrustWorkloadIdentityManager {
+	return &v1alpha1.ZeroTrustWorkloadIdentityManager{Spec: v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{TrustDomain: "example.org", ClusterName: "downstream", BundleConfigMap: "spire-bundle"}}
+}
+
+func TestUpstreamAgentConfiguration(t *testing.T) {
+	server, parent := upstreamTestServer(), upstreamTestParent()
+	cm, err := generateUpstreamAgentConfigMap(server, parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(cm.Data[upstreamAgentConfigKey]), &config); err != nil {
+		t.Fatal(err)
+	}
+	agent := config["agent"].(map[string]interface{})
+	for key, expected := range map[string]interface{}{"server_address": "upstream.example.org", "server_port": float64(443), "socket_path": upstreamAgentSocketPath, "trust_domain": "example.org", "trust_bundle_path": upstreamAgentBundleDir + "/bundle.crt", "data_dir": upstreamAgentDataDir} {
+		if agent[key] != expected {
+			t.Errorf("%s=%v, want %v", key, agent[key], expected)
+		}
+	}
+	plugins := config["plugins"].(map[string]interface{})
+	pluginData := func(kind, name string) map[string]interface{} {
+		return plugins[kind].([]interface{})[0].(map[string]interface{})[name].(map[string]interface{})["plugin_data"].(map[string]interface{})
+	}
+	if pluginData("NodeAttestor", "k8s_psat")["cluster"] != "downstream" || pluginData("NodeAttestor", "k8s_psat")["token_path"] != upstreamAgentTokenDir+"/"+upstreamAgentTokenName {
+		t.Fatal("invalid PSAT configuration")
+	}
+	if pluginData("KeyManager", "disk")["directory"] != upstreamAgentDataDir || pluginData("WorkloadAttestor", "unix")["discover_workload_path"] != true {
+		t.Fatal("invalid key or workload attestor")
+	}
+	if config["health_checks"].(map[string]interface{})["bind_port"] != float64(upstreamAgentHealthPort) {
+		t.Fatal("health port mismatch")
+	}
+	plugin := buildUpstreamAuthorityPlugin(server.Spec.UpstreamAuthority)[0][pluginNameSpire].(map[string]interface{})["plugin_data"].(map[string]interface{})
+	if plugin["workload_api_socket"] != agent["socket_path"] || plugin["server_address"] != agent["server_address"] || plugin["server_port"] != int32(443) {
+		t.Fatal("server and agent configuration mismatch")
+	}
+	hash := generateConfigHashFromString(cm.Data[upstreamAgentConfigKey])
+	server.Spec.UpstreamAuthority.Spire.ServerAddress = "replacement.example.org"
+	server.Spec.UpstreamAuthority.Spire.ServerPort = 8443
+	updated, err := generateUpstreamAgentConfigMap(server, parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextHash := generateConfigHashFromString(updated.Data[upstreamAgentConfigKey])
+	before := GenerateSpireServerStatefulSet(&server.Spec, "", "", hash, "")
+	after := GenerateSpireServerStatefulSet(&server.Spec, "", "", nextHash, "")
+	if hash == nextHash || !needsUpdate(*before, *after) {
+		t.Fatal("changed configuration does not roll StatefulSet")
+	}
+	if err := validateUpstreamAuthority(server.Spec.UpstreamAuthority); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReconcileUpstreamAgentConfigMap(t *testing.T) {
+	for _, scenario := range []string{"create", "no-op", "update", "conflict", "get-error", "create-error", "update-error", "unowned", "create-only"} {
+		t.Run(scenario, func(t *testing.T) {
+			server, parent := upstreamTestServer(), upstreamTestParent()
+			fake := &fakes.FakeCustomCtrlClient{}
+			r := newTestReconciler(fake)
+			if err := v1alpha1.AddToScheme(r.scheme); err != nil {
+				t.Fatal(err)
+			}
+			existing, err := generateUpstreamAgentConfigMap(server, parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			existing.OwnerReferences = []metav1.OwnerReference{{UID: server.UID, Controller: boolPtr(true)}}
+			existing.ResourceVersion = "1"
+			if scenario != "no-op" {
+				existing.Data[upstreamAgentConfigKey] = "old-config"
+			}
+			if scenario == "unowned" {
+				existing.OwnerReferences = nil
+			}
+			fake.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+				if scenario == "create" || scenario == "create-error" {
+					return kerrors.NewNotFound(corev1.Resource("configmaps"), upstreamAgentName)
+				}
+				if scenario == "get-error" {
+					return errors.New("read failed")
+				}
+				*obj.(*corev1.ConfigMap) = *existing.DeepCopy()
+				return nil
+			}
+			fake.CreateStub = func(_ context.Context, obj client.Object, _ ...client.CreateOption) error {
+				if scenario == "create-error" {
+					return errors.New("create failed")
+				}
+				if !metav1.IsControlledBy(obj, server) {
+					t.Fatal("created config lacks owner")
+				}
+				return nil
+			}
+			calls := 0
+			fake.UpdateStub = func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
+				calls++
+				if scenario == "update-error" {
+					return errors.New("update failed")
+				}
+				if scenario == "conflict" && calls == 1 {
+					existing.ResourceVersion = "2"
+					return kerrors.NewConflict(corev1.Resource("configmaps"), upstreamAgentName, errors.New("stale"))
+				}
+				if obj.GetResourceVersion() != existing.ResourceVersion {
+					t.Fatal("retry did not use fresh resourceVersion")
+				}
+				existing = obj.(*corev1.ConfigMap).DeepCopy()
+				return nil
+			}
+			hash, err := r.reconcileUpstreamAgentConfigMap(context.Background(), server, parent, scenario == "create-only")
+			wantErr := strings.HasSuffix(scenario, "error") || scenario == "unowned"
+			if (err != nil) != wantErr {
+				t.Fatalf("error=%v, wantError=%v", err, wantErr)
+			}
+			if scenario == "conflict" && calls != 2 {
+				t.Fatalf("expected conflict retry, got %d writes", calls)
+			}
+			if (scenario == "no-op" || scenario == "create-only" || scenario == "unowned") && calls != 0 {
+				t.Fatal("unexpected write")
+			}
+			if !wantErr && hash == "" {
+				t.Fatal("missing config hash")
+			}
+			if scenario == "create-only" && hash != generateConfigHashFromString("old-config") {
+				t.Fatal("create-only returned unapplied configuration hash")
+			}
+		})
+	}
+}
+
+func boolPtr(value bool) *bool { return &value }
+
+func TestCleanupUpstreamConfigMap(t *testing.T) {
+	for _, scenario := range []string{"owned", "unowned", "not-found", "create-only", "get-error", "delete-error", "delete-not-found", "delete-conflict"} {
+		t.Run(scenario, func(t *testing.T) {
+			server := upstreamTestServer()
+			fake := &fakes.FakeCustomCtrlClient{}
+			r := newTestReconciler(fake)
+			fake.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+				if key.Name != upstreamAgentName {
+					t.Fatal("cleanup read unrelated object")
+				}
+				if scenario == "not-found" {
+					return kerrors.NewNotFound(corev1.Resource("configmaps"), key.Name)
+				}
+				if scenario == "get-error" {
+					return errors.New("get failed")
+				}
+				cm := obj.(*corev1.ConfigMap)
+				cm.Name, cm.UID, cm.ResourceVersion = upstreamAgentName, "cm-uid", "5"
+				if scenario != "unowned" {
+					cm.OwnerReferences = []metav1.OwnerReference{{UID: server.UID, Controller: boolPtr(true)}}
+				}
+				return nil
+			}
+			fake.DeleteStub = func(_ context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				if _, ok := obj.(*corev1.ConfigMap); !ok {
+					t.Fatal("cleanup attempted deleting non-ConfigMap")
+				}
+				options := &client.DeleteOptions{}
+				for _, option := range opts {
+					option.ApplyToDelete(options)
+				}
+				if options.Preconditions == nil || *options.Preconditions.UID != "cm-uid" || *options.Preconditions.ResourceVersion != "5" {
+					t.Fatal("missing deletion race preconditions")
+				}
+				switch scenario {
+				case "delete-not-found":
+					return kerrors.NewNotFound(corev1.Resource("configmaps"), obj.GetName())
+				case "delete-error":
+					return errors.New("delete failed")
+				case "delete-conflict":
+					return kerrors.NewConflict(corev1.Resource("configmaps"), obj.GetName(), errors.New("changed owner"))
+				}
+				return nil
+			}
+			err := r.cleanupUpstreamAgentConfigMap(context.Background(), server, scenario == "create-only")
+			wantErr := strings.HasSuffix(scenario, "error") || scenario == "delete-conflict"
+			if (err != nil) != wantErr {
+				t.Fatalf("error=%v, wantError=%v", err, wantErr)
+			}
+			if (scenario == "unowned" || scenario == "not-found" || scenario == "create-only") && fake.DeleteCallCount() != 0 {
+				t.Fatal("unexpected deletion")
+			}
+		})
+	}
+}

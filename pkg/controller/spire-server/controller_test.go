@@ -2,17 +2,31 @@ package spire_server
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
+	"math/big"
+	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
+	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -2228,5 +2242,376 @@ func TestReconcile_ReconciliationStepErrors_MutationKillers(t *testing.T) {
 				t.Errorf("Expected RequeueAfter=0 when error returned for %s, got %v", tt.description, result.RequeueAfter)
 			}
 		})
+	}
+}
+
+func testTrustBundle(t *testing.T) []byte {
+	t.Helper()
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign, NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour)}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, public, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+}
+
+func TestUpstreamTrustBundleLifecycle(t *testing.T) {
+	valid := testTrustBundle(t)
+	for _, tc := range []struct {
+		name    string
+		bundle  []byte
+		readErr error
+		reason  string
+		ready   bool
+	}{
+		{name: "valid", bundle: valid, ready: true},
+		{name: "multiple-roots", bundle: append(append([]byte{}, valid...), valid...), ready: true},
+		{name: "missing-secret", readErr: kerrors.NewNotFound(corev1.Resource("secrets"), "bundle"), reason: "TrustBundleMissing"},
+		{name: "empty-key", reason: "TrustBundleMissing"},
+		{name: "whitespace", bundle: []byte("  "), reason: "UpstreamAgentNotReady"},
+		{name: "malformed", bundle: []byte("sensitive-invalid-data"), reason: "UpstreamAgentNotReady"},
+		{name: "trailing-junk", bundle: append(append([]byte{}, valid...), []byte("junk")...), reason: "UpstreamAgentNotReady"},
+		{name: "bad-der", bundle: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("junk")}), reason: "UpstreamAgentNotReady"},
+		{name: "read-error", readErr: errors.New("temporarily unavailable"), reason: "UpstreamAgentNotReady"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := upstreamTestServer()
+			fake := &fakes.FakeCustomCtrlClient{}
+			r := newTestReconciler(fake)
+			fake.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+				if key.Name != server.Spec.UpstreamAuthority.Spire.TrustBundleSecret || key.Namespace != utils.GetOperatorNamespace() {
+					t.Fatalf("wrong Secret key: %v", key)
+				}
+				if tc.readErr != nil {
+					return tc.readErr
+				}
+				obj.(*corev1.Secret).Data = map[string][]byte{upstreamAgentBundleKey: tc.bundle}
+				return nil
+			}
+			manager := status.NewManager(fake)
+			hash, ready, err := r.readUpstreamTrustBundle(context.Background(), server, manager)
+			if (err != nil) != (tc.name == "read-error") || ready != tc.ready {
+				t.Fatalf("ready=%v, error=%v", ready, err)
+			}
+			if ready && hash != generateConfigHash(tc.bundle) {
+				t.Fatal("hash is not derived from actual bundle bytes")
+			}
+			if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
+				t.Fatal(err)
+			}
+			cond := apimeta.FindStatusCondition(server.Status.Conditions, UpstreamAgentAvailable)
+			if !ready && (cond == nil || cond.Reason != tc.reason || cond.Status != metav1.ConditionFalse) {
+				t.Fatalf("unexpected condition: %+v", cond)
+			}
+			if cond != nil && strings.Contains(cond.Message, "sensitive-invalid-data") {
+				t.Fatal("status exposed Secret content")
+			}
+		})
+	}
+	server := upstreamTestServer()
+	old := GenerateSpireServerStatefulSet(&server.Spec, "s", "m", "a", generateConfigHash(valid))
+	updated := GenerateSpireServerStatefulSet(&server.Spec, "s", "m", "a", generateConfigHash(testTrustBundle(t)))
+	if !needsUpdate(*old, *updated) {
+		t.Fatal("trust rotation does not trigger rollout")
+	}
+	server.Spec.UpstreamAuthority = nil
+	disabled := GenerateSpireServerStatefulSet(&server.Spec, "s", "m", "", "")
+	if !needsUpdate(*updated, *disabled) || len(disabled.Spec.Template.Spec.Containers) != 2 || disabled.Spec.Template.Spec.ShareProcessNamespace != nil {
+		t.Fatal("disable did not remove integration")
+	}
+	for _, volume := range disabled.Spec.Template.Spec.Volumes {
+		if strings.HasPrefix(volume.Name, "upstream-") {
+			t.Fatal("upstream volume remains after disable")
+		}
+	}
+	if _, exists := disabled.Spec.Template.Annotations[upstreamAgentBundleHashAnnotation]; exists {
+		t.Fatal("bundle annotation remains")
+	}
+	if _, exists := disabled.Spec.Template.Annotations[upstreamAgentConfigHashAnnotation]; exists {
+		t.Fatal("config annotation remains")
+	}
+	if buildUpstreamAuthorityPlugin(&v1alpha1.UpstreamAuthorityConfig{}) != nil {
+		t.Fatal("unexpected disabled plugin")
+	}
+}
+
+func TestUpstreamSecretEvents(t *testing.T) {
+	server := upstreamTestServer()
+	fake := &fakes.FakeCustomCtrlClient{}
+	r := newTestReconciler(fake)
+	fake.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+		*obj.(*v1alpha1.SpireServer) = *server.DeepCopy()
+		return nil
+	}
+	for _, event := range []string{"create", "update", "delete"} {
+		t.Run(event, func(t *testing.T) {
+			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "upstream-bundle", Namespace: utils.GetOperatorNamespace()}}
+			requests := r.mapUpstreamSecret(context.Background(), secret)
+			if len(requests) != 1 || requests[0].Name != "cluster" || requests[0].Namespace != "" {
+				t.Fatalf("reference event not mapped: %v", requests)
+			}
+			secret.Name = "unrelated"
+			if len(r.mapUpstreamSecret(context.Background(), secret)) != 0 {
+				t.Fatal("unrelated Secret enqueued")
+			}
+			secret.Name, secret.Namespace = "upstream-bundle", "another-namespace"
+			if len(r.mapUpstreamSecret(context.Background(), secret)) != 0 {
+				t.Fatal("other namespace enqueued")
+			}
+		})
+	}
+	server.Spec.UpstreamAuthority = nil
+	if len(r.mapUpstreamSecret(context.Background(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "upstream-bundle", Namespace: utils.GetOperatorNamespace()}})) != 0 {
+		t.Fatal("disabled reference enqueued")
+	}
+}
+
+func TestUpstreamAgentAvailability(t *testing.T) {
+	for _, scenario := range []string{"ready", "unready", "terminated", "missing-pod", "pod-read-error", "missing-sts", "sts-read-error", "wrong-sts-owner", "wrong-pod-owner", "wrong-name", "terminating", "old-generation", "old-revision", "old-pod-config", "old-sts-config", "no-sidecar", "no-container-status"} {
+		t.Run(scenario, func(t *testing.T) {
+			server := upstreamTestServer()
+			server.Generation = 7
+			sts := GenerateSpireServerStatefulSet(&server.Spec, "s", "m", "a", "b")
+			sts.UID, sts.Generation = "sts-uid", 4
+			sts.OwnerReferences = []metav1.OwnerReference{{UID: server.UID, Controller: boolPtr(true)}}
+			sts.Status = appsv1.StatefulSetStatus{ObservedGeneration: 4, UpdateRevision: "current"}
+			expected := map[string]string{}
+			for _, key := range []string{spireServerStatefulSetSpireServerConfigHashAnnotationKey, spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey, upstreamAgentConfigHashAnnotation, upstreamAgentBundleHashAnnotation} {
+				expected[key] = sts.Spec.Template.Annotations[key]
+			}
+			pod := &corev1.Pod{ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(), Spec: *sts.Spec.Template.Spec.DeepCopy()}
+			pod.Name, pod.Namespace = "spire-server-0", utils.GetOperatorNamespace()
+			pod.OwnerReferences = []metav1.OwnerReference{{UID: sts.UID, Name: "spire-server", Kind: "StatefulSet", Controller: boolPtr(true)}}
+			pod.Labels[appsv1.ControllerRevisionHashLabelKey] = "current"
+			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: upstreamAgentName, Ready: true, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}}
+			switch scenario {
+			case "unready":
+				pod.Status.ContainerStatuses[0].Ready = false
+			case "terminated":
+				pod.Status.ContainerStatuses[0].State = corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{}}
+			case "wrong-sts-owner":
+				sts.OwnerReferences[0].UID = "someone-else"
+			case "wrong-pod-owner":
+				pod.OwnerReferences[0].UID = "someone-else"
+			case "wrong-name":
+				pod.Name = "other-pod"
+			case "terminating":
+				now := metav1.Now()
+				pod.DeletionTimestamp = &now
+			case "old-generation":
+				sts.Status.ObservedGeneration = 3
+			case "old-revision":
+				pod.Labels[appsv1.ControllerRevisionHashLabelKey] = "old"
+			case "old-pod-config":
+				pod.Annotations[upstreamAgentBundleHashAnnotation] = "old"
+			case "old-sts-config":
+				sts.Spec.Template.Annotations[upstreamAgentConfigHashAnnotation] = "old"
+			case "no-sidecar":
+				pod.Spec.Containers = pod.Spec.Containers[:2]
+			case "no-container-status":
+				pod.Status.ContainerStatuses = nil
+			}
+			fake := &fakes.FakeCustomCtrlClient{}
+			r := newTestReconciler(fake)
+			fake.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+				switch target := obj.(type) {
+				case *appsv1.StatefulSet:
+					if scenario == "missing-sts" {
+						return kerrors.NewNotFound(appsv1.Resource("statefulsets"), key.Name)
+					}
+					if scenario == "sts-read-error" {
+						return errors.New("read failure")
+					}
+					*target = *sts.DeepCopy()
+				case *corev1.Pod:
+					if scenario == "missing-pod" {
+						return kerrors.NewNotFound(corev1.Resource("pods"), key.Name)
+					}
+					if scenario == "pod-read-error" {
+						return errors.New("read failure")
+					}
+					*target = *pod.DeepCopy()
+				default:
+					t.Fatalf("unexpected read: %T", obj)
+				}
+				return nil
+			}
+			manager := status.NewManager(fake)
+			err := r.reconcileUpstreamAgentAvailability(context.Background(), server, manager, expected)
+			if (err != nil) != strings.HasSuffix(scenario, "read-error") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
+				t.Fatal(err)
+			}
+			cond := apimeta.FindStatusCondition(server.Status.Conditions, UpstreamAgentAvailable)
+			ready := scenario == "ready"
+			if cond == nil || (cond.Status == metav1.ConditionTrue) != ready {
+				t.Fatalf("unexpected upstream condition: %+v", cond)
+			}
+			aggregate := apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.Ready)
+			if (aggregate.Status == metav1.ConditionTrue) != ready || cond.ObservedGeneration != 7 {
+				t.Fatalf("incorrect aggregate or generation: %+v", aggregate)
+			}
+			writes := fake.StatusUpdateCallCount()
+			if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
+				t.Fatal(err)
+			}
+			if fake.StatusUpdateCallCount() != writes {
+				t.Fatal("identical status wrote again")
+			}
+		})
+	}
+}
+
+func TestUpstreamPodEvents(t *testing.T) {
+	r := newTestReconciler(&fakes.FakeCustomCtrlClient{})
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "spire-server-0", Namespace: utils.GetOperatorNamespace(), OwnerReferences: []metav1.OwnerReference{{Kind: "StatefulSet", Name: "spire-server", Controller: boolPtr(true)}}}}
+	if len(r.mapUpstreamPod(context.Background(), pod)) != 1 {
+		t.Fatal("pod readiness event not mapped")
+	}
+	pod.Name = "spire-server-1"
+	if len(r.mapUpstreamPod(context.Background(), pod)) != 0 {
+		t.Fatal("unrelated ordinal enqueued")
+	}
+	pod.Name, pod.Namespace = "spire-server-0", "unrelated"
+	if len(r.mapUpstreamPod(context.Background(), pod)) != 0 {
+		t.Fatal("wrong namespace enqueued")
+	}
+	pod.Namespace, pod.OwnerReferences = utils.GetOperatorNamespace(), nil
+	if len(r.mapUpstreamPod(context.Background(), pod)) != 0 {
+		t.Fatal("unowned pod enqueued")
+	}
+}
+
+// This drives the real reconciliation sequence against stored objects; it does
+// not simulate the kubelet, SCC admission, or SPIRE processes.
+func TestReconcileUpstreamLifecycle(t *testing.T) {
+	ctx := context.Background()
+	server, parent := upstreamTestServer(), upstreamTestParent()
+	server.Spec.JwtIssuer = "https://example.org"
+	parent.TypeMeta = metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "ZeroTrustWorkloadIdentityManager"}
+	parent.Name, parent.UID = "cluster", "parent-uid"
+	fake := &fakes.FakeCustomCtrlClient{}
+	r := newTestReconciler(fake)
+	for _, add := range []func(*runtime.Scheme) error{v1alpha1.AddToScheme, corev1.AddToScheme, appsv1.AddToScheme, rbacv1.AddToScheme, admissionv1.AddToScheme, routev1.AddToScheme} {
+		if err := add(r.scheme); err != nil {
+			t.Fatal(err)
+		}
+	}
+	objects := map[string]client.Object{}
+	keyFor := func(obj client.Object) string { return fmt.Sprintf("%T/%s/%s", obj, obj.GetNamespace(), obj.GetName()) }
+	save := func(obj client.Object) { objects[keyFor(obj)] = obj.DeepCopyObject().(client.Object) }
+	save(server)
+	save(parent)
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "upstream-bundle", Namespace: utils.GetOperatorNamespace()}, Data: map[string][]byte{upstreamAgentBundleKey: testTrustBundle(t)}}
+	save(secret)
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "spire-data-spire-server-0", Namespace: utils.GetOperatorNamespace()}}
+	save(pvc)
+	fake.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+		found := objects[fmt.Sprintf("%T/%s/%s", obj, key.Namespace, key.Name)]
+		if found == nil {
+			return kerrors.NewNotFound(corev1.Resource("objects"), key.Name)
+		}
+		reflect.ValueOf(obj).Elem().Set(reflect.ValueOf(found.DeepCopyObject()).Elem())
+		return nil
+	}
+	fake.CreateStub = func(_ context.Context, obj client.Object, _ ...client.CreateOption) error {
+		if objects[keyFor(obj)] != nil {
+			return kerrors.NewAlreadyExists(corev1.Resource("objects"), obj.GetName())
+		}
+		obj.SetUID(types.UID("uid-" + obj.GetName()))
+		obj.SetResourceVersion("1")
+		save(obj)
+		return nil
+	}
+	fake.UpdateStub = func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
+		existing := objects[keyFor(obj)]
+		if existing == nil {
+			return kerrors.NewNotFound(corev1.Resource("objects"), obj.GetName())
+		}
+		if existing.GetResourceVersion() != obj.GetResourceVersion() {
+			return kerrors.NewConflict(corev1.Resource("objects"), obj.GetName(), errors.New("stale"))
+		}
+		version, _ := strconv.Atoi(existing.GetResourceVersion())
+		obj.SetResourceVersion(strconv.Itoa(version + 1))
+		obj.SetUID(existing.GetUID())
+		save(obj)
+		return nil
+	}
+	fake.StatusUpdateStub = func(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+		save(obj)
+		return nil
+	}
+	fake.DeleteStub = func(_ context.Context, obj client.Object, _ ...client.DeleteOption) error {
+		delete(objects, keyFor(obj))
+		return nil
+	}
+	reconcile := func() {
+		t.Helper()
+		if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: "cluster"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	condition := func() *metav1.Condition {
+		return apimeta.FindStatusCondition(objects[keyFor(server)].(*v1alpha1.SpireServer).Status.Conditions, UpstreamAgentAvailable)
+	}
+	reconcile()
+	if condition() == nil || condition().Status != metav1.ConditionFalse {
+		t.Fatal("new sidecar prematurely ready")
+	}
+	stsKey := keyFor(&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "spire-server", Namespace: utils.GetOperatorNamespace()}})
+	sts := objects[stsKey].(*appsv1.StatefulSet)
+	sts.Status = appsv1.StatefulSetStatus{ObservedGeneration: sts.Generation, UpdateRevision: "revision-1", ReadyReplicas: 1, UpdatedReplicas: 1, Replicas: 1}
+	pod := &corev1.Pod{ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(), Spec: *sts.Spec.Template.Spec.DeepCopy()}
+	pod.Name, pod.Namespace = "spire-server-0", utils.GetOperatorNamespace()
+	pod.OwnerReferences = []metav1.OwnerReference{{Kind: "StatefulSet", Name: sts.Name, UID: sts.UID, Controller: boolPtr(true)}}
+	pod.Labels[appsv1.ControllerRevisionHashLabelKey] = "revision-1"
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: upstreamAgentName, Ready: true, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}}
+	save(pod)
+	reconcile()
+	if condition().Status != metav1.ConditionTrue {
+		t.Fatalf("current sidecar not ready: %+v", condition())
+	}
+	writes, statusWrites := fake.UpdateCallCount(), fake.StatusUpdateCallCount()
+	reconcile()
+	if fake.UpdateCallCount() != writes || fake.StatusUpdateCallCount() != statusWrites {
+		for i := writes; i < fake.UpdateCallCount(); i++ {
+			_, obj, _ := fake.UpdateArgsForCall(i)
+			t.Logf("extra update: %T %s", obj, obj.GetName())
+		}
+		t.Fatalf("steady reconciliation updates %d -> %d; status %d -> %d", writes, fake.UpdateCallCount(), statusWrites, fake.StatusUpdateCallCount())
+	}
+	secret.Data[upstreamAgentBundleKey] = testTrustBundle(t)
+	save(secret)
+	reconcile()
+	if condition().Status != metav1.ConditionFalse {
+		t.Fatal("old pod ready after bundle rotation")
+	}
+	current := objects[keyFor(server)].(*v1alpha1.SpireServer)
+	current.Spec.UpstreamAuthority = nil
+	reconcile()
+	if condition() != nil {
+		t.Fatal("upstream condition remains after disable")
+	}
+	configKey := keyFor(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: upstreamAgentName, Namespace: utils.GetOperatorNamespace()}})
+	if objects[configKey] != nil {
+		t.Fatal("owned agent ConfigMap remains after disable")
+	}
+	if objects[keyFor(secret)] == nil || objects[keyFor(pvc)] == nil {
+		t.Fatal("administrator Secret or server PVC deleted")
+	}
+	sts = objects[stsKey].(*appsv1.StatefulSet)
+	if len(sts.Spec.Template.Spec.Containers) != 2 || sts.Spec.Template.Spec.ShareProcessNamespace != nil {
+		t.Fatal("upstream pod state remains after disable")
+	}
+	deletes := fake.DeleteCallCount()
+	reconcile()
+	if fake.DeleteCallCount() != deletes {
+		t.Fatal("repeat disable attempted additional deletes")
 	}
 }

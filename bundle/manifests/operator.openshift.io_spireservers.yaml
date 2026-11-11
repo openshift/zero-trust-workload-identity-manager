@@ -1,9 +1,9 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  creationTimestamp: null
   name: spireservers.operator.openshift.io
 spec:
   group: operator.openshift.io
@@ -1486,6 +1486,49 @@ spec:
                     - issuerName
                     - namespace
                     type: object
+                  spire:
+                    description: |-
+                      spire configures an upstream SPIRE server in the same trust domain.
+                      When set, certManager and vault must be omitted. When omitted, no
+                      upstream SPIRE agent is deployed.
+                    properties:
+                      serverAddress:
+                        description: |-
+                          serverAddress is the required DNS hostname of the upstream gRPC endpoint.
+                          It must contain 1-253 lowercase alphanumeric, hyphen or dot characters,
+                          with DNS labels of at most 63 characters, and no URL scheme, port or path.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$
+                        type: string
+                        x-kubernetes-validations:
+                        - message: serverAddress must be a hostname without scheme,
+                            port, or path
+                          rule: '!self.contains(''://'') && !self.contains('':'')
+                            && !self.contains(''/'')'
+                      serverPort:
+                        default: 443
+                        description: |-
+                          serverPort is the upstream gRPC port, between 1 and 65535 inclusive.
+                          When omitted, it defaults to 443.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1
+                        type: integer
+                      trustBundleSecret:
+                        description: |-
+                          trustBundleSecret is the required name of a Secret in the operator namespace.
+                          Its bundle.crt key must contain PEM-encoded X.509 root certificates for
+                          bootstrapping trust in the upstream server. The Secret is administrator-owned.
+                          The name must be a lowercase DNS subdomain of 1-253 characters.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                        type: string
+                    required:
+                    - serverAddress
+                    - trustBundleSecret
+                    type: object
                   vault:
                     description: vault configures the HashiCorp Vault UpstreamAuthority
                       plugin.
@@ -1558,9 +1601,10 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-validations:
-                - message: exactly one of certManager or vault must be set
-                  rule: (has(self.certManager) && !has(self.vault)) || (!has(self.certManager)
-                    && has(self.vault))
+                - message: exactly one of certManager, vault, or spire must be set
+                  rule: (has(self.certManager) && !has(self.vault) && !has(self.spire))
+                    || (!has(self.certManager) && has(self.vault) && !has(self.spire))
+                    || (!has(self.certManager) && !has(self.vault) && has(self.spire))
             required:
             - caSubject
             - datastore
@@ -1649,9 +1693,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

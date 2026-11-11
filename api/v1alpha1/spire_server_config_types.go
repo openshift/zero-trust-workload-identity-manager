@@ -363,8 +363,8 @@ type CASubject struct {
 }
 
 // UpstreamAuthorityConfig selects and configures an UpstreamAuthority plugin.
-// Exactly one of certManager or vault must be set.
-// +kubebuilder:validation:XValidation:rule="(has(self.certManager) && !has(self.vault)) || (!has(self.certManager) && has(self.vault))",message="exactly one of certManager or vault must be set"
+// Exactly one of certManager, vault, or spire must be set.
+// +kubebuilder:validation:XValidation:rule="(has(self.certManager) && !has(self.vault) && !has(self.spire)) || (!has(self.certManager) && has(self.vault) && !has(self.spire)) || (!has(self.certManager) && !has(self.vault) && has(self.spire))",message="exactly one of certManager, vault, or spire must be set"
 type UpstreamAuthorityConfig struct {
 	// certManager configures the cert-manager UpstreamAuthority plugin.
 	// +kubebuilder:validation:Optional
@@ -373,6 +373,47 @@ type UpstreamAuthorityConfig struct {
 	// vault configures the HashiCorp Vault UpstreamAuthority plugin.
 	// +kubebuilder:validation:Optional
 	Vault *UpstreamAuthorityVault `json:"vault,omitempty"`
+
+	// spire configures an upstream SPIRE server in the same trust domain.
+	// When set, certManager and vault must be omitted. When omitted, no
+	// upstream SPIRE agent is deployed.
+	// +optional
+	// +kubebuilder:validation:Optional
+	Spire *UpstreamAuthoritySpire `json:"spire,omitempty"`
+}
+
+// UpstreamAuthoritySpire configures a downstream server's SPIRE upstream authority.
+type UpstreamAuthoritySpire struct {
+	// serverAddress is the required DNS hostname of the upstream gRPC endpoint.
+	// It must contain 1-253 lowercase alphanumeric, hyphen or dot characters,
+	// with DNS labels of at most 63 characters, and no URL scheme, port or path.
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$`
+	// +kubebuilder:validation:XValidation:rule="!self.contains('://') && !self.contains(':') && !self.contains('/')",message="serverAddress must be a hostname without scheme, port, or path"
+	ServerAddress string `json:"serverAddress"`
+
+	// serverPort is the upstream gRPC port, between 1 and 65535 inclusive.
+	// When omitted, it defaults to 443.
+	// +optional
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=443
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	ServerPort int32 `json:"serverPort,omitempty"`
+
+	// trustBundleSecret is the required name of a Secret in the operator namespace.
+	// Its bundle.crt key must contain PEM-encoded X.509 root certificates for
+	// bootstrapping trust in the upstream server. The Secret is administrator-owned.
+	// The name must be a lowercase DNS subdomain of 1-253 characters.
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	TrustBundleSecret string `json:"trustBundleSecret"`
 }
 
 // UpstreamAuthorityCertManager configures the cert-manager UpstreamAuthority plugin.
