@@ -1223,7 +1223,7 @@ spec:
                       - message: endpointSpiffeId is required when bundleEndpointProfile
                           is https_spiffe
                         rule: 'self.bundleEndpointProfile == ''https_spiffe'' ? has(self.endpointSpiffeId)
-                          && size(self.endpointSpiffeId) > 0 : true'
+                          && self.endpointSpiffeId != '''' : true'
                     maxItems: 50
                     minItems: 1
                     type: array

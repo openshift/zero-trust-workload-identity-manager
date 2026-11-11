@@ -155,7 +155,7 @@ func (r *SpireServerReconciler) reconcileRoute(ctx context.Context, server *v1al
 			}
 		} else {
 			// Route exists and is up to date - only update status if it's currently not ready
-			existingCondition := apimeta.FindStatusCondition(server.Status.Conditions, RouteAvailable)
+			existingCondition := apimeta.FindStatusCondition(server.Status.ConditionalStatus.Conditions, RouteAvailable)
 			if existingCondition == nil || existingCondition.Status != metav1.ConditionTrue {
 				statusMgr.AddCondition(RouteAvailable, "RouteAvailable",
 					"Federation route is ready",

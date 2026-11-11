@@ -75,8 +75,8 @@ func ResourceNeedsUpdate(existing, desired client.Object) bool {
 // We don't care about extra labels that Kubernetes might add
 // Treats nil and empty maps as equivalent
 func LabelsMatch(existing, desired map[string]string) bool {
-	// If desired is empty, we're not enforcing any labels
-	if len(desired) == 0 {
+	// If desired is nil or empty, we're not enforcing any labels
+	if desired == nil || len(desired) == 0 {
 		return true
 	}
 
@@ -94,8 +94,8 @@ func LabelsMatch(existing, desired map[string]string) bool {
 // We don't care about extra annotations that Kubernetes might add
 // Treats nil and empty maps as equivalent
 func AnnotationsMatch(existing, desired map[string]string) bool {
-	// If desired is empty, we're not enforcing any annotations
-	if len(desired) == 0 {
+	// If desired is nil or empty, we're not enforcing any annotations
+	if desired == nil || len(desired) == 0 {
 		return true
 	}
 

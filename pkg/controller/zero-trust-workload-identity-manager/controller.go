@@ -326,7 +326,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	}
 
 	// Set CreateOnlyMode condition based on environment variable (simpler than aggregating from operands)
-	setCreateOnlyModeCondition(statusMgr, config.Status.Conditions)
+	setCreateOnlyModeCondition(statusMgr, config.Status.ConditionalStatus.Conditions)
 
 	// Check create-only mode from environment variable for logging and OLM update
 	createOnlyModeEnabled := utils.IsInCreateOnlyMode()
@@ -603,7 +603,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) updateOperatorCondition(ctx
 			// Only count operands that exist but are not ready
 			// If operand exists (not CR not found) and is not ready, it blocks upgrade
 			if !utils.StringToBool(operand.Ready) && operand.Message != OperandMessageCRNotFound {
-				notReadyOperands = append(notReadyOperands, operand.Kind)
+				notReadyOperands = append(notReadyOperands, fmt.Sprintf("%s", operand.Kind))
 			}
 		}
 
