@@ -185,7 +185,7 @@ func (r *SpiffeCsiReconciler) handleCreateOnlyMode(driver *v1alpha1.SpiffeCSIDri
 			"Create-Only Mode is active: Updates are not reconciled to existing resources",
 			metav1.ConditionTrue)
 	} else {
-		existingCondition := apimeta.FindStatusCondition(driver.Status.Conditions, utils.CreateOnlyModeStatusType)
+		existingCondition := apimeta.FindStatusCondition(driver.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
 		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
 			statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeDisabled,
 				"Create-only mode is disabled",

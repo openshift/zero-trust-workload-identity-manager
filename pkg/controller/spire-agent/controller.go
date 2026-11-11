@@ -206,7 +206,7 @@ func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, 
 			"Create-Only Mode is active: Updates are not reconciled to existing resources",
 			metav1.ConditionTrue)
 	} else {
-		existingCondition := apimeta.FindStatusCondition(agent.Status.Conditions, utils.CreateOnlyModeStatusType)
+		existingCondition := apimeta.FindStatusCondition(agent.Status.ConditionalStatus.Conditions, utils.CreateOnlyModeStatusType)
 		if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
 			statusMgr.AddCondition(utils.CreateOnlyModeStatusType, utils.CreateOnlyModeDisabled,
 				"Create-only mode is disabled",
@@ -217,7 +217,7 @@ func (r *SpireAgentReconciler) handleCreateOnlyMode(agent *v1alpha1.SpireAgent, 
 }
 
 // validateConfiguration validates SpireAgent configuration including proxy settings
-func (r *SpireAgentReconciler) validateConfiguration(_ context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
+func (r *SpireAgentReconciler) validateConfiguration(ctx context.Context, agent *v1alpha1.SpireAgent, statusMgr *status.Manager) error {
 	// Validate proxy configuration - if proxy is enabled, CA bundle ConfigMap must be configured
 	if err := r.validateProxyConfiguration(statusMgr); err != nil {
 		return err
