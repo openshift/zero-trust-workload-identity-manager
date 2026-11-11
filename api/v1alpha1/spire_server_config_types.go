@@ -480,7 +480,8 @@ type SpireServerStatus struct {
 	ConditionalStatus `json:",inline,omitempty"`
 
 	// networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
-	// Populated when spec.managedNetworkPolicy is "true" or unset; omitted when unmanaged ("false").
+	// When spec.managedNetworkPolicy is "true" or unset, managementState is Managed.
+	// When spec.managedNetworkPolicy is "false", managementState is Unmanaged and the operator does not reconcile ztwim-sys-* policies.
 	// +kubebuilder:validation:Optional
 	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }

@@ -18,8 +18,10 @@ const (
 
 // ZTWIM aggregate condition reasons (condition type NetworkPoliciesApplied on ZeroTrustWorkloadIdentityManager).
 const (
+	// ReasonOperandsNetworkPoliciesReady is set when every aggregated operand is ready or Unmanaged.
 	ReasonOperandsNetworkPoliciesReady = "OperandsNetworkPoliciesReady"
-	ReasonOperandNetworkPolicyFailed   = "OperandNetworkPolicyFailed"
+	// ReasonOperandsNetworkPolicyFailed is set when one or more aggregated operands report failure (details in condition message).
+	ReasonOperandsNetworkPolicyFailed = "OperandsNetworkPolicyFailed"
 )
 
 // NetworkPolicyManagementState mirrors effective spec.managedNetworkPolicy on the operand.
