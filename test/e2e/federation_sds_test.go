@@ -149,9 +149,9 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		})
 	})
 
-	Context("Federation Routes", func() {
-		It("creates federation routes on both clusters", func() {
-			By("Waiting for federation route on Cluster A")
+	Context("Operator federation routes", func() {
+		It("waits for spire-server-federation routes on both clusters", func() {
+			By("Waiting for operator-managed spire-server-federation route on Cluster A (test does not create this Route)")
 			Eventually(func() string {
 				route := &routev1.Route{}
 				err := k8sClient.Get(testCtx, types.NamespacedName{
@@ -174,7 +174,7 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			bundleRouteA = route.Spec.Host
 			fmt.Fprintf(GinkgoWriter, "Cluster A federation route: %s\n", bundleRouteA)
 
-			By("Waiting for federation route on Cluster B")
+			By("Waiting for operator-managed spire-server-federation route on Cluster B (test does not create this Route)")
 			Eventually(func() string {
 				routeB := &routev1.Route{}
 				err := k8sClientB.Get(testCtx, types.NamespacedName{
