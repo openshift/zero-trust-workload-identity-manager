@@ -26,6 +26,10 @@ const (
 	OperatorLogLevelEnvVar           = "OPERATOR_LOG_LEVEL"
 	CreateOnlyModeEnvVar             = "CREATE_ONLY_MODE"
 
+	OperatorMetricsServiceName = "zero-trust-workload-identity-manager-metrics-service"
+	OperatorMetricsPortName    = "metrics-https"
+	OperatorMetricsPort        = 8443
+
 	SpireServerStatefulSetName               = "spire-server"
 	SpireServerPodLabel                      = "app.kubernetes.io/name=spire-server"
 	SpireServerConfigMapName                 = "spire-server"
@@ -41,10 +45,6 @@ const (
 	SpireOIDCDiscoveryProviderConfigMapName  = "spire-spiffe-oidc-discovery-provider"
 	SpireOIDCDiscoveryProviderConfigKey      = "oidc-discovery-provider.conf"
 
-	OperatorMetricsServiceName = "zero-trust-workload-identity-manager-metrics-service"
-	OperatorMetricsPortName    = "metrics-https"
-	OperatorMetricsPort        = 8443
-
 	AppContainerImage = "busybox"
 
 	SpiffeHelperConfigMapName = "spiffe-helper-config"
@@ -56,9 +56,32 @@ const (
 	// certificate validity for clock skew compensation.
 	ClockSkewTolerance = 1 * time.Minute
 
+	// Federation e2e (https_spiffe, two-cluster). Behavioral reference:
+	// https://github.com/sayak-redhat/redhat-openshift-onboarding/blob/main/SPIRE-Federation-https_spiffe-Guide-4.18.md
+	FederationRouteName           = "spire-server-federation"
+	FederationRoutePort           = 443
+	SpireControllerManagerClass     = "zero-trust-workload-identity-manager-spire"
+	SpireServerAPISocket            = "/tmp/spire-server/private/api.sock"
+	SpireAgentWorkloadSocket        = "/tmp/spire-agent/public/spire-agent.sock"
+	MTLSServerRoutePort             = 443
+	MTLSOpenSSLTimeoutSeconds       = 60
+	MTLSServerImage                   = "registry.access.redhat.com/ubi9/ubi:9.5"
+	MTLSServerPort                    = 8443
+	MTLSTestNamespaceA              = "e2e-federation-mtls-a"
+	MTLSTestNamespaceB              = "e2e-federation-mtls-b"
+	MTLSServerPodName               = "mtls-server"
+	MTLSClientPodName               = "mtls-client"
+	MTLSServerSAName                = "mtls-server-sa"
+	MTLSClientSAName                = "mtls-client-sa"
+	MTLSServerAppLabel              = "federation-mtls-server"
+	MTLSClientAppLabel              = "federation-mtls-client"
+	MTLSServerRouteName             = "mtls-server"
+	MinWorkloadFederationBundleCAs = 2
+
 	DefaultInterval    = 10 * time.Second
 	ShortInterval      = 5 * time.Second
 	DefaultTimeout     = 5 * time.Minute
 	ShortTimeout       = 2 * time.Minute
 	TestContextTimeout = 10 * time.Minute
+	FederationTimeout  = 10 * time.Minute
 )
