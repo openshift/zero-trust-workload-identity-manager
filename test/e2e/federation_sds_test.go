@@ -398,7 +398,10 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 		})
 
 		It("mTLS fails without federated trust material (negative control)", func() {
+			clientCSI := "federation-mtls-client"
+
 			DeferCleanup(func(ctx context.Context) {
+				utils.SetClusterSPIFFEIDFederatesWith(ctx, k8sClient, clientCSI, []string{trustDomainB})
 				cftdRestore := utils.NewFederationClusterFederatedTrustDomain(
 					"federation-cluster-b", trustDomainB, bundleRouteB, bootstrapBundleB)
 				if err := k8sClient.Create(ctx, cftdRestore); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -412,6 +415,18 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 			}
 			Expect(k8sClient.Delete(testCtx, cftd)).To(Succeed(),
 				"failed to delete ClusterFederatedTrustDomain on Cluster A")
+
+			By("Removing federatesWith from client ClusterSPIFFEID on Cluster A")
+			utils.SetClusterSPIFFEIDFederatesWith(testCtx, k8sClient, clientCSI, nil)
+
+			By("Recreating client pod so bundle.pem is refreshed without federated CAs")
+			utils.RecreateMTLSClientPod(testCtx, k8sClient, clientset,
+				utils.MTLSTestNamespaceA, utils.MTLSClientPodName, utils.MTLSClientSAName)
+			clientSPIFFEID := utils.FederationWorkloadSPIFFEID(trustDomainA, utils.MTLSTestNamespaceA, utils.MTLSClientSAName)
+			utils.WaitForSVIDsReady(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", clientSPIFFEID, utils.DefaultTimeout)
+
+			By("Waiting for client bundle.pem to contain only the local CA")
+			utils.WaitForWorkloadLocalBundleOnly(testCtx, utils.MTLSTestNamespaceA, utils.MTLSClientPodName, "tls-client", utils.FederationTimeout, false)
 
 			By("Attempting mTLS connection (should fail without federated trust)")
 			Eventually(func() bool {
@@ -434,14 +449,18 @@ var _ = Describe("Federation SDS E2E", Label("federation", "sds"), Ordered, func
 					fmt.Fprintf(GinkgoWriter, "mTLS attempt failed (retrying): %v\n", err)
 					return false
 				}
-				if strings.Contains(stdout, "verify error") {
+				if utils.IsMTLSTLSVerifyFailure(stdout, err) || strings.Contains(stdout, "verify error") {
 					fmt.Fprintf(GinkgoWriter, "[EXPECTED] TLS verification error: %s\n", stdout)
+					return true
+				}
+				if !utils.MTLSConnectionVerifies(stdout, err) {
+					fmt.Fprintf(GinkgoWriter, "[EXPECTED] mTLS did not verify: %s\n", stdout)
 					return true
 				}
 				fmt.Fprintf(GinkgoWriter, "mTLS still succeeding unexpectedly: %s\n", stdout)
 				return false
-			}).WithTimeout(utils.FederationTimeout).WithPolling(30*time.Second).Should(BeTrue(),
-				"mTLS should fail when federated trust is removed and only the local CA remains")
+			}).WithTimeout(utils.ShortTimeout).WithPolling(utils.ShortInterval).Should(BeTrue(),
+				"mTLS should fail when federated trust is removed and client bundle.pem is local-only")
 		})
 	})
 })

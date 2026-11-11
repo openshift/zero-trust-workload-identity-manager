@@ -32,6 +32,7 @@ import (
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -191,6 +192,55 @@ func CreateFederationClusterSPIFFEID(ctx context.Context, k8sClient client.Clien
 		},
 	}
 	Expect(k8sClient.Create(ctx, cspiffeID)).To(Succeed(), "failed to create ClusterSPIFFEID %s", name)
+}
+
+// SetClusterSPIFFEIDFederatesWith updates federatesWith on an existing ClusterSPIFFEID.
+func SetClusterSPIFFEIDFederatesWith(ctx context.Context, k8sClient client.Client, name string, peerTrustDomains []string) {
+	By(fmt.Sprintf("Updating ClusterSPIFFEID %s federatesWith=%v", name, peerTrustDomains))
+	cspiffeID := &spiffev1alpha1.ClusterSPIFFEID{}
+	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: name}, cspiffeID)).To(Succeed(),
+		"failed to get ClusterSPIFFEID %s", name)
+	cspiffeID.Spec.FederatesWith = peerTrustDomains
+	Expect(k8sClient.Update(ctx, cspiffeID)).To(Succeed(), "failed to update ClusterSPIFFEID %s", name)
+}
+
+// RecreateMTLSClientPod deletes and recreates the client pod so spiffe-helper refreshes bundle.pem on disk.
+func RecreateMTLSClientPod(ctx context.Context, k8sClient client.Client, clientset kubernetes.Interface, namespace, podName, saName string) {
+	By(fmt.Sprintf("Recreating mTLS client pod %s/%s", namespace, podName))
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: namespace}}
+	Expect(k8sClient.Delete(ctx, pod)).To(Succeed(), "failed to delete mTLS client pod %s/%s", namespace, podName)
+	Eventually(func() bool {
+		_, err := clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+		return apierrors.IsNotFound(err)
+	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(BeTrue(),
+		"mTLS client pod %s/%s should be deleted", namespace, podName)
+	clientPod := NewMTLSClientPod(podName, namespace, saName)
+	Expect(k8sClient.Create(ctx, clientPod)).To(Succeed(), "failed to recreate mTLS client pod %s/%s", namespace, podName)
+	WaitForPodReady(ctx, clientset, podName, namespace, DefaultTimeout)
+}
+
+// WaitForWorkloadLocalBundleOnly waits until bundle.pem contains only the local trust domain CA material.
+func WaitForWorkloadLocalBundleOnly(ctx context.Context, namespace, podName, containerName string, timeout time.Duration, onClusterB bool) {
+	By(fmt.Sprintf("Waiting for bundle.pem in %s/%s to contain only the local CA", namespace, podName))
+	Eventually(func() int {
+		if onClusterB {
+			return workloadSPIFFEBundleCACountOnClusterB(ctx, namespace, podName, containerName)
+		}
+		return WorkloadSPIFFEBundleCACount(ctx, namespace, podName, containerName)
+	}).WithTimeout(timeout).WithPolling(DefaultInterval).Should(Equal(1),
+		"bundle.pem in %s/%s should contain only the local CA after federation removal", namespace, podName)
+}
+
+// MTLSConnectionVerifies reports whether openssl s_client completed with successful certificate verification.
+func MTLSConnectionVerifies(stdout string, err error) bool {
+	if err != nil {
+		return false
+	}
+	exitCode, ok := parseShellExitCode(stdout)
+	if !ok || exitCode != 0 {
+		return false
+	}
+	return strings.Contains(stdout, "Verification: OK") || strings.Contains(stdout, "CONNECTION ESTABLISHED")
 }
 
 // WaitForSpireReady waits for both SpireServer and SpireAgent to report Ready on a cluster.
