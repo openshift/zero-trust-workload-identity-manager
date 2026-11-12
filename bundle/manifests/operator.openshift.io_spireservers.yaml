@@ -1305,6 +1305,16 @@ spec:
                 - warn
                 - error
                 type: string
+              managedRoute:
+                default: "false"
+                description: |-
+                  managedRoute exposes the SPIRE server's gRPC port externally through
+                  an operator-managed passthrough Route. "false" leaves exposure to the administrator.
+                  This is distinct from spec.federation.managedRoute, which controls the federation bundle Route.
+                enum:
+                - "true"
+                - "false"
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string
