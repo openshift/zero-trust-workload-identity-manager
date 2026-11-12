@@ -40,7 +40,7 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
-			CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "false"},
+			ManagedNetworkPolicy: "false",
 		},
 	}
 
@@ -67,7 +67,7 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 
 	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
-		Spec:       v1alpha1.SpireOIDCDiscoveryProviderSpec{CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "true"}},
+		Spec:       v1alpha1.SpireOIDCDiscoveryProviderSpec{ManagedNetworkPolicy: "true"},
 	}
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), oidc, statusMgr, false); err != nil {

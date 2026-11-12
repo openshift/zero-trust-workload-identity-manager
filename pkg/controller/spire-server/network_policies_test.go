@@ -41,7 +41,7 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	server := &v1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec: v1alpha1.SpireServerSpec{
-			CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "false"},
+			ManagedNetworkPolicy: "false",
 		},
 	}
 
@@ -68,7 +68,7 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 
 	server := &v1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
-		Spec:       v1alpha1.SpireServerSpec{CommonConfig: v1alpha1.CommonConfig{ManagedNetworkPolicy: "true"}},
+		Spec:       v1alpha1.SpireServerSpec{ManagedNetworkPolicy: "true"},
 	}
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
