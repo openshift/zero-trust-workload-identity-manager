@@ -11,6 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -50,11 +51,11 @@ const (
 
 // SpireOidcDiscoveryProviderReconciler reconciles a SpireOidcDiscoveryProvider object
 type SpireOidcDiscoveryProviderReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
@@ -65,11 +66,11 @@ func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireOidcD
 		return nil, err
 	}
 	return &SpireOidcDiscoveryProviderReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireOIDCDiscoveryProviderControllerName),
+		scheme:         mgr.GetScheme(),
 		tlsProfileSpec: tlsProfileSpec,
 	}, nil
 }
@@ -171,6 +172,10 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, err
 	}
 
+	if err := r.reconcileNetworkPolicies(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -201,6 +206,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&spiffev1alpha1.ClusterSPIFFEID{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&v1alpha1.ZeroTrustWorkloadIdentityManager{}, handler.EnqueueRequestsFromMapFunc(mapFunc), builder.WithPredicates(utils.ZTWIMSpecChangedPredicate)).
+		Watches(&networkingv1.NetworkPolicy{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Complete(r)
 	if err != nil {
 		return err
