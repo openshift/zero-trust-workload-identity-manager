@@ -191,7 +191,7 @@ func TestReconcileService(t *testing.T) {
 						Name:            "spire-spiffe-oidc-discovery-provider",
 						Namespace:       utils.GetOperatorNamespace(),
 						ResourceVersion: "123",
-						Labels: map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+						Labels:          map[string]string{utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
 					},
 				}
 				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
