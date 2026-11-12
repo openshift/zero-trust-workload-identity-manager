@@ -976,18 +976,6 @@ spec:
                 maxProperties: 64
                 type: object
                 x-kubernetes-map-type: granular
-              managedNetworkPolicy:
-                default: "true"
-                description: |-
-                  managedNetworkPolicy controls whether the operator creates and reconciles
-                  operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
-                  "true": The operator manages operand ingress and allow-all egress NetworkPolicies where applicable.
-                  "false": Administrators supply and maintain their own NetworkPolicies; the operator does not
-                  reconcile ztwim-sys-* policies or reference customer-created policies. Cluster AdminNetworkPolicy may apply.
-                enum:
-                - "true"
-                - "false"
-                type: string
               nodeSelector:
                 additionalProperties:
                   type: string
@@ -1180,27 +1168,6 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              networkPolicy:
-                description: |-
-                  networkPolicy is reserved for API shape consistency with other operands; it is always unset.
-                  The SpiffeCSI controller does not reconcile operator-managed NetworkPolicies (ztwim-sys-*) for this driver.
-                properties:
-                  lastAppliedPolicies:
-                    description: lastAppliedPolicies lists fixed-name NetworkPolicy
-                      resources last applied by the operator.
-                    items:
-                      type: string
-                    type: array
-                    x-kubernetes-list-type: atomic
-                  managementState:
-                    description: |-
-                      managementState reflects whether the operator manages ztwim-sys-* policies for this operand.
-                      Managed corresponds to spec.managedNetworkPolicy "true" (or unset/default); Unmanaged corresponds to "false".
-                    enum:
-                    - Managed
-                    - Unmanaged
-                    type: string
-                type: object
             type: object
         type: object
         x-kubernetes-validations:

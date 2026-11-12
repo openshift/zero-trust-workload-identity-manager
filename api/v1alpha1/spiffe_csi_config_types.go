@@ -50,11 +50,6 @@ type SpiffeCSIDriverSpec struct {
 type SpiffeCSIDriverStatus struct {
 	// conditions holds information about the current state of the SPIFFE CSI driver deployment.
 	ConditionalStatus `json:",inline,omitempty"`
-
-	// networkPolicy is reserved for API shape consistency with other operands; it is always unset.
-	// The SpiffeCSI controller does not reconcile operator-managed NetworkPolicies (ztwim-sys-*) for this driver.
-	// +kubebuilder:validation:Optional
-	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
 
 // GetConditionalStatus returns the conditional status of the SpiffeCSIDriver

@@ -57,6 +57,16 @@ type SpireAgentSpec struct {
 	// +kubebuilder:validation:Optional
 	WorkloadAttestors *WorkloadAttestors `json:"workloadAttestors,omitempty"`
 
+	// managedNetworkPolicy controls whether the operator creates and reconciles
+	// operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
+	// "true": The operator manages operand ingress and allow-all egress NetworkPolicies where applicable.
+	// "false": Administrators supply and maintain their own NetworkPolicies; the operator does not
+	// reconcile ztwim-sys-* policies or reference customer-created policies. Cluster AdminNetworkPolicy may apply.
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedNetworkPolicy string `json:"managedNetworkPolicy,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 
