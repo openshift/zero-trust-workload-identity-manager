@@ -143,6 +143,11 @@ test-e2e-tls:
 		-ginkgo.fail-fast \
 		-ginkgo.label-filter=tls
 
+E2E_FEDERATION_TIMEOUT ?= 45m
+.PHONY: test-e2e-federation  # Run federation SDS e2e tests (requires KUBECONFIG_CLUSTER_B)
+test-e2e-federation:
+	OPERATOR_NAMESPACE=zero-trust-workload-identity-manager go test ./test/e2e/ -v -timeout $(E2E_FEDERATION_TIMEOUT) -ginkgo.label-filter="federation"
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
