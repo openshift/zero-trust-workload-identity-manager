@@ -1317,6 +1317,38 @@ spec:
                 - "true"
                 - "false"
                 type: string
+              nodeAttestor:
+                description: nodeAttestor configures additional node attestation sources.
+                properties:
+                  externalK8sPSAT:
+                    description: externalK8sPSAT configures attestation for downstream
+                      Kubernetes clusters.
+                    properties:
+                      clusters:
+                        description: clusters enumerates clusters whose SPIRE servers
+                          chain to this one.
+                        items:
+                          properties:
+                            name:
+                              description: |-
+                                name identifies the downstream cluster.
+                                Must match the downstream cluster's ZeroTrustWorkloadIdentityManager.spec.clusterName.
+                                The operator reads Secret nested-spire-<name>-kubeconfig, key kubeconfig,
+                                from its namespace.
+                              maxLength: 63
+                              minLength: 1
+                              pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        maxItems: 100
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                    type: object
+                type: object
               nodeSelector:
                 additionalProperties:
                   type: string

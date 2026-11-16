@@ -3,6 +3,7 @@ package spire_server
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,9 +11,11 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,6 +23,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // newTestReconciler creates a reconciler for testing
@@ -2226,6 +2230,198 @@ func TestReconcile_ReconciliationStepErrors_MutationKillers(t *testing.T) {
 			}
 			if result.RequeueAfter != 0 {
 				t.Errorf("Expected RequeueAfter=0 when error returned for %s, got %v", tt.description, result.RequeueAfter)
+			}
+		})
+	}
+}
+
+func TestReconcileDownstreamTransientError(t *testing.T) {
+	server, parent := nestedFixture()
+	r, fc, backing := nestedReconciler(t)
+	server.Spec.JwtIssuer = "https://example.org"
+	server.Spec.CAValidity = metav1.Duration{Duration: 24 * time.Hour}
+	server.Spec.DefaultX509Validity = metav1.Duration{Duration: time.Hour}
+	server.Spec.DefaultJWTValidity = metav1.Duration{Duration: 5 * time.Minute}
+	parent.Name = spireServerResourceName
+	parent.UID = "parent"
+	server.OwnerReferences = []metav1.OwnerReference{{APIVersion: v1alpha1.GroupVersion.String(), Kind: "ZeroTrustWorkloadIdentityManager", Name: spireServerResourceName, UID: parent.UID}}
+	for _, obj := range []client.Object{server, parent} {
+		if err := backing.Create(context.Background(), obj); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expected := kerrors.NewServiceUnavailable("temporary")
+	originalGet := fc.GetStub
+	fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		if _, ok := obj.(*corev1.Secret); ok {
+			return expected
+		}
+		return originalGet(ctx, key, obj)
+	}
+	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: spireServerResourceName}})
+	if !errors.Is(err, expected) {
+		t.Fatalf("outer reconcile did not return retryable credential error: %v", err)
+	}
+	if fc.StatusUpdateWithRetryCallCount() == 0 {
+		t.Fatal("expected credential read failure to be reported in status")
+	}
+	_, updated, _ := fc.StatusUpdateWithRetryArgsForCall(fc.StatusUpdateWithRetryCallCount() - 1)
+	condition := apimeta.FindStatusCondition(updated.(*v1alpha1.SpireServer).Status.Conditions, DownstreamClustersValid)
+	if condition == nil || condition.Status != metav1.ConditionFalse || condition.Reason != "KubeConfigReadFailed" {
+		t.Fatalf("expected credential read failure condition, got %+v", condition)
+	}
+	for _, detail := range []string{nestedTestNamespace + "/" + nestedTestSecretName, expected.Error()} {
+		if !strings.Contains(condition.Message, detail) {
+			t.Fatalf("condition message %q does not include %q", condition.Message, detail)
+		}
+	}
+}
+
+func TestReconcileDownstreamCleanupPreservesValidity(t *testing.T) {
+	for _, mode := range []string{nestedTestList, nestedTestDelete, nestedTestCreateOnly, "deletion pending"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("CREATE_ONLY_MODE", "false")
+			if mode == nestedTestCreateOnly {
+				t.Setenv("CREATE_ONLY_MODE", "true")
+			}
+			ctx := context.Background()
+			server, parent := nestedFixture()
+			server.Spec.JwtIssuer = "https://example.org"
+			server.Spec.CAValidity = metav1.Duration{Duration: 24 * time.Hour}
+			server.Spec.DefaultX509Validity = metav1.Duration{Duration: time.Hour}
+			server.Spec.DefaultJWTValidity = metav1.Duration{Duration: 5 * time.Minute}
+			parent.Name = spireServerResourceName
+			parent.UID = "parent"
+			r, fc, backing := nestedReconciler(t, server, parent)
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: nestedTestSecretName, Namespace: nestedTestNamespace},
+				Data:       map[string][]byte{downstreamKubeConfigKey: nestedKubeconfig(t, nestedTestToken)},
+			}
+			if err := backing.Create(ctx, secret); err != nil {
+				t.Fatal(err)
+			}
+			entries := downstreamEntries(server, parent)
+			obsolete := entries[0].DeepCopy()
+			obsolete.Name = "nested-spire-offboarded-node-alias"
+			for _, entry := range append(entries, obsolete) {
+				if err := controllerutil.SetControllerReference(server, entry, r.scheme); err != nil {
+					t.Fatal(err)
+				}
+				if err := backing.Create(ctx, entry); err != nil {
+					t.Fatal(err)
+				}
+			}
+			expected := kerrors.NewServiceUnavailable(nestedTestTemporary)
+			switch mode {
+			case nestedTestList:
+				fc.ListReturns(expected)
+			case nestedTestDelete:
+				fc.DeleteReturns(expected)
+			case "deletion pending":
+				// A successful delete request need not immediately remove the object.
+				fc.DeleteReturns(nil)
+			}
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: server.Name}})
+			if mode == nestedTestList || mode == nestedTestDelete {
+				if !errors.Is(err, expected) || !strings.Contains(err.Error(), "downstream entr") {
+					t.Fatalf("expected retryable cleanup diagnostic, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if fc.StatusUpdateWithRetryCallCount() == 0 {
+				t.Fatal("expected registration status to be reported")
+			}
+			_, updated, _ := fc.StatusUpdateWithRetryArgsForCall(fc.StatusUpdateWithRetryCallCount() - 1)
+			condition := apimeta.FindStatusCondition(updated.(*v1alpha1.SpireServer).Status.Conditions, DownstreamClustersValid)
+			if condition == nil || condition.Status != metav1.ConditionTrue || condition.Reason != nestedTestReady {
+				t.Fatalf("cleanup changed healthy registration status: %+v", condition)
+			}
+			if err := backing.Get(ctx, client.ObjectKeyFromObject(obsolete), &spiffev1alpha1.ClusterStaticEntry{}); err != nil {
+				t.Fatalf("expected obsolete entry to remain: %v", err)
+			}
+			if mode == nestedTestCreateOnly && fc.DeleteCallCount() != 0 {
+				t.Fatal("create-only mode attempted cleanup")
+			}
+		})
+	}
+}
+
+func TestDownstreamReconcileCredentialRetry(t *testing.T) {
+	for _, mode := range []string{nestedTestMissing, nestedTestEmpty, "valid", nestedTestLocalCollision, nestedTestLocalOnly} {
+		t.Run(mode, func(t *testing.T) {
+			ctx := context.Background()
+			server, parent := nestedFixture()
+			server.Spec.JwtIssuer = "https://example.org"
+			server.Spec.CAValidity = metav1.Duration{Duration: 24 * time.Hour}
+			server.Spec.DefaultX509Validity = metav1.Duration{Duration: time.Hour}
+			server.Spec.DefaultJWTValidity = metav1.Duration{Duration: 5 * time.Minute}
+			parent.Name = spireServerResourceName
+			parent.UID = "parent"
+			switch mode {
+			case nestedTestLocalCollision:
+				server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[0].Name = parent.Spec.ClusterName
+			case nestedTestLocalOnly:
+				server.Spec.NodeAttestor = nil
+			}
+			r, fc, backing := nestedReconciler(t, server, parent)
+			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nestedTestSecretName, Namespace: nestedTestNamespace}, Data: map[string][]byte{downstreamKubeConfigKey: nestedKubeconfig(t, nestedTestToken)}}
+			if mode == nestedTestEmpty {
+				secret.Data = nil
+			}
+			if mode != nestedTestMissing {
+				if err := backing.Create(ctx, secret); err != nil {
+					t.Fatal(err)
+				}
+			}
+			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: spireServerResourceName}}
+			result, err := r.Reconcile(ctx, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRetry := time.Duration(0)
+			wantReason := nestedTestReady
+			switch mode {
+			case nestedTestMissing:
+				wantRetry, wantReason = time.Minute, nestedTestKubeConfigMissing
+			case nestedTestEmpty:
+				wantRetry, wantReason = time.Minute, nestedTestKubeConfigInvalid
+			case nestedTestLocalCollision:
+				wantReason = "ClusterNameConflict"
+			case nestedTestLocalOnly:
+				wantReason = "Ready"
+			}
+			if result.RequeueAfter != wantRetry {
+				t.Fatalf("requeue=%+v, want after %v", result, wantRetry)
+			}
+			_, updated, _ := fc.StatusUpdateWithRetryArgsForCall(fc.StatusUpdateWithRetryCallCount() - 1)
+			condition := apimeta.FindStatusCondition(updated.(*v1alpha1.SpireServer).Status.Conditions, DownstreamClustersValid)
+			if condition == nil || condition.Reason != wantReason {
+				t.Fatalf("condition=%+v, want %s", condition, wantReason)
+			}
+			if wantRetry == 0 {
+				return
+			}
+			if !strings.Contains(condition.Message, "east") || !strings.Contains(condition.Message, nestedTestSecretName) {
+				t.Fatalf("diagnostic must identify cluster and expected Secret: %s", condition.Message)
+			}
+			// Fix the excluded input, then simulate the scheduled reconciliation.
+			secret.Data = map[string][]byte{downstreamKubeConfigKey: nestedKubeconfig(t, nestedTestToken)}
+			if mode == nestedTestMissing {
+				err = backing.Create(ctx, secret)
+			} else {
+				err = backing.Update(ctx, secret)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err = r.Reconcile(ctx, request)
+			if err != nil || result.RequeueAfter != 0 {
+				t.Fatalf("fixed credential should stop retries: %+v, %v", result, err)
+			}
+			var entries spiffev1alpha1.ClusterStaticEntryList
+			if err := backing.List(ctx, &entries); err != nil || len(entries.Items) != 2 {
+				t.Fatalf("fixed credential did not activate both entries: %d, %v", len(entries.Items), err)
 			}
 		})
 	}

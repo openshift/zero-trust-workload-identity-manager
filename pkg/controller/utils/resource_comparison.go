@@ -58,6 +58,8 @@ func ResourceNeedsUpdate(existing, desired client.Object) bool {
 		typeSpecificResult = SecurityContextConstraintsNeedsUpdate(existingTyped, desired.(*securityv1.SecurityContextConstraints))
 	case *spiffev1alpha1.ClusterSPIFFEID:
 		typeSpecificResult = ClusterSPIFFEIDNeedsUpdate(existingTyped, desired.(*spiffev1alpha1.ClusterSPIFFEID))
+	case *spiffev1alpha1.ClusterStaticEntry:
+		typeSpecificResult = ClusterStaticEntryNeedsUpdate(existingTyped, desired.(*spiffev1alpha1.ClusterStaticEntry))
 	case *appsv1.StatefulSet:
 		typeSpecificResult = StatefulSetNeedsUpdate(existingTyped, desired.(*appsv1.StatefulSet))
 	case *appsv1.Deployment:
@@ -406,6 +408,11 @@ func ClusterSPIFFEIDNeedsUpdate(existing, desired *spiffev1alpha1.ClusterSPIFFEI
 		return true
 	}
 	return false
+}
+
+// ClusterStaticEntryNeedsUpdate checks if a ClusterStaticEntry needs updating
+func ClusterStaticEntryNeedsUpdate(existing, desired *spiffev1alpha1.ClusterStaticEntry) bool {
+	return !equality.Semantic.DeepEqual(existing.Spec, desired.Spec)
 }
 
 // volumesEqual compares two volume slices for equality

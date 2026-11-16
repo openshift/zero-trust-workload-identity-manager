@@ -2691,3 +2691,24 @@ func TestSecurityContextConstraintsNeedsUpdate_AllScenarios(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterStaticEntryComparison(t *testing.T) {
+	desired := &spiffev1alpha1.ClusterStaticEntry{
+		Spec: spiffev1alpha1.ClusterStaticEntrySpec{
+			SPIFFEID:  "spiffe://example.org/downstream/east",
+			ParentID:  "spiffe://example.org/spire/server",
+			ClassName: "test",
+			Selectors: []string{"test:value"},
+		},
+	}
+	existing := desired.DeepCopy()
+	existing.ResourceVersion = "123"
+	existing.Status.Set = true
+	if ResourceNeedsUpdate(existing, desired) {
+		t.Fatal("status or resourceVersion caused update")
+	}
+	existing.Spec.Downstream = true
+	if !ResourceNeedsUpdate(existing, desired) {
+		t.Fatal("spec drift missed")
+	}
+}

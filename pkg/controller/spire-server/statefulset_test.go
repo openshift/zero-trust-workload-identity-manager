@@ -1135,3 +1135,62 @@ func TestGenerateStatefulSet_NoUpstreamAuthority(t *testing.T) {
 		}
 	}
 }
+
+func TestDownstreamCredentialMounts(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", nestedTestNamespace)
+	server, _ := nestedFixture()
+	server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters = append(server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters, v1alpha1.DownstreamCluster{Name: nestedTestSecondCluster})
+	sts := GenerateSpireServerStatefulSet(&server.Spec, "config", "scm")
+	pod := sts.Spec.Template.Spec
+	if sts.Spec.Template.Annotations[securityv1.RequiredSCCAnnotation] != utils.RestrictedV2SCCName {
+		t.Fatal("SCC changed")
+	}
+	for _, container := range pod.Containers {
+		if container.SecurityContext == nil || container.SecurityContext.ReadOnlyRootFilesystem == nil || !*container.SecurityContext.ReadOnlyRootFilesystem {
+			t.Fatal("read-only root lost")
+		}
+		if container.SecurityContext.Privileged != nil && *container.SecurityContext.Privileged {
+			t.Fatal("privileged container introduced")
+		}
+	}
+	for _, cluster := range server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters {
+		volumeName := downstreamVolumeName(cluster)
+		if len(volumeName) > 63 {
+			t.Fatal("volume name too long")
+		}
+		foundVolume, foundMount := false, false
+		for _, volume := range pod.Volumes {
+			if volume.HostPath != nil {
+				t.Fatal("hostPath introduced")
+			}
+			if volume.Name == volumeName {
+				foundVolume = true
+				if volume.Secret == nil || volume.Secret.SecretName != "nested-spire-"+cluster.Name+"-kubeconfig" || !reflect.DeepEqual(volume.Secret.Items, []corev1.KeyToPath{{Key: downstreamKubeConfigKey, Path: downstreamKubeConfigKey}}) {
+					t.Fatal("wrong credential projection")
+				}
+			}
+		}
+		for _, container := range pod.Containers {
+			for _, mount := range container.VolumeMounts {
+				if mount.Name == volumeName {
+					foundMount = true
+					if container.Name != "spire-server" || !mount.ReadOnly || mount.SubPath != "" || mount.MountPath != "/run/spire/kubeconfigs/"+cluster.Name {
+						t.Fatal("credentials exposed to wrong container or not hot-reloadable")
+					}
+				}
+			}
+		}
+		if !foundVolume || !foundMount {
+			t.Fatal("missing credential mount")
+		}
+	}
+	server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[0], server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[1] = server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[1], server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[0]
+	if !reflect.DeepEqual(sts, GenerateSpireServerStatefulSet(&server.Spec, "config", "scm")) {
+		t.Fatal("order-only pod churn")
+	}
+	server.Spec.NodeAttestor = nil
+	local := GenerateSpireServerStatefulSet(&server.Spec, "config", "scm")
+	if len(local.Spec.Template.Spec.Volumes) != len(pod.Volumes)-2 {
+		t.Fatal("removed registrations left credential volumes")
+	}
+}
