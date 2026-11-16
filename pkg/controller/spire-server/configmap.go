@@ -15,7 +15,9 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 
@@ -34,6 +36,18 @@ const (
 	pluginNameUpstreamAuthority = "UpstreamAuthority"
 	pluginNameCertManager       = "cert-manager"
 	pluginNameVault             = "vault"
+	pluginNameSpire             = "spire"
+	upstreamAgentName           = "spire-agent-upstream"
+	upstreamAgentConfigKey      = "agent.conf"
+	upstreamAgentConfigDir      = "/run/spire/upstream/config"
+	upstreamAgentSocketDir      = "/run/spire/upstream/sockets"
+	upstreamAgentSocketPath     = upstreamAgentSocketDir + "/api.sock"
+	upstreamAgentDataDir        = "/run/spire/upstream/data"
+	upstreamAgentBundleDir      = "/run/spire/upstream/bundle"
+	upstreamAgentBundleKey      = "bundle.crt"
+	upstreamAgentTokenDir       = "/var/run/secrets/tokens"
+	upstreamAgentTokenName      = "spire-agent"
+	upstreamAgentHealthPort     = 8082
 
 	// Upstream Authority defaults
 	defaultIssuerKind      = "Issuer"
@@ -376,6 +390,15 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 }
 
 func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[string]interface{} {
+	if ua.Spire != nil {
+		return []map[string]interface{}{{pluginNameSpire: map[string]interface{}{
+			"plugin_data": map[string]interface{}{
+				"server_address":      ua.Spire.ServerAddress,
+				"server_port":         upstreamServerPort(ua.Spire),
+				"workload_api_socket": upstreamAgentSocketPath,
+			},
+		}}}
+	}
 	if ua.CertManager != nil {
 		return []map[string]interface{}{
 			{
@@ -395,6 +418,100 @@ func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[st
 		}
 	}
 	return nil
+}
+
+func upstreamServerPort(config *v1alpha1.UpstreamAuthoritySpire) int32 {
+	if config.ServerPort == 0 {
+		return 443
+	}
+	return config.ServerPort
+}
+
+func hasSpireUpstream(server *v1alpha1.SpireServer) bool {
+	return server.Spec.UpstreamAuthority != nil && server.Spec.UpstreamAuthority.Spire != nil
+}
+
+func generateUpstreamAgentConfigMap(server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) (*corev1.ConfigMap, error) {
+	upstream := server.Spec.UpstreamAuthority.Spire
+	config := map[string]interface{}{
+		"agent": map[string]interface{}{
+			"data_dir":          upstreamAgentDataDir,
+			"log_level":         utils.GetLogLevelFromString(server.Spec.LogLevel),
+			"log_format":        utils.GetLogFormatFromString(server.Spec.LogFormat),
+			"server_address":    upstream.ServerAddress,
+			"server_port":       upstreamServerPort(upstream),
+			"socket_path":       upstreamAgentSocketPath,
+			"trust_bundle_path": upstreamAgentBundleDir + "/" + upstreamAgentBundleKey,
+			"trust_domain":      ztwim.Spec.TrustDomain,
+			"rebootstrap_mode":  "auto",
+		},
+		"plugins": map[string]interface{}{
+			"KeyManager": []map[string]interface{}{{"disk": map[string]interface{}{
+				"plugin_data": map[string]interface{}{"directory": upstreamAgentDataDir},
+			}}},
+			"NodeAttestor": []map[string]interface{}{{"k8s_psat": map[string]interface{}{
+				"plugin_data": map[string]interface{}{"cluster": ztwim.Spec.ClusterName, "token_path": upstreamAgentTokenDir + "/" + upstreamAgentTokenName},
+			}}},
+			"WorkloadAttestor": []map[string]interface{}{{"unix": map[string]interface{}{
+				"plugin_data": map[string]interface{}{"discover_workload_path": true},
+			}}},
+		},
+		"health_checks": map[string]interface{}{
+			"bind_address": "0.0.0.0", "bind_port": upstreamAgentHealthPort,
+			"listener_enabled": true, "live_path": "/live", "ready_path": "/ready",
+		},
+	}
+	data, err := marshalToJSON(config)
+	if err != nil {
+		return nil, err
+	}
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: upstreamAgentName, Namespace: utils.GetOperatorNamespace(), Labels: utils.SpireServerLabels(server.Spec.Labels)},
+		Data:       map[string]string{upstreamAgentConfigKey: string(data)},
+	}, nil
+}
+
+// reconcileUpstreamAgentConfigMap uses a fresh version on every retry and never
+// adopts a colliding ConfigMap belonging to an administrator or another owner.
+func (r *SpireServerReconciler) reconcileUpstreamAgentConfigMap(ctx context.Context, server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnly bool) (string, error) {
+	if !hasSpireUpstream(server) {
+		return "", nil
+	}
+	desired, err := generateUpstreamAgentConfigMap(server, ztwim)
+	if err != nil {
+		return "", err
+	}
+	if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
+		return "", err
+	}
+	hash := generateConfigHashFromString(desired.Data[upstreamAgentConfigKey])
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var existing corev1.ConfigMap
+		err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, &existing)
+		if kerrors.IsNotFound(err) {
+			return r.ctrlClient.Create(ctx, desired)
+		}
+		if err != nil {
+			return err
+		}
+		if !metav1.IsControlledBy(&existing, server) {
+			return fmt.Errorf("ConfigMap %s/%s is not owned by SpireServer", existing.Namespace, existing.Name)
+		}
+		if createOnly {
+			hash = generateConfigHashFromString(existing.Data[upstreamAgentConfigKey])
+			return nil
+		}
+		if equality.Semantic.DeepEqual(existing.Data, desired.Data) && equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
+			return nil
+		}
+		existing.Data = desired.Data
+		existing.Labels = desired.Labels
+		return r.ctrlClient.Update(ctx, &existing)
+	})
+	if err != nil {
+		return "", fmt.Errorf("reconcile upstream agent ConfigMap: %w", err)
+	}
+	return hash, nil
 }
 
 func buildCertManagerPluginData(cm *v1alpha1.UpstreamAuthorityCertManager) map[string]interface{} {
@@ -688,4 +805,20 @@ func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec, ztwim *v1alp
 			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 	}, nil
+}
+
+func (r *SpireServerReconciler) cleanupUpstreamAgentConfigMap(ctx context.Context, server *v1alpha1.SpireServer, createOnly bool) error {
+	if createOnly {
+		return nil
+	}
+	var cm corev1.ConfigMap
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: upstreamAgentName, Namespace: utils.GetOperatorNamespace()}, &cm); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(&cm, server) {
+		return nil
+	}
+	// Both preconditions protect against replacing the object or changing its
+	// ownership between the read and delete. Conflicts retry via Reconcile.
+	return client.IgnoreNotFound(r.ctrlClient.Delete(ctx, &cm, client.Preconditions{UID: &cm.UID, ResourceVersion: &cm.ResourceVersion}))
 }
