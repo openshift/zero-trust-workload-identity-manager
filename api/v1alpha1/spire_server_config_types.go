@@ -123,7 +123,38 @@ type SpireServerSpec struct {
 	// +kubebuilder:validation:Optional
 	ManagedNetworkPolicy string `json:"managedNetworkPolicy,omitempty"`
 
+	// nodeAttestor configures additional node attestation sources.
+	// +kubebuilder:validation:Optional
+	NodeAttestor *NodeAttestorConfig `json:"nodeAttestor,omitempty"`
+
 	CommonConfig `json:",inline"`
+}
+
+type NodeAttestorConfig struct {
+	// externalK8sPSAT configures attestation for downstream Kubernetes clusters.
+	// +kubebuilder:validation:Optional
+	ExternalK8sPSAT *ExternalK8sPSATConfig `json:"externalK8sPSAT,omitempty"`
+}
+
+type ExternalK8sPSATConfig struct {
+	// clusters enumerates clusters whose SPIRE servers chain to this one.
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:Optional
+	Clusters []DownstreamCluster `json:"clusters,omitempty"`
+}
+
+type DownstreamCluster struct {
+	// name identifies the downstream cluster.
+	// Must match the downstream cluster's ZeroTrustWorkloadIdentityManager.spec.clusterName.
+	// The operator reads Secret nested-spire-<name>-kubeconfig, key kubeconfig,
+	// from its namespace.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Name string `json:"name"`
 }
 
 // FederationConfig defines federation bundle endpoint and federated trust domains

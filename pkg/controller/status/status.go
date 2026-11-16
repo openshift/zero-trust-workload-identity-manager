@@ -47,6 +47,12 @@ func (m *Manager) AddCondition(conditionType, reason, message string, status met
 	}
 }
 
+// HasCondition reports whether a condition type was recorded this reconcile.
+func (m *Manager) HasCondition(conditionType string) bool {
+	_, ok := m.conditions[conditionType]
+	return ok
+}
+
 // SetReadyCondition sets the Ready condition based on all other conditions
 // Distinguishes between "Progressing" (normal startup/rollout) and "Failed" (actual errors)
 func (m *Manager) SetReadyCondition() {

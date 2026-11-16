@@ -50,6 +50,7 @@ var (
 		&admissionregistrationv1.ValidatingWebhookConfiguration{},
 		&routev1.Route{},
 		&spiffev1alpha1.ClusterSPIFFEID{},
+		&spiffev1alpha1.ClusterStaticEntry{},
 	}
 
 	cacheResourceWithoutReqSelectors = []client.Object{
@@ -63,6 +64,7 @@ var (
 	}
 
 	informerResources = []client.Object{
+		&corev1.Secret{},
 		&configv1.APIServer{},
 		&corev1.ServiceAccount{},
 		&corev1.Service{},
@@ -83,6 +85,7 @@ var (
 		&v1alpha1.SpireOIDCDiscoveryProvider{},
 		&routev1.Route{},
 		&spiffev1alpha1.ClusterSPIFFEID{},
+		&spiffev1alpha1.ClusterStaticEntry{},
 		&operatorv1.OperatorCondition{},
 	}
 )
@@ -230,6 +233,7 @@ func (c *customCtrlClientImpl) GetClient() client.Client {
 // with custom label selectors and informers. This function should be passed to the
 // manager's NewCache option to ensure a unified cache is used.
 func NewCacheBuilder() (cache.NewCacheFunc, error) {
+	namespace := utils.GetOperatorNamespace()
 	spireServerManagedResourceAppManagedReq, err := labels.NewRequirement(utils.AppManagedByLabelKey, selection.Equals, []string{utils.AppManagedByLabelValue})
 	if err != nil {
 		return nil, err
@@ -238,15 +242,7 @@ func NewCacheBuilder() (cache.NewCacheFunc, error) {
 
 	return func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 		// Configure cache with custom label selectors
-		customCacheObjects := map[client.Object]cache.ByObject{}
-		for _, resource := range cacheResources {
-			customCacheObjects[resource] = cache.ByObject{
-				Label: managedResourceLabelReqSelector,
-			}
-		}
-		for _, resource := range cacheResourceWithoutReqSelectors {
-			customCacheObjects[resource] = cache.ByObject{}
-		}
+		customCacheObjects := configuredCacheObjects(managedResourceLabelReqSelector, namespace)
 
 		// Merge custom cache objects with any existing ones from opts
 		if opts.ByObject == nil {
@@ -274,6 +270,22 @@ func NewCacheBuilder() (cache.NewCacheFunc, error) {
 
 		return newCache, nil
 	}, nil
+}
+
+// configuredCacheObjects sets up cache filtering per resource type. Operator-managed
+// resources use the managed-by label selector. Secrets are cached without label
+// filtering but scoped to the operator namespace, since kubeconfig Secrets are
+// admin-created and don't carry the managed-by label.
+func configuredCacheObjects(selector labels.Selector, namespace string) map[client.Object]cache.ByObject {
+	objects := map[client.Object]cache.ByObject{}
+	for _, resource := range cacheResources {
+		objects[resource] = cache.ByObject{Label: selector}
+	}
+	for _, resource := range cacheResourceWithoutReqSelectors {
+		objects[resource] = cache.ByObject{}
+	}
+	objects[&corev1.Secret{}] = cache.ByObject{Label: labels.Everything(), Namespaces: map[string]cache.Config{namespace: {}}}
+	return objects
 }
 
 // BuildCustomClient now uses the manager's unified cache instead of creating a separate one.
