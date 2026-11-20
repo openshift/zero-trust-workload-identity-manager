@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-server-egress-allow-all
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-server
+  policyTypes:
+    - Egress
+  egress:
+    # Allow-all egress is intentional for GA (SPIRE-774): datastore/Vault/proxy targets differ per
+    # cluster and cannot be derived reliably from the SpireServer connection string when the DB is
+    # an in-cluster Service (servicePort vs targetPort). podSelector above is limited to spire-server
+    # pods only. For narrower egress, set managedNetworkPolicy: "false" and apply samples from
+    # config/samples/network-policies/ or use cluster AdminNetworkPolicy per platform guidance.
+    - {}
