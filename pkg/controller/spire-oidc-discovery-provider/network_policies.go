@@ -28,15 +28,13 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 		statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonManagedNetworkPolicyDisabled,
 			"Operator management of operand NetworkPolicies is disabled",
 			metav1.ConditionFalse)
-		if err := r.ctrlClient.StatusUpdateWithRetry(ctx, oidc); err != nil {
-			return err
-		}
 		return nil
 	}
 
 	applied := make([]string, 0, len(spireOIDCBaselineNetworkPolicyAssets))
 	created := false
 	updated := false
+	driftSkipped := false
 
 	for _, assetName := range spireOIDCBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, oidc.Spec.Labels)
@@ -68,6 +66,10 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 		}
 
 		if createOnlyMode {
+			if utils.ResourceNeedsUpdate(existing, desired) {
+				driftSkipped = true
+				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
+			}
 			applied = append(applied, desired.Name)
 			continue
 		}
@@ -90,19 +92,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 		LastAppliedPolicies: applied,
 	}
 
-	reason := v1alpha1.ReasonNetworkPolicyUpdated
-	message := fmt.Sprintf("Applied %d operator NetworkPolicies", len(applied))
-	if created && !updated {
-		reason = v1alpha1.ReasonNetworkPolicyCreated
-		message = fmt.Sprintf("Created %d operator NetworkPolicies", len(applied))
-	} else if updated {
-		message = fmt.Sprintf("Updated operator NetworkPolicies (%d total)", len(applied))
-	}
-
-	statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, reason, message, metav1.ConditionTrue)
-	if err := r.ctrlClient.StatusUpdateWithRetry(ctx, oidc); err != nil {
-		return err
-	}
+	status.SetOperandNetworkPoliciesAvailableCondition(statusMgr, oidc.Status.Conditions, created, updated, driftSkipped, len(applied))
 	return nil
 }
 

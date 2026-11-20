@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	networkingv1 "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -78,5 +79,15 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	}
 	if agent.Status.NetworkPolicy == nil || len(agent.Status.NetworkPolicy.LastAppliedPolicies) != len(spireAgentBaselineNetworkPolicyAssets) {
 		t.Fatalf("unexpected applied policies: %+v", agent.Status.NetworkPolicy)
+	}
+
+	if err := statusMgr.ApplyStatus(context.Background(), agent, func() *v1alpha1.ConditionalStatus {
+		return &agent.Status.ConditionalStatus
+	}); err != nil {
+		t.Fatalf("ApplyStatus: %v", err)
+	}
+	npCond := apimeta.FindStatusCondition(agent.Status.Conditions, v1alpha1.NetworkPoliciesAvailable)
+	if npCond == nil || npCond.Reason != v1alpha1.ReasonNetworkPolicyCreated {
+		t.Fatalf("expected NetworkPolicyCreated, got %+v", npCond)
 	}
 }
