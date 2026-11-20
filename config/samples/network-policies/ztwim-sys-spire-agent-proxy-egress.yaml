@@ -1,0 +1,23 @@
+# Reference only — cluster-wide proxy egress is covered by the allow-all egress add-on.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztwim-sys-spire-agent-proxy-egress
+  namespace: zero-trust-workload-identity-manager
+  labels:
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: zero-trust-workload-identity-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-agent
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-config
+      ports:
+        - port: 443
+          protocol: TCP
