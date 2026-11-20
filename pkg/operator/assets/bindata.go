@@ -859,9 +859,6 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: openshift-ingress
-        - namespaceSelector:
-            matchLabels:
               policy-group.network.openshift.io/ingress: ""
       ports:
         - port: 8443
