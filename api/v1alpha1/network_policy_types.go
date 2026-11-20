@@ -10,6 +10,7 @@ const NetworkPoliciesApplied = "NetworkPoliciesApplied"
 const (
 	ReasonNetworkPolicyCreated         = "NetworkPolicyCreated"
 	ReasonNetworkPolicyUpdated         = "NetworkPolicyUpdated"
+	ReasonNetworkPoliciesReady         = "NetworkPoliciesReady"
 	ReasonManagedNetworkPolicyDisabled = "ManagedNetworkPolicyDisabled"
 	ReasonNetworkPolicyCreationFailed  = "NetworkPolicyCreationFailed"
 	ReasonNetworkPolicyUpdateFailed    = "NetworkPolicyUpdateFailed"
