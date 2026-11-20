@@ -1118,6 +1118,8 @@ spec:
       ports:
         - port: 8081
           protocol: TCP
+    # spire-controller-manager validating webhook (port 9443): admission traffic has no stable
+    # in-cluster NetworkPolicy peer; omit "from" to allow the API server / control plane paths.
     - ports:
         - port: 9443
           protocol: TCP
