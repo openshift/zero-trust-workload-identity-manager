@@ -412,6 +412,9 @@ func TestSpireServerEgressPolicy_AllowAll(t *testing.T) {
 	if len(allowAll.Spec.Egress) != 1 {
 		t.Fatal("expected spire-server egress allow-all policy with one egress rule")
 	}
+	if !utils.NetworkPolicyAllowsAllEgress(allowAll) {
+		t.Fatal("expected egress rule with empty To and Ports (allow-all)")
+	}
 }
 
 func TestManagedNetworkPolicyEnabled(t *testing.T) {

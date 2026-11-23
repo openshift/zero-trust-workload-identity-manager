@@ -10,7 +10,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: spire-oidc-discovery-provider
+      app.kubernetes.io/name: spiffe-oidc-discovery-provider
   policyTypes:
     - Egress
   egress:

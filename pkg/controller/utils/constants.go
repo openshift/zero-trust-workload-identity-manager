@@ -42,11 +42,9 @@ const (
 
 	SpireServerNetworkPolicyIngressAssetName        = "spire-server/ztwim-sys-spire-server-ingress.yaml"
 	SpireServerNetworkPolicyEgressAllowAllAssetName = "spire-server/ztwim-sys-spire-server-egress-allow-all.yaml"
-	SpireServerNetworkPolicyEgressAllowAllName      = "ztwim-sys-spire-server-egress-allow-all"
 
 	SpireAgentNetworkPolicyIngressAssetName        = "spire-agent/ztwim-sys-spire-agent-ingress.yaml"
 	SpireAgentNetworkPolicyEgressAllowAllAssetName = "spire-agent/ztwim-sys-spire-agent-egress-allow-all.yaml"
-	SpireAgentNetworkPolicyEgressAllowAllName      = "ztwim-sys-spire-agent-egress-allow-all"
 
 	SpireOIDCDiscoveryProviderNetworkPolicyIngressAssetName = "spire-oidc-discovery-provider/ztwim-sys-spire-oidc-discovery-provider-ingress.yaml"
 
