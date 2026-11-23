@@ -350,6 +350,11 @@ func NeedsOwnerReferenceUpdate(obj client.Object, expectedOwner client.Object) b
 	return true
 }
 
+// OperandManagedResourceNeedsUpdate is true when spec/labels differ or the operand controller ref is missing or wrong.
+func OperandManagedResourceNeedsUpdate(existing, desired, owner client.Object) bool {
+	return ResourceNeedsUpdate(existing, desired) || NeedsOwnerReferenceUpdate(existing, owner)
+}
+
 // GenerationOrOwnerReferenceChangedPredicate triggers reconciliation when either:
 // 1. The resource generation changes (spec/status changes)
 // 2. Owner references change (removed/modified)

@@ -66,7 +66,7 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		}
 
 		if createOnlyMode {
-			if utils.ResourceNeedsUpdate(existing, desired) {
+			if utils.OperandManagedResourceNeedsUpdate(existing, desired, server) {
 				driftSkipped = true
 				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
 			}
@@ -74,7 +74,7 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			continue
 		}
 
-		if utils.ResourceNeedsUpdate(existing, desired) {
+		if utils.OperandManagedResourceNeedsUpdate(existing, desired, server) {
 			desired.ResourceVersion = existing.ResourceVersion
 			if err := r.ctrlClient.Update(ctx, desired); err != nil {
 				statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyUpdateFailed,
