@@ -3,18 +3,27 @@ package spire_oidc_discovery_provider
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
+	securityv1 "github.com/openshift/api/security/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -193,4 +202,109 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	if len(oidc.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
 		t.Fatalf("create-only skip must not record policy as applied, got %+v", oidc.Status.NetworkPolicy.LastAppliedPolicies)
 	}
+}
+
+func TestReconcile_UnmanagedNetworkPolicyPersistsWithoutReadyFailure(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+	persisted := runOIDCReconcileForNetworkPolicy(t, "false", nil)
+	if persisted.Status.NetworkPolicy == nil || persisted.Status.NetworkPolicy.ManagementState != v1alpha1.NetworkPolicyManagementUnmanaged {
+		t.Fatalf("expected persisted Unmanaged networkPolicy, got %+v", persisted.Status.NetworkPolicy)
+	}
+	ready := apimeta.FindStatusCondition(persisted.Status.Conditions, v1alpha1.Ready)
+	if ready != nil && ready.Status == metav1.ConditionFalse && strings.Contains(ready.Message, "NetworkPolicy reconcile failed") {
+		t.Fatalf("unmanaged mode must not fail Ready for NetworkPolicy, got %+v", ready)
+	}
+}
+
+func TestReconcile_NetworkPolicyErrorSetsReadyFalse(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+	persisted := runOIDCReconcileForNetworkPolicy(t, "true", fmt.Errorf("networkpolicy api down"))
+	ready := apimeta.FindStatusCondition(persisted.Status.Conditions, v1alpha1.Ready)
+	if ready == nil || ready.Status != metav1.ConditionFalse || ready.Reason != v1alpha1.ReasonFailed || !strings.Contains(ready.Message, "NetworkPolicy reconcile failed") {
+		t.Fatalf("expected Ready=False for NetworkPolicy error, got %+v", ready)
+	}
+}
+
+func runOIDCReconcileForNetworkPolicy(t *testing.T, managed string, npGetErr error) *v1alpha1.SpireOIDCDiscoveryProvider {
+	t.Helper()
+	fc := &fakes.FakeCustomCtrlClient{}
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{
+		v1alpha1.AddToScheme,
+		corev1.AddToScheme,
+		appsv1.AddToScheme,
+		rbacv1.AddToScheme,
+		networkingv1.AddToScheme,
+		securityv1.AddToScheme,
+		routev1.AddToScheme,
+		spiffev1alpha1.AddToScheme,
+	} {
+		if err := add(scheme); err != nil {
+			t.Fatalf("AddToScheme: %v", err)
+		}
+	}
+	reconciler := &SpireOidcDiscoveryProviderReconciler{
+		ctrlClient:    fc,
+		ctx:           context.Background(),
+		log:           logr.Discard(),
+		scheme:        scheme,
+		eventRecorder: record.NewFakeRecorder(100),
+	}
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		TypeMeta: metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "SpireOIDCDiscoveryProvider"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "oidc-uid",
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: v1alpha1.GroupVersion.String(),
+				Kind:       "ZeroTrustWorkloadIdentityManager",
+				Name:       "cluster",
+				UID:        "ztwim-uid",
+			}},
+		},
+		Spec: v1alpha1.SpireOIDCDiscoveryProviderSpec{
+			ManagedNetworkPolicy: managed,
+			JwtIssuer:            "https://oidc.example.org",
+		},
+	}
+	ztwim := &v1alpha1.ZeroTrustWorkloadIdentityManager{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "ZeroTrustWorkloadIdentityManager"},
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "ztwim-uid"},
+		Spec:       v1alpha1.ZeroTrustWorkloadIdentityManagerSpec{TrustDomain: "example.org"},
+	}
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+		switch typed := obj.(type) {
+		case *v1alpha1.SpireOIDCDiscoveryProvider:
+			*typed = *oidc.DeepCopy()
+			return nil
+		case *v1alpha1.ZeroTrustWorkloadIdentityManager:
+			*typed = *ztwim.DeepCopy()
+			return nil
+		case *networkingv1.NetworkPolicy:
+			if npGetErr != nil {
+				return npGetErr
+			}
+		}
+		return kerrors.NewNotFound(schema.GroupResource{Resource: key.Name}, key.Name)
+	}
+	fc.CreateReturns(nil)
+	fc.UpdateReturns(nil)
+	var persisted *v1alpha1.SpireOIDCDiscoveryProvider
+	fc.StatusUpdateWithRetryStub = func(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+		if got, ok := obj.(*v1alpha1.SpireOIDCDiscoveryProvider); ok {
+			persisted = got.DeepCopy()
+		}
+		return nil
+	}
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "cluster"}})
+	if npGetErr == nil && err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if npGetErr != nil && err == nil {
+		t.Fatal("expected NetworkPolicy reconcile error")
+	}
+	if persisted == nil {
+		t.Fatal("expected status to be persisted")
+	}
+	return persisted
 }
