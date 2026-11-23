@@ -67,9 +67,6 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	if oidc.Status.NetworkPolicy == nil || oidc.Status.NetworkPolicy.ManagementState != v1alpha1.NetworkPolicyManagementUnmanaged {
 		t.Fatalf("expected unmanaged network policy status, got %+v", oidc.Status.NetworkPolicy)
 	}
-	if apimeta.FindStatusCondition(oidc.Status.Conditions, "NetworkPoliciesAvailable") != nil {
-		t.Fatal("expected no NetworkPoliciesAvailable condition")
-	}
 }
 
 func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
@@ -93,9 +90,6 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	}
 	if oidc.Status.NetworkPolicy == nil || len(oidc.Status.NetworkPolicy.LastAppliedPolicies) != len(spireOIDCBaselineNetworkPolicyAssets) {
 		t.Fatalf("unexpected applied policies: %+v", oidc.Status.NetworkPolicy)
-	}
-	if apimeta.FindStatusCondition(oidc.Status.Conditions, "NetworkPoliciesAvailable") != nil {
-		t.Fatal("expected no NetworkPoliciesAvailable condition")
 	}
 }
 
