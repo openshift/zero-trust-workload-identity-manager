@@ -172,7 +172,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileNetworkPolicies(ctx, &oidcDiscoveryProviderConfig, statusMgr, createOnlyMode); err != nil {
+	if err := r.reconcileNetworkPolicies(ctx, &oidcDiscoveryProviderConfig, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 

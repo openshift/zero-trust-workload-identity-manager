@@ -189,7 +189,7 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileNetworkPolicies(ctx, &server, statusMgr, createOnlyMode); err != nil {
+	if err := r.reconcileNetworkPolicies(ctx, &server, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 

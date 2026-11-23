@@ -2,16 +2,13 @@ package spire_server
 
 import (
 	"context"
-	"fmt"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/operator/assets"
 )
@@ -20,28 +17,19 @@ var spireServerBaselineNetworkPolicyAssets = []string{
 	utils.SpireServerNetworkPolicyIngressAssetName,
 }
 
-func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, createOnlyMode bool) error {
+func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, createOnlyMode bool) error {
 	if !utils.ManagedNetworkPolicyEnabled(server.Spec.ManagedNetworkPolicy) {
 		server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
 			ManagementState: v1alpha1.NetworkPolicyManagementUnmanaged,
 		}
-		statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonManagedNetworkPolicyDisabled,
-			"Operator management of operand NetworkPolicies is disabled",
-			metav1.ConditionFalse)
 		return nil
 	}
 
 	applied := make([]string, 0, len(spireServerBaselineNetworkPolicyAssets))
-	created := false
-	updated := false
-	driftSkipped := false
 
 	for _, assetName := range spireServerBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, server.Spec.Labels)
 		if err := controllerutil.SetControllerReference(server, desired, r.scheme); err != nil {
-			statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
-				fmt.Sprintf("Failed to set owner reference on NetworkPolicy %s: %v", desired.Name, err),
-				metav1.ConditionFalse)
 			return err
 		}
 
@@ -49,25 +37,17 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
 		if err != nil {
 			if !kerrors.IsNotFound(err) {
-				statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
-					fmt.Sprintf("Failed to get NetworkPolicy %s: %v", desired.Name, err),
-					metav1.ConditionFalse)
 				return err
 			}
 			if err := r.ctrlClient.Create(ctx, desired); err != nil {
-				statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyCreationFailed,
-					fmt.Sprintf("Failed to create NetworkPolicy %s: %v", desired.Name, err),
-					metav1.ConditionFalse)
 				return err
 			}
-			created = true
 			applied = append(applied, desired.Name)
 			continue
 		}
 
 		if createOnlyMode {
 			if utils.OperandManagedResourceNeedsUpdate(existing, desired, server) {
-				driftSkipped = true
 				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
 			}
 			applied = append(applied, desired.Name)
@@ -77,12 +57,8 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		if utils.OperandManagedResourceNeedsUpdate(existing, desired, server) {
 			desired.ResourceVersion = existing.ResourceVersion
 			if err := r.ctrlClient.Update(ctx, desired); err != nil {
-				statusMgr.AddCondition(v1alpha1.NetworkPoliciesAvailable, v1alpha1.ReasonNetworkPolicyUpdateFailed,
-					fmt.Sprintf("Failed to update NetworkPolicy %s: %v", desired.Name, err),
-					metav1.ConditionFalse)
 				return err
 			}
-			updated = true
 		}
 		applied = append(applied, desired.Name)
 	}
@@ -91,8 +67,6 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
 		LastAppliedPolicies: applied,
 	}
-
-	status.SetOperandNetworkPoliciesAvailableCondition(statusMgr, server.Status.Conditions, created, updated, driftSkipped, len(applied))
 	return nil
 }
 

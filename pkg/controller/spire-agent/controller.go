@@ -162,7 +162,7 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileNetworkPolicies(ctx, &agent, statusMgr, createOnlyMode); err != nil {
+	if err := r.reconcileNetworkPolicies(ctx, &agent, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 

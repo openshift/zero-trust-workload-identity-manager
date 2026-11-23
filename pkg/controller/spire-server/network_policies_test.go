@@ -8,7 +8,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
-	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	networkingv1 "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,10 +19,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func newNetworkPolicyTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireServerReconciler {
+func newNetworkPolicyTestReconciler(t *testing.T, fakeClient *fakes.FakeCustomCtrlClient) *SpireServerReconciler {
+	t.Helper()
 	scheme := runtime.NewScheme()
-	_ = v1alpha1.AddToScheme(scheme)
-	_ = networkingv1.AddToScheme(scheme)
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme v1alpha1: %v", err)
+	}
+	if err := networkingv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme networkingv1: %v", err)
+	}
 	return &SpireServerReconciler{
 		ctrlClient:    fakeClient,
 		ctx:           context.Background(),
@@ -37,9 +41,7 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 
 	fc := &fakes.FakeCustomCtrlClient{}
-	fc.StatusUpdateWithRetryReturns(nil)
-	reconciler := newNetworkPolicyTestReconciler(fc)
-	statusMgr := status.NewManager(fc)
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
 
 	server := &v1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
@@ -48,7 +50,7 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 		},
 	}
 
-	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
 	if fc.CreateCallCount() != 0 {
@@ -56,6 +58,9 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	}
 	if server.Status.NetworkPolicy == nil || server.Status.NetworkPolicy.ManagementState != v1alpha1.NetworkPolicyManagementUnmanaged {
 		t.Fatalf("expected unmanaged network policy status, got %+v", server.Status.NetworkPolicy)
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.NetworkPoliciesAvailable) != nil {
+		t.Fatal("expected no NetworkPoliciesAvailable condition")
 	}
 }
 
@@ -65,16 +70,14 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	fc := &fakes.FakeCustomCtrlClient{}
 	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
 	fc.CreateReturns(nil)
-	fc.StatusUpdateWithRetryReturns(nil)
-	reconciler := newNetworkPolicyTestReconciler(fc)
-	statusMgr := status.NewManager(fc)
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
 
 	server := &v1alpha1.SpireServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec:       v1alpha1.SpireServerSpec{ManagedNetworkPolicy: "true"},
 	}
 
-	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
 	if fc.CreateCallCount() != len(spireServerBaselineNetworkPolicyAssets) {
@@ -82,6 +85,9 @@ func TestReconcileNetworkPolicies_CreatesBaselinePolicies(t *testing.T) {
 	}
 	if server.Status.NetworkPolicy == nil || len(server.Status.NetworkPolicy.LastAppliedPolicies) != len(spireServerBaselineNetworkPolicyAssets) {
 		t.Fatalf("unexpected applied policies: %+v", server.Status.NetworkPolicy)
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.NetworkPoliciesAvailable) != nil {
+		t.Fatal("expected no NetworkPoliciesAvailable condition")
 	}
 }
 
@@ -113,23 +119,48 @@ func TestReconcileNetworkPolicies_UpdatesStalePolicy(t *testing.T) {
 	}
 	fc.UpdateReturns(nil)
 
-	reconciler := newNetworkPolicyTestReconciler(fc)
-	statusMgr := status.NewManager(fc)
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
 
-	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, false); err != nil {
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, false); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
 	if fc.UpdateCallCount() != 1 {
 		t.Fatalf("expected 1 update, got %d", fc.UpdateCallCount())
 	}
-	if err := statusMgr.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus {
-		return &server.Status.ConditionalStatus
-	}); err != nil {
-		t.Fatalf("ApplyStatus: %v", err)
+}
+
+func TestReconcileNetworkPolicies_RepairsMissingOwnerReference(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	server := &v1alpha1.SpireServer{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-server"},
+		Spec:       v1alpha1.SpireServerSpec{ManagedNetworkPolicy: "true"},
 	}
-	npCond := apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.NetworkPoliciesAvailable)
-	if npCond == nil || npCond.Reason != v1alpha1.ReasonNetworkPolicyUpdated {
-		t.Fatalf("expected NetworkPolicyUpdated, got %+v", npCond)
+	desired := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[0], server.Spec.Labels)
+	existing := desired.DeepCopy()
+	existing.ResourceVersion = "7"
+	existing.OwnerReferences = nil
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+		np, ok := obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T", obj)
+		}
+		if key.Name != desired.Name {
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
+		*np = *existing
+		return nil
+	}
+	fc.UpdateReturns(nil)
+
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, false); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	if fc.UpdateCallCount() != 1 {
+		t.Fatalf("expected 1 update to repair owner reference, got %d", fc.UpdateCallCount())
 	}
 }
 
@@ -140,11 +171,6 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
 		Spec:       v1alpha1.SpireServerSpec{ManagedNetworkPolicy: "true"},
 	}
-	server.Status.Conditions = []metav1.Condition{{
-		Type:   v1alpha1.NetworkPoliciesAvailable,
-		Status: metav1.ConditionTrue,
-		Reason: v1alpha1.ReasonNetworkPolicyCreated,
-	}}
 	stale := staleServerIngressNetworkPolicy(server)
 
 	fc := &fakes.FakeCustomCtrlClient{}
@@ -157,23 +183,13 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 		return nil
 	}
 
-	reconciler := newNetworkPolicyTestReconciler(fc)
-	statusMgr := status.NewManager(fc)
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
 
-	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, statusMgr, true); err != nil {
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, true); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
 	if fc.UpdateCallCount() != 0 {
 		t.Fatalf("expected no update in create-only mode, got %d", fc.UpdateCallCount())
-	}
-	if err := statusMgr.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus {
-		return &server.Status.ConditionalStatus
-	}); err != nil {
-		t.Fatalf("ApplyStatus: %v", err)
-	}
-	npCond := apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.NetworkPoliciesAvailable)
-	if npCond == nil || npCond.Reason != v1alpha1.ReasonNetworkPolicyCreated {
-		t.Fatalf("expected prior NetworkPolicyCreated preserved, got %+v", npCond)
 	}
 }
 
