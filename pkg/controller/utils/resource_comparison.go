@@ -117,6 +117,16 @@ func NetworkPolicyNeedsUpdate(existing, desired *networkingv1.NetworkPolicy) boo
 	return !equality.Semantic.DeepEqual(existing.Spec, desired.Spec)
 }
 
+// NetworkPolicyAllowsAllEgress reports whether any egress rule allows all destinations and ports.
+func NetworkPolicyAllowsAllEgress(np *networkingv1.NetworkPolicy) bool {
+	for _, rule := range np.Spec.Egress {
+		if len(rule.To) == 0 && len(rule.Ports) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // ServiceNeedsUpdate checks if a Service needs updating
 func ServiceNeedsUpdate(existing, desired *corev1.Service) bool {
 	// Don't compare ClusterIP - it's immutable and set by K8s
