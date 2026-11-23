@@ -1,30 +1,5 @@
 package v1alpha1
 
-// NetworkPoliciesAvailable is the condition type reporting operand NetworkPolicy reconcile health.
-const NetworkPoliciesAvailable = "NetworkPoliciesAvailable"
-
-// NetworkPoliciesApplied is the ZTWIM condition type reporting aggregate operand network policy readiness.
-const NetworkPoliciesApplied = "NetworkPoliciesApplied"
-
-// Operand condition reasons (condition type NetworkPoliciesAvailable on SpireServer, SpireAgent, SpireOIDCDiscoveryProvider).
-const (
-	ReasonNetworkPolicyCreated         = "NetworkPolicyCreated"
-	ReasonNetworkPolicyUpdated         = "NetworkPolicyUpdated"
-	ReasonNetworkPoliciesReady         = "NetworkPoliciesReady"
-	ReasonManagedNetworkPolicyDisabled = "ManagedNetworkPolicyDisabled"
-	ReasonNetworkPolicyCreationFailed  = "NetworkPolicyCreationFailed"
-	ReasonNetworkPolicyUpdateFailed    = "NetworkPolicyUpdateFailed"
-	ReasonNetworkPolicyDeletionFailed  = "NetworkPolicyDeletionFailed"
-)
-
-// ZTWIM aggregate condition reasons (condition type NetworkPoliciesApplied on ZeroTrustWorkloadIdentityManager).
-const (
-	// ReasonOperandsNetworkPoliciesReady is set when every aggregated operand is ready or Unmanaged.
-	ReasonOperandsNetworkPoliciesReady = "OperandsNetworkPoliciesReady"
-	// ReasonOperandsNetworkPolicyFailed is set when one or more aggregated operands report failure (details in condition message).
-	ReasonOperandsNetworkPolicyFailed = "OperandsNetworkPolicyFailed"
-)
-
 // NetworkPolicyManagementState mirrors effective spec.managedNetworkPolicy on the operand.
 // - Managed: spec.managedNetworkPolicy is "true" or unset (default "true").
 // - Unmanaged: spec.managedNetworkPolicy is "false"; the operator does not reconcile ztwim-sys-* NetworkPolicies for this operand.
