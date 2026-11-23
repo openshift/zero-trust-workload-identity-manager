@@ -87,9 +87,10 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, err
 	}
 
+	statusAtGet := oidcDiscoveryProviderConfig.Status.DeepCopy()
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
-		if err := statusMgr.ApplyStatus(ctx, &oidcDiscoveryProviderConfig, func() *v1alpha1.ConditionalStatus {
+		if err := statusMgr.ApplyStatus(ctx, &oidcDiscoveryProviderConfig, statusAtGet, func() *v1alpha1.ConditionalStatus {
 			return &oidcDiscoveryProviderConfig.Status.ConditionalStatus
 		}); err != nil {
 			r.log.Error(err, "failed to update status")

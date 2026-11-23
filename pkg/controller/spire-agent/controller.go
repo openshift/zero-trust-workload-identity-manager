@@ -84,9 +84,10 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
+	statusAtGet := agent.Status.DeepCopy()
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
-		if err := statusMgr.ApplyStatus(ctx, &agent, func() *v1alpha1.ConditionalStatus {
+		if err := statusMgr.ApplyStatus(ctx, &agent, statusAtGet, func() *v1alpha1.ConditionalStatus {
 			return &agent.Status.ConditionalStatus
 		}); err != nil {
 			r.log.Error(err, "failed to update status")

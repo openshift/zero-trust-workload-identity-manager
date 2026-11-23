@@ -256,7 +256,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	statusMgr := status.NewManager(r.ctrlClient)
 
 	defer func() {
-		if err := statusMgr.ApplyStatus(ctx, &config, func() *v1alpha1.ConditionalStatus {
+		if err := statusMgr.ApplyStatus(ctx, &config, nil, func() *v1alpha1.ConditionalStatus {
 			return &config.Status.ConditionalStatus
 		}); err != nil {
 			r.log.Error(err, "failed to update status")
