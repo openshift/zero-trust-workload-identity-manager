@@ -406,6 +406,63 @@ func TestReconcileNetworkPolicies_PostgresUsesAllowAllEgressOnly(t *testing.T) {
 	}
 }
 
+func TestFederationIngressNetworkPolicy_RouterPeerSelector(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+	np := networkPolicyFromAsset(utils.SpireServerNetworkPolicyFederationIngressAssetName, nil)
+	for _, rule := range np.Spec.Ingress {
+		for _, peer := range rule.From {
+			if peer.NamespaceSelector != nil &&
+				peer.NamespaceSelector.MatchLabels["policy-group.network.openshift.io/ingress"] == "" {
+				return
+			}
+		}
+	}
+	t.Fatal("expected federation ingress NP to allow from policy-group.network.openshift.io/ingress")
+}
+
+func TestReconcileNetworkPolicies_FederationCreateOnlySkipsDelete(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	federationNP := networkPolicyFromAsset(utils.SpireServerNetworkPolicyFederationIngressAssetName, nil)
+	baselineIngress := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[0], nil)
+	baselineEgress := networkPolicyFromAsset(spireServerBaselineNetworkPolicyAssets[1], nil)
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetStub = func(_ context.Context, key client.ObjectKey, obj client.Object) error {
+		np, ok := obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T", obj)
+		}
+		switch key.Name {
+		case baselineIngress.Name:
+			*np = *baselineIngress
+			return nil
+		case baselineEgress.Name:
+			*np = *baselineEgress
+			return nil
+		case federationNP.Name:
+			*np = *federationNP
+			return nil
+		default:
+			return kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, key.Name)
+		}
+	}
+
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	server := &v1alpha1.SpireServer{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "SpireServer"},
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireServerSpec{ManagedNetworkPolicy: "true"},
+	}
+
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, true); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	if fc.DeleteCallCount() != 0 {
+		t.Fatalf("create-only mode must not delete federation NP, got %d deletes", fc.DeleteCallCount())
+	}
+}
+
 func TestReconcileNetworkPolicies_FederationCreatesPolicies(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 
