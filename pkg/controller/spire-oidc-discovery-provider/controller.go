@@ -173,6 +173,9 @@ func (r *SpireOidcDiscoveryProviderReconciler) Reconcile(ctx context.Context, re
 	}
 
 	if err := r.reconcileNetworkPolicies(ctx, &oidcDiscoveryProviderConfig, createOnlyMode); err != nil {
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			fmt.Sprintf("NetworkPolicy reconcile failed: %v", err),
+			metav1.ConditionFalse)
 		return ctrl.Result{}, err
 	}
 

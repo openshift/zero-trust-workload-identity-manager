@@ -163,6 +163,9 @@ func (r *SpireAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	if err := r.reconcileNetworkPolicies(ctx, &agent, createOnlyMode); err != nil {
+		statusMgr.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed,
+			fmt.Sprintf("NetworkPolicy reconcile failed: %v", err),
+			metav1.ConditionFalse)
 		return ctrl.Result{}, err
 	}
 

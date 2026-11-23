@@ -19,6 +19,7 @@ var spireOIDCBaselineNetworkPolicyAssets = []string{
 
 func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx context.Context, oidc *v1alpha1.SpireOIDCDiscoveryProvider, createOnlyMode bool) error {
 	if !utils.ManagedNetworkPolicyEnabled(oidc.Spec.ManagedNetworkPolicy) {
+		r.log.V(1).Info("Operand NetworkPolicy management is disabled")
 		oidc.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
 			ManagementState: v1alpha1.NetworkPolicyManagementUnmanaged,
 		}
@@ -30,6 +31,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 	for _, assetName := range spireOIDCBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, oidc.Spec.Labels)
 		if err := controllerutil.SetControllerReference(oidc, desired, r.scheme); err != nil {
+			r.log.Error(err, "failed to set controller reference on NetworkPolicy", "name", desired.Name)
 			return err
 		}
 
@@ -37,11 +39,14 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 		err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
 		if err != nil {
 			if !kerrors.IsNotFound(err) {
+				r.log.Error(err, "failed to get NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
 				return err
 			}
 			if err := r.ctrlClient.Create(ctx, desired); err != nil {
+				r.log.Error(err, "failed to create NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
 				return err
 			}
+			r.log.Info("Created NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
 			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 			continue
 		}
@@ -56,10 +61,15 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 		if utils.OperandManagedResourceNeedsUpdate(existing, desired, oidc) {
 			desired.ResourceVersion = existing.ResourceVersion
 			if err := r.ctrlClient.Update(ctx, desired); err != nil {
+				r.log.Error(err, "failed to update NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
 				return err
 			}
+			r.log.Info("Updated NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
 			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
+			continue
 		}
+
+		r.log.V(1).Info("NetworkPolicy is up to date", "name", desired.Name)
 	}
 
 	oidc.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
