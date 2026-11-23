@@ -96,6 +96,22 @@ func TestSetReadyCondition(t *testing.T) {
 			expectedReason: v1alpha1.ReasonInProgress,
 		},
 		{
+			name: "Upstream agent sidecar starting - Progressing",
+			existingConditions: map[string]Condition{
+				"UpstreamAgentAvailable": {Type: "UpstreamAgentAvailable", Status: metav1.ConditionFalse, Reason: "UpstreamAgentNotReady", Message: "Waiting for the current upstream agent pod to become ready"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "Trust bundle missing - Failed",
+			existingConditions: map[string]Condition{
+				"UpstreamAgentAvailable": {Type: "UpstreamAgentAvailable", Status: metav1.ConditionFalse, Reason: "TrustBundleMissing", Message: "Secret zero-trust-workload-identity-manager/hub-trust-bundle not found"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonFailed,
+		},
+		{
 			name: "Failure takes precedence over progressing",
 			existingConditions: map[string]Condition{
 				"StatefulSetAvailable": {Type: "StatefulSetAvailable", Status: metav1.ConditionFalse, Reason: "StatefulSetNotReady", Message: "StatefulSet has 0/1 replicas ready"},

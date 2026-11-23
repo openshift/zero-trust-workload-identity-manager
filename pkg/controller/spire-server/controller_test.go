@@ -2599,8 +2599,8 @@ func TestReconcileUpstreamLifecycle(t *testing.T) {
 		t.Fatal("upstream condition remains after disable")
 	}
 	configKey := keyFor(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: upstreamAgentName, Namespace: utils.GetOperatorNamespace()}})
-	if objects[configKey] != nil {
-		t.Fatal("owned agent ConfigMap remains after disable")
+	if objects[configKey] == nil {
+		t.Fatal("owned agent ConfigMap was deleted on disable")
 	}
 	if objects[keyFor(secret)] == nil || objects[keyFor(pvc)] == nil {
 		t.Fatal("administrator Secret or server PVC deleted")

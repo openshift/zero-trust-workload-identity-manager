@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 
@@ -805,20 +804,4 @@ func generateSpireBundleConfigMap(config *v1alpha1.SpireServerSpec, ztwim *v1alp
 			Labels:    utils.SpireServerLabels(config.Labels),
 		},
 	}, nil
-}
-
-func (r *SpireServerReconciler) cleanupUpstreamAgentConfigMap(ctx context.Context, server *v1alpha1.SpireServer, createOnly bool) error {
-	if createOnly {
-		return nil
-	}
-	var cm corev1.ConfigMap
-	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: upstreamAgentName, Namespace: utils.GetOperatorNamespace()}, &cm); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	if !metav1.IsControlledBy(&cm, server) {
-		return nil
-	}
-	// Both preconditions protect against replacing the object or changing its
-	// ownership between the read and delete. Conflicts retry via Reconcile.
-	return client.IgnoreNotFound(r.ctrlClient.Delete(ctx, &cm, client.Preconditions{UID: &cm.UID, ResourceVersion: &cm.ResourceVersion}))
 }

@@ -192,7 +192,7 @@ func validateUpstreamAuthority(ua *v1alpha1.UpstreamAuthorityConfig) error {
 			return fmt.Errorf("spire.serverAddress labels must not exceed 63 characters")
 		}
 	}
-	if ua.Spire.ServerPort < 0 || ua.Spire.ServerPort > 65535 {
+	if ua.Spire.ServerPort < 1 || ua.Spire.ServerPort > 65535 {
 		return fmt.Errorf("spire.serverPort must be between 1 and 65535")
 	}
 	if errs := validation.IsDNS1123Subdomain(ua.Spire.TrustBundleSecret); len(errs) != 0 {

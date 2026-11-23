@@ -73,9 +73,10 @@ func (m *Manager) SetReadyCondition() {
 
 	// Reasons that indicate normal progress (not actual failures)
 	progressingReasons := map[string]bool{
-		"StatefulSetNotReady": true,
-		"DaemonSetNotReady":   true,
-		"DeploymentNotReady":  true,
+		"StatefulSetNotReady":   true,
+		"DaemonSetNotReady":     true,
+		"DeploymentNotReady":    true,
+		"UpstreamAgentNotReady": true, // nested SPIRE sidecar starting / rolling out
 	}
 
 	conditionTypes := make([]string, 0, len(m.conditions))

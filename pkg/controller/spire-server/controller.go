@@ -200,14 +200,12 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	if !hasSpireUpstream(&server) {
-		if err := r.cleanupUpstreamAgentConfigMap(ctx, &server, createOnlyMode); err != nil {
-			statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Upstream agent cleanup failed", metav1.ConditionFalse)
-			return ctrl.Result{}, err
-		}
+		// Leave any previously created spire-agent-upstream ConfigMap in place; only
+		// drop the status condition once nested SPIRE is disabled (STS no longer mounts it).
 		if !createOnlyMode {
 			statusMgr.RemoveCondition(UpstreamAgentAvailable)
 		} else if apimeta.FindStatusCondition(server.Status.Conditions, UpstreamAgentAvailable) != nil {
-			statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Upstream agent cleanup is deferred in create-only mode", metav1.ConditionFalse)
+			statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Upstream agent disable is deferred in create-only mode", metav1.ConditionFalse)
 		}
 	} else {
 		expected := map[string]string{
