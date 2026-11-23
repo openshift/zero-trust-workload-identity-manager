@@ -43,6 +43,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 				return err
 			}
 			if err := r.ctrlClient.Create(ctx, desired); err != nil {
+				err = utils.NetworkPolicyCreateError(err, desired)
 				r.log.Error(err, "failed to create NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
 				return err
 			}
