@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -992,4 +993,22 @@ func TestNeedsOwnerReferenceUpdate(t *testing.T) {
 			t.Error("Expected true when owner UID is different")
 		}
 	})
+}
+
+func TestBaselineNetworkPolicyLastAppliedAndRecord(t *testing.T) {
+	if got := BaselineNetworkPolicyLastApplied(nil, 2); len(got) != 0 {
+		t.Fatalf("expected empty baseline, got %v", got)
+	}
+	status := &v1alpha1.NetworkPolicyStatus{LastAppliedPolicies: []string{"a"}}
+	if got := BaselineNetworkPolicyLastApplied(status, 2); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("expected copy of prior list, got %v", got)
+	}
+	applied := RecordNetworkPolicyApplied(nil, "x")
+	if len(applied) != 1 || applied[0] != "x" {
+		t.Fatalf("expected recorded name, got %v", applied)
+	}
+	applied = RecordNetworkPolicyApplied(applied, "x")
+	if len(applied) != 1 {
+		t.Fatalf("expected no duplicate, got %v", applied)
+	}
 }

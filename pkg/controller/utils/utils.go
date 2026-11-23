@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
@@ -110,6 +111,27 @@ func DecodeNetworkPolicyObjBytes(objBytes []byte) *networkingv1.NetworkPolicy {
 
 func ManagedNetworkPolicyEnabled(value string) bool {
 	return value != "false"
+}
+
+// BaselineNetworkPolicyLastApplied copies the operand's recorded last-applied policy names
+// so read-only reconcile passes (create-only skip, no-op) do not drop prior accurate entries.
+func BaselineNetworkPolicyLastApplied(status *v1alpha1.NetworkPolicyStatus, capacity int) []string {
+	applied := make([]string, 0, capacity)
+	if status == nil {
+		return applied
+	}
+	applied = append(applied, status.LastAppliedPolicies...)
+	return applied
+}
+
+// RecordNetworkPolicyApplied adds a policy name after the operator successfully creates or updates it.
+func RecordNetworkPolicyApplied(applied []string, name string) []string {
+	for _, existing := range applied {
+		if existing == name {
+			return applied
+		}
+	}
+	return append(applied, name)
 }
 
 func DecodeServiceObjBytes(objBytes []byte) *corev1.Service {

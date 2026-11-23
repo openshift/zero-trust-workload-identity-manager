@@ -25,7 +25,7 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 		return nil
 	}
 
-	applied := make([]string, 0, len(spireAgentBaselineNetworkPolicyAssets))
+	applied := utils.BaselineNetworkPolicyLastApplied(agent.Status.NetworkPolicy, len(spireAgentBaselineNetworkPolicyAssets))
 
 	for _, assetName := range spireAgentBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, agent.Spec.Labels)
@@ -42,7 +42,7 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 			if err := r.ctrlClient.Create(ctx, desired); err != nil {
 				return err
 			}
-			applied = append(applied, desired.Name)
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 			continue
 		}
 
@@ -50,7 +50,6 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 			if utils.OperandManagedResourceNeedsUpdate(existing, desired, agent) {
 				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
 			}
-			applied = append(applied, desired.Name)
 			continue
 		}
 
@@ -59,8 +58,8 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 			if err := r.ctrlClient.Update(ctx, desired); err != nil {
 				return err
 			}
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 		}
-		applied = append(applied, desired.Name)
 	}
 
 	agent.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{

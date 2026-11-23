@@ -25,7 +25,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 		return nil
 	}
 
-	applied := make([]string, 0, len(spireOIDCBaselineNetworkPolicyAssets))
+	applied := utils.BaselineNetworkPolicyLastApplied(oidc.Status.NetworkPolicy, len(spireOIDCBaselineNetworkPolicyAssets))
 
 	for _, assetName := range spireOIDCBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, oidc.Spec.Labels)
@@ -42,7 +42,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 			if err := r.ctrlClient.Create(ctx, desired); err != nil {
 				return err
 			}
-			applied = append(applied, desired.Name)
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 			continue
 		}
 
@@ -50,7 +50,6 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 			if utils.OperandManagedResourceNeedsUpdate(existing, desired, oidc) {
 				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
 			}
-			applied = append(applied, desired.Name)
 			continue
 		}
 
@@ -59,8 +58,8 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 			if err := r.ctrlClient.Update(ctx, desired); err != nil {
 				return err
 			}
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 		}
-		applied = append(applied, desired.Name)
 	}
 
 	oidc.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{

@@ -191,6 +191,9 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	if fc.UpdateCallCount() != 0 {
 		t.Fatalf("expected no update in create-only mode, got %d", fc.UpdateCallCount())
 	}
+	if len(server.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
+		t.Fatalf("create-only skip must not record policy as applied, got %+v", server.Status.NetworkPolicy.LastAppliedPolicies)
+	}
 }
 
 func TestManagedNetworkPolicyEnabled(t *testing.T) {

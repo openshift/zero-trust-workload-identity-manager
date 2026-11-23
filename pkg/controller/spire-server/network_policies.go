@@ -25,7 +25,7 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		return nil
 	}
 
-	applied := make([]string, 0, len(spireServerBaselineNetworkPolicyAssets))
+	applied := utils.BaselineNetworkPolicyLastApplied(server.Status.NetworkPolicy, len(spireServerBaselineNetworkPolicyAssets))
 
 	for _, assetName := range spireServerBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, server.Spec.Labels)
@@ -42,7 +42,7 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			if err := r.ctrlClient.Create(ctx, desired); err != nil {
 				return err
 			}
-			applied = append(applied, desired.Name)
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 			continue
 		}
 
@@ -50,7 +50,6 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			if utils.OperandManagedResourceNeedsUpdate(existing, desired, server) {
 				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
 			}
-			applied = append(applied, desired.Name)
 			continue
 		}
 
@@ -59,8 +58,8 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			if err := r.ctrlClient.Update(ctx, desired); err != nil {
 				return err
 			}
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
 		}
-		applied = append(applied, desired.Name)
 	}
 
 	server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{

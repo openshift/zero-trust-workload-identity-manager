@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func newNetworkPolicyTestReconciler(t *testing.T, fakeClient *fakes.FakeCustomCtrlClient) *SpireAgentReconciler {
@@ -126,6 +127,10 @@ func TestReconcileNetworkPolicies_UpdatesStalePolicy(t *testing.T) {
 	if fc.UpdateCallCount() != 1 {
 		t.Fatalf("expected 1 update, got %d", fc.UpdateCallCount())
 	}
+	policyName := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels).Name
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0] != policyName {
+		t.Fatalf("expected policy recorded after update, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	}
 }
 
 func TestReconcileNetworkPolicies_RepairsMissingOwnerReference(t *testing.T) {
@@ -189,5 +194,80 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	}
 	if fc.UpdateCallCount() != 0 {
 		t.Fatalf("expected no update in create-only mode, got %d", fc.UpdateCallCount())
+	}
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
+		t.Fatalf("create-only skip must not record policy as applied, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+}
+
+func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	agent := &v1alpha1.SpireAgent{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireAgentSpec{ManagedNetworkPolicy: "true"},
+		Status: v1alpha1.SpireAgentStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []string{"prior-policy"},
+			},
+		},
+	}
+	stale := staleAgentIngressNetworkPolicy(agent)
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+		np, ok := obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T", obj)
+		}
+		*np = *stale
+		return nil
+	}
+
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, true); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0] != "prior-policy" {
+		t.Fatalf("expected prior lastApplied preserved, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+}
+
+func TestReconcileNetworkPolicies_NoOpDoesNotRecordLastApplied(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	agent := &v1alpha1.SpireAgent{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "SpireAgent"},
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireAgentSpec{ManagedNetworkPolicy: "true"},
+	}
+	reconciler := newNetworkPolicyTestReconciler(t, &fakes.FakeCustomCtrlClient{})
+	desired := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels)
+	existing := desired.DeepCopy()
+	existing.ResourceVersion = "1"
+	if err := controllerutil.SetControllerReference(agent, existing, reconciler.scheme); err != nil {
+		t.Fatalf("SetControllerReference: %v", err)
+	}
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+		np, ok := obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T", obj)
+		}
+		*np = *existing
+		return nil
+	}
+	reconciler.ctrlClient = fc
+
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, false); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	if fc.UpdateCallCount() != 0 {
+		t.Fatalf("expected no update, got %d", fc.UpdateCallCount())
+	}
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
+		t.Fatalf("no-op reconcile must not record policy as applied, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
 	}
 }
