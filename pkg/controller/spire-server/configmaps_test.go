@@ -2149,7 +2149,7 @@ func TestSpireControllerManagerConfigHashConsistentWithOperandTLSConfig(t *testi
 func upstreamTestServer() *v1alpha1.SpireServer {
 	config := createValidConfig()
 	config.Persistence = v1alpha1.Persistence{Size: "1Gi", AccessMode: "ReadWriteOnce"}
-	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{Spire: &v1alpha1.UpstreamAuthoritySpire{ServerAddress: "upstream.example.org", TrustBundleSecret: "upstream-bundle"}}
+	config.UpstreamAuthority = &v1alpha1.UpstreamAuthorityConfig{Spire: &v1alpha1.UpstreamAuthoritySpire{ServerAddress: "upstream.example.org", ServerPort: 443, TrustBundleSecret: "upstream-bundle"}}
 	return &v1alpha1.SpireServer{ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "server-uid"}, Spec: *config}
 }
 
