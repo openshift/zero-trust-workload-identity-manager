@@ -114,6 +114,14 @@ func ManagedNetworkPolicyEnabled(value string) bool {
 	return value != "false"
 }
 
+// NetworkPolicyStatusWith builds operand NetworkPolicy status from the policies recorded so far.
+func NetworkPolicyStatusWith(state v1alpha1.NetworkPolicyManagementState, applied []v1alpha1.AppliedNetworkPolicy) *v1alpha1.NetworkPolicyStatus {
+	return &v1alpha1.NetworkPolicyStatus{
+		ManagementState:     state,
+		LastAppliedPolicies: applied,
+	}
+}
+
 // BaselineNetworkPolicyLastApplied copies the operand's recorded last-applied policies
 // so read-only reconcile passes (create-only skip, no-op) do not drop prior entries or timestamps.
 func BaselineNetworkPolicyLastApplied(status *v1alpha1.NetworkPolicyStatus, capacity int) []v1alpha1.AppliedNetworkPolicy {

@@ -56,6 +56,12 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 		Spec: v1alpha1.SpireAgentSpec{
 			ManagedNetworkPolicy: "false",
 		},
+		Status: v1alpha1.SpireAgentStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy", LastAppliedTime: metav1.Unix(10, 0)}},
+			},
+		},
 	}
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, false); err != nil {
@@ -66,6 +72,60 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	}
 	if agent.Status.NetworkPolicy == nil || agent.Status.NetworkPolicy.ManagementState != v1alpha1.NetworkPolicyManagementUnmanaged {
 		t.Fatalf("expected unmanaged network policy status, got %+v", agent.Status.NetworkPolicy)
+	}
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0].Name != "prior-policy" {
+		t.Fatalf("expected prior lastAppliedPolicies kept, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+}
+
+func TestReconcileNetworkPolicies_CreateFailureKeepsEarlierApplied(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
+	if len(spireAgentBaselineNetworkPolicyAssets) > 1 {
+		fc.CreateReturnsOnCall(0, nil)
+		fc.CreateReturnsOnCall(1, fmt.Errorf("quota exceeded"))
+	} else {
+		fc.CreateReturns(fmt.Errorf("quota exceeded"))
+	}
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+
+	agent := &v1alpha1.SpireAgent{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireAgentSpec{ManagedNetworkPolicy: "true"},
+		Status: v1alpha1.SpireAgentStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy", LastAppliedTime: metav1.Unix(10, 0)}},
+			},
+		},
+	}
+	first := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], nil).Name
+
+	err := reconciler.reconcileNetworkPolicies(context.Background(), agent, false)
+	if err == nil {
+		t.Fatal("expected create failure")
+	}
+	got := agent.Status.NetworkPolicy
+	if got == nil || got.ManagementState != v1alpha1.NetworkPolicyManagementManaged {
+		t.Fatalf("expected Managed status with policies applied before the error, got %+v", got)
+	}
+	names := map[string]bool{}
+	for _, policy := range got.LastAppliedPolicies {
+		names[policy.Name] = true
+	}
+	if !names["prior-policy"] {
+		t.Fatalf("expected prior policy kept, got %+v", got.LastAppliedPolicies)
+	}
+	if len(spireAgentBaselineNetworkPolicyAssets) > 1 {
+		second := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[1], nil).Name
+		if !names[first] || names[second] {
+			t.Fatalf("expected %s recorded and %s omitted, got %+v", first, second, got.LastAppliedPolicies)
+		}
+		return
+	}
+	if names[first] {
+		t.Fatalf("failed policy must not be recorded, got %+v", got.LastAppliedPolicies)
 	}
 }
 

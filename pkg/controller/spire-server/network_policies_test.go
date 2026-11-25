@@ -58,6 +58,12 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 		Spec: v1alpha1.SpireServerSpec{
 			ManagedNetworkPolicy: "false",
 		},
+		Status: v1alpha1.SpireServerStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy", LastAppliedTime: metav1.Unix(10, 0)}},
+			},
+		},
 	}
 
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, false); err != nil {
@@ -68,6 +74,35 @@ func TestReconcileNetworkPolicies_ManagedDisabled(t *testing.T) {
 	}
 	if server.Status.NetworkPolicy == nil || server.Status.NetworkPolicy.ManagementState != v1alpha1.NetworkPolicyManagementUnmanaged {
 		t.Fatalf("expected unmanaged network policy status, got %+v", server.Status.NetworkPolicy)
+	}
+	if len(server.Status.NetworkPolicy.LastAppliedPolicies) != 1 || server.Status.NetworkPolicy.LastAppliedPolicies[0].Name != "prior-policy" {
+		t.Fatalf("expected prior lastAppliedPolicies kept, got %+v", server.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+}
+
+func TestReconcileNetworkPolicies_CreateFailureKeepsPriorApplied(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{Resource: "networkpolicies"}, "np"))
+	fc.CreateReturns(fmt.Errorf("quota exceeded"))
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+
+	server := &v1alpha1.SpireServer{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireServerSpec{ManagedNetworkPolicy: "true"},
+		Status: v1alpha1.SpireServerStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy", LastAppliedTime: metav1.Unix(10, 0)}},
+			},
+		},
+	}
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), server, false); err == nil {
+		t.Fatal("expected create failure")
+	}
+	got := server.Status.NetworkPolicy
+	if got == nil || got.ManagementState != v1alpha1.NetworkPolicyManagementManaged || len(got.LastAppliedPolicies) != 1 || got.LastAppliedPolicies[0].Name != "prior-policy" {
+		t.Fatalf("expected prior lastAppliedPolicies kept on failure, got %+v", got)
 	}
 }
 

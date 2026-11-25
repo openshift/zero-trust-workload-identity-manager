@@ -30,7 +30,9 @@ type NetworkPolicyStatus struct {
 	ManagementState NetworkPolicyManagementState `json:"managementState,omitempty"`
 
 	// lastAppliedPolicies lists NetworkPolicies the operator has successfully created or updated.
-	// Entries are kept across reconciles. A later create or update appends a new name or refreshes lastAppliedTime.
+	// Entries are kept across reconciles, including when spec.managedNetworkPolicy changes to "false"
+	// and when a later policy in the same reconcile fails.
+	// A later create or update appends a new name or refreshes lastAppliedTime.
 	// +kubebuilder:validation:Optional
 	// +listType=atomic
 	LastAppliedPolicies []AppliedNetworkPolicy `json:"lastAppliedPolicies,omitempty"`

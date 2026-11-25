@@ -19,15 +19,16 @@ var spireServerBaselineNetworkPolicyAssets = []string{
 }
 
 func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, server *v1alpha1.SpireServer, createOnlyMode bool) error {
+	applied := utils.BaselineNetworkPolicyLastApplied(server.Status.NetworkPolicy, len(spireServerBaselineNetworkPolicyAssets))
 	if !utils.ManagedNetworkPolicyEnabled(server.Spec.ManagedNetworkPolicy) {
 		r.log.V(1).Info("Operand NetworkPolicy management is disabled")
-		server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
-			ManagementState: v1alpha1.NetworkPolicyManagementUnmanaged,
-		}
+		server.Status.NetworkPolicy = utils.NetworkPolicyStatusWith(v1alpha1.NetworkPolicyManagementUnmanaged, applied)
 		return nil
 	}
 
-	applied := utils.BaselineNetworkPolicyLastApplied(server.Status.NetworkPolicy, len(spireServerBaselineNetworkPolicyAssets))
+	defer func() {
+		server.Status.NetworkPolicy = utils.NetworkPolicyStatusWith(v1alpha1.NetworkPolicyManagementManaged, applied)
+	}()
 
 	for _, assetName := range spireServerBaselineNetworkPolicyAssets {
 		desired := networkPolicyFromAsset(assetName, server.Spec.Labels)
@@ -73,10 +74,6 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 		r.log.V(1).Info("NetworkPolicy is up to date", "name", desired.Name)
 	}
 
-	server.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
-		ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
-		LastAppliedPolicies: applied,
-	}
 	return nil
 }
 
