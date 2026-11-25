@@ -5,6 +5,7 @@ import (
 
 	networkingv1 "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -47,7 +48,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 				return err
 			}
 			r.log.Info("Created NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now())
 			continue
 		}
 
@@ -65,7 +66,7 @@ func (r *SpireOidcDiscoveryProviderReconciler) reconcileNetworkPolicies(ctx cont
 				return err
 			}
 			r.log.Info("Updated NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name)
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now())
 			continue
 		}
 

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	routev1 "github.com/openshift/api/route/v1"
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,6 +22,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -113,10 +114,10 @@ func ManagedNetworkPolicyEnabled(value string) bool {
 	return value != "false"
 }
 
-// BaselineNetworkPolicyLastApplied copies the operand's recorded last-applied policy names
-// so read-only reconcile passes (create-only skip, no-op) do not drop prior accurate entries.
-func BaselineNetworkPolicyLastApplied(status *v1alpha1.NetworkPolicyStatus, capacity int) []string {
-	applied := make([]string, 0, capacity)
+// BaselineNetworkPolicyLastApplied copies the operand's recorded last-applied policies
+// so read-only reconcile passes (create-only skip, no-op) do not drop prior entries or timestamps.
+func BaselineNetworkPolicyLastApplied(status *v1alpha1.NetworkPolicyStatus, capacity int) []v1alpha1.AppliedNetworkPolicy {
+	applied := make([]v1alpha1.AppliedNetworkPolicy, 0, capacity)
 	if status == nil {
 		return applied
 	}
@@ -124,14 +125,16 @@ func BaselineNetworkPolicyLastApplied(status *v1alpha1.NetworkPolicyStatus, capa
 	return applied
 }
 
-// RecordNetworkPolicyApplied adds a policy name after the operator successfully creates or updates it.
-func RecordNetworkPolicyApplied(applied []string, name string) []string {
-	for _, existing := range applied {
-		if existing == name {
+// RecordNetworkPolicyApplied adds a policy after the operator successfully creates or updates it.
+// An existing name keeps its place and gets a new lastAppliedTime.
+func RecordNetworkPolicyApplied(applied []v1alpha1.AppliedNetworkPolicy, name string, at metav1.Time) []v1alpha1.AppliedNetworkPolicy {
+	for i, existing := range applied {
+		if existing.Name == name {
+			applied[i].LastAppliedTime = at
 			return applied
 		}
 	}
-	return append(applied, name)
+	return append(applied, v1alpha1.AppliedNetworkPolicy{Name: name, LastAppliedTime: at})
 }
 
 func DecodeServiceObjBytes(objBytes []byte) *corev1.Service {

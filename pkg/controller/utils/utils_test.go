@@ -999,16 +999,18 @@ func TestBaselineNetworkPolicyLastAppliedAndRecord(t *testing.T) {
 	if got := BaselineNetworkPolicyLastApplied(nil, 2); len(got) != 0 {
 		t.Fatalf("expected empty baseline, got %v", got)
 	}
-	status := &v1alpha1.NetworkPolicyStatus{LastAppliedPolicies: []string{"a"}}
-	if got := BaselineNetworkPolicyLastApplied(status, 2); len(got) != 1 || got[0] != "a" {
+	earlier := metav1.Unix(100, 0)
+	later := metav1.Unix(200, 0)
+	status := &v1alpha1.NetworkPolicyStatus{LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "a", LastAppliedTime: earlier}}}
+	if got := BaselineNetworkPolicyLastApplied(status, 2); len(got) != 1 || got[0].Name != "a" || !got[0].LastAppliedTime.Time.Equal(earlier.Time) {
 		t.Fatalf("expected copy of prior list, got %v", got)
 	}
-	applied := RecordNetworkPolicyApplied(nil, "x")
-	if len(applied) != 1 || applied[0] != "x" {
+	applied := RecordNetworkPolicyApplied(nil, "x", earlier)
+	if len(applied) != 1 || applied[0].Name != "x" || !applied[0].LastAppliedTime.Time.Equal(earlier.Time) {
 		t.Fatalf("expected recorded name, got %v", applied)
 	}
-	applied = RecordNetworkPolicyApplied(applied, "x")
-	if len(applied) != 1 {
-		t.Fatalf("expected no duplicate, got %v", applied)
+	applied = RecordNetworkPolicyApplied(applied, "x", later)
+	if len(applied) != 1 || !applied[0].LastAppliedTime.Time.Equal(later.Time) {
+		t.Fatalf("expected timestamp refresh without a duplicate, got %v", applied)
 	}
 }

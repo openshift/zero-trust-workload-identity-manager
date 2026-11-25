@@ -130,7 +130,7 @@ func TestReconcileNetworkPolicies_UpdatesStalePolicy(t *testing.T) {
 		t.Fatalf("expected 1 update, got %d", fc.UpdateCallCount())
 	}
 	policyName := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels).Name
-	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0] != policyName {
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0].Name != policyName || agent.Status.NetworkPolicy.LastAppliedPolicies[0].LastAppliedTime.IsZero() {
 		t.Fatalf("expected policy recorded after update, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
 	}
 }
@@ -211,7 +211,7 @@ func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing
 		Status: v1alpha1.SpireAgentStatus{
 			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
 				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
-				LastAppliedPolicies: []string{"prior-policy"},
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy"}},
 			},
 		},
 	}
@@ -231,7 +231,7 @@ func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, true); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
-	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0] != "prior-policy" {
+	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0].Name != "prior-policy" {
 		t.Fatalf("expected prior lastApplied preserved, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
 	}
 }

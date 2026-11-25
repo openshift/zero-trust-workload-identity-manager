@@ -1,5 +1,16 @@
 package v1alpha1
 
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+// AppliedNetworkPolicy is one operator-applied NetworkPolicy and the time it was last created or updated.
+type AppliedNetworkPolicy struct {
+	// name is the NetworkPolicy metadata.name.
+	Name string `json:"name"`
+
+	// lastAppliedTime is when the operator last successfully created or updated this NetworkPolicy.
+	LastAppliedTime metav1.Time `json:"lastAppliedTime"`
+}
+
 // NetworkPolicyManagementState mirrors effective spec.managedNetworkPolicy on the operand.
 // - Managed: spec.managedNetworkPolicy is "true" or unset (default "true").
 // - Unmanaged: spec.managedNetworkPolicy is "false"; the operator does not reconcile ztwim-sys-* NetworkPolicies for this operand.
@@ -18,8 +29,9 @@ type NetworkPolicyStatus struct {
 	// +kubebuilder:validation:Optional
 	ManagementState NetworkPolicyManagementState `json:"managementState,omitempty"`
 
-	// lastAppliedPolicies lists fixed-name NetworkPolicy resources last applied by the operator.
+	// lastAppliedPolicies lists NetworkPolicies the operator has successfully created or updated.
+	// Entries are kept across reconciles. A later create or update appends a new name or refreshes lastAppliedTime.
 	// +kubebuilder:validation:Optional
 	// +listType=atomic
-	LastAppliedPolicies []string `json:"lastAppliedPolicies,omitempty"`
+	LastAppliedPolicies []AppliedNetworkPolicy `json:"lastAppliedPolicies,omitempty"`
 }
