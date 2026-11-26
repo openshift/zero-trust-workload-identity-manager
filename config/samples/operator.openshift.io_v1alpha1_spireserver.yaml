@@ -28,6 +28,14 @@ spec:
     size: "2Gi"
     accessMode: ReadWriteOnce
     storageClass: ""
+  # Nested SPIRE: register downstream clusters so they can get intermediate CAs signed by this SPIRE server (optional)
+  # name must match the downstream ZTWIM clusterName and differ from this cluster's.
+  # Create Secret nested-spire-east-prod-kubeconfig in the operator namespace,
+  # with a non-empty kubeconfig key. Administrators manage and rotate credentials.
+  # nodeAttestor:
+  #   externalK8sPSAT:
+  #     clusters:
+  #       - name: east-prod
   # Federation configuration (optional)
   # This example shows how to configure SPIRE Server for federation
   federation:

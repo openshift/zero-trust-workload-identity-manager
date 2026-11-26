@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
+	spiffev1alpha1 "github.com/spiffe/spire-controller-manager/api/v1alpha1"
 
 	configv1 "github.com/openshift/api/config/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -48,15 +50,16 @@ const (
 	RBACAvailable                    = "RBACAvailable"
 	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
 	RouteAvailable                   = "RouteAvailable"
+	DownstreamClustersValid          = "DownstreamClustersValid"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
 type SpireServerReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
@@ -67,11 +70,11 @@ func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireServe
 		return nil, err
 	}
 	return &SpireServerReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		scheme:         mgr.GetScheme(),
 		tlsProfileSpec: tlsProfileSpec,
 	}, nil
 }
@@ -161,8 +164,19 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	// Reconcile the federation Route independently of downstream registration.
+	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile downstream clusters: validate, create entries, prune orphans.
+	effectiveServer, downstreamIssues, err := r.reconcileDownstreamClusters(ctx, &server, &ztwim, statusMgr, createOnlyMode)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Reconcile ConfigMaps
-	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, &server, statusMgr, &ztwim, r.tlsProfileSpec, createOnlyMode)
+	spireServerConfigMapHash, err := r.reconcileSpireServerConfigMap(ctx, effectiveServer, statusMgr, &ztwim, r.tlsProfileSpec, createOnlyMode)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -179,15 +193,19 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Reconcile StatefulSet
-	if err := r.reconcileStatefulSet(ctx, &server, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash); err != nil {
+	if err := r.reconcileStatefulSet(ctx, effectiveServer, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// reconcile Route if enabled
-	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
-		return ctrl.Result{}, err
+	// If any downstream cluster was excluded due to a missing or empty kubeconfig
+	// Secret, requeue after a minute so the controller picks it up once the admin
+	// creates it. Once the Secret exists and is mounted, SPIRE re-reads it on
+	// every attestation attempt - no reconcile needed for credential rotation.
+	for _, issue := range downstreamIssues {
+		if issue.reason == "KubeConfigMissing" || issue.reason == "KubeConfigInvalid" {
+			return ctrl.Result{RequeueAfter: time.Minute}, nil
+		}
 	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -211,6 +229,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&spiffev1alpha1.ClusterStaticEntry{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&rbacv1.ClusterRole{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).

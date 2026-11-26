@@ -323,18 +323,7 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 				{
 					"k8s_psat": map[string]interface{}{
 						"plugin_data": map[string]interface{}{
-							"clusters": []map[string]interface{}{
-								{
-									ztwim.Spec.ClusterName: map[string]interface{}{
-										"allowed_node_label_keys": []string{},
-										"allowed_pod_label_keys":  []string{},
-										"audience":                []string{"spire-server"},
-										"service_account_allow_list": []string{
-											fmt.Sprintf("%s:spire-agent", utils.GetOperatorNamespace()),
-										},
-									},
-								},
-							},
+							"clusters": buildAttestorClusters(config, ztwim),
 						},
 					},
 				},
@@ -373,6 +362,29 @@ func generateServerConfMap(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.Zer
 	}
 
 	return configMap
+}
+
+// buildAttestorClusters builds the k8s_psat plugin's cluster list. The first entry
+// is always the local cluster (for spire-agent attestation). Downstream entries are
+// appended for each cluster in externalK8sPSAT.clusters, each pointing to the
+// mounted kubeconfig for TokenReview calls against that cluster's API server.
+func buildAttestorClusters(config *v1alpha1.SpireServerSpec, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager) []map[string]interface{} {
+	downstream := sortedDownstreamClusters(config)
+	clusters := make([]map[string]interface{}, 0, 1+len(downstream))
+	clusters = append(clusters, map[string]interface{}{ztwim.Spec.ClusterName: map[string]interface{}{
+		"allowed_node_label_keys":    []string{},
+		"allowed_pod_label_keys":     []string{},
+		"audience":                   []string{"spire-server"},
+		"service_account_allow_list": []string{fmt.Sprintf("%s:spire-agent", utils.GetOperatorNamespace())},
+	}})
+	for _, cluster := range downstream {
+		clusters = append(clusters, map[string]interface{}{cluster.Name: map[string]interface{}{
+			"kube_config_file":           downstreamKubeConfigDirectory(cluster) + "/" + downstreamKubeConfigKey,
+			"audience":                   []string{"spire-server"},
+			"service_account_allow_list": []string{fmt.Sprintf("%s:spire-server", utils.GetOperatorNamespace())},
+		}})
+	}
+	return clusters
 }
 
 func buildUpstreamAuthorityPlugin(ua *v1alpha1.UpstreamAuthorityConfig) []map[string]interface{} {

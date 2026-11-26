@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2143,5 +2144,48 @@ func TestSpireControllerManagerConfigHashConsistentWithOperandTLSConfig(t *testi
 
 	if nilHash == partialHash || partialHash == fullHash || nilHash == fullHash {
 		t.Fatalf("expected distinct hashes for nil/partial/full profiles, got nil=%q partial=%q full=%q", nilHash, partialHash, fullHash)
+	}
+}
+
+func TestDownstreamConfigMapGeneration(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", nestedTestNamespace)
+	server, parent := nestedFixture()
+	baseline := server.DeepCopy()
+	baseline.Spec.NodeAttestor = nil
+	local := generateServerConfMap(&baseline.Spec, parent, nil)
+	firstCM, err := generateSpireServerConfigMap(&server.Spec, parent, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstHash := generateConfigHashFromString(firstCM.Data[utils.SpireServerConfigKey])
+	server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[0].Name = nestedTestReplacement
+	changedCM, err := generateSpireServerConfigMap(&server.Spec, parent, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedHash := generateConfigHashFromString(changedCM.Data[utils.SpireServerConfigKey])
+	if changedHash == firstHash {
+		t.Fatal("cluster-name change did not change config hash")
+	}
+	clusters := buildAttestorClusters(&server.Spec, parent)
+	if !reflect.DeepEqual(clusters[0], buildAttestorClusters(&baseline.Spec, parent)[0]) {
+		t.Fatal("local attestor changed")
+	}
+	remote := clusters[1][nestedTestReplacement].(map[string]interface{})
+	if remote["kube_config_file"] != "/run/spire/kubeconfigs/replacement/kubeconfig" {
+		t.Fatalf("unexpected kubeconfig path: %v", remote["kube_config_file"])
+	}
+	if !reflect.DeepEqual(remote["service_account_allow_list"], []string{"test-operator:spire-server"}) || !reflect.DeepEqual(remote["audience"], []string{"spire-server"}) {
+		t.Fatal("incorrect remote attestor")
+	}
+	server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters = append(server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters, v1alpha1.DownstreamCluster{Name: "aaa"})
+	ordered := generateServerConfMap(&server.Spec, parent, nil)
+	server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[0], server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[1] = server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[1], server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[0]
+	if !reflect.DeepEqual(ordered, generateServerConfMap(&server.Spec, parent, nil)) {
+		t.Fatal("order-only config churn")
+	}
+	server.Spec.NodeAttestor = nil
+	if !reflect.DeepEqual(local, generateServerConfMap(&server.Spec, parent, nil)) {
+		t.Fatal("remove last did not restore local config")
 	}
 }

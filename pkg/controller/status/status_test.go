@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	appsv1 "k8s.io/api/apps/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -409,6 +410,69 @@ func TestApplyStatus(t *testing.T) {
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestRemoveConditionPersistsWithoutOtherChanges(t *testing.T) {
+	fc := &fakes.FakeCustomCtrlClient{}
+	mgr := NewManager(fc)
+	obj := &v1alpha1.SpireServer{}
+	ready := metav1.Condition{
+		Type: v1alpha1.Ready, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonReady,
+		Message: "All components are ready", LastTransitionTime: metav1.Now(),
+	}
+	obj.Status.Conditions = []metav1.Condition{
+		ready,
+		{Type: "OptionalFeatureValid", Status: metav1.ConditionFalse},
+	}
+	mgr.RemoveCondition("OptionalFeatureValid")
+	apply := func() {
+		t.Helper()
+		if err := mgr.ApplyStatus(context.Background(), obj, func() *v1alpha1.ConditionalStatus {
+			return &obj.Status.ConditionalStatus
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply()
+	if fc.StatusUpdateWithRetryCallCount() != 1 {
+		t.Fatal("condition removal alone must trigger a status update")
+	}
+	_, updated, _ := fc.StatusUpdateWithRetryArgsForCall(0)
+	conditions := updated.(*v1alpha1.SpireServer).Status.Conditions
+	if len(conditions) != 1 || conditions[0] != ready {
+		t.Fatalf("expected only the unchanged Ready condition, got %+v", conditions)
+	}
+	apply()
+	if fc.StatusUpdateWithRetryCallCount() != 1 {
+		t.Fatal("removing an absent condition must not trigger another status update")
+	}
+}
+
+func TestRemoveConditionOrdering(t *testing.T) {
+	for _, addAfterRemoval := range []bool{false, true} {
+		t.Run(map[bool]string{false: "remove after add", true: "add after remove"}[addAfterRemoval], func(t *testing.T) {
+			mgr := NewManager(&fakes.FakeCustomCtrlClient{})
+			mgr.AddCondition("OptionalFeatureValid", "Invalid", "invalid", metav1.ConditionFalse)
+			mgr.RemoveCondition("OptionalFeatureValid")
+			wantReady := metav1.ConditionTrue
+			if addAfterRemoval {
+				mgr.AddCondition("OptionalFeatureValid", "Invalid", "invalid", metav1.ConditionFalse)
+				wantReady = metav1.ConditionFalse
+			}
+			obj := &v1alpha1.SpireServer{}
+			if err := mgr.ApplyStatus(context.Background(), obj, func() *v1alpha1.ConditionalStatus {
+				return &obj.Status.ConditionalStatus
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if present := apimeta.FindStatusCondition(obj.Status.Conditions, "OptionalFeatureValid") != nil; present != addAfterRemoval {
+				t.Fatalf("condition presence=%v, want %v", present, addAfterRemoval)
+			}
+			if ready := apimeta.FindStatusCondition(obj.Status.Conditions, v1alpha1.Ready); ready == nil || ready.Status != wantReady {
+				t.Fatalf("Ready=%+v, want %s", ready, wantReady)
 			}
 		})
 	}

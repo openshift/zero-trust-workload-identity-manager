@@ -129,6 +129,23 @@ func GenerateSpireServerStatefulSet(config *v1alpha1.SpireServerSpec,
 		{Name: "controller-manager-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "spire-controller-manager"}}}},
 	}
 
+	// Mount each downstream cluster's kubeconfig Secret so the SPIRE server can
+	// call TokenReview on the downstream API server during k8s_psat attestation.
+	// Kubelet propagates Secret updates to the mounted files automatically.
+	for _, cluster := range sortedDownstreamClusters(config) {
+		volumeName := downstreamVolumeName(cluster)
+		volumes = append(volumes, corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+				SecretName: downstreamSecretName(cluster),
+				Items:      []corev1.KeyToPath{{Key: downstreamKubeConfigKey, Path: downstreamKubeConfigKey}},
+			}},
+		})
+		spireServerVolumeMounts = append(spireServerVolumeMounts, corev1.VolumeMount{
+			Name: volumeName, MountPath: downstreamKubeConfigDirectory(cluster), ReadOnly: true,
+		})
+	}
+
 	// Add database TLS Secret volume and mount if configured
 	if config.Datastore.TLSSecretName != "" {
 		// Add volume mount for the TLS secret at fixed path
