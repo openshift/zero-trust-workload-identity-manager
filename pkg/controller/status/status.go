@@ -25,8 +25,9 @@ type Condition struct {
 
 // Manager handles status updates for operand resources
 type Manager struct {
-	customClient customClient.CustomCtrlClient
-	conditions   map[string]Condition
+	customClient      customClient.CustomCtrlClient
+	conditions        map[string]Condition
+	removedConditions map[string]struct{}
 }
 
 // NewManager creates a new status manager
@@ -39,12 +40,22 @@ func NewManager(customClient customClient.CustomCtrlClient) *Manager {
 
 // AddCondition adds or updates a condition
 func (m *Manager) AddCondition(conditionType, reason, message string, status metav1.ConditionStatus) {
+	delete(m.removedConditions, conditionType)
 	m.conditions[conditionType] = Condition{
 		Type:    conditionType,
 		Status:  status,
 		Reason:  reason,
 		Message: message,
 	}
+}
+
+// RemoveCondition schedules removal of a condition from the persisted status.
+func (m *Manager) RemoveCondition(conditionType string) {
+	delete(m.conditions, conditionType)
+	if m.removedConditions == nil {
+		m.removedConditions = make(map[string]struct{})
+	}
+	m.removedConditions[conditionType] = struct{}{}
 }
 
 // HasCondition reports whether a condition type was recorded this reconcile.
@@ -113,6 +124,9 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 
 	if status.Conditions == nil {
 		status.Conditions = []metav1.Condition{}
+	}
+	for conditionType := range m.removedConditions {
+		apimeta.RemoveStatusCondition(&status.Conditions, conditionType)
 	}
 
 	// Only auto-set Ready condition if it hasn't been manually set

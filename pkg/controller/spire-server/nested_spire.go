@@ -35,6 +35,12 @@ type downstreamIssue struct {
 	message string
 }
 
+func hasDownstreamClusters(spec *v1alpha1.SpireServerSpec) bool {
+	return spec.NodeAttestor != nil &&
+		spec.NodeAttestor.ExternalK8sPSAT != nil &&
+		len(spec.NodeAttestor.ExternalK8sPSAT.Clusters) > 0
+}
+
 // sortedDownstreamClusters returns a sorted copy so that ConfigMap and
 // StatefulSet generation is deterministic across reconcile loops.
 func sortedDownstreamClusters(config *v1alpha1.SpireServerSpec) []v1alpha1.DownstreamCluster {
@@ -44,6 +50,41 @@ func sortedDownstreamClusters(config *v1alpha1.SpireServerSpec) []v1alpha1.Downs
 	clusters := append([]v1alpha1.DownstreamCluster(nil), config.NodeAttestor.ExternalK8sPSAT.Clusters...)
 	sort.Slice(clusters, func(i, j int) bool { return clusters[i].Name < clusters[j].Name })
 	return clusters
+}
+
+// reconcileDownstreamClusters orchestrates downstream cluster reconciliation:
+// validate Secrets, create/update ClusterStaticEntries for valid clusters,
+// report status, and prune orphaned entries. When no downstream clusters are
+// configured, remove the condition and prune entries for removed clusters.
+func (r *SpireServerReconciler) reconcileDownstreamClusters(ctx context.Context, server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, statusMgr *status.Manager, createOnlyMode bool) (*v1alpha1.SpireServer, []downstreamIssue, error) {
+	if !hasDownstreamClusters(&server.Spec) {
+		statusMgr.RemoveCondition(DownstreamClustersValid)
+		if err := r.pruneDownstreamEntries(ctx, server, ztwim, createOnlyMode); err != nil {
+			r.log.Error(err, "Failed to clean up obsolete downstream registrations")
+			return nil, nil, err
+		}
+		return server, nil, nil
+	}
+
+	effectiveServer, issues, err := r.resolveDownstreamClusters(ctx, server, ztwim)
+	if err != nil {
+		statusMgr.AddCondition(DownstreamClustersValid, "KubeConfigReadFailed", err.Error(), metav1.ConditionFalse)
+		return nil, nil, err
+	}
+	if hasDownstreamClusters(&effectiveServer.Spec) {
+		if err := r.reconcileDownstreamEntries(ctx, effectiveServer, ztwim, statusMgr, createOnlyMode); err != nil {
+			return nil, nil, err
+		}
+	}
+	if len(issues) != 0 {
+		statusMgr.AddCondition(DownstreamClustersValid, issues[0].reason, downstreamIssuesMessage(issues), metav1.ConditionFalse)
+	}
+	// Missing credentials do not offboard a configured cluster.
+	if err := r.pruneDownstreamEntries(ctx, server, ztwim, createOnlyMode); err != nil {
+		r.log.Error(err, "Failed to clean up obsolete downstream registrations")
+		return nil, nil, err
+	}
+	return effectiveServer, issues, nil
 }
 
 // resolveDownstreamClusters validates each downstream cluster entry and returns

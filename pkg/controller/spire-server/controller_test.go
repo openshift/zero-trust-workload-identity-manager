@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/status"
@@ -2242,6 +2243,10 @@ func TestReconcileDownstreamTransientError(t *testing.T) {
 	server.Spec.CAValidity = metav1.Duration{Duration: 24 * time.Hour}
 	server.Spec.DefaultX509Validity = metav1.Duration{Duration: time.Hour}
 	server.Spec.DefaultJWTValidity = metav1.Duration{Duration: 5 * time.Minute}
+	server.Spec.Federation = &v1alpha1.FederationConfig{
+		ManagedRoute:   "true",
+		BundleEndpoint: v1alpha1.BundleEndpointConfig{Profile: v1alpha1.HttpsSpiffeProfile},
+	}
 	parent.Name = spireServerResourceName
 	parent.UID = "parent"
 	server.OwnerReferences = []metav1.OwnerReference{{APIVersion: v1alpha1.GroupVersion.String(), Kind: "ZeroTrustWorkloadIdentityManager", Name: spireServerResourceName, UID: parent.UID}}
@@ -2261,6 +2266,10 @@ func TestReconcileDownstreamTransientError(t *testing.T) {
 	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: spireServerResourceName}})
 	if !errors.Is(err, expected) {
 		t.Fatalf("outer reconcile did not return retryable credential error: %v", err)
+	}
+	route := generateFederationRoute(server, parent)
+	if err := backing.Get(context.Background(), client.ObjectKeyFromObject(route), &routev1.Route{}); err != nil {
+		t.Fatalf("downstream credential failure blocked federation Route creation: %v", err)
 	}
 	if fc.StatusUpdateWithRetryCallCount() == 0 {
 		t.Fatal("expected credential read failure to be reported in status")
@@ -2389,13 +2398,19 @@ func TestDownstreamReconcileCredentialRetry(t *testing.T) {
 			case nestedTestLocalCollision:
 				wantReason = "ClusterNameConflict"
 			case nestedTestLocalOnly:
-				wantReason = "Ready"
+				wantReason = ""
 			}
 			if result.RequeueAfter != wantRetry {
 				t.Fatalf("requeue=%+v, want after %v", result, wantRetry)
 			}
 			_, updated, _ := fc.StatusUpdateWithRetryArgsForCall(fc.StatusUpdateWithRetryCallCount() - 1)
 			condition := apimeta.FindStatusCondition(updated.(*v1alpha1.SpireServer).Status.Conditions, DownstreamClustersValid)
+			if mode == nestedTestLocalOnly {
+				if condition != nil {
+					t.Fatalf("unexpected downstream condition with no configured clusters: %+v", condition)
+				}
+				return
+			}
 			if condition == nil || condition.Reason != wantReason {
 				t.Fatalf("condition=%+v, want %s", condition, wantReason)
 			}

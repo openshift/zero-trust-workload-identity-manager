@@ -144,26 +144,6 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	// Validate downstream cluster Secrets and build an effectiveServer that
-	// includes only clusters with valid credentials. The effectiveServer is
-	// passed to ConfigMap and StatefulSet generators so invalid clusters
-	// don't produce broken volume mounts or k8s_psat config entries.
-	effectiveServer, downstreamIssues, err := r.resolveDownstreamClusters(ctx, &server, &ztwim)
-	if err != nil {
-		statusMgr.AddCondition(DownstreamClustersValid, "KubeConfigReadFailed", err.Error(), metav1.ConditionFalse)
-		return ctrl.Result{}, err
-	}
-	if err := r.reconcileDownstreamEntries(ctx, effectiveServer, &ztwim, statusMgr, createOnlyMode); err != nil {
-		return ctrl.Result{}, err
-	}
-	if len(downstreamIssues) != 0 {
-		statusMgr.AddCondition(DownstreamClustersValid, downstreamIssues[0].reason, downstreamIssuesMessage(downstreamIssues), metav1.ConditionFalse)
-	}
-	if err := r.pruneDownstreamEntries(ctx, effectiveServer, &ztwim, createOnlyMode); err != nil {
-		r.log.Error(err, "Failed to clean up obsolete downstream registrations")
-		return ctrl.Result{}, err
-	}
-
 	// Reconcile ServiceAccount
 	if err := r.reconcileServiceAccount(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
@@ -181,6 +161,17 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Reconcile Webhook
 	if err := r.reconcileWebhook(ctx, &server, statusMgr, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile the federation Route independently of downstream registration.
+	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile downstream clusters: validate, create entries, prune orphans.
+	effectiveServer, downstreamIssues, err := r.reconcileDownstreamClusters(ctx, &server, &ztwim, statusMgr, createOnlyMode)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -203,11 +194,6 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Reconcile StatefulSet
 	if err := r.reconcileStatefulSet(ctx, effectiveServer, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// reconcile Route if enabled
-	if err := r.reconcileRoute(ctx, &server, statusMgr, &ztwim, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
 	}
 

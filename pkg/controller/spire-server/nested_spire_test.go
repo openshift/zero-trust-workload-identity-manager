@@ -119,6 +119,75 @@ func nestedReconciler(t *testing.T, objects ...client.Object) (*SpireServerRecon
 	return r, fc, backing
 }
 
+func TestReconcileDownstreamClustersDisabled(t *testing.T) {
+	for _, mode := range []string{"no node attestor", "no external attestor", "empty clusters", nestedTestCreateOnly, nestedTestList} {
+		t.Run(mode, func(t *testing.T) {
+			ctx := context.Background()
+			server, parent := nestedFixture()
+			r, fc, backing := nestedReconciler(t)
+			entries := downstreamEntries(server, parent)
+			for _, entry := range entries {
+				if err := controllerutil.SetControllerReference(server, entry, r.scheme); err != nil {
+					t.Fatal(err)
+				}
+				if err := backing.Create(ctx, entry); err != nil {
+					t.Fatal(err)
+				}
+			}
+			switch mode {
+			case "no external attestor":
+				server.Spec.NodeAttestor.ExternalK8sPSAT = nil
+			case "empty clusters":
+				server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters = nil
+			default:
+				server.Spec.NodeAttestor = nil
+			}
+			server.Status.Conditions = []metav1.Condition{{
+				Type: DownstreamClustersValid, Status: metav1.ConditionFalse,
+				Reason: nestedTestKubeConfigMissing, Message: "previous failure",
+			}}
+			expected := kerrors.NewServiceUnavailable(nestedTestTemporary)
+			if mode == nestedTestList {
+				fc.ListReturns(expected)
+			}
+			mgr := status.NewManager(fc)
+			effective, issues, err := r.reconcileDownstreamClusters(ctx, server, parent, mgr, mode == nestedTestCreateOnly)
+			if mode == nestedTestList {
+				if !errors.Is(err, expected) {
+					t.Fatalf("expected cleanup error, got %v", err)
+				}
+			} else if err != nil || effective != server || len(issues) != 0 {
+				t.Fatalf("unexpected disabled-feature result: effective=%p, issues=%v, err=%v", effective, issues, err)
+			}
+			if fc.GetCallCount() != 0 {
+				t.Fatal("disabled downstream configuration must not read credential Secrets or reconcile entries")
+			}
+			if err := mgr.ApplyStatus(ctx, server, func() *v1alpha1.ConditionalStatus {
+				return &server.Status.ConditionalStatus
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if fc.StatusUpdateWithRetryCallCount() != 1 {
+				t.Fatal("expected removal to be persisted")
+			}
+			_, updated, _ := fc.StatusUpdateWithRetryArgsForCall(0)
+			if condition := apimeta.FindStatusCondition(updated.(*v1alpha1.SpireServer).Status.Conditions, DownstreamClustersValid); condition != nil {
+				t.Fatalf("disabled feature retained its condition: %+v", condition)
+			}
+			for _, entry := range entries {
+				err := backing.Get(ctx, client.ObjectKeyFromObject(entry), &spiffev1alpha1.ClusterStaticEntry{})
+				if mode == nestedTestCreateOnly || mode == nestedTestList {
+					if err != nil {
+						t.Fatalf("entry should remain: %v", err)
+					}
+				} else if !kerrors.IsNotFound(err) {
+					t.Fatalf("obsolete entry was not deleted: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestResolveDownstreamClusters(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -986,31 +1055,100 @@ func TestDownstreamEntryFailureAfterFirstEntry(t *testing.T) {
 	}
 }
 
+func TestDownstreamCleanupPreservesConfiguredClusters(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		empty     bool
+		validWest bool
+	}{
+		{name: "all Secrets missing"},
+		{name: "all Secrets empty", empty: true},
+		{name: "one Secret missing", validWest: true},
+		{name: "one Secret empty", empty: true, validWest: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			server, parent := nestedFixture()
+			server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters = append(server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters,
+				v1alpha1.DownstreamCluster{Name: nestedTestSecondCluster},
+				v1alpha1.DownstreamCluster{Name: "removed"},
+			)
+			r, fc, backing := nestedReconciler(t)
+			// Start with registrations from a previously working configuration.
+			if err := r.reconcileDownstreamEntries(ctx, server, parent, status.NewManager(fc), false); err != nil {
+				t.Fatal(err)
+			}
+			server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters = server.Spec.NodeAttestor.ExternalK8sPSAT.Clusters[:2]
+			for _, cluster := range sortedDownstreamClusters(&server.Spec) {
+				valid := tc.validWest && cluster.Name == nestedTestSecondCluster
+				if !tc.empty && !valid {
+					continue
+				}
+				secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: downstreamSecretName(cluster), Namespace: nestedTestNamespace}}
+				secret.Data = map[string][]byte{downstreamKubeConfigKey: {}}
+				if valid {
+					secret.Data[downstreamKubeConfigKey] = nestedKubeconfig(t, nestedTestToken)
+				}
+				if err := backing.Create(ctx, secret); err != nil {
+					t.Fatal(err)
+				}
+			}
+			effective, issues, err := r.reconcileDownstreamClusters(ctx, server, parent, status.NewManager(fc), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantValid := 0
+			if tc.validWest {
+				wantValid = 1
+			}
+			if len(sortedDownstreamClusters(&effective.Spec)) != wantValid || len(issues) != 2-wantValid {
+				t.Fatalf("credential filtering changed: effective=%+v, issues=%+v", effective.Spec.NodeAttestor, issues)
+			}
+			var entries spiffev1alpha1.ClusterStaticEntryList
+			if err := backing.List(ctx, &entries); err != nil {
+				t.Fatal(err)
+			}
+			if len(entries.Items) != 4 {
+				t.Fatalf("expected four entries for the two configured clusters, got %d", len(entries.Items))
+			}
+			for _, desired := range downstreamEntries(server, parent) {
+				if err := backing.Get(ctx, client.ObjectKeyFromObject(desired), &spiffev1alpha1.ClusterStaticEntry{}); err != nil {
+					t.Fatalf("configured cluster lost entry %s: %v", desired.Name, err)
+				}
+			}
+		})
+	}
+}
+
 func TestDownstreamCredentialRecovery(t *testing.T) {
 	ctx := context.Background()
 	server, parent := nestedFixture()
 	r, fc, backing := nestedReconciler(t)
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nestedTestSecretName, Namespace: nestedTestNamespace}, Data: map[string][]byte{downstreamKubeConfigKey: nestedKubeconfig(t, nestedTestToken)}}
-	check := func(want string) {
+	check := func(want string, wantEntries int) {
 		t.Helper()
-		effective, issues, err := r.resolveDownstreamClusters(ctx, server, parent)
+		mgr := status.NewManager(fc)
+		_, _, err := r.reconcileDownstreamClusters(ctx, server, parent, mgr, false)
 		if err != nil {
 			t.Fatal(err)
-		}
-		mgr := status.NewManager(fc)
-		if err := r.reconcileDownstreamEntries(ctx, effective, parent, mgr, false); err != nil {
-			t.Fatal(err)
-		}
-		if err := r.pruneDownstreamEntries(ctx, effective, parent, false); err != nil {
-			t.Fatal(err)
-		}
-		if len(issues) > 0 {
-			mgr.AddCondition(DownstreamClustersValid, issues[0].reason, downstreamIssuesMessage(issues), metav1.ConditionFalse)
 		}
 		if err := mgr.ApplyStatus(ctx, server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
 			t.Fatal(err)
 		}
+		var entries spiffev1alpha1.ClusterStaticEntryList
+		if err := backing.List(ctx, &entries); err != nil {
+			t.Fatal(err)
+		}
+		if len(entries.Items) != wantEntries {
+			t.Fatalf("got %d registration entries, want %d", len(entries.Items), wantEntries)
+		}
 		got := apimeta.FindStatusCondition(server.Status.Conditions, DownstreamClustersValid)
+		if want == "" {
+			if got != nil {
+				t.Fatalf("disabled feature retained its condition: %+v", got)
+			}
+			return
+		}
 		if got == nil || got.Reason != want {
 			t.Fatalf("condition=%+v, want %s", got, want)
 		}
@@ -1018,23 +1156,26 @@ func TestDownstreamCredentialRecovery(t *testing.T) {
 			t.Fatal("credential leaked to status")
 		}
 	}
-	check(nestedTestKubeConfigMissing)
+	check(nestedTestKubeConfigMissing, 0)
 	if err := backing.Create(ctx, secret); err != nil {
 		t.Fatal(err)
 	}
-	check(nestedTestReady)
+	check(nestedTestReady, 2)
 	if err := backing.Delete(ctx, secret); err != nil {
 		t.Fatal(err)
 	}
-	check(nestedTestKubeConfigMissing)
+	check(nestedTestKubeConfigMissing, 2)
 	secret.ResourceVersion = ""
 	secret.UID = ""
 	if err := backing.Create(ctx, secret); err != nil {
 		t.Fatal(err)
 	}
-	check(nestedTestReady)
+	check(nestedTestReady, 2)
+	if fc.CreateCallCount() != 2 {
+		t.Fatal("credential recovery recreated existing registrations")
+	}
 	server.Spec.NodeAttestor = nil
-	check(nestedTestReady)
+	check("", 0)
 	if err := backing.Get(ctx, client.ObjectKeyFromObject(secret), &corev1.Secret{}); err != nil {
 		t.Fatal("administrator Secret was removed")
 	}
