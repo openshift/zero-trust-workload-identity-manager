@@ -213,9 +213,15 @@ func TestReconcileNetworkPolicies_UpdatesStalePolicy(t *testing.T) {
 	if fc.UpdateCallCount() != 1 {
 		t.Fatalf("expected 1 update, got %d", fc.UpdateCallCount())
 	}
-	policyName := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels).Name
-	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0].Name != policyName || agent.Status.NetworkPolicy.LastAppliedPolicies[0].LastAppliedTime.IsZero() {
-		t.Fatalf("expected policy recorded after update, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	names := map[string]metav1.Time{}
+	for _, policy := range agent.Status.NetworkPolicy.LastAppliedPolicies {
+		names[policy.Name] = policy.LastAppliedTime
+	}
+	if names[ingressName].Time.IsZero() {
+		t.Fatalf("expected updated ingress recorded with Now, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+	if !names[egressCurrent.Name].Time.Equal(egressCurrent.CreationTimestamp.Time) {
+		t.Fatalf("expected up-to-date egress recorded with creationTimestamp, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
 	}
 }
 
