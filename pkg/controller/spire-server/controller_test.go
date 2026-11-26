@@ -2339,37 +2339,6 @@ func TestUpstreamTrustBundleLifecycle(t *testing.T) {
 	}
 }
 
-func TestUpstreamSecretEvents(t *testing.T) {
-	server := upstreamTestServer()
-	fake := &fakes.FakeCustomCtrlClient{}
-	r := newTestReconciler(fake)
-	fake.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
-		*obj.(*v1alpha1.SpireServer) = *server.DeepCopy()
-		return nil
-	}
-	for _, event := range []string{"create", "update", "delete"} {
-		t.Run(event, func(t *testing.T) {
-			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "upstream-bundle", Namespace: utils.GetOperatorNamespace()}}
-			requests := r.mapUpstreamSecret(context.Background(), secret)
-			if len(requests) != 1 || requests[0].Name != "cluster" || requests[0].Namespace != "" {
-				t.Fatalf("reference event not mapped: %v", requests)
-			}
-			secret.Name = "unrelated"
-			if len(r.mapUpstreamSecret(context.Background(), secret)) != 0 {
-				t.Fatal("unrelated Secret enqueued")
-			}
-			secret.Name, secret.Namespace = "upstream-bundle", "another-namespace"
-			if len(r.mapUpstreamSecret(context.Background(), secret)) != 0 {
-				t.Fatal("other namespace enqueued")
-			}
-		})
-	}
-	server.Spec.UpstreamAuthority = nil
-	if len(r.mapUpstreamSecret(context.Background(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "upstream-bundle", Namespace: utils.GetOperatorNamespace()}})) != 0 {
-		t.Fatal("disabled reference enqueued")
-	}
-}
-
 func TestUpstreamAgentAvailability(t *testing.T) {
 	for _, scenario := range []string{"ready", "unready", "terminated", "missing-pod", "pod-read-error", "missing-sts", "sts-read-error", "wrong-sts-owner", "wrong-pod-owner", "wrong-name", "terminating", "old-generation", "old-revision", "old-pod-config", "old-sts-config", "no-sidecar", "no-container-status"} {
 		t.Run(scenario, func(t *testing.T) {

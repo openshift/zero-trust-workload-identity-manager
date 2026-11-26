@@ -247,7 +247,6 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(r.mapUpstreamPod), controllerManagedResourcePredicates).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.mapUpstreamSecret)).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
@@ -413,27 +412,6 @@ func (r *SpireServerReconciler) handleTTLValidation(ctx context.Context, server 
 			metav1.ConditionTrue)
 	}
 
-	return nil
-}
-
-// mapUpstreamSecret deliberately has no managed-label predicate: the referenced
-// bootstrap Secret belongs to the administrator, in the operator namespace.
-func (r *SpireServerReconciler) mapUpstreamSecret(ctx context.Context, obj client.Object) []reconcile.Request {
-	if obj.GetNamespace() != utils.GetOperatorNamespace() {
-		return nil
-	}
-	request := []reconcile.Request{{NamespacedName: types.NamespacedName{Name: "cluster"}}}
-	var server v1alpha1.SpireServer
-	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "cluster"}, &server); err != nil {
-		if kerrors.IsNotFound(err) {
-			return nil
-		}
-		r.log.Error(err, "failed to resolve upstream Secret reference")
-		return request // retry through Reconcile rather than losing this event
-	}
-	if hasSpireUpstream(&server) && obj.GetName() == server.Spec.UpstreamAuthority.Spire.TrustBundleSecret {
-		return request
-	}
 	return nil
 }
 
