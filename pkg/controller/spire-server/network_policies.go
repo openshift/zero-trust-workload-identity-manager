@@ -49,7 +49,7 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 				return err
 			}
 			r.log.Info("Created NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now())
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now(), true)
 			continue
 		}
 
@@ -57,6 +57,7 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 			if utils.OperandManagedResourceNeedsUpdate(existing, desired, server) {
 				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
 			}
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, existing.CreationTimestamp, false)
 			continue
 		}
 
@@ -67,11 +68,12 @@ func (r *SpireServerReconciler) reconcileNetworkPolicies(ctx context.Context, se
 				return err
 			}
 			r.log.Info("Updated NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now())
+			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now(), true)
 			continue
 		}
 
 		r.log.V(1).Info("NetworkPolicy is up to date", "name", desired.Name)
+		applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, existing.CreationTimestamp, false)
 	}
 
 	return nil

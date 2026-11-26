@@ -157,6 +157,7 @@ func staleAgentIngressNetworkPolicy(agent *v1alpha1.SpireAgent) *networkingv1.Ne
 	desired := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels)
 	stale := desired.DeepCopy()
 	stale.ResourceVersion = "42"
+	stale.CreationTimestamp = metav1.Unix(50, 0)
 	delete(stale.Labels, "app.kubernetes.io/managed-by")
 	return stale
 }
@@ -257,8 +258,9 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	if fc.UpdateCallCount() != 0 {
 		t.Fatalf("expected no update in create-only mode, got %d", fc.UpdateCallCount())
 	}
-	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
-		t.Fatalf("create-only skip must not record policy as applied, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	got := agent.Status.NetworkPolicy.LastAppliedPolicies
+	if len(got) != 1 || got[0].Name != stale.Name || !got[0].LastAppliedTime.Time.Equal(stale.CreationTimestamp.Time) {
+		t.Fatalf("create-only existing policy must record creationTimestamp, got %+v", got)
 	}
 }
 
@@ -271,7 +273,7 @@ func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing
 		Status: v1alpha1.SpireAgentStatus{
 			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
 				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
-				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy"}},
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy", LastAppliedTime: metav1.Unix(10, 0)}},
 			},
 		},
 	}
@@ -291,12 +293,19 @@ func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing
 	if err := reconciler.reconcileNetworkPolicies(context.Background(), agent, true); err != nil {
 		t.Fatalf("reconcileNetworkPolicies: %v", err)
 	}
-	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 1 || agent.Status.NetworkPolicy.LastAppliedPolicies[0].Name != "prior-policy" {
+	names := map[string]metav1.Time{}
+	for _, policy := range agent.Status.NetworkPolicy.LastAppliedPolicies {
+		names[policy.Name] = policy.LastAppliedTime
+	}
+	if !names["prior-policy"].Time.Equal(metav1.Unix(10, 0).Time) {
 		t.Fatalf("expected prior lastApplied preserved, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+	if !names[stale.Name].Time.Equal(stale.CreationTimestamp.Time) {
+		t.Fatalf("expected existing policy recorded with creationTimestamp, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
 	}
 }
 
-func TestReconcileNetworkPolicies_NoOpDoesNotRecordLastApplied(t *testing.T) {
+func TestReconcileNetworkPolicies_UpToDateRecordsCreationTimestamp(t *testing.T) {
 	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
 
 	agent := &v1alpha1.SpireAgent{
@@ -308,6 +317,7 @@ func TestReconcileNetworkPolicies_NoOpDoesNotRecordLastApplied(t *testing.T) {
 	desired := networkPolicyFromAsset(spireAgentBaselineNetworkPolicyAssets[0], agent.Spec.Labels)
 	existing := desired.DeepCopy()
 	existing.ResourceVersion = "1"
+	existing.CreationTimestamp = metav1.Unix(77, 0)
 	if err := controllerutil.SetControllerReference(agent, existing, reconciler.scheme); err != nil {
 		t.Fatalf("SetControllerReference: %v", err)
 	}
@@ -329,8 +339,9 @@ func TestReconcileNetworkPolicies_NoOpDoesNotRecordLastApplied(t *testing.T) {
 	if fc.UpdateCallCount() != 0 {
 		t.Fatalf("expected no update, got %d", fc.UpdateCallCount())
 	}
-	if len(agent.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
-		t.Fatalf("no-op reconcile must not record policy as applied, got %+v", agent.Status.NetworkPolicy.LastAppliedPolicies)
+	got := agent.Status.NetworkPolicy.LastAppliedPolicies
+	if len(got) != 1 || got[0].Name != existing.Name || !got[0].LastAppliedTime.Time.Equal(existing.CreationTimestamp.Time) {
+		t.Fatalf("up-to-date policy must record creationTimestamp, got %+v", got)
 	}
 }
 

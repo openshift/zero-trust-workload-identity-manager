@@ -133,12 +133,16 @@ func BaselineNetworkPolicyLastApplied(status *v1alpha1.NetworkPolicyStatus, capa
 	return applied
 }
 
-// RecordNetworkPolicyApplied adds a policy after the operator successfully creates or updates it.
-// An existing name keeps its place and gets a new lastAppliedTime.
-func RecordNetworkPolicyApplied(applied []v1alpha1.AppliedNetworkPolicy, name string, at metav1.Time) []v1alpha1.AppliedNetworkPolicy {
+// RecordNetworkPolicyApplied records a NetworkPolicy in lastAppliedPolicies.
+// If the name is missing it is appended with at. If the name is present and refresh
+// is true (create/update), lastAppliedTime is replaced with at. If refresh is false
+// (object already exists and matches), the existing timestamp is left unchanged.
+func RecordNetworkPolicyApplied(applied []v1alpha1.AppliedNetworkPolicy, name string, at metav1.Time, refresh bool) []v1alpha1.AppliedNetworkPolicy {
 	for i, existing := range applied {
 		if existing.Name == name {
-			applied[i].LastAppliedTime = at
+			if refresh {
+				applied[i].LastAppliedTime = at
+			}
 			return applied
 		}
 	}

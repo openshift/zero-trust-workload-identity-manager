@@ -1005,12 +1005,20 @@ func TestBaselineNetworkPolicyLastAppliedAndRecord(t *testing.T) {
 	if got := BaselineNetworkPolicyLastApplied(status, 2); len(got) != 1 || got[0].Name != "a" || !got[0].LastAppliedTime.Time.Equal(earlier.Time) {
 		t.Fatalf("expected copy of prior list, got %v", got)
 	}
-	applied := RecordNetworkPolicyApplied(nil, "x", earlier)
+	applied := RecordNetworkPolicyApplied(nil, "x", earlier, true)
 	if len(applied) != 1 || applied[0].Name != "x" || !applied[0].LastAppliedTime.Time.Equal(earlier.Time) {
 		t.Fatalf("expected recorded name, got %v", applied)
 	}
-	applied = RecordNetworkPolicyApplied(applied, "x", later)
+	applied = RecordNetworkPolicyApplied(applied, "x", later, true)
 	if len(applied) != 1 || !applied[0].LastAppliedTime.Time.Equal(later.Time) {
 		t.Fatalf("expected timestamp refresh without a duplicate, got %v", applied)
+	}
+	applied = RecordNetworkPolicyApplied(applied, "x", earlier, false)
+	if len(applied) != 1 || !applied[0].LastAppliedTime.Time.Equal(later.Time) {
+		t.Fatalf("expected refresh=false to keep existing timestamp, got %v", applied)
+	}
+	applied = RecordNetworkPolicyApplied(nil, "y", earlier, false)
+	if len(applied) != 1 || applied[0].Name != "y" || !applied[0].LastAppliedTime.Time.Equal(earlier.Time) {
+		t.Fatalf("expected refresh=false to append missing name, got %v", applied)
 	}
 }

@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func newNetworkPolicyTestReconciler(t *testing.T, fakeClient *fakes.FakeCustomCtrlClient) *SpireOidcDiscoveryProviderReconciler {
@@ -132,6 +133,7 @@ func staleOIDCIngressNetworkPolicy(oidc *v1alpha1.SpireOIDCDiscoveryProvider) *n
 	desired := networkPolicyFromAsset(spireOIDCBaselineNetworkPolicyAssets[0], oidc.Spec.Labels)
 	stale := desired.DeepCopy()
 	stale.ResourceVersion = "42"
+	stale.CreationTimestamp = metav1.Unix(50, 0)
 	delete(stale.Labels, "app.kubernetes.io/managed-by")
 	return stale
 }
@@ -228,8 +230,90 @@ func TestReconcileNetworkPolicies_CreateOnlySkipsDrift(t *testing.T) {
 	if fc.UpdateCallCount() != 0 {
 		t.Fatalf("expected no update in create-only mode, got %d", fc.UpdateCallCount())
 	}
-	if len(oidc.Status.NetworkPolicy.LastAppliedPolicies) != 0 {
-		t.Fatalf("create-only skip must not record policy as applied, got %+v", oidc.Status.NetworkPolicy.LastAppliedPolicies)
+	got := oidc.Status.NetworkPolicy.LastAppliedPolicies
+	if len(got) != 1 || got[0].Name != stale.Name || !got[0].LastAppliedTime.Time.Equal(stale.CreationTimestamp.Time) {
+		t.Fatalf("create-only existing policy must record creationTimestamp, got %+v", got)
+	}
+}
+
+func TestReconcileNetworkPolicies_CreateOnlyPreservesPriorLastApplied(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireOIDCDiscoveryProviderSpec{ManagedNetworkPolicy: "true"},
+		Status: v1alpha1.SpireOIDCDiscoveryProviderStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "prior-policy", LastAppliedTime: metav1.Unix(10, 0)}},
+			},
+		},
+	}
+	stale := staleOIDCIngressNetworkPolicy(oidc)
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+		np, ok := obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T", obj)
+		}
+		*np = *stale
+		return nil
+	}
+
+	reconciler := newNetworkPolicyTestReconciler(t, fc)
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), oidc, true); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	names := map[string]metav1.Time{}
+	for _, policy := range oidc.Status.NetworkPolicy.LastAppliedPolicies {
+		names[policy.Name] = policy.LastAppliedTime
+	}
+	if !names["prior-policy"].Time.Equal(metav1.Unix(10, 0).Time) {
+		t.Fatalf("expected prior lastApplied preserved, got %+v", oidc.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+	if !names[stale.Name].Time.Equal(stale.CreationTimestamp.Time) {
+		t.Fatalf("expected existing policy recorded with creationTimestamp, got %+v", oidc.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+}
+
+func TestReconcileNetworkPolicies_UpToDateRecordsCreationTimestamp(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "zero-trust-workload-identity-manager")
+
+	oidc := &v1alpha1.SpireOIDCDiscoveryProvider{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v1alpha1.GroupVersion.String(), Kind: "SpireOIDCDiscoveryProvider"},
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "uid-1"},
+		Spec:       v1alpha1.SpireOIDCDiscoveryProviderSpec{ManagedNetworkPolicy: "true"},
+	}
+	reconciler := newNetworkPolicyTestReconciler(t, &fakes.FakeCustomCtrlClient{})
+	desired := networkPolicyFromAsset(spireOIDCBaselineNetworkPolicyAssets[0], oidc.Spec.Labels)
+	existing := desired.DeepCopy()
+	existing.ResourceVersion = "1"
+	existing.CreationTimestamp = metav1.Unix(77, 0)
+	if err := controllerutil.SetControllerReference(oidc, existing, reconciler.scheme); err != nil {
+		t.Fatalf("SetControllerReference: %v", err)
+	}
+
+	fc := &fakes.FakeCustomCtrlClient{}
+	fc.GetStub = func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+		np, ok := obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T", obj)
+		}
+		*np = *existing
+		return nil
+	}
+	reconciler.ctrlClient = fc
+
+	if err := reconciler.reconcileNetworkPolicies(context.Background(), oidc, false); err != nil {
+		t.Fatalf("reconcileNetworkPolicies: %v", err)
+	}
+	if fc.UpdateCallCount() != 0 {
+		t.Fatalf("expected no update, got %d", fc.UpdateCallCount())
+	}
+	got := oidc.Status.NetworkPolicy.LastAppliedPolicies
+	if len(got) != 1 || got[0].Name != existing.Name || !got[0].LastAppliedTime.Time.Equal(existing.CreationTimestamp.Time) {
+		t.Fatalf("up-to-date policy must record creationTimestamp, got %+v", got)
 	}
 }
 
