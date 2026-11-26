@@ -146,11 +146,6 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	upstreamBundleHash, bundleReady, err := r.readUpstreamTrustBundle(ctx, &server, statusMgr)
-	if err != nil || !bundleReady {
-		return ctrl.Result{}, err
-	}
-
 	// Reconcile ServiceAccount
 	if err := r.reconcileServiceAccount(ctx, &server, statusMgr, createOnlyMode); err != nil {
 		return ctrl.Result{}, err
@@ -185,6 +180,11 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Reconcile Spire Bundle ConfigMap
 	if err := r.reconcileSpireBundleConfigMap(ctx, &server, statusMgr, &ztwim); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	upstreamBundleHash, bundleReady, err := r.readUpstreamTrustBundle(ctx, &server, statusMgr)
+	if err != nil || !bundleReady {
 		return ctrl.Result{}, err
 	}
 
