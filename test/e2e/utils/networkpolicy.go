@@ -644,7 +644,16 @@ func AssertOIDCIngressNamespaceLabel(ctx context.Context, clientset kubernetes.I
 		map[string]string{networkPolicyProbeLabel: "true"},
 		[]string{"sleep", "3600"},
 	)
-	oidcIP := operandPodIP(ctx, clientset, SpireOIDCDiscoveryProviderPodLabel)
+	oidcPod := readyOperandPod(ctx, clientset, SpireOIDCDiscoveryProviderPodLabel)
+	oidcIP := oidcPod.Status.PodIP
+	assertSameDestination := func() {
+		current, err := clientset.CoreV1().Pods(OperatorNamespace).Get(ctx, oidcPod.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "OIDC destination pod %s must still exist", oidcPod.Name)
+		Expect(current.UID).To(Equal(oidcPod.UID), "OIDC destination pod %s was replaced", oidcPod.Name)
+		Expect(current.Status.PodIP).To(Equal(oidcIP), "OIDC destination pod %s changed IP", oidcPod.Name)
+		Expect(current.DeletionTimestamp).To(BeNil(), "OIDC destination pod %s is terminating", oidcPod.Name)
+		Expect(IsPodReady(current)).To(BeTrue(), "OIDC destination pod %s must remain ready", oidcPod.Name)
+	}
 
 	By("Rejecting a direct OIDC connection from an unlabelled namespace")
 	expectTCPBlocked(ctx, namespace, "np-oidc-client", oidcIP, 8443)
@@ -656,12 +665,17 @@ func AssertOIDCIngressNamespaceLabel(ctx context.Context, clientset kubernetes.I
 	Eventually(func() error {
 		return dialFromPod(ctx, namespace, "np-oidc-client", oidcIP, 8443)
 	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+	assertSameDestination()
 
 	By("Rejecting new direct connections after removing the namespace label")
 	_, err = clientset.CoreV1().Namespaces().Patch(ctx, namespace, types.MergePatchType,
 		[]byte(`{"metadata":{"labels":{"policy-group.network.openshift.io/ingress":null}}}`), metav1.PatchOptions{})
 	Expect(err).NotTo(HaveOccurred())
+	// Check both sides of the blocking window so pod replacement cannot turn
+	// a timeout against a retired IP into evidence of policy enforcement.
+	assertSameDestination()
 	expectTCPBlocked(ctx, namespace, "np-oidc-client", oidcIP, 8443)
+	assertSameDestination()
 }
 
 // AssertNetworkPoliciesCreateOnly uses the existing OLM rollout pattern to
@@ -708,6 +722,11 @@ func AssertNetworkPoliciesCreateOnly(
 	}
 	createOnlyEnv = append(createOnlyEnv, map[string]interface{}{"name": CreateOnlyModeEnvVar, "value": "true"})
 
+	// Cleanups run in reverse registration order. Restore the environment first,
+	// but still restore policy specs if the environment patch or rollout wait fails.
+	DeferCleanup(func(cleanupCtx context.Context) {
+		restoreNetworkPolicySpecs(cleanupCtx, clientset, original)
+	})
 	DeferCleanup(func(cleanupCtx context.Context) {
 		patchNetworkPolicySubscriptionEnv(cleanupCtx, k8sClient, subscription, originalEnv)
 		WaitForDeploymentEnvVar(
@@ -720,7 +739,6 @@ func AssertNetworkPoliciesCreateOnly(
 			DefaultTimeout,
 		)
 		WaitForDeploymentAvailable(cleanupCtx, clientset, OperatorDeploymentName, OperatorNamespace, DefaultTimeout)
-		restoreNetworkPolicySpecs(cleanupCtx, clientset, original)
 	})
 
 	By("Enabling create-only mode through the Subscription")
@@ -841,9 +859,13 @@ func restoreNetworkPolicySpecs(
 	clientset kubernetes.Interface,
 	original map[string]networkingv1.NetworkPolicySpec,
 ) {
+	var restoreErrors []error
 	for name, spec := range original {
-		Expect(updateNetworkPolicySpec(ctx, clientset, name, spec)).To(Succeed(), "failed to restore policy %s", name)
+		if err := updateNetworkPolicySpec(ctx, clientset, name, spec); err != nil {
+			restoreErrors = append(restoreErrors, fmt.Errorf("failed to restore policy %s: %w", name, err))
+		}
 	}
+	Expect(errors.Join(restoreErrors...)).NotTo(HaveOccurred())
 }
 
 func assertNetworkPolicySpecs(
@@ -1169,9 +1191,9 @@ func AssertOperandNetworkPolicy(
 
 // AssertDisabledManagementRecreatesDeletedPolicies sets managedNetworkPolicy to
 // "false" on one operand. ManagementState becomes Unmanaged, application history
-// is preserved, and Ready stays True while its policies remain. Deleting those policies
-// leaves them absent until the field is "true" again, which makes reconciliation
-// recreate them and Ready stay True.
+// is preserved, and Ready stays True while its policies remain and while they
+// are deleted. The policies stay absent until the field is "true" again, which
+// makes reconciliation recreate them and Ready stay True.
 func AssertDisabledManagementRecreatesDeletedPolicies(
 	ctx context.Context,
 	k8sClient client.Client,
@@ -1204,15 +1226,17 @@ func AssertDisabledManagementRecreatesDeletedPolicies(
 			return networkPolicyAbsent(ctx, clientset, name)
 		}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(BeTrue(), "delete should remove %s", name)
 	}
-	Consistently(func() string {
+	Consistently(func(g Gomega) {
 		for _, policy := range policies {
-			if !networkPolicyAbsent(ctx, clientset, policy.Name) {
-				return policy.Name
-			}
+			g.Expect(networkPolicyAbsent(ctx, clientset, policy.Name)).To(BeTrue(),
+				"controller recreated NetworkPolicy %s while managedNetworkPolicy is false", policy.Name)
 		}
-		return ""
-	}).WithTimeout(unmanagedDeleteWindow).WithPolling(ShortInterval).Should(BeEmpty(),
-		"controller recreated a NetworkPolicy while managedNetworkPolicy is false")
+		conditions, err := operandStatusConditions(ctx, k8sClient, tc.Kind)
+		g.Expect(err).NotTo(HaveOccurred(), "failed to read %s conditions while NetworkPolicies are absent", tc.Kind)
+		g.Expect(conditionError(apimeta.FindStatusCondition(conditions, operatorv1alpha1.Ready),
+			metav1.ConditionTrue, operatorv1alpha1.ReasonReady, "")).To(Succeed(),
+			"%s should stay Ready while NetworkPolicies are absent and managedNetworkPolicy is false", tc.Kind)
+	}).WithTimeout(unmanagedDeleteWindow).WithPolling(ShortInterval).Should(Succeed())
 
 	By("Setting managedNetworkPolicy to true on " + tc.Kind)
 	setManagedNetworkPolicy(ctx, k8sClient, tc, "true")
@@ -1494,16 +1518,20 @@ func allowAllEgress(np *networkingv1.NetworkPolicy) bool {
 }
 
 func operandPodIP(ctx context.Context, clientset kubernetes.Interface, selector string) string {
+	return readyOperandPod(ctx, clientset, selector).Status.PodIP
+}
+
+func readyOperandPod(ctx context.Context, clientset kubernetes.Interface, selector string) *corev1.Pod {
 	pods, err := clientset.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
 	Expect(err).NotTo(HaveOccurred(), "failed to list pods %s", selector)
 	for _, pod := range FilterActivePods(pods.Items) {
 		if pod.Labels[networkPolicyProbeLabel] == "true" || !IsPodReady(&pod) || pod.Status.PodIP == "" {
 			continue
 		}
-		return pod.Status.PodIP
+		return &pod
 	}
 	Fail(fmt.Sprintf("no ready pod IP for %s", selector))
-	return ""
+	return nil
 }
 
 func createProbeNamespace(ctx context.Context, clientset kubernetes.Interface) string {
