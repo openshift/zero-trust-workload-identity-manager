@@ -63,6 +63,8 @@ var (
 	}
 
 	informerResources = []client.Object{
+		&corev1.Pod{},
+		&corev1.Secret{},
 		&configv1.APIServer{},
 		&corev1.ServiceAccount{},
 		&corev1.Service{},
@@ -248,6 +250,10 @@ func NewCacheBuilder() (cache.NewCacheFunc, error) {
 			customCacheObjects[resource] = cache.ByObject{}
 		}
 
+		for object, options := range upstreamCacheObjects(utils.GetOperatorNamespace()) {
+			customCacheObjects[object] = options
+		}
+
 		// Merge custom cache objects with any existing ones from opts
 		if opts.ByObject == nil {
 			opts.ByObject = customCacheObjects
@@ -281,4 +287,17 @@ func NewCacheBuilder() (cache.NewCacheFunc, error) {
 func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
 	// Use the manager's client directly, which is backed by the unified cache
 	return mgr.GetClient(), nil
+}
+
+// Bootstrap Secrets are administrator-owned, so they cannot use the managed
+// resource label filter. Limit this informer to the operand namespace.
+func upstreamCacheObjects(namespace string) map[client.Object]cache.ByObject {
+	return map[client.Object]cache.ByObject{
+		&corev1.Secret{}: {Namespaces: map[string]cache.Config{namespace: {}}},
+		&corev1.Pod{}: {Namespaces: map[string]cache.Config{namespace: {}}, Label: labels.SelectorFromSet(labels.Set{
+			utils.AppManagedByLabelKey:    utils.AppManagedByLabelValue,
+			"app.kubernetes.io/name":      "spire-server",
+			"app.kubernetes.io/component": utils.ComponentControlPlane,
+		})},
+	}
 }

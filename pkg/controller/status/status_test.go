@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/client/fakes"
 	appsv1 "k8s.io/api/apps/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -91,6 +92,22 @@ func TestSetReadyCondition(t *testing.T) {
 			},
 			expectedStatus: metav1.ConditionFalse,
 			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "Upstream agent sidecar starting - Progressing",
+			existingConditions: map[string]Condition{
+				"UpstreamAgentAvailable": {Type: "UpstreamAgentAvailable", Status: metav1.ConditionFalse, Reason: "UpstreamAgentNotReady", Message: "Waiting for the current upstream agent pod to become ready"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "Trust bundle missing - Failed",
+			existingConditions: map[string]Condition{
+				"UpstreamAgentAvailable": {Type: "UpstreamAgentAvailable", Status: metav1.ConditionFalse, Reason: "TrustBundleMissing", Message: "Secret zero-trust-workload-identity-manager/hub-trust-bundle not found"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonFailed,
 		},
 		{
 			name: "Failure takes precedence over progressing",
@@ -797,5 +814,27 @@ func TestGetStatefulSetStatusMessage_AllScenarios(t *testing.T) {
 				t.Errorf("Expected message to contain '%s', got '%s'", tt.expectedContain, msg)
 			}
 		})
+	}
+}
+
+func TestRemoveCondition(t *testing.T) {
+	fake := &fakes.FakeCustomCtrlClient{}
+	server := &v1alpha1.SpireServer{}
+	server.Status.Conditions = []metav1.Condition{
+		{Type: "UpstreamAgentAvailable", Status: metav1.ConditionFalse, Reason: "TrustBundleMissing"},
+		{Type: "StatefulSetAvailable", Status: metav1.ConditionTrue, Reason: "StatefulSetReady"},
+	}
+	manager := NewManager(fake)
+	manager.RemoveCondition("UpstreamAgentAvailable")
+	if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus {
+		return &server.Status.ConditionalStatus
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, "UpstreamAgentAvailable") != nil {
+		t.Fatal("removed condition remains")
+	}
+	if apimeta.FindStatusCondition(server.Status.Conditions, "StatefulSetAvailable") == nil {
+		t.Fatal("unrelated condition was dropped")
 	}
 }

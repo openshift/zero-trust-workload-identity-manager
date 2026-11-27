@@ -48,15 +48,16 @@ const (
 	RBACAvailable                    = "RBACAvailable"
 	ValidatingWebhookAvailable       = "ValidatingWebhookAvailable"
 	RouteAvailable                   = "RouteAvailable"
+	UpstreamAgentAvailable           = "UpstreamAgentAvailable"
 )
 
 // SpireServerReconciler reconciles a SpireServer object
 type SpireServerReconciler struct {
-	ctrlClient    customClient.CustomCtrlClient
-	ctx           context.Context
-	eventRecorder record.EventRecorder
-	log           logr.Logger
-	scheme        *runtime.Scheme
+	ctrlClient     customClient.CustomCtrlClient
+	ctx            context.Context
+	eventRecorder  record.EventRecorder
+	log            logr.Logger
+	scheme         *runtime.Scheme
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
@@ -67,11 +68,11 @@ func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireServe
 		return nil, err
 	}
 	return &SpireServerReconciler{
-		ctrlClient:    c,
-		ctx:           context.Background(),
-		eventRecorder: mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		log:           ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
-		scheme:        mgr.GetScheme(),
+		ctrlClient:     c,
+		ctx:            context.Background(),
+		eventRecorder:  mgr.GetEventRecorderFor(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		log:            ctrl.Log.WithName(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName),
+		scheme:         mgr.GetScheme(),
 		tlsProfileSpec: tlsProfileSpec,
 	}, nil
 }
@@ -88,6 +89,9 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	statusMgr := status.NewManager(r.ctrlClient)
+	if hasSpireUpstream(&server) {
+		statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Waiting for upstream agent reconciliation", metav1.ConditionFalse)
+	}
 	defer func() {
 		if err := statusMgr.ApplyStatus(ctx, &server, func() *v1alpha1.ConditionalStatus {
 			return &server.Status.ConditionalStatus
@@ -178,9 +182,40 @@ func (r *SpireServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile StatefulSet
-	if err := r.reconcileStatefulSet(ctx, &server, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash); err != nil {
+	upstreamBundleHash, bundleReady, err := r.readUpstreamTrustBundle(ctx, &server, statusMgr)
+	if err != nil || !bundleReady {
 		return ctrl.Result{}, err
+	}
+
+	upstreamConfigHash, err := r.reconcileUpstreamAgentConfigMap(ctx, &server, &ztwim, createOnlyMode)
+	if err != nil {
+		statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", err.Error(), metav1.ConditionFalse)
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile StatefulSet
+	if err := r.reconcileStatefulSet(ctx, &server, statusMgr, createOnlyMode, spireServerConfigMapHash, spireControllerManagerConfigMapHash, upstreamConfigHash, upstreamBundleHash); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !hasSpireUpstream(&server) {
+		// Leave any previously created spire-agent-upstream ConfigMap in place; only
+		// drop the status condition once nested SPIRE is disabled (STS no longer mounts it).
+		if !createOnlyMode {
+			statusMgr.RemoveCondition(UpstreamAgentAvailable)
+		} else if apimeta.FindStatusCondition(server.Status.Conditions, UpstreamAgentAvailable) != nil {
+			statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Upstream agent disable is deferred in create-only mode", metav1.ConditionFalse)
+		}
+	} else {
+		expected := map[string]string{
+			spireServerStatefulSetSpireServerConfigHashAnnotationKey:            spireServerConfigMapHash,
+			spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey: spireControllerManagerConfigMapHash,
+			upstreamAgentConfigHashAnnotation:                                   upstreamConfigHash,
+			upstreamAgentBundleHashAnnotation:                                   upstreamBundleHash,
+		}
+		if err := r.reconcileUpstreamAgentAvailability(ctx, &server, statusMgr, expected); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// reconcile Route if enabled
@@ -210,6 +245,7 @@ func (r *SpireServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1alpha1.SpireServer{}, builder.WithPredicates(utils.GenerationOrOwnerReferenceChangedPredicate)).
 		Named(utils.ZeroTrustWorkloadIdentityManagerSpireServerControllerName).
 		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
+		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(r.mapUpstreamPod), controllerManagedResourcePredicates).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
@@ -325,6 +361,13 @@ func (r *SpireServerReconciler) validateProxyConfiguration(statusMgr *status.Man
 
 // needsUpdate returns true if StatefulSet needs to be updated
 func needsUpdate(current, desired appsv1.StatefulSet) bool {
+	if current.Spec.Template.Annotations[upstreamAgentBundleHashAnnotation] != desired.Spec.Template.Annotations[upstreamAgentBundleHashAnnotation] {
+		return true
+	}
+
+	if current.Spec.Template.Annotations[upstreamAgentConfigHashAnnotation] != desired.Spec.Template.Annotations[upstreamAgentConfigHashAnnotation] {
+		return true
+	}
 	if current.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireServerConfigHashAnnotationKey] {
 		return true
 	} else if current.Spec.Template.Annotations[spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey] != desired.Spec.Template.Annotations[spireServerStatefulSetSpireControllerManagerConfigHashAnnotationKey] {
@@ -368,5 +411,86 @@ func (r *SpireServerReconciler) handleTTLValidation(ctx context.Context, server 
 			metav1.ConditionTrue)
 	}
 
+	return nil
+}
+
+func (r *SpireServerReconciler) readUpstreamTrustBundle(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager) (string, bool, error) {
+	if !hasSpireUpstream(server) {
+		return "", true, nil
+	}
+	name := server.Spec.UpstreamAuthority.Spire.TrustBundleSecret
+	var secret corev1.Secret
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: name, Namespace: utils.GetOperatorNamespace()}, &secret); err != nil {
+		if kerrors.IsNotFound(err) {
+			statusMgr.AddCondition(UpstreamAgentAvailable, "TrustBundleMissing", fmt.Sprintf("Secret %s/%s not found", utils.GetOperatorNamespace(), name), metav1.ConditionFalse)
+			return "", false, nil
+		}
+		statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Unable to read upstream trust bundle Secret", metav1.ConditionFalse)
+		return "", false, err
+	}
+	bundle := secret.Data[upstreamAgentBundleKey]
+	if len(bundle) == 0 {
+		statusMgr.AddCondition(UpstreamAgentAvailable, "TrustBundleMissing", fmt.Sprintf("Secret %s must contain non-empty %s", name, upstreamAgentBundleKey), metav1.ConditionFalse)
+		return "", false, nil
+	}
+	if err := validateUpstreamTrustBundle(bundle); err != nil {
+		statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", fmt.Sprintf("Secret %s has an invalid %s: %v", name, upstreamAgentBundleKey, err), metav1.ConditionFalse)
+		return "", false, nil
+	}
+	return generateConfigHash(bundle), true, nil
+}
+
+func (r *SpireServerReconciler) mapUpstreamPod(_ context.Context, obj client.Object) []reconcile.Request {
+	owner := metav1.GetControllerOf(obj)
+	if obj.GetNamespace() != utils.GetOperatorNamespace() || obj.GetName() != "spire-server-0" || owner == nil || owner.Kind != "StatefulSet" || owner.Name != "spire-server" {
+		return nil
+	}
+	return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: "cluster"}}}
+}
+
+// Availability describes the current sidecar, not end-to-end CA issuance.
+// Rollout and hash checks exclude a ready container from an obsolete template.
+func (r *SpireServerReconciler) reconcileUpstreamAgentAvailability(ctx context.Context, server *v1alpha1.SpireServer, statusMgr *status.Manager, expected map[string]string) error {
+	statusMgr.AddCondition(UpstreamAgentAvailable, "UpstreamAgentNotReady", "Waiting for the current upstream agent pod to become ready", metav1.ConditionFalse)
+	var sts appsv1.StatefulSet
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "spire-server", Namespace: utils.GetOperatorNamespace()}, &sts); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(&sts, server) || sts.Status.ObservedGeneration < sts.Generation || sts.Status.UpdateRevision == "" {
+		return nil
+	}
+	for key, value := range expected {
+		if sts.Spec.Template.Annotations[key] != value {
+			return nil
+		}
+	}
+	var pod corev1.Pod
+	if err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: "spire-server-0", Namespace: utils.GetOperatorNamespace()}, &pod); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if pod.Name != "spire-server-0" || pod.Namespace != utils.GetOperatorNamespace() || !metav1.IsControlledBy(&pod, &sts) || !pod.DeletionTimestamp.IsZero() || pod.Labels[appsv1.ControllerRevisionHashLabelKey] != sts.Status.UpdateRevision {
+		return nil
+	}
+	for key, value := range expected {
+		if pod.Annotations[key] != value {
+			return nil
+		}
+	}
+	sidecarPresent := false
+	for _, container := range pod.Spec.Containers {
+		if container.Name == upstreamAgentName {
+			sidecarPresent = true
+			break
+		}
+	}
+	if !sidecarPresent {
+		return nil
+	}
+	for _, container := range pod.Status.ContainerStatuses {
+		if container.Name == upstreamAgentName && container.Ready && container.State.Running != nil {
+			statusMgr.AddCondition(UpstreamAgentAvailable, "Ready", "Upstream agent sidecar is ready with the configured trust bundle", metav1.ConditionTrue)
+			break
+		}
+	}
 	return nil
 }

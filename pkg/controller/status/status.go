@@ -27,6 +27,7 @@ type Condition struct {
 type Manager struct {
 	customClient customClient.CustomCtrlClient
 	conditions   map[string]Condition
+	removed      map[string]bool
 }
 
 // NewManager creates a new status manager
@@ -34,17 +35,28 @@ func NewManager(customClient customClient.CustomCtrlClient) *Manager {
 	return &Manager{
 		customClient: customClient,
 		conditions:   make(map[string]Condition),
+		removed:      make(map[string]bool),
 	}
 }
 
 // AddCondition adds or updates a condition
 func (m *Manager) AddCondition(conditionType, reason, message string, status metav1.ConditionStatus) {
+	delete(m.removed, conditionType)
 	m.conditions[conditionType] = Condition{
 		Type:    conditionType,
 		Status:  status,
 		Reason:  reason,
 		Message: message,
 	}
+}
+
+// RemoveCondition schedules removal without discarding unrelated conditions.
+func (m *Manager) RemoveCondition(conditionType string) {
+	if m.removed == nil {
+		m.removed = make(map[string]bool)
+	}
+	m.removed[conditionType] = true
+	delete(m.conditions, conditionType)
 }
 
 // SetReadyCondition sets the Ready condition based on all other conditions
@@ -59,9 +71,10 @@ func (m *Manager) SetReadyCondition() {
 
 	// Reasons that indicate normal progress (not actual failures)
 	progressingReasons := map[string]bool{
-		"StatefulSetNotReady": true,
-		"DaemonSetNotReady":   true,
-		"DeploymentNotReady":  true,
+		"StatefulSetNotReady":   true,
+		"DaemonSetNotReady":     true,
+		"DeploymentNotReady":    true,
+		"UpstreamAgentNotReady": true, // nested SPIRE sidecar starting / rolling out
 	}
 
 	for condType, cond := range m.conditions {
@@ -115,6 +128,10 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 	if !readyExplicitlySet {
 		// Set the Ready condition based on all other conditions
 		m.SetReadyCondition()
+	}
+
+	for conditionType := range m.removed {
+		apimeta.RemoveStatusCondition(&status.Conditions, conditionType)
 	}
 
 	// Apply all conditions
