@@ -8,14 +8,6 @@ rules:
   - ""
   resources:
   - configmaps
-  - endpoints
-  - events
-  - namespaces
-  - nodes
-  - nodes/proxy
-  - pods
-  - serviceaccounts
-  - services
   verbs:
   - create
   - delete
@@ -27,11 +19,29 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - endpoints
+  - namespaces
+  - nodes
+  - pods
   - secrets
   verbs:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes/proxy
+  verbs:
+  - get
 - apiGroups:
   - ""
   resourceNames:
@@ -45,6 +55,15 @@ rules:
   - delete
   - get
   - update
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - list
+  - watch
 - apiGroups:
   - ""
   resourceNames:
@@ -64,11 +83,9 @@ rules:
   - validatingwebhookconfigurations
   verbs:
   - create
-  - delete
   - get
   - list
   - patch
-  - update
   - watch
 - apiGroups:
   - admissionregistration.k8s.io
@@ -98,11 +115,7 @@ rules:
   - statefulsets
   verbs:
   - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - apps
@@ -130,11 +143,8 @@ rules:
   - tokenreviews
   verbs:
   - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - cert-manager.io
@@ -187,12 +197,7 @@ rules:
   - spireservers
   - zerotrustworkloadidentitymanagers
   verbs:
-  - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - operator.openshift.io
@@ -210,28 +215,6 @@ rules:
   - zerotrustworkloadidentitymanagers/finalizers
   - zerotrustworkloadidentitymanagers/status
   verbs:
-  - update
-- apiGroups:
-  - operator.openshift.io
-  resources:
-  - spiffecsidrivers/finalizers
-  - spireagents/finalizers
-  - spireoidcdiscoveryproviders/finalizers
-  - spireservers/finalizers
-  - zerotrustworkloadidentitymanagers/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - operator.openshift.io
-  resources:
-  - spiffecsidrivers/status
-  - spireagents/status
-  - spireoidcdiscoveryproviders/status
-  - spireservers/status
-  - zerotrustworkloadidentitymanagers/status
-  verbs:
-  - get
-  - patch
   - update
 - apiGroups:
   - operator.openshift.io
@@ -278,11 +261,7 @@ rules:
   - roles
   verbs:
   - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io
@@ -344,11 +323,7 @@ rules:
   - securitycontextconstraints
   verbs:
   - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - security.openshift.io
@@ -372,14 +347,8 @@ rules:
   - spire.spiffe.io
   resources:
   - clusterfederatedtrustdomains
-  - clusterfederatedtrustdomains/finalizers
-  - clusterfederatedtrustdomains/status
   - clusterspiffeids
-  - clusterspiffeids/finalizers
-  - clusterspiffeids/status
   - clusterstaticentries
-  - clusterstaticentries/finalizers
-  - clusterstaticentries/status
   verbs:
   - create
   - delete
@@ -389,6 +358,24 @@ rules:
   - update
   - watch
 - apiGroups:
+  - spire.spiffe.io
+  resources:
+  - clusterfederatedtrustdomains/finalizers
+  - clusterspiffeids/finalizers
+  - clusterstaticentries/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - spire.spiffe.io
+  resources:
+  - clusterfederatedtrustdomains/status
+  - clusterspiffeids/status
+  - clusterstaticentries/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - storage.k8s.io
   resources:
   - csidrivers
@@ -397,6 +384,5 @@ rules:
   - delete
   - get
   - list
-  - patch
   - update
   - watch

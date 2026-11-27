@@ -86,9 +86,14 @@ func TestE2E(t *testing.T) {
 	// Configure Ginkgo for e2e tests
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 
-	// Suite-level configuration
-	// Suite timeout must allow all test specs to complete; go test -timeout is 45m
+	// Suite-level configuration.
+	// Default e2e (label filter !tls) stays at 40m under the 45m go test timeout.
+	// The tls suite waits for Machine Config rolls. Cluster-bot keeps the cluster for about 3h,
+	// so this stays under the 2h50m go test timeout used by make test-e2e-tls.
 	suiteConfig.Timeout = 40 * time.Minute
+	if Label("tls").MatchesLabelFilter(GinkgoLabelFilter()) {
+		suiteConfig.Timeout = 2*time.Hour + 40*time.Minute
+	}
 	suiteConfig.FailFast = false       // Continue after first failure to see all issues
 	suiteConfig.FlakeAttempts = 0      // Retry on flaky tests (helpful when deflaking tests)
 	suiteConfig.MustPassRepeatedly = 1 // Must pass repeatedly times (helpful when deflaking tests)

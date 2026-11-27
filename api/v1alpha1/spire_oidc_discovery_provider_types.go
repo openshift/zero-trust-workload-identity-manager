@@ -79,6 +79,16 @@ type SpireOIDCDiscoveryProviderSpec struct {
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
 	ExternalSecretRef string `json:"externalSecretRef,omitempty"`
 
+	// managedNetworkPolicy controls whether the operator creates and reconciles
+	// operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
+	// "true": The operator manages operand ingress NetworkPolicies where applicable.
+	// "false": Administrators supply and maintain their own NetworkPolicies; the operator does not
+	// reconcile ztwim-sys-* policies or reference customer-created policies. Cluster AdminNetworkPolicy may apply.
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedNetworkPolicy string `json:"managedNetworkPolicy,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 
@@ -87,6 +97,12 @@ type SpireOIDCDiscoveryProviderSpec struct {
 type SpireOIDCDiscoveryProviderStatus struct {
 	// conditions holds information about the current state of the SPIRE OIDC discovery provider deployment.
 	ConditionalStatus `json:",inline,omitempty"`
+
+	// networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
+	// When spec.managedNetworkPolicy is "true" or unset, managementState is Managed.
+	// When spec.managedNetworkPolicy is "false", managementState is Unmanaged and the operator does not reconcile ztwim-sys-* policies.
+	// +kubebuilder:validation:Optional
+	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
 
 // GetConditionalStatus returns the conditional status of the SpireOIDCDiscoveryProvider

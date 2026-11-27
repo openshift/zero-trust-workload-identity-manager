@@ -57,6 +57,16 @@ type SpireAgentSpec struct {
 	// +kubebuilder:validation:Optional
 	WorkloadAttestors *WorkloadAttestors `json:"workloadAttestors,omitempty"`
 
+	// managedNetworkPolicy controls whether the operator creates and reconciles
+	// operator-managed NetworkPolicy resources (ztwim-sys-*) for this operand.
+	// "true": The operator manages operand ingress and allow-all egress NetworkPolicies where applicable.
+	// "false": Administrators supply and maintain their own NetworkPolicies; the operator does not
+	// reconcile ztwim-sys-* policies or reference customer-created policies. Cluster AdminNetworkPolicy may apply.
+	// +kubebuilder:default:="true"
+	// +kubebuilder:validation:Enum:="true";"false"
+	// +kubebuilder:validation:Optional
+	ManagedNetworkPolicy string `json:"managedNetworkPolicy,omitempty"`
+
 	CommonConfig `json:",inline"`
 }
 
@@ -138,6 +148,12 @@ type WorkloadAttestorsVerification struct {
 type SpireAgentStatus struct {
 	// conditions holds information about the current state of the SPIRE agent deployment.
 	ConditionalStatus `json:",inline,omitempty"`
+
+	// networkPolicy holds observed operator-managed NetworkPolicy state (ztwim-sys-*).
+	// When spec.managedNetworkPolicy is "true" or unset, managementState is Managed.
+	// When spec.managedNetworkPolicy is "false", managementState is Unmanaged and the operator does not reconcile ztwim-sys-* policies.
+	// +kubebuilder:validation:Optional
+	NetworkPolicy *NetworkPolicyStatus `json:"networkPolicy,omitempty"`
 }
 
 // GetConditionalStatus returns the conditional status of the SpireAgent
