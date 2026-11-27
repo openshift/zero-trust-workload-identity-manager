@@ -463,8 +463,10 @@ spec:
         - apiGroups:
           - networking.k8s.io
           resourceNames:
+          - ztwim-sys-spire-agent-egress-allow-all
           - ztwim-sys-spire-agent-ingress
           - ztwim-sys-spire-oidc-discovery-provider-ingress
+          - ztwim-sys-spire-server-egress-allow-all
           - ztwim-sys-spire-server-ingress
           resources:
           - networkpolicies
