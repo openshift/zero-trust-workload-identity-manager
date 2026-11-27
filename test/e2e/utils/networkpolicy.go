@@ -18,11 +18,9 @@ package utils
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,7 +62,7 @@ const (
 	// unmanagedDeleteWindow is long enough for another reconcile to recreate a
 	// policy. While management is off, the object must stay absent for this long.
 	unmanagedDeleteWindow = 45 * time.Second
-	policyStabilityWindow = 10 * time.Second
+	policyStabilityWindow = 20 * time.Second
 )
 
 // ingressNetworkPolicies are the policies created while managedNetworkPolicy is enabled.
@@ -287,8 +285,9 @@ func assertManagedNetworkPolicyEnabled(
 	tc ManagedNetworkPolicyCase,
 ) {
 	By("Checking managed NetworkPolicies and stable operand status")
-	assertIngressNetworkPolicies(ctx, clientset)
-	assertEgressAllowAllPresent(ctx, clientset)
+	for _, policy := range operandManagedPolicies(tc) {
+		waitForNetworkPolicy(ctx, clientset, policy.Name, policy.ready)
+	}
 	assertStableNetworkPolicyStatus(ctx, k8sClient, operatorConditionName, tc, true)
 }
 
@@ -300,8 +299,10 @@ func assertManagedNetworkPolicyDisabled(
 	tc ManagedNetworkPolicyCase,
 ) {
 	By("Checking existing NetworkPolicies remain while management is disabled")
-	assertIngressNetworkPolicies(ctx, clientset)
-	assertEgressAllowAllPresent(ctx, clientset)
+	for _, policy := range operandManagedPolicies(tc) {
+		np := getNetworkPolicy(ctx, clientset, policy.Name)
+		Expect(policy.ready(np)).To(BeTrue(), "existing NetworkPolicy %s has unexpected rules: %#v", policy.Name, np.Spec)
+	}
 	assertStableNetworkPolicyStatus(ctx, k8sClient, operatorConditionName, tc, false)
 }
 
@@ -338,10 +339,18 @@ func assertOperandNetworkPolicyManagement(
 	observed, err := readOperandNetworkPolicyStatus(ctx, k8sClient, tc.Kind)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(observed.NetworkPolicy.ManagementState).To(Equal(state))
+	applied := make([]string, 0, len(observed.NetworkPolicy.LastAppliedPolicies))
 	for _, policy := range observed.NetworkPolicy.LastAppliedPolicies {
 		g.Expect(policy.Name).NotTo(BeEmpty())
 		g.Expect(policy.LastAppliedTime.IsZero()).To(BeFalse(),
 			"%s policy %s must record its last successful create or update", tc.Kind, policy.Name)
+		applied = append(applied, policy.Name)
+	}
+	if managed {
+		for _, policy := range operandManagedPolicies(tc) {
+			g.Expect(applied).To(ContainElement(policy.Name),
+				"%s must record expected policy %s in lastAppliedPolicies", tc.Kind, policy.Name)
+		}
 	}
 	return observed.Conditions
 }
@@ -377,15 +386,6 @@ func conditionError(condition *metav1.Condition, status metav1.ConditionStatus, 
 		)
 	}
 	return nil
-}
-
-func assertIngressNetworkPolicies(ctx context.Context, clientset kubernetes.Interface) {
-	for _, want := range ingressNetworkPolicies {
-		np, err := clientset.NetworkingV1().NetworkPolicies(OperatorNamespace).Get(ctx, want.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "NetworkPolicy %s should exist", want.Name)
-		Expect(equality.Semantic.DeepEqual(np.Spec, expectedIngressSpec(want.PodSelector))).To(BeTrue(),
-			"NetworkPolicy %s rules: %#v", want.Name, np.Spec)
-	}
 }
 
 func (tc ManagedNetworkPolicyCase) waitOperandCondition(
@@ -614,6 +614,7 @@ func AssertNetworkPolicyDrift(
 		assertManagedNetworkPolicyDisabled(ctx, k8sClient, clientset, operatorConditionName, tc)
 	}
 
+	before := snapshotNetworkPolicyApplicationTimes(ctx, k8sClient, tc.Kind, operandManagedPolicies(tc))
 	By("Adding a harmless extra rule to each operand policy")
 	edited := driftNetworkPolicySpecs(ctx, clientset, original)
 	if !managed {
@@ -627,9 +628,7 @@ func AssertNetworkPolicyDrift(
 
 	By("Waiting for the operator to restore the original policy rules")
 	waitNetworkPolicySpecs(ctx, clientset, original)
-	for name := range original {
-		assertRecordedNetworkPolicies(ctx, k8sClient, tc.Kind, name)
-	}
+	assertNetworkPolicyApplicationTimesAdvanced(ctx, k8sClient, tc.Kind, before)
 	assertManagedNetworkPolicyEnabled(ctx, k8sClient, clientset, operatorConditionName, tc)
 }
 
@@ -647,6 +646,8 @@ func AssertOIDCIngressNamespaceLabel(ctx context.Context, clientset kubernetes.I
 	)
 	oidcPod := readyOperandPod(ctx, clientset, SpireOIDCDiscoveryProviderPodLabel)
 	oidcIP := oidcPod.Status.PodIP
+	allowedNamespace := createOIDCAllowedProbe(ctx, clientset)
+	verifyAllowed := destinationTCPHealthCheck(ctx, clientset, oidcPod, allowedNamespace, "np-oidc-allowed-client", 8443)
 	assertSameDestination := func() {
 		current, err := clientset.CoreV1().Pods(OperatorNamespace).Get(ctx, oidcPod.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), "OIDC destination pod %s must still exist", oidcPod.Name)
@@ -657,7 +658,7 @@ func AssertOIDCIngressNamespaceLabel(ctx context.Context, clientset kubernetes.I
 	}
 
 	By("Rejecting a direct OIDC connection from an unlabelled namespace")
-	expectTCPBlocked(ctx, namespace, "np-oidc-client", oidcIP, 8443)
+	expectTCPBlocked(ctx, namespace, "np-oidc-client", oidcIP, 8443, verifyAllowed)
 
 	By("Allowing the same client after adding the empty-valued ingress namespace label")
 	_, err := clientset.CoreV1().Namespaces().Patch(ctx, namespace, types.MergePatchType,
@@ -675,7 +676,7 @@ func AssertOIDCIngressNamespaceLabel(ctx context.Context, clientset kubernetes.I
 	// Check both sides of the blocking window so pod replacement cannot turn
 	// a timeout against a retired IP into evidence of policy enforcement.
 	assertSameDestination()
-	expectTCPBlocked(ctx, namespace, "np-oidc-client", oidcIP, 8443)
+	expectTCPBlocked(ctx, namespace, "np-oidc-client", oidcIP, 8443, verifyAllowed)
 	assertSameDestination()
 }
 
@@ -905,11 +906,6 @@ func AssertFederationNetworkPolicyBasic(
 	k8sClient client.Client,
 	clientset kubernetes.Interface,
 ) {
-	_, err := clientset.NetworkingV1().NetworkPolicies(OperatorNamespace).Get(
-		ctx, federationPolicyName, metav1.GetOptions{},
-	)
-	Expect(err == nil || apierrors.IsNotFound(err)).To(BeTrue(), "failed to inspect federation policy: %v", err)
-	policyAbsent := apierrors.IsNotFound(err)
 	server, host := configureBasicFederation(ctx, k8sClient)
 	assertBasicFederationResources(ctx, k8sClient, clientset, server, host)
 	tc := managedNetworkPolicyCase("SpireServer")
@@ -920,9 +916,8 @@ func AssertFederationNetworkPolicyBasic(
 		g.Expect(conditionError(apimeta.FindStatusCondition(conditions, operatorv1alpha1.Ready),
 			metav1.ConditionTrue, operatorv1alpha1.ReasonReady, "")).To(Succeed())
 	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
-	if policyAbsent {
-		assertRecordedNetworkPolicies(ctx, k8sClient, tc.Kind, federationPolicyName)
-	}
+	// Managed policies must have history even when federation predates this run.
+	assertRecordedNetworkPolicies(ctx, k8sClient, tc.Kind, federationPolicyName)
 
 	assertBasicFederationBundle(ctx, clientset, host)
 }
@@ -1051,7 +1046,13 @@ func assertBasicFederationBundle(ctx context.Context, clientset kubernetes.Inter
 		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
 	}
 	defer transport.CloseIdleConnections()
-	httpClient := &http.Client{Transport: transport, Timeout: 15 * time.Second}
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   15 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	Eventually(func() error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host, nil)
 		if err != nil {
@@ -1117,7 +1118,7 @@ func AssertOperandNetworkPolicy(
 			equality.Semantic.DeepEqual(np.Spec, expectedIngressSpec("spire-server")),
 		).To(BeTrue(), "server ingress should allow TCP 8081 from spire-agent, got %#v", np.Spec)
 		assertAllowAllEgress(ctx, clientset, serverEgressPolicyName, "spire-server")
-		assertNoSampleNetworkPolicies(ctx, clientset)
+		assertNoReferencePoliciesInTestNamespace(ctx, clientset)
 
 		listenerNS := createProbeNamespace(ctx, clientset)
 		By("Creating the listener and the agent-labeled client")
@@ -1133,13 +1134,15 @@ func AssertOperandNetworkPolicy(
 			"app.kubernetes.io/name": "spire-agent",
 			networkPolicyProbeLabel:  "true",
 		}, []string{"sleep", "3600"})
-		serverIP := operandPodIP(ctx, clientset, SpireServerPodLabel)
+		serverPod := readyOperandPod(ctx, clientset, SpireServerPodLabel)
+		serverIP := serverPod.Status.PodIP
 		By("Opening TCP 8081 from an agent-labeled pod")
 		Eventually(func() error {
 			return dialFromPod(ctx, OperatorNamespace, "np-agent-client", serverIP, 8081)
 		}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed(), "agent should open TCP 8081")
 		By("Refusing TCP 8081 from a pod that is not an agent")
-		expectTCPBlocked(ctx, listenerNS, "np-listener", serverIP, 8081)
+		verifyAllowed := destinationTCPHealthCheck(ctx, clientset, serverPod, OperatorNamespace, "np-agent-client", 8081)
+		expectTCPBlocked(ctx, listenerNS, "np-listener", serverIP, 8081, verifyAllowed)
 
 		listenerIP := createHTTPProbeListener(ctx, clientset, listenerNS)
 		createProbePod(ctx, clientset, OperatorNamespace, "np-server-client", map[string]string{
@@ -1172,7 +1175,10 @@ func AssertOperandNetworkPolicy(
 			map[string]string{networkPolicyProbeLabel: "true"},
 			[]string{"sleep", "3600"},
 		)
-		oidcIP := operandPodIP(ctx, clientset, SpireOIDCDiscoveryProviderPodLabel)
+		oidcPod := readyOperandPod(ctx, clientset, SpireOIDCDiscoveryProviderPodLabel)
+		oidcIP := oidcPod.Status.PodIP
+		allowedNamespace := createOIDCAllowedProbe(ctx, clientset)
+		verifyAllowed := destinationTCPHealthCheck(ctx, clientset, oidcPod, allowedNamespace, "np-oidc-allowed-client", 8443)
 		url := discoveryIssuer + "/.well-known/openid-configuration"
 		By("Checking the same client can read OIDC discovery through the Route")
 		body := expectHTTP200(ctx, listenerNS, "np-listener", url)
@@ -1181,8 +1187,8 @@ func AssertOperandNetworkPolicy(
 		}
 		Expect(json.Unmarshal([]byte(body), &discovery)).To(Succeed())
 		Expect(discovery.Issuer).To(Equal(discoveryIssuer))
-		By("Checking direct TCP 8443 times out while Route access remains available")
-		expectTCPBlocked(ctx, listenerNS, "np-listener", oidcIP, 8443)
+		By("Checking direct TCP 8443 is blocked while allowed-client and Route access remain available")
+		expectTCPBlocked(ctx, listenerNS, "np-listener", oidcIP, 8443, verifyAllowed)
 		expectHTTP200(ctx, listenerNS, "np-listener", url)
 
 	default:
@@ -1217,6 +1223,7 @@ func AssertDisabledManagementRecreatesDeletedPolicies(
 	Expect(stored).To(Equal("false"), "%s should persist managedNetworkPolicy=false", tc.Kind)
 	assertManagedNetworkPolicyDisabled(ctx, k8sClient, clientset, operatorConditionName, tc)
 
+	before := snapshotNetworkPolicyApplicationTimes(ctx, k8sClient, tc.Kind, policies)
 	By("Deleting managed NetworkPolicies while management is off")
 	for _, policy := range policies {
 		deleteNetworkPolicy(ctx, clientset, policy.Name)
@@ -1247,8 +1254,8 @@ func AssertDisabledManagementRecreatesDeletedPolicies(
 	By("Waiting for the deleted NetworkPolicies to be recreated")
 	for _, policy := range policies {
 		waitForNetworkPolicy(ctx, clientset, policy.Name, policy.ready)
-		assertRecordedNetworkPolicies(ctx, k8sClient, tc.Kind, policy.Name)
 	}
+	assertNetworkPolicyApplicationTimesAdvanced(ctx, k8sClient, tc.Kind, before)
 	assertManagedNetworkPolicyEnabled(ctx, k8sClient, clientset, operatorConditionName, tc)
 	tc.waitWorkload(ctx, clientset)
 }
@@ -1401,7 +1408,9 @@ func operandManagedPolicies(tc ManagedNetworkPolicyCase) []operandPolicy {
 	}
 	for _, policy := range egressAllowAllPolicies {
 		if policy.PodSelector == selector {
-			policies = append(policies, operandPolicy{Name: policy.Name, ready: allowAllEgress})
+			policies = append(policies, operandPolicy{Name: policy.Name, ready: func(np *networkingv1.NetworkPolicy) bool {
+				return allowAllEgress(np, selector)
+			}})
 		}
 	}
 	Expect(policies).NotTo(BeEmpty(), "%s has no managed NetworkPolicies", tc.Kind)
@@ -1413,28 +1422,25 @@ func networkPolicyAbsent(ctx context.Context, clientset kubernetes.Interface, na
 	return apierrors.IsNotFound(err)
 }
 
-func assertEgressAllowAllPresent(ctx context.Context, clientset kubernetes.Interface) {
-	for _, want := range egressAllowAllPolicies {
-		assertAllowAllEgress(ctx, clientset, want.Name, want.PodSelector)
-	}
-}
-
 func assertAllowAllEgress(ctx context.Context, clientset kubernetes.Interface, name, podSelector string) {
 	np := getNetworkPolicy(ctx, clientset, name)
-	Expect(np.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.kubernetes.io/name", podSelector),
-		"NetworkPolicy %s pod selector", name)
-	Expect(allowAllEgress(np)).To(BeTrue(), "NetworkPolicy %s should allow all egress, got %#v", name, np.Spec)
+	Expect(allowAllEgress(np, podSelector)).To(BeTrue(),
+		"NetworkPolicy %s should select only %s pods and allow all egress, got %#v", name, podSelector, np.Spec)
 }
 
-func assertNoSampleNetworkPolicies(ctx context.Context, clientset kubernetes.Interface) {
+// assertNoReferencePoliciesInTestNamespace checks test-environment hygiene using
+// reference-policy name categories that could affect traffic checks. Reference
+// policies are administrator-managed; this does not assert operator reconciliation.
+func assertNoReferencePoliciesInTestNamespace(ctx context.Context, clientset kubernetes.Interface) {
 	list, err := clientset.NetworkingV1().NetworkPolicies(OperatorNamespace).List(ctx, metav1.ListOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "failed to list NetworkPolicies for test-environment checks")
 	for _, item := range list.Items {
 		if item.Name == federationPolicyName {
 			continue // Managed federation ingress is not a reference-only sample.
 		}
 		for _, fragment := range []string{"baseline", "database", "vault", "proxy", "federation"} {
-			Expect(item.Name).NotTo(ContainSubstring(fragment), "operator reconciled sample policy %s", item.Name)
+			Expect(item.Name).NotTo(ContainSubstring(fragment),
+				"policy %s matches reference-policy category %s and may affect traffic checks", item.Name, fragment)
 		}
 	}
 }
@@ -1530,6 +1536,61 @@ func assertRecordedNetworkPolicies(
 	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
 }
 
+// snapshotNetworkPolicyApplicationTimes requires existing history for each policy
+// and separates the next write from it by metav1.Time's one-second API precision.
+func snapshotNetworkPolicyApplicationTimes(
+	ctx context.Context,
+	k8sClient client.Client,
+	kind string,
+	policies []operandPolicy,
+) map[string]metav1.Time {
+	before := make(map[string]metav1.Time, len(policies))
+	Eventually(func(g Gomega) {
+		observed, err := readOperandNetworkPolicyStatus(ctx, k8sClient, kind)
+		g.Expect(err).NotTo(HaveOccurred(), "failed to snapshot %s policy application times", kind)
+		applied := make(map[string]metav1.Time, len(observed.NetworkPolicy.LastAppliedPolicies))
+		for _, policy := range observed.NetworkPolicy.LastAppliedPolicies {
+			applied[policy.Name] = policy.LastAppliedTime
+		}
+		for _, policy := range policies {
+			appliedAt := applied[policy.Name]
+			g.Expect(appliedAt.IsZero()).To(BeFalse(),
+				"%s policy %s must have a recorded timestamp before mutation", kind, policy.Name)
+			before[policy.Name] = appliedAt
+		}
+	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		Fail(fmt.Sprintf("waiting for %s policy timestamp precision: %v", kind, ctx.Err()))
+	}
+	return before
+}
+
+func assertNetworkPolicyApplicationTimesAdvanced(
+	ctx context.Context,
+	k8sClient client.Client,
+	kind string,
+	before map[string]metav1.Time,
+) {
+	Eventually(func(g Gomega) {
+		observed, err := readOperandNetworkPolicyStatus(ctx, k8sClient, kind)
+		g.Expect(err).NotTo(HaveOccurred(), "failed to read %s policy application times after mutation", kind)
+		applied := make(map[string]metav1.Time, len(observed.NetworkPolicy.LastAppliedPolicies))
+		for _, policy := range observed.NetworkPolicy.LastAppliedPolicies {
+			applied[policy.Name] = policy.LastAppliedTime
+		}
+		for name, previous := range before {
+			current := applied[name]
+			g.Expect(current.Time).To(BeTemporally(">", previous.Time),
+				"%s policy %s must record a newer timestamp after repair or recreation", kind, name)
+		}
+	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+}
+
 func getNetworkPolicy(
 	ctx context.Context,
 	clientset kubernetes.Interface,
@@ -1617,7 +1678,13 @@ func tcpPolicyPorts(ports ...int32) []networkingv1.NetworkPolicyPort {
 	return result
 }
 
-func allowAllEgress(np *networkingv1.NetworkPolicy) bool {
+func allowAllEgress(np *networkingv1.NetworkPolicy, podSelector string) bool {
+	expectedSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{"app.kubernetes.io/name": podSelector},
+	}
+	if !equality.Semantic.DeepEqual(np.Spec.PodSelector, expectedSelector) {
+		return false
+	}
 	if len(np.Spec.PolicyTypes) != 1 || np.Spec.PolicyTypes[0] != networkingv1.PolicyTypeEgress {
 		return false
 	}
@@ -1625,10 +1692,6 @@ func allowAllEgress(np *networkingv1.NetworkPolicy) bool {
 		return false
 	}
 	return len(np.Spec.Egress[0].To) == 0 && len(np.Spec.Egress[0].Ports) == 0
-}
-
-func operandPodIP(ctx context.Context, clientset kubernetes.Interface, selector string) string {
-	return readyOperandPod(ctx, clientset, selector).Status.PodIP
 }
 
 func readyOperandPod(ctx context.Context, clientset kubernetes.Interface, selector string) *corev1.Pod {
@@ -1645,19 +1708,17 @@ func readyOperandPod(ctx context.Context, clientset kubernetes.Interface, select
 }
 
 func createProbeNamespace(ctx context.Context, clientset kubernetes.Interface) string {
-	buf := make([]byte, 3)
-	_, _ = rand.Read(buf)
-	name := "e2e-np-" + hex.EncodeToString(buf)
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
-		Name: name,
+		GenerateName: "e2e-np-",
 		Labels: map[string]string{
 			"pod-security.kubernetes.io/enforce": "restricted",
 			"pod-security.kubernetes.io/audit":   "restricted",
 			"pod-security.kubernetes.io/warn":    "restricted",
 		},
 	}}
-	_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred(), "failed to create namespace %s", name)
+	created, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to create NetworkPolicy probe namespace")
+	name := created.Name
 	DeferCleanup(func(cleanupCtx context.Context) {
 		err := clientset.CoreV1().Namespaces().Delete(cleanupCtx, name, metav1.DeleteOptions{})
 		if !apierrors.IsNotFound(err) {
@@ -1665,6 +1726,40 @@ func createProbeNamespace(ctx context.Context, clientset kubernetes.Interface) s
 		}
 	})
 	return name
+}
+
+// createOIDCAllowedProbe provides a positive control for direct OIDC connections.
+// Its namespace retains the ingress label while the tested namespace is toggled.
+func createOIDCAllowedProbe(ctx context.Context, clientset kubernetes.Interface) string {
+	namespace := createProbeNamespace(ctx, clientset)
+	_, err := clientset.CoreV1().Namespaces().Patch(ctx, namespace, types.MergePatchType,
+		[]byte(`{"metadata":{"labels":{"policy-group.network.openshift.io/ingress":""}}}`), metav1.PatchOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to label allowed OIDC probe namespace %s", namespace)
+	createProbePod(ctx, clientset, namespace, "np-oidc-allowed-client",
+		map[string]string{networkPolicyProbeLabel: "true"}, []string{"sleep", "3600"})
+	return namespace
+}
+
+// destinationTCPHealthCheck verifies that the original destination pod is still
+// serving the same port to an allowed client before interpreting a denied probe.
+func destinationTCPHealthCheck(
+	ctx context.Context,
+	clientset kubernetes.Interface,
+	destination *corev1.Pod,
+	allowedNamespace, allowedPod string,
+	port int,
+) func() error {
+	return func() error {
+		current, err := clientset.CoreV1().Pods(OperatorNamespace).Get(ctx, destination.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("read destination pod %s: %w", destination.Name, err)
+		}
+		if current.UID != destination.UID || current.Status.PodIP != destination.Status.PodIP ||
+			current.DeletionTimestamp != nil || !IsPodReady(current) {
+			return fmt.Errorf("destination pod %s was replaced, changed IP, is terminating, or is not ready", destination.Name)
+		}
+		return dialFromPod(ctx, allowedNamespace, allowedPod, destination.Status.PodIP, port)
+	}
 }
 
 func createHTTPProbeListener(ctx context.Context, clientset kubernetes.Interface, namespace string) string {
@@ -1759,23 +1854,29 @@ func parseTCPProbeResult(stdout, stderr string) (bool, error) {
 	case "connected":
 		return true, nil
 	case "unreachable":
-		if strings.Contains(strings.ToLower(stderr), "timed out") {
-			return false, nil
+		for _, signal := range []string{
+			"timed out", "no route to host", "network is unreachable", "connection refused", "permission denied",
+		} {
+			if strings.Contains(strings.ToLower(stderr), signal) {
+				return false, nil
+			}
 		}
-		return false, fmt.Errorf("probe failed without a network timeout: %s", stderr)
+		return false, fmt.Errorf("probe failed without a recognized connection-denial signal: %s", stderr)
 	default:
 		return false, fmt.Errorf("unexpected probe output %q: %s", stdout, stderr)
 	}
 }
 
-func expectTCPBlocked(ctx context.Context, namespace, pod, ip string, port int) {
+func expectTCPBlocked(ctx context.Context, namespace, pod, ip string, port int, verifyAllowed func() error) {
 	check := func(g Gomega) {
+		g.Expect(verifyAllowed()).To(Succeed(), "destination must be healthy and reachable from the allowed client")
 		connected, err := probeTCPConnection(ctx, namespace, pod, ip, port)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(connected).To(BeFalse())
+		g.Expect(err).NotTo(HaveOccurred(), "failed to execute TCP probe from %s/%s", namespace, pod)
+		g.Expect(connected).To(BeFalse(), "TCP %s:%d must reject connections from %s/%s", ip, port, namespace, pod)
+		g.Expect(verifyAllowed()).To(Succeed(), "destination must remain healthy and reachable after the blocked probe")
 	}
 	Eventually(check).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed(),
-		"TCP %s:%d should time out from %s/%s", ip, port, namespace, pod)
+		"TCP %s:%d should be blocked from %s/%s", ip, port, namespace, pod)
 	Consistently(check).WithTimeout(policyStabilityWindow).WithPolling(ShortInterval).Should(Succeed())
 }
 

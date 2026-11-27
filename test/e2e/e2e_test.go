@@ -1960,7 +1960,7 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 		})
 	})
 
-	Context("managedNetworkPolicy: policy creation, traffic rules, management toggles and parent status across Server, Agent and OIDC", func() {
+	Context("managedNetworkPolicy: policy creation, traffic rules, management toggles and parent status across Server, Agent and OIDC", Label("networkpolicy"), func() {
 		BeforeAll(func() {
 			setupCtx, cancel := context.WithTimeout(context.Background(), utils.TestContextTimeout)
 			DeferCleanup(cancel)
