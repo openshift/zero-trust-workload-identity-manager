@@ -464,25 +464,7 @@ spec:
           - networking.k8s.io
           resourceNames:
           - ztwim-sys-spire-agent-ingress
-          resources:
-          - networkpolicies
-          verbs:
-          - delete
-          - get
-          - update
-        - apiGroups:
-          - networking.k8s.io
-          resourceNames:
           - ztwim-sys-spire-oidc-discovery-provider-ingress
-          resources:
-          - networkpolicies
-          verbs:
-          - delete
-          - get
-          - update
-        - apiGroups:
-          - networking.k8s.io
-          resourceNames:
           - ztwim-sys-spire-server-ingress
           resources:
           - networkpolicies
