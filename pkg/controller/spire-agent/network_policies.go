@@ -4,10 +4,7 @@ import (
 	"context"
 
 	networkingv1 "k8s.io/api/networking/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
@@ -30,50 +27,30 @@ func (r *SpireAgentReconciler) reconcileNetworkPolicies(ctx context.Context, age
 		agent.Status.NetworkPolicy = utils.NetworkPolicyStatusWith(v1alpha1.NetworkPolicyManagementManaged, applied)
 	}()
 
+	ns := utils.GetOperatorNamespace()
 	for _, assetName := range spireAgentBaselineNetworkPolicyAssets {
-		desired := networkPolicyFromAsset(assetName, agent.Spec.Labels)
-		if err := controllerutil.SetControllerReference(agent, desired, r.scheme); err != nil {
-			r.log.Error(err, "failed to set controller reference on NetworkPolicy", "name", desired.Name)
+		desiredName := networkPolicyFromAsset(assetName, agent.Spec.Labels).Name
+		result, err := utils.ApplyNetworkPolicy(ctx, r.ctrlClient, r.scheme, agent, ns, desiredName, true, func() *networkingv1.NetworkPolicy {
+			return networkPolicyFromAsset(assetName, agent.Spec.Labels)
+		}, createOnlyMode)
+		if err != nil {
+			r.log.Error(err, "failed to reconcile NetworkPolicy", "name", desiredName, "namespace", ns)
 			return err
 		}
-
-		existing := &networkingv1.NetworkPolicy{}
-		err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
-		if err != nil {
-			if !kerrors.IsNotFound(err) {
-				r.log.Error(err, "failed to get NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-				return err
+		if result.Created {
+			r.log.Info("Created NetworkPolicy", "name", result.Name, "namespace", ns)
+			applied = utils.RecordNetworkPolicyApplied(applied, result.Name, metav1.Now(), true)
+		} else if result.Updated {
+			r.log.Info("Updated NetworkPolicy", "name", result.Name, "namespace", ns)
+			applied = utils.RecordNetworkPolicyApplied(applied, result.Name, metav1.Now(), true)
+		} else {
+			if !createOnlyMode {
+				r.log.V(1).Info("NetworkPolicy is up to date", "name", result.Name)
+			} else {
+				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", result.Name)
 			}
-			if err := r.ctrlClient.Create(ctx, desired); err != nil {
-				r.log.Error(err, "failed to create NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-				return err
-			}
-			r.log.Info("Created NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now(), true)
-			continue
+			applied = utils.RecordNetworkPolicyApplied(applied, result.Name, result.CreationTimestamp, false)
 		}
-
-		if createOnlyMode {
-			if utils.OperandManagedResourceNeedsUpdate(existing, desired, agent) {
-				r.log.V(1).Info("Skipping NetworkPolicy update due to create-only mode", "name", desired.Name)
-			}
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, existing.CreationTimestamp, false)
-			continue
-		}
-
-		if utils.OperandManagedResourceNeedsUpdate(existing, desired, agent) {
-			desired.ResourceVersion = existing.ResourceVersion
-			if err := r.ctrlClient.Update(ctx, desired); err != nil {
-				r.log.Error(err, "failed to update NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-				return err
-			}
-			r.log.Info("Updated NetworkPolicy", "name", desired.Name, "namespace", desired.Namespace)
-			applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, metav1.Now(), true)
-			continue
-		}
-
-		r.log.V(1).Info("NetworkPolicy is up to date", "name", desired.Name)
-		applied = utils.RecordNetworkPolicyApplied(applied, desired.Name, existing.CreationTimestamp, false)
 	}
 
 	return nil
