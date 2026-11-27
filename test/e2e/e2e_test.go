@@ -1995,6 +1995,10 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 			})
 		}
 
+		It("SpireServer: records recreated policy application history after a ResourceQuota failure [SPIRE-796]", func() {
+			utils.AssertServerNetworkPolicyQuotaRecovery(testCtx, k8sClient, clientset, operatorConditionName)
+		})
+
 		It("keeps parent Ready and Upgradeable True when NetworkPolicy management is disabled for all three components", func() {
 			utils.AssertNetworkPolicyManagementCombination(testCtx, k8sClient, operatorConditionName, "")
 		})

@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1250,6 +1251,115 @@ func AssertDisabledManagementRecreatesDeletedPolicies(
 	}
 	assertManagedNetworkPolicyEnabled(ctx, k8sClient, clientset, operatorConditionName, tc)
 	tc.waitWorkload(ctx, clientset)
+}
+
+// AssertServerNetworkPolicyQuotaRecovery covers SPIRE-796: successful policy
+// recreation after a quota failure must be recorded in application history.
+func AssertServerNetworkPolicyQuotaRecovery(
+	ctx context.Context,
+	k8sClient client.Client,
+	clientset kubernetes.Interface,
+	operatorConditionName string,
+) {
+	tc := managedNetworkPolicyCase("SpireServer")
+	name := managedIngressPolicyName("spire-server")
+	expected := expectedIngressSpec("spire-server")
+	policyReady := func(np *networkingv1.NetworkPolicy) bool {
+		return equality.Semantic.DeepEqual(np.Spec, expected)
+	}
+	assertManagedNetworkPolicyEnabled(ctx, k8sClient, clientset, operatorConditionName, tc)
+	original := getNetworkPolicy(ctx, clientset, name)
+
+	// Register recovery first so quota removal runs before it, even when another
+	// cleanup fails. Keep the operator responsible for recreating the policy.
+	DeferCleanup(func(cleanupCtx context.Context) {
+		setManagedNetworkPolicy(cleanupCtx, k8sClient, tc, "true")
+		waitForNetworkPolicy(cleanupCtx, clientset, name, policyReady)
+		tc.waitOperandCondition(cleanupCtx, k8sClient, operatorv1alpha1.Ready,
+			metav1.ConditionTrue, operatorv1alpha1.ReasonReady, "")
+	})
+
+	By("Toggling server policy management before testing quota recovery")
+	for _, value := range []string{"false", "true"} {
+		obj := newManagedNetworkPolicyObject(tc.Kind)
+		obj.SetName("cluster")
+		patch := fmt.Sprintf(`{"spec":{"managedNetworkPolicy":%q}}`, value)
+		Expect(k8sClient.Patch(ctx, obj, client.RawPatch(types.MergePatchType, []byte(patch)))).To(
+			Succeed(), "failed to set SpireServer managedNetworkPolicy=%s", value)
+		// Fixed builds may preserve history; do not require it to be cleared.
+		Eventually(func(g Gomega) {
+			assertOperandNetworkPolicyManagement(ctx, g, k8sClient, tc, value == "true")
+		}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+	}
+
+	By("Installing a quota that prevents replacement of the server ingress policy")
+	policies, err := clientset.NetworkingV1().NetworkPolicies(OperatorNamespace).List(ctx, metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to count NetworkPolicies before creating the quota")
+	count := int64(len(policies.Items))
+	Expect(count).To(BeNumerically(">", 0), "the server ingress policy must exist before imposing the quota")
+	quotaResource := corev1.ResourceName("count/networkpolicies.networking.k8s.io")
+	limit := *resource.NewQuantity(count-1, resource.DecimalSI)
+	quota, err := clientset.CoreV1().ResourceQuotas(OperatorNamespace).Create(ctx, &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-np-history-quota-"},
+		Spec:       corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{quotaResource: limit}},
+	}, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to create the NetworkPolicy quota")
+	DeferCleanup(func(cleanupCtx context.Context) {
+		err := clientset.CoreV1().ResourceQuotas(OperatorNamespace).Delete(cleanupCtx, quota.Name, metav1.DeleteOptions{})
+		if !apierrors.IsNotFound(err) {
+			Expect(err).NotTo(HaveOccurred(), "failed to remove quota %s", quota.Name)
+		}
+	})
+	Eventually(func(g Gomega) {
+		current, err := clientset.CoreV1().ResourceQuotas(OperatorNamespace).Get(ctx, quota.Name, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "failed to read quota %s", quota.Name)
+		hard, hardFound := current.Status.Hard[quotaResource]
+		used, usedFound := current.Status.Used[quotaResource]
+		g.Expect(hardFound && usedFound).To(BeTrue(), "quota %s must report hard and used counts", quota.Name)
+		g.Expect(hard.Cmp(limit)).To(BeZero(), "quota %s must enforce the requested limit", quota.Name)
+		g.Expect(used.Value()).To(Equal(count), "quota %s must account for existing policies", quota.Name)
+	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+
+	By("Deleting server ingress and observing the specific quota-induced readiness failure")
+	deleteNetworkPolicy(ctx, clientset, name)
+	Eventually(func(g Gomega) {
+		_, err := clientset.NetworkingV1().NetworkPolicies(OperatorNamespace).Get(ctx, name, metav1.GetOptions{})
+		g.Expect(apierrors.IsNotFound(err)).To(BeTrue(), "policy %s should remain absent, err=%v", name, err)
+		observed, err := readOperandNetworkPolicyStatus(ctx, k8sClient, tc.Kind)
+		g.Expect(err).NotTo(HaveOccurred(), "failed to read SpireServer quota failure status")
+		ready := apimeta.FindStatusCondition(observed.Conditions, operatorv1alpha1.Ready)
+		g.Expect(conditionError(ready, metav1.ConditionFalse, "", "")).To(Succeed())
+		g.Expect(strings.ToLower(ready.Message)).To(ContainSubstring("networkpolicy"))
+		g.Expect(strings.ToLower(ready.Message)).To(ContainSubstring("exceeded quota"))
+		g.Expect(ready.Message).To(ContainSubstring(quota.Name), "failure must identify this test's quota")
+	}).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+
+	By("Removing the quota and verifying recreation, readiness and persistent application history")
+	Expect(clientset.CoreV1().ResourceQuotas(OperatorNamespace).Delete(ctx, quota.Name, metav1.DeleteOptions{})).To(
+		Succeed(), "failed to remove quota %s for recovery", quota.Name)
+	checkRecovered := func(g Gomega) {
+		recreated, err := clientset.NetworkingV1().NetworkPolicies(OperatorNamespace).Get(ctx, name, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "policy %s should be recreated after quota removal", name)
+		g.Expect(recreated.UID).NotTo(Equal(original.UID), "policy %s must be a new object", name)
+		g.Expect(policyReady(recreated)).To(BeTrue(), "recreated policy %s must have the expected rules", name)
+		observed, err := readOperandNetworkPolicyStatus(ctx, k8sClient, tc.Kind)
+		g.Expect(err).NotTo(HaveOccurred(), "failed to read SpireServer recovery history")
+		g.Expect(observed.NetworkPolicy.ManagementState).To(Equal("Managed"))
+		g.Expect(conditionError(apimeta.FindStatusCondition(observed.Conditions, operatorv1alpha1.Ready),
+			metav1.ConditionTrue, operatorv1alpha1.ReasonReady, "")).To(Succeed())
+		var appliedAt metav1.Time
+		for _, applied := range observed.NetworkPolicy.LastAppliedPolicies {
+			if applied.Name == name {
+				appliedAt = applied.LastAppliedTime
+			}
+		}
+		g.Expect(appliedAt.IsZero()).To(BeFalse(), "SPIRE-796: recreated policy %s must be recorded in history", name)
+		g.Expect(appliedAt.Time).To(BeTemporally(">=", recreated.CreationTimestamp.Time),
+			"SPIRE-796: policy %s history must record its successful recreation, not a previous application", name)
+		assertHealthyParentNetworkPolicyStatus(ctx, g, k8sClient, operatorConditionName)
+	}
+	Eventually(checkRecovered).WithTimeout(DefaultTimeout).WithPolling(ShortInterval).Should(Succeed())
+	Consistently(checkRecovered).WithTimeout(policyStabilityWindow).WithPolling(ShortInterval).Should(Succeed())
 }
 
 func managedNetworkPolicyCase(kind string) ManagedNetworkPolicyCase {
