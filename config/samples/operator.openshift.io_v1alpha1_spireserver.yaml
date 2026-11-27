@@ -28,6 +28,9 @@ spec:
     size: "2Gi"
     accessMode: ReadWriteOnce
     storageClass: ""
+  # Optional: operator-managed passthrough Route for the SPIRE server gRPC API at
+  # grpc.<clusterName>.<trustDomain>. Defaults to false when omitted.
+  # managedRoute: "true"
   # Federation configuration (optional)
   # This example shows how to configure SPIRE Server for federation
   federation:

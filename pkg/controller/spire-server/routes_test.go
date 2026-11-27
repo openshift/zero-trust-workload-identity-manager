@@ -3,6 +3,7 @@ package spire_server
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -252,7 +253,7 @@ func TestCheckFederationRouteConflict(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hasConflict := checkFederationRouteConflict(tt.current, tt.desired)
+			hasConflict := routeNeedsUpdate(tt.current, tt.desired)
 			if hasConflict != tt.expectConflict {
 				t.Errorf("Expected conflict=%v, got %v", tt.expectConflict, hasConflict)
 			}
@@ -346,6 +347,93 @@ func TestGenerateFederationRouteLabels(t *testing.T) {
 	}
 }
 
+func TestGenerateGRPCEndpointRoute(t *testing.T) {
+	server := &v1alpha1.SpireServer{}
+	ztwim := createRouteTestZTWIM()
+
+	route := generateGRPCEndpointRoute(server, ztwim)
+
+	if route.Name != grpcEndpointRouteName {
+		t.Errorf("Expected route name %q, got %q", grpcEndpointRouteName, route.Name)
+	}
+
+	if route.Namespace != utils.OperatorNamespace {
+		t.Errorf("Expected namespace %q, got %q", utils.OperatorNamespace, route.Namespace)
+	}
+
+	if route.Spec.Host != "grpc.test-cluster.example.org" {
+		t.Errorf("Expected host %q, got %q", "grpc.test-cluster.example.org", route.Spec.Host)
+	}
+
+	if route.Spec.To.Kind != "Service" {
+		t.Errorf("Expected To.Kind 'Service', got %q", route.Spec.To.Kind)
+	}
+
+	if route.Spec.To.Name != "spire-server" {
+		t.Errorf("Expected To.Name 'spire-server', got %q", route.Spec.To.Name)
+	}
+
+	if route.Spec.Port == nil {
+		t.Fatal("Expected Port to be set")
+	}
+
+	if route.Spec.Port.TargetPort != intstr.FromString("grpc") {
+		t.Errorf("Expected TargetPort 'grpc', got %v", route.Spec.Port.TargetPort)
+	}
+
+	if route.Spec.TLS == nil {
+		t.Fatal("Expected TLS configuration to be set")
+	}
+
+	if route.Spec.TLS.Termination != routev1.TLSTerminationPassthrough {
+		t.Errorf("Expected TLS termination %q, got %q", routev1.TLSTerminationPassthrough, route.Spec.TLS.Termination)
+	}
+
+	if route.Spec.TLS.InsecureEdgeTerminationPolicy != routev1.InsecureEdgeTerminationPolicyRedirect {
+		t.Errorf("Expected insecure edge termination policy 'Redirect', got %q", route.Spec.TLS.InsecureEdgeTerminationPolicy)
+	}
+
+	if route.Spec.WildcardPolicy != routev1.WildcardPolicyNone {
+		t.Errorf("Expected WildcardPolicy 'None', got %q", route.Spec.WildcardPolicy)
+	}
+}
+
+func TestValidateGRPCEndpointRouteHost(t *testing.T) {
+	tests := []struct {
+		name      string
+		host      string
+		wantValid bool
+	}{
+		{
+			name:      "valid host",
+			host:      "grpc.test-cluster.example.org",
+			wantValid: true,
+		},
+		{
+			name:      "trust domain has empty label",
+			host:      "grpc.test-cluster.a..b",
+			wantValid: false,
+		},
+		{
+			name:      "host exceeds dns subdomain length",
+			host:      "grpc.test-cluster." + strings.Repeat("a", 237),
+			wantValid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validateGRPCEndpointRouteHost(tt.host)
+			if tt.wantValid && len(errs) > 0 {
+				t.Fatalf("Expected valid host, got errors: %v", errs)
+			}
+			if !tt.wantValid && len(errs) == 0 {
+				t.Fatal("Expected invalid host")
+			}
+		})
+	}
+}
+
 // newRouteTestReconciler creates a reconciler for route tests
 func newRouteTestReconciler(fakeClient *fakes.FakeCustomCtrlClient) *SpireServerReconciler {
 	scheme := runtime.NewScheme()
@@ -378,6 +466,18 @@ func createRouteTestServer() *v1alpha1.SpireServer {
 	}
 }
 
+func createManagedGRPCRouteTestServer() *v1alpha1.SpireServer {
+	return &v1alpha1.SpireServer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+			UID:  "test-uid",
+		},
+		Spec: v1alpha1.SpireServerSpec{
+			ManagedRoute: "true",
+		},
+	}
+}
+
 // createRouteTestZTWIM creates a test ZTWIM for route tests
 func createRouteTestZTWIM() *v1alpha1.ZeroTrustWorkloadIdentityManager {
 	return &v1alpha1.ZeroTrustWorkloadIdentityManager{
@@ -389,6 +489,193 @@ func createRouteTestZTWIM() *v1alpha1.ZeroTrustWorkloadIdentityManager {
 			ClusterName:     "test-cluster",
 			BundleConfigMap: "spire-bundle",
 		},
+	}
+}
+
+func TestReconcileManagedGRPCRoute(t *testing.T) {
+	tests := []struct {
+		name           string
+		server         *v1alpha1.SpireServer
+		ztwim          *v1alpha1.ZeroTrustWorkloadIdentityManager
+		setupClient    func(*fakes.FakeCustomCtrlClient)
+		createOnlyMode bool
+		expectError    bool
+		expectCreate   bool
+		expectUpdate   bool
+		expectNoOp     bool
+	}{
+		{
+			name: "managedRoute default off - returns nil without route client calls",
+			server: &v1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {},
+			expectError: false,
+			expectNoOp:  true,
+		},
+		{
+			name: "managed route disabled - does not create route",
+			server: &v1alpha1.SpireServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster", UID: "test-uid"},
+				Spec: v1alpha1.SpireServerSpec{
+					ManagedRoute: "false",
+				},
+			},
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {},
+			expectError: false,
+			expectNoOp:  true,
+		},
+		{
+			name:   "invalid generated host - does not create route",
+			server: createManagedGRPCRouteTestServer(),
+			ztwim: func() *v1alpha1.ZeroTrustWorkloadIdentityManager {
+				z := createRouteTestZTWIM()
+				z.Spec.TrustDomain = "a..b"
+				return z
+			}(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {},
+			expectError: false,
+			expectNoOp:  true,
+		},
+		{
+			name:   "create route success",
+			server: createManagedGRPCRouteTestServer(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, grpcEndpointRouteName))
+				fc.CreateReturns(nil)
+			},
+			expectError:  false,
+			expectCreate: true,
+		},
+		{
+			name:   "create route error",
+			server: createManagedGRPCRouteTestServer(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(kerrors.NewNotFound(schema.GroupResource{}, grpcEndpointRouteName))
+				fc.CreateReturns(errors.New("create failed"))
+			},
+			expectError: true,
+		},
+		{
+			name:   "get route error",
+			server: createManagedGRPCRouteTestServer(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				fc.GetReturns(errors.New("connection refused"))
+			},
+			expectError: true,
+		},
+		{
+			name: "update route success",
+			server: func() *v1alpha1.SpireServer {
+				s := createManagedGRPCRouteTestServer()
+				s.Spec.Labels = map[string]string{"new": "label"}
+				return s
+			}(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingRoute := &routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            grpcEndpointRouteName,
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old": "label", utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+					},
+					Spec: routev1.RouteSpec{Host: "old-host"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if route, ok := obj.(*routev1.Route); ok {
+						*route = *existingRoute
+					}
+					return nil
+				}
+				fc.UpdateReturns(nil)
+			},
+			expectError:  false,
+			expectUpdate: true,
+		},
+		{
+			name: "create only mode skips update",
+			server: func() *v1alpha1.SpireServer {
+				s := createManagedGRPCRouteTestServer()
+				s.Spec.Labels = map[string]string{"new": "label"}
+				return s
+			}(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				existingRoute := &routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            grpcEndpointRouteName,
+						Namespace:       utils.GetOperatorNamespace(),
+						ResourceVersion: "123",
+						Labels:          map[string]string{"old": "label", utils.AppManagedByLabelKey: utils.AppManagedByLabelValue},
+					},
+					Spec: routev1.RouteSpec{Host: "old-host"},
+				}
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if route, ok := obj.(*routev1.Route); ok {
+						*route = *existingRoute
+					}
+					return nil
+				}
+			},
+			createOnlyMode: true,
+			expectError:    false,
+			expectUpdate:   false,
+		},
+		{
+			name:   "route exists and up to date",
+			server: createManagedGRPCRouteTestServer(),
+			setupClient: func(fc *fakes.FakeCustomCtrlClient) {
+				server := createManagedGRPCRouteTestServer()
+				ztwim := createRouteTestZTWIM()
+				expectedRoute := generateGRPCEndpointRoute(server, ztwim)
+				fc.GetStub = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if route, ok := obj.(*routev1.Route); ok {
+						*route = *expectedRoute
+					}
+					return nil
+				}
+			},
+			expectError:  false,
+			expectUpdate: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := &fakes.FakeCustomCtrlClient{}
+			reconciler := newRouteTestReconciler(fakeClient)
+			tt.setupClient(fakeClient)
+
+			ztwim := createRouteTestZTWIM()
+			if tt.ztwim != nil {
+				ztwim = tt.ztwim
+			}
+			statusMgr := status.NewManager(fakeClient)
+			err := reconciler.reconcileManagedGRPCRoute(context.Background(), tt.server, statusMgr, ztwim, tt.createOnlyMode)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tt.expectNoOp {
+				if fakeClient.GetCallCount() != 0 {
+					t.Error("Expected Get not to be called")
+				}
+				if fakeClient.CreateCallCount() != 0 {
+					t.Error("Expected Create not to be called")
+				}
+			}
+			if tt.expectCreate && fakeClient.CreateCallCount() != 1 {
+				t.Errorf("Expected Create to be called once, got %d", fakeClient.CreateCallCount())
+			}
+			if tt.expectUpdate && fakeClient.UpdateCallCount() != 1 {
+				t.Errorf("Expected Update to be called once, got %d", fakeClient.UpdateCallCount())
+			}
+			if !tt.expectUpdate && fakeClient.UpdateCallCount() != 0 {
+				t.Error("Expected Update not to be called")
+			}
+		})
 	}
 }
 

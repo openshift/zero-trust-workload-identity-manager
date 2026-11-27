@@ -93,6 +93,30 @@ func TestSetReadyCondition(t *testing.T) {
 			expectedReason: v1alpha1.ReasonInProgress,
 		},
 		{
+			name: "gRPC managed route not admitted - Progressing",
+			existingConditions: map[string]Condition{
+				"ManagedGRPCRouteAvailable": {Type: "ManagedGRPCRouteAvailable", Status: metav1.ConditionFalse, Reason: "RouteNotAdmitted", Message: "gRPC endpoint route is not admitted"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			name: "gRPC managed route creation failed - Failed",
+			existingConditions: map[string]Condition{
+				"ManagedGRPCRouteAvailable": {Type: "ManagedGRPCRouteAvailable", Status: metav1.ConditionFalse, Reason: "RouteCreationFailed", Message: "failed to create route"},
+			},
+			expectedStatus: metav1.ConditionFalse,
+			expectedReason: v1alpha1.ReasonFailed,
+		},
+		{
+			name: "gRPC managed route omitted when disabled - Ready unaffected",
+			existingConditions: map[string]Condition{
+				"StatefulSetAvailable": {Type: "StatefulSetAvailable", Status: metav1.ConditionTrue, Reason: "StatefulSetReady", Message: "ready"},
+			},
+			expectedStatus: metav1.ConditionTrue,
+			expectedReason: v1alpha1.ReasonReady,
+		},
+		{
 			name: "Failure takes precedence over progressing",
 			existingConditions: map[string]Condition{
 				"StatefulSetAvailable": {Type: "StatefulSetAvailable", Status: metav1.ConditionFalse, Reason: "StatefulSetNotReady", Message: "StatefulSet has 0/1 replicas ready"},

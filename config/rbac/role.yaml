@@ -303,6 +303,7 @@ rules:
   resourceNames:
   - spire-oidc-discovery-provider
   - spire-server-federation
+  - spire-server-grpc
   resources:
   - routes
   verbs:

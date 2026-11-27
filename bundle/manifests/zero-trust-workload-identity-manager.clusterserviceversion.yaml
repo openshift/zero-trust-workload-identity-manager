@@ -211,7 +211,7 @@ metadata:
     capabilities: Basic Install
     console.openshift.io/disable-operand-delete: "true"
     containerImage: openshift.io/zero-trust-workload-identity-manager
-    createdAt: "2026-11-02T05:31:14Z"
+    createdAt: "2026-11-27T09:16:38Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -580,6 +580,7 @@ spec:
           resourceNames:
           - spire-oidc-discovery-provider
           - spire-server-federation
+          - spire-server-grpc
           resources:
           - routes
           verbs:
