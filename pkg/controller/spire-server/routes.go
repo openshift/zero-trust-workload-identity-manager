@@ -283,7 +283,7 @@ func (r *SpireServerReconciler) reconcileManagedGRPCRoute(ctx context.Context, s
 		}
 
 		r.log.Error(err, "Failed to get existing gRPC endpoint route")
-		statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteCreationFailed",
+		statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteRetrievalFailed",
 			err.Error(),
 			metav1.ConditionFalse)
 		return err
@@ -307,7 +307,7 @@ func (r *SpireServerReconciler) reconcileManagedGRPCRoute(ctx context.Context, s
 		r.log.Info("Found drift in gRPC endpoint route, updating route")
 		route.ResourceVersion = existingRoute.ResourceVersion
 		if err = r.ctrlClient.Update(ctx, route); err != nil {
-			statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteCreationFailed",
+			statusMgr.AddCondition(ManagedGRPCRouteAvailable, "RouteUpdateFailed",
 				err.Error(),
 				metav1.ConditionFalse)
 			return err

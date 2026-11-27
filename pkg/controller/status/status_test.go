@@ -93,12 +93,20 @@ func TestSetReadyCondition(t *testing.T) {
 			expectedReason: v1alpha1.ReasonInProgress,
 		},
 		{
-			name: "gRPC route not admitted - Progressing",
+			name: "gRPC managed route unavailable - does not affect Ready",
 			existingConditions: map[string]Condition{
 				"ManagedGRPCRouteAvailable": {Type: "ManagedGRPCRouteAvailable", Status: metav1.ConditionFalse, Reason: "RouteNotAdmitted", Message: "gRPC endpoint route is not admitted"},
 			},
-			expectedStatus: metav1.ConditionFalse,
-			expectedReason: v1alpha1.ReasonInProgress,
+			expectedStatus: metav1.ConditionTrue,
+			expectedReason: v1alpha1.ReasonReady,
+		},
+		{
+			name: "gRPC managed route creation failed - does not affect Ready",
+			existingConditions: map[string]Condition{
+				"ManagedGRPCRouteAvailable": {Type: "ManagedGRPCRouteAvailable", Status: metav1.ConditionFalse, Reason: "RouteCreationFailed", Message: "failed to create route"},
+			},
+			expectedStatus: metav1.ConditionTrue,
+			expectedReason: v1alpha1.ReasonReady,
 		},
 		{
 			name: "Failure takes precedence over progressing",

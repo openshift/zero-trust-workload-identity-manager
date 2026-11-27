@@ -71,12 +71,12 @@ func (m *Manager) SetReadyCondition() {
 		"StatefulSetNotReady": true,
 		"DaemonSetNotReady":   true,
 		"DeploymentNotReady":  true,
-		"RouteNotAdmitted":      true,
 	}
 
 	for condType, cond := range m.conditions {
-		// Skip conditions that don't indicate operational health
-		if condType == v1alpha1.Ready || condType == v1alpha1.Degraded || condType == utils.CreateOnlyModeStatusType {
+		// Skip conditions that don't indicate operational health.
+		// ManagedGRPCRouteAvailable is optional/opt-in and must not affect Ready.
+		if condType == v1alpha1.Ready || condType == v1alpha1.Degraded || condType == utils.CreateOnlyModeStatusType || condType == "ManagedGRPCRouteAvailable" {
 			continue
 		}
 		if cond.Status == metav1.ConditionFalse {
