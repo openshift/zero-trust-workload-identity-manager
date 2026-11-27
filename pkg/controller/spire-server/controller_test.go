@@ -2423,14 +2423,14 @@ func TestUpstreamAgentAvailability(t *testing.T) {
 				t.Fatalf("unexpected upstream condition: %+v", cond)
 			}
 			aggregate := apimeta.FindStatusCondition(server.Status.Conditions, v1alpha1.Ready)
-			if (aggregate.Status == metav1.ConditionTrue) != ready || cond.ObservedGeneration != 7 {
-				t.Fatalf("incorrect aggregate or generation: %+v", aggregate)
+			if (aggregate.Status == metav1.ConditionTrue) != ready {
+				t.Fatalf("incorrect aggregate: %+v", aggregate)
 			}
-			writes := fake.StatusUpdateCallCount()
+			writes := fake.StatusUpdateWithRetryCallCount()
 			if err := manager.ApplyStatus(context.Background(), server, func() *v1alpha1.ConditionalStatus { return &server.Status.ConditionalStatus }); err != nil {
 				t.Fatal(err)
 			}
-			if fake.StatusUpdateCallCount() != writes {
+			if fake.StatusUpdateWithRetryCallCount() != writes {
 				t.Fatal("identical status wrote again")
 			}
 		})
@@ -2512,7 +2512,7 @@ func TestReconcileUpstreamLifecycle(t *testing.T) {
 		save(obj)
 		return nil
 	}
-	fake.StatusUpdateStub = func(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+	fake.StatusUpdateWithRetryStub = func(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
 		save(obj)
 		return nil
 	}
@@ -2546,14 +2546,14 @@ func TestReconcileUpstreamLifecycle(t *testing.T) {
 	if condition().Status != metav1.ConditionTrue {
 		t.Fatalf("current sidecar not ready: %+v", condition())
 	}
-	writes, statusWrites := fake.UpdateCallCount(), fake.StatusUpdateCallCount()
+	writes, statusWrites := fake.UpdateCallCount(), fake.StatusUpdateWithRetryCallCount()
 	reconcile()
-	if fake.UpdateCallCount() != writes || fake.StatusUpdateCallCount() != statusWrites {
+	if fake.UpdateCallCount() != writes || fake.StatusUpdateWithRetryCallCount() != statusWrites {
 		for i := writes; i < fake.UpdateCallCount(); i++ {
 			_, obj, _ := fake.UpdateArgsForCall(i)
 			t.Logf("extra update: %T %s", obj, obj.GetName())
 		}
-		t.Fatalf("steady reconciliation updates %d -> %d; status %d -> %d", writes, fake.UpdateCallCount(), statusWrites, fake.StatusUpdateCallCount())
+		t.Fatalf("steady reconciliation updates %d -> %d; status %d -> %d", writes, fake.UpdateCallCount(), statusWrites, fake.StatusUpdateWithRetryCallCount())
 	}
 	secret.Data[upstreamAgentBundleKey] = testTrustBundle(t)
 	save(secret)

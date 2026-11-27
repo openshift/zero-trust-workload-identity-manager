@@ -2254,23 +2254,19 @@ func TestReconcileUpstreamAgentConfigMap(t *testing.T) {
 				if scenario == "update-error" {
 					return errors.New("update failed")
 				}
-				if scenario == "conflict" && calls == 1 {
-					existing.ResourceVersion = "2"
+				if scenario == "conflict" {
 					return kerrors.NewConflict(corev1.Resource("configmaps"), upstreamAgentName, errors.New("stale"))
-				}
-				if obj.GetResourceVersion() != existing.ResourceVersion {
-					t.Fatal("retry did not use fresh resourceVersion")
 				}
 				existing = obj.(*corev1.ConfigMap).DeepCopy()
 				return nil
 			}
 			hash, err := r.reconcileUpstreamAgentConfigMap(context.Background(), server, parent, scenario == "create-only")
-			wantErr := strings.HasSuffix(scenario, "error") || scenario == "unowned"
+			wantErr := strings.HasSuffix(scenario, "error") || scenario == "unowned" || scenario == "conflict"
 			if (err != nil) != wantErr {
 				t.Fatalf("error=%v, wantError=%v", err, wantErr)
 			}
-			if scenario == "conflict" && calls != 2 {
-				t.Fatalf("expected conflict retry, got %d writes", calls)
+			if scenario == "conflict" && calls != 1 {
+				t.Fatalf("expected single conflicted update, got %d writes", calls)
 			}
 			if (scenario == "no-op" || scenario == "create-only" || scenario == "unowned") && calls != 0 {
 				t.Fatal("unexpected write")

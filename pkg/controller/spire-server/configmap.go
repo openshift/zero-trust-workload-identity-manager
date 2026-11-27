@@ -15,7 +15,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
@@ -470,8 +469,9 @@ func generateUpstreamAgentConfigMap(server *v1alpha1.SpireServer, ztwim *v1alpha
 	}, nil
 }
 
-// reconcileUpstreamAgentConfigMap uses a fresh version on every retry and never
-// adopts a colliding ConfigMap belonging to an administrator or another owner.
+// reconcileUpstreamAgentConfigMap never adopts a colliding ConfigMap belonging
+// to an administrator or another owner. Conflict retries are left to the next
+// reconcile.
 func (r *SpireServerReconciler) reconcileUpstreamAgentConfigMap(ctx context.Context, server *v1alpha1.SpireServer, ztwim *v1alpha1.ZeroTrustWorkloadIdentityManager, createOnly bool) (string, error) {
 	if !hasSpireUpstream(server) {
 		return "", nil
@@ -484,30 +484,30 @@ func (r *SpireServerReconciler) reconcileUpstreamAgentConfigMap(ctx context.Cont
 		return "", err
 	}
 	hash := generateConfigHashFromString(desired.Data[upstreamAgentConfigKey])
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		var existing corev1.ConfigMap
-		err := r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, &existing)
-		if kerrors.IsNotFound(err) {
-			return r.ctrlClient.Create(ctx, desired)
+
+	var existing corev1.ConfigMap
+	err = r.ctrlClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, &existing)
+	if kerrors.IsNotFound(err) {
+		if err := r.ctrlClient.Create(ctx, desired); err != nil {
+			return "", fmt.Errorf("reconcile upstream agent ConfigMap: %w", err)
 		}
-		if err != nil {
-			return err
-		}
-		if !metav1.IsControlledBy(&existing, server) {
-			return fmt.Errorf("ConfigMap %s/%s is not owned by SpireServer", existing.Namespace, existing.Name)
-		}
-		if createOnly {
-			hash = generateConfigHashFromString(existing.Data[upstreamAgentConfigKey])
-			return nil
-		}
-		if equality.Semantic.DeepEqual(existing.Data, desired.Data) && equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
-			return nil
-		}
-		existing.Data = desired.Data
-		existing.Labels = desired.Labels
-		return r.ctrlClient.Update(ctx, &existing)
-	})
+		return hash, nil
+	}
 	if err != nil {
+		return "", fmt.Errorf("reconcile upstream agent ConfigMap: %w", err)
+	}
+	if !metav1.IsControlledBy(&existing, server) {
+		return "", fmt.Errorf("ConfigMap %s/%s is not owned by SpireServer", existing.Namespace, existing.Name)
+	}
+	if createOnly {
+		return generateConfigHashFromString(existing.Data[upstreamAgentConfigKey]), nil
+	}
+	if equality.Semantic.DeepEqual(existing.Data, desired.Data) && equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
+		return hash, nil
+	}
+	existing.Data = desired.Data
+	existing.Labels = desired.Labels
+	if err := r.ctrlClient.Update(ctx, &existing); err != nil {
 		return "", fmt.Errorf("reconcile upstream agent ConfigMap: %w", err)
 	}
 	return hash, nil

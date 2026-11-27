@@ -3,14 +3,12 @@ package status
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/pkg/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
@@ -79,13 +77,7 @@ func (m *Manager) SetReadyCondition() {
 		"UpstreamAgentNotReady": true, // nested SPIRE sidecar starting / rolling out
 	}
 
-	conditionTypes := make([]string, 0, len(m.conditions))
-	for conditionType := range m.conditions {
-		conditionTypes = append(conditionTypes, conditionType)
-	}
-	sort.Strings(conditionTypes)
-	for _, condType := range conditionTypes {
-		cond := m.conditions[condType]
+	for condType, cond := range m.conditions {
 		// Skip conditions that don't indicate operational health
 		if condType == v1alpha1.Ready || condType == v1alpha1.Degraded || condType == utils.CreateOnlyModeStatusType {
 			continue
@@ -123,46 +115,44 @@ func (m *Manager) SetReadyCondition() {
 
 // ApplyStatus applies all collected conditions to the given resource status
 func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus func() *v1alpha1.ConditionalStatus) error {
-	observedGeneration := obj.GetGeneration()
-	if _, explicit := m.conditions[v1alpha1.Ready]; !explicit {
+	status := getStatus()
+	originalStatus := status.DeepCopy()
+
+	if status.Conditions == nil {
+		status.Conditions = []metav1.Condition{}
+	}
+
+	// Only auto-set Ready condition if it hasn't been manually set
+	// Check if Ready condition was explicitly added by the controller
+	_, readyExplicitlySet := m.conditions[v1alpha1.Ready]
+	if !readyExplicitlySet {
+		// Set the Ready condition based on all other conditions
 		m.SetReadyCondition()
 	}
-	refresh := false
-	// Reapply only this manager's changes to the fresh object on a conflict,
-	// retaining condition changes made by other writers in the meantime.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if refresh {
-			if err := m.customClient.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
-				return err
-			}
-		}
-		refresh = true
-		status := getStatus()
-		originalStatus := status.DeepCopy()
-		for conditionType := range m.removed {
-			apimeta.RemoveStatusCondition(&status.Conditions, conditionType)
-		}
-		// Deterministic order also prevents status ordering changes across retries.
-		conditionTypes := make([]string, 0, len(m.conditions))
-		for conditionType := range m.conditions {
-			conditionTypes = append(conditionTypes, conditionType)
-		}
-		sort.Strings(conditionTypes)
-		for _, conditionType := range conditionTypes {
-			cond := m.conditions[conditionType]
-			apimeta.SetStatusCondition(&status.Conditions, metav1.Condition{
-				Type: cond.Type, Status: cond.Status, Reason: cond.Reason, Message: cond.Message,
-				ObservedGeneration: observedGeneration, LastTransitionTime: metav1.Now(),
-			})
-		}
-		if equality.Semantic.DeepEqual(originalStatus, status) {
-			return nil
-		}
-		return m.customClient.StatusUpdate(ctx, obj)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
+
+	for conditionType := range m.removed {
+		apimeta.RemoveStatusCondition(&status.Conditions, conditionType)
 	}
+
+	// Apply all conditions
+	for _, cond := range m.conditions {
+		newCondition := metav1.Condition{
+			Type:               cond.Type,
+			Status:             cond.Status,
+			Reason:             cond.Reason,
+			Message:            cond.Message,
+			LastTransitionTime: metav1.Now(),
+		}
+		apimeta.SetStatusCondition(&status.Conditions, newCondition)
+	}
+
+	// Only update if status has changed
+	if !equality.Semantic.DeepEqual(originalStatus, status) {
+		if err := m.customClient.StatusUpdateWithRetry(ctx, obj); err != nil {
+			return fmt.Errorf("failed to update status: %w", err)
+		}
+	}
+
 	return nil
 }
 
