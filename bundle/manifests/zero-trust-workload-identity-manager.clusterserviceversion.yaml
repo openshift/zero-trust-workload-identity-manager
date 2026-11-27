@@ -458,12 +458,38 @@ spec:
           - networkpolicies
           verbs:
           - create
+          - list
+          - watch
+        - apiGroups:
+          - networking.k8s.io
+          resourceNames:
+          - ztwim-sys-spire-agent-ingress
+          resources:
+          - networkpolicies
+          verbs:
           - delete
           - get
-          - list
-          - patch
           - update
-          - watch
+        - apiGroups:
+          - networking.k8s.io
+          resourceNames:
+          - ztwim-sys-spire-oidc-discovery-provider-ingress
+          resources:
+          - networkpolicies
+          verbs:
+          - delete
+          - get
+          - update
+        - apiGroups:
+          - networking.k8s.io
+          resourceNames:
+          - ztwim-sys-spire-server-ingress
+          resources:
+          - networkpolicies
+          verbs:
+          - delete
+          - get
+          - update
         - apiGroups:
           - operator.openshift.io
           resourceNames:

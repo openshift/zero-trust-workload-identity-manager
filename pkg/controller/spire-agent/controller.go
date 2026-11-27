@@ -57,6 +57,9 @@ type SpireAgentReconciler struct {
 	tlsProfileSpec *configv1.TLSProfileSpec
 }
 
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=list;watch;create
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;update;delete,resourceNames=ztwim-sys-spire-agent-ingress
+
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager, tlsProfileSpec *configv1.TLSProfileSpec) (*SpireAgentReconciler, error) {
 	c, err := customClient.NewCustomClient(mgr)
