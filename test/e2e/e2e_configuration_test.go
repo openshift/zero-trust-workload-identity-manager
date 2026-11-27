@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"flag"
 	"path/filepath"
 	"testing"
 	"time"
@@ -86,13 +87,23 @@ func TestE2E(t *testing.T) {
 	// Configure Ginkgo for e2e tests
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 
-	// Suite-level configuration.
-	// Default e2e (label filter !tls) stays at 40m under the 45m go test timeout.
-	// The tls suite waits for Machine Config rolls. Cluster-bot keeps the cluster for about 3h,
-	// so this stays under the 2h50m go test timeout used by make test-e2e-tls.
-	suiteConfig.Timeout = 40 * time.Minute
-	if Label("tls").MatchesLabelFilter(GinkgoLabelFilter()) {
-		suiteConfig.Timeout = 2*time.Hour + 40*time.Minute
+	// Respect explicit -ginkgo.timeout overrides, including E2E_SUITE_TIMEOUT from make.
+	// Without that flag, filters excluding TLS use 60m (time.Hour), matching the
+	// Makefile default. Filters including TLS, including an empty filter in a bare
+	// go test run, use 2h40m to allow Machine Config rolls.
+	// The separate go test -timeout must exceed the suite timeout; the Makefile
+	// uses 65m for normal E2Es and 2h50m for TLS E2Es.
+	timeoutConfigured := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "ginkgo.timeout" {
+			timeoutConfigured = true
+		}
+	})
+	if !timeoutConfigured {
+		suiteConfig.Timeout = time.Hour
+		if Label("tls").MatchesLabelFilter(GinkgoLabelFilter()) {
+			suiteConfig.Timeout = 2*time.Hour + 40*time.Minute
+		}
 	}
 	suiteConfig.FailFast = false       // Continue after first failure to see all issues
 	suiteConfig.FlakeAttempts = 0      // Retry on flaky tests (helpful when deflaking tests)

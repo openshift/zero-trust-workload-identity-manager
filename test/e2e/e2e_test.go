@@ -1959,4 +1959,60 @@ var _ = Describe("Zero Trust Workload Identity Manager", Ordered, func() {
 				"ConfigMap drift should be corrected when CreateOnlyMode is False")
 		})
 	})
+
+	Context("managedNetworkPolicy: policy creation, traffic rules, management toggles and parent status across Server, Agent and OIDC", Label("networkpolicy"), func() {
+		BeforeAll(func() {
+			setupCtx, cancel := context.WithTimeout(context.Background(), utils.TestContextTimeout)
+			DeferCleanup(cancel)
+			utils.AssertAllOperandsPodsReady(setupCtx, k8sClient, clientset)
+		})
+
+		for _, tc := range utils.ManagedNetworkPolicyCases {
+			It(tc.Kind+": enables NetworkPolicy management by default, creates expected policies and keeps Ready and Upgradeable True", func() {
+				utils.AssertManagedNetworkPolicyDefault(testCtx, k8sClient, clientset, operatorConditionName, tc)
+			})
+			It(tc.Kind+": checks expected NetworkPolicy rules and verifies allowed traffic and applicable blocked connections", func() {
+				utils.AssertOperandNetworkPolicy(testCtx, k8sClient, clientset, tc, jwtIssuer)
+			})
+			It(tc.Kind+": automatically restores the original NetworkPolicy rules after manual edits when management is enabled", func() {
+				utils.AssertNetworkPolicyDrift(testCtx, k8sClient, clientset, operatorConditionName, tc, true)
+			})
+			It(tc.Kind+": keeps manual NetworkPolicy edits while management is disabled and restores original rules after re-enabling it", func() {
+				utils.AssertNetworkPolicyDrift(testCtx, k8sClient, clientset, operatorConditionName, tc, false)
+			})
+			It(tc.Kind+": keeps Ready True and deleted policies absent while management is disabled, then recreates them when re-enabled", func() {
+				utils.AssertDisabledManagementRecreatesDeletedPolicies(testCtx, k8sClient, clientset, operatorConditionName, tc)
+			})
+			It(tc.Kind+": rejects invalid strings, empty strings and boolean values for managedNetworkPolicy without changing saved settings", func() {
+				utils.AssertManagedNetworkPolicyRejectsInvalid(testCtx, k8sClient, tc)
+			})
+			It(tc.Kind+": switches NetworkPolicy management off and on while keeping Ready and Upgradeable True without restarting pods", func() {
+				utils.AssertManagedNetworkPolicyToggleStable(testCtx, k8sClient, clientset, operatorConditionName, tc)
+			})
+			It(tc.Kind+": keeps parent Ready and Upgradeable True when only this component has policy management enabled", func() {
+				utils.AssertNetworkPolicyManagementCombination(
+					testCtx, k8sClient, operatorConditionName, tc.Kind)
+			})
+		}
+
+		It("SpireServer: records recreated policy application history after a ResourceQuota failure [SPIRE-796]", func() {
+			utils.AssertServerNetworkPolicyQuotaRecovery(testCtx, k8sClient, clientset, operatorConditionName)
+		})
+
+		It("keeps parent Ready and Upgradeable True when NetworkPolicy management is disabled for all three components", func() {
+			utils.AssertNetworkPolicyManagementCombination(testCtx, k8sClient, operatorConditionName, "")
+		})
+
+		It("SpireOIDCDiscoveryProvider: blocks direct access without the ingress namespace label, allows it when added and blocks it when removed", func() {
+			utils.AssertOIDCIngressNamespaceLabel(testCtx, clientset)
+		})
+
+		It("preserves manual NetworkPolicy edits while create-only mode is enabled and restores original rules after disabling it", func() {
+			utils.AssertNetworkPoliciesCreateOnly(testCtx, k8sClient, clientset, subscriptionName)
+		})
+
+		It("enables federation if absent and checks server readiness, policy rules, Service, Route and HTTPS trust bundle retrieval", Label("federation"), func() {
+			utils.AssertFederationNetworkPolicyBasic(testCtx, k8sClient, clientset)
+		})
+	})
 })
