@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/openshift/zero-trust-workload-identity-manager/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -992,4 +993,178 @@ func TestNeedsOwnerReferenceUpdate(t *testing.T) {
 			t.Error("Expected true when owner UID is different")
 		}
 	})
+}
+
+func TestBaselineNetworkPolicyLastAppliedAndRecord(t *testing.T) {
+	if got := BaselineNetworkPolicyLastApplied(nil, 2); len(got) != 0 {
+		t.Fatalf("expected empty baseline, got %v", got)
+	}
+	earlier := metav1.Unix(100, 0)
+	later := metav1.Unix(200, 0)
+	status := &v1alpha1.NetworkPolicyStatus{LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "a", LastAppliedTime: earlier}}}
+	if got := BaselineNetworkPolicyLastApplied(status, 2); len(got) != 1 || got[0].Name != "a" || !got[0].LastAppliedTime.Time.Equal(earlier.Time) {
+		t.Fatalf("expected copy of prior list, got %v", got)
+	}
+	applied := RecordNetworkPolicyApplied(nil, "x", earlier, true)
+	if len(applied) != 1 || applied[0].Name != "x" || !applied[0].LastAppliedTime.Time.Equal(earlier.Time) {
+		t.Fatalf("expected recorded name, got %v", applied)
+	}
+	applied = RecordNetworkPolicyApplied(applied, "x", later, true)
+	if len(applied) != 1 || !applied[0].LastAppliedTime.Time.Equal(later.Time) {
+		t.Fatalf("expected timestamp refresh without a duplicate, got %v", applied)
+	}
+	applied = RecordNetworkPolicyApplied(applied, "x", earlier, false)
+	if len(applied) != 1 || !applied[0].LastAppliedTime.Time.Equal(later.Time) {
+		t.Fatalf("expected refresh=false to keep existing timestamp, got %v", applied)
+	}
+	applied = RecordNetworkPolicyApplied(nil, "y", earlier, false)
+	if len(applied) != 1 || applied[0].Name != "y" || !applied[0].LastAppliedTime.Time.Equal(earlier.Time) {
+		t.Fatalf("expected refresh=false to append missing name, got %v", applied)
+	}
+}
+
+func TestMergeNetworkPolicyLastApplied(t *testing.T) {
+	earlier := metav1.Unix(100, 0)
+	later := metav1.Unix(200, 0)
+	same := metav1.Unix(150, 0)
+
+	t.Run("empty", func(t *testing.T) {
+		if got := MergeNetworkPolicyLastApplied(nil, nil); got != nil {
+			t.Fatalf("expected nil, got %v", got)
+		}
+		if got := MergeNetworkPolicyLastApplied(nil, []v1alpha1.AppliedNetworkPolicy{{Name: "a", LastAppliedTime: earlier}}); len(got) != 1 || got[0].Name != "a" {
+			t.Fatalf("expected src-only preserved, got %v", got)
+		}
+		if got := MergeNetworkPolicyLastApplied([]v1alpha1.AppliedNetworkPolicy{{Name: "a", LastAppliedTime: earlier}}, nil); len(got) != 1 || got[0].Name != "a" {
+			t.Fatalf("expected dst-only preserved, got %v", got)
+		}
+	})
+
+	t.Run("newer wins", func(t *testing.T) {
+		dst := []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: earlier}}
+		src := []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: later}}
+		got := MergeNetworkPolicyLastApplied(dst, src)
+		if len(got) != 1 || !got[0].LastAppliedTime.Time.Equal(later.Time) {
+			t.Fatalf("expected later from src, got %v", got)
+		}
+		got = MergeNetworkPolicyLastApplied(src, dst)
+		if len(got) != 1 || !got[0].LastAppliedTime.Time.Equal(later.Time) {
+			t.Fatalf("expected later from dst, got %v", got)
+		}
+	})
+
+	t.Run("union by name", func(t *testing.T) {
+		dst := []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: later}}
+		src := []v1alpha1.AppliedNetworkPolicy{{Name: "egress", LastAppliedTime: earlier}}
+		got := MergeNetworkPolicyLastApplied(dst, src)
+		if len(got) != 2 {
+			t.Fatalf("expected union of 2, got %v", got)
+		}
+		byName := map[string]metav1.Time{}
+		for _, p := range got {
+			byName[p.Name] = p.LastAppliedTime
+		}
+		if !byName["ingress"].Time.Equal(later.Time) || !byName["egress"].Time.Equal(earlier.Time) {
+			t.Fatalf("unexpected merge result: %v", got)
+		}
+	})
+
+	t.Run("equal times keep dst", func(t *testing.T) {
+		dst := []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: same}}
+		src := []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: same}}
+		got := MergeNetworkPolicyLastApplied(dst, src)
+		if len(got) != 1 || !got[0].LastAppliedTime.Time.Equal(same.Time) {
+			t.Fatalf("expected equal-time dst kept, got %v", got)
+		}
+	})
+}
+
+func TestMergeNetworkPolicyStatusInto(t *testing.T) {
+	earlier := metav1.Unix(100, 0)
+	later := metav1.Unix(200, 0)
+
+	t.Run("nil dst preserves src", func(t *testing.T) {
+		src := &v1alpha1.NetworkPolicyStatus{
+			ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+			LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "a", LastAppliedTime: later}},
+		}
+		got := MergeNetworkPolicyStatusInto(nil, src)
+		if got == nil || got == src || got.ManagementState != v1alpha1.NetworkPolicyManagementManaged || len(got.LastAppliedPolicies) != 1 {
+			t.Fatalf("expected deep copy of src, got %#v", got)
+		}
+	})
+
+	t.Run("nil src keeps dst", func(t *testing.T) {
+		dst := &v1alpha1.NetworkPolicyStatus{
+			ManagementState:     v1alpha1.NetworkPolicyManagementUnmanaged,
+			LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "a", LastAppliedTime: earlier}},
+		}
+		got := MergeNetworkPolicyStatusInto(dst, nil)
+		if got != dst {
+			t.Fatalf("expected dst pointer preserved, got %#v", got)
+		}
+	})
+
+	t.Run("merges policies keeps dst management state", func(t *testing.T) {
+		dst := &v1alpha1.NetworkPolicyStatus{
+			ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+			LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: earlier}},
+		}
+		src := &v1alpha1.NetworkPolicyStatus{
+			ManagementState:     v1alpha1.NetworkPolicyManagementUnmanaged,
+			LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: later}, {Name: "egress", LastAppliedTime: earlier}},
+		}
+		got := MergeNetworkPolicyStatusInto(dst, src)
+		if got.ManagementState != v1alpha1.NetworkPolicyManagementManaged {
+			t.Fatalf("expected dst management state kept, got %v", got.ManagementState)
+		}
+		byName := map[string]metav1.Time{}
+		for _, p := range got.LastAppliedPolicies {
+			byName[p.Name] = p.LastAppliedTime
+		}
+		if !byName["ingress"].Time.Equal(later.Time) || !byName["egress"].Time.Equal(earlier.Time) {
+			t.Fatalf("unexpected merged policies: %v", got.LastAppliedPolicies)
+		}
+	})
+}
+
+func TestMergeOperandNetworkPolicyLastApplied(t *testing.T) {
+	earlier := metav1.Unix(100, 0)
+	later := metav1.Unix(200, 0)
+
+	obj := &v1alpha1.SpireServer{
+		Status: v1alpha1.SpireServerStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: earlier}},
+			},
+		},
+	}
+	current := &v1alpha1.SpireServer{
+		Status: v1alpha1.SpireServerStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "ingress", LastAppliedTime: later}},
+			},
+		},
+	}
+	MergeOperandNetworkPolicyLastApplied(obj, current)
+	if !obj.Status.NetworkPolicy.LastAppliedPolicies[0].LastAppliedTime.Time.Equal(later.Time) {
+		t.Fatalf("expected max time on SpireServer, got %v", obj.Status.NetworkPolicy.LastAppliedPolicies)
+	}
+
+	// Accidental nil on obj must not wipe current.
+	objNil := &v1alpha1.SpireAgent{Status: v1alpha1.SpireAgentStatus{}}
+	curAgent := &v1alpha1.SpireAgent{
+		Status: v1alpha1.SpireAgentStatus{
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState:     v1alpha1.NetworkPolicyManagementManaged,
+				LastAppliedPolicies: []v1alpha1.AppliedNetworkPolicy{{Name: "agent-ingress", LastAppliedTime: later}},
+			},
+		},
+	}
+	MergeOperandNetworkPolicyLastApplied(objNil, curAgent)
+	if objNil.Status.NetworkPolicy == nil || len(objNil.Status.NetworkPolicy.LastAppliedPolicies) != 1 {
+		t.Fatalf("expected current NetworkPolicy preserved onto nil obj, got %#v", objNil.Status.NetworkPolicy)
+	}
 }

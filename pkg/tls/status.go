@@ -43,7 +43,7 @@ func ReportTLSResolutionFailure(ctx context.Context, c client.Client, log logr.L
 
 	sm := status.NewManager(customClient.NewCustomClientFromClient(c))
 	sm.AddCondition(v1alpha1.Ready, v1alpha1.ReasonFailed, "failed to resolve cluster TLS profile", metav1.ConditionFalse)
-	if patchErr := sm.ApplyStatus(ctx, &ztwim, func() *v1alpha1.ConditionalStatus {
+	if patchErr := sm.ApplyStatus(ctx, &ztwim, nil, func() *v1alpha1.ConditionalStatus {
 		return &ztwim.Status.ConditionalStatus
 	}); patchErr != nil {
 		log.Error(patchErr, "failed to update ZTWIM cluster CR status for TLS resolution failure")
