@@ -1651,10 +1651,27 @@ spec:
                   When spec.managedNetworkPolicy is "false", managementState is Unmanaged and the operator does not reconcile ztwim-sys-* policies.
                 properties:
                   lastAppliedPolicies:
-                    description: lastAppliedPolicies lists fixed-name NetworkPolicy
-                      resources last applied by the operator.
+                    description: |-
+                      lastAppliedPolicies lists NetworkPolicies the operator has successfully created or updated.
+                      Entries are kept across reconciles, including when spec.managedNetworkPolicy changes to "false"
+                      and when a later policy in the same reconcile fails.
+                      A later create or update appends a new name or refreshes lastAppliedTime.
                     items:
-                      type: string
+                      description: AppliedNetworkPolicy is one operator-applied NetworkPolicy
+                        and the time it was last created or updated.
+                      properties:
+                        lastAppliedTime:
+                          description: lastAppliedTime is when the operator last successfully
+                            created or updated this NetworkPolicy.
+                          format: date-time
+                          type: string
+                        name:
+                          description: name is the NetworkPolicy metadata.name.
+                          type: string
+                      required:
+                      - lastAppliedTime
+                      - name
+                      type: object
                     type: array
                     x-kubernetes-list-type: atomic
                   managementState:

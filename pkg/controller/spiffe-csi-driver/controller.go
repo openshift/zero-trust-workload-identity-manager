@@ -77,7 +77,7 @@ func (r *SpiffeCsiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	statusMgr := status.NewManager(r.ctrlClient)
 	defer func() {
-		if err := statusMgr.ApplyStatus(ctx, &spiffeCSIDriver, func() *v1alpha1.ConditionalStatus {
+		if err := statusMgr.ApplyStatus(ctx, &spiffeCSIDriver, nil, func() *v1alpha1.ConditionalStatus {
 			return &spiffeCSIDriver.Status.ConditionalStatus
 		}); err != nil {
 			r.log.Error(err, "failed to update status")

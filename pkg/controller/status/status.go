@@ -100,8 +100,12 @@ func (m *Manager) SetReadyCondition() {
 	}
 }
 
-// ApplyStatus applies all collected conditions to the given resource status
-func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus func() *v1alpha1.ConditionalStatus) error {
+// ApplyStatus applies collected conditions and persists the operand status.
+// statusAtGet is a deepcopy of the operand status taken immediately after Get.
+// Pass nil when the object has no status fields outside conditions.
+// A status write runs when conditions changed during this call, or when the live
+// operand status (including networkPolicy) differs from statusAtGet.
+func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, statusAtGet any, getStatus func() *v1alpha1.ConditionalStatus) error {
 	status := getStatus()
 	originalStatus := status.DeepCopy()
 
@@ -129,14 +133,32 @@ func (m *Manager) ApplyStatus(ctx context.Context, obj client.Object, getStatus 
 		apimeta.SetStatusCondition(&status.Conditions, newCondition)
 	}
 
-	// Only update if status has changed
-	if !equality.Semantic.DeepEqual(originalStatus, status) {
+	conditionsChanged := !equality.Semantic.DeepEqual(originalStatus, status)
+	operandStatusChanged := false
+	if statusAtGet != nil {
+		operandStatusChanged = !equality.Semantic.DeepEqual(statusAtGet, operandStatus(obj))
+	}
+	if conditionsChanged || operandStatusChanged {
 		if err := m.customClient.StatusUpdateWithRetry(ctx, obj); err != nil {
 			return fmt.Errorf("failed to update status: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// operandStatus returns the live status struct for operands that store fields outside conditions.
+func operandStatus(obj client.Object) any {
+	switch o := obj.(type) {
+	case *v1alpha1.SpireAgent:
+		return &o.Status
+	case *v1alpha1.SpireServer:
+		return &o.Status
+	case *v1alpha1.SpireOIDCDiscoveryProvider:
+		return &o.Status
+	default:
+		return nil
+	}
 }
 
 // CheckStatefulSetHealth checks the health of a StatefulSet and adds conditions

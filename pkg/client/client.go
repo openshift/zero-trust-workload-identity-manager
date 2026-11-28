@@ -183,6 +183,9 @@ func (c *customCtrlClientImpl) StatusUpdateWithRetry(
 			return fmt.Errorf("failed to fetch latest %q for update: %w", key, err)
 		}
 		obj.SetResourceVersion(current.GetResourceVersion())
+		// Stale reconciles can race on status writes and regress lastAppliedTime;
+		// merge by name keeping the newer timestamp before persisting.
+		utils.MergeOperandNetworkPolicyLastApplied(obj, current)
 		return c.Client.Status().Update(ctx, obj, opts...)
 	}); err != nil {
 		return fmt.Errorf("failed to update %q status: %w", key, err)
