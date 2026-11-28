@@ -1,28 +1,15 @@
 package v1alpha1
 
-// NetworkPoliciesAvailable is the condition type reporting operand NetworkPolicy reconcile health.
-const NetworkPoliciesAvailable = "NetworkPoliciesAvailable"
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// NetworkPoliciesApplied is the ZTWIM condition type reporting aggregate operand network policy readiness.
-const NetworkPoliciesApplied = "NetworkPoliciesApplied"
+// AppliedNetworkPolicy is one operator-applied NetworkPolicy and the time it was last created or updated.
+type AppliedNetworkPolicy struct {
+	// name is the NetworkPolicy metadata.name.
+	Name string `json:"name"`
 
-// Operand condition reasons (condition type NetworkPoliciesAvailable on SpireServer, SpireAgent, SpireOIDCDiscoveryProvider).
-const (
-	ReasonNetworkPolicyCreated         = "NetworkPolicyCreated"
-	ReasonNetworkPolicyUpdated         = "NetworkPolicyUpdated"
-	ReasonManagedNetworkPolicyDisabled = "ManagedNetworkPolicyDisabled"
-	ReasonNetworkPolicyCreationFailed  = "NetworkPolicyCreationFailed"
-	ReasonNetworkPolicyUpdateFailed    = "NetworkPolicyUpdateFailed"
-	ReasonNetworkPolicyDeletionFailed  = "NetworkPolicyDeletionFailed"
-)
-
-// ZTWIM aggregate condition reasons (condition type NetworkPoliciesApplied on ZeroTrustWorkloadIdentityManager).
-const (
-	// ReasonOperandsNetworkPoliciesReady is set when every aggregated operand is ready or Unmanaged.
-	ReasonOperandsNetworkPoliciesReady = "OperandsNetworkPoliciesReady"
-	// ReasonOperandsNetworkPolicyFailed is set when one or more aggregated operands report failure (details in condition message).
-	ReasonOperandsNetworkPolicyFailed = "OperandsNetworkPolicyFailed"
-)
+	// lastAppliedTime is when the operator last successfully created or updated this NetworkPolicy.
+	LastAppliedTime metav1.Time `json:"lastAppliedTime"`
+}
 
 // NetworkPolicyManagementState mirrors effective spec.managedNetworkPolicy on the operand.
 // - Managed: spec.managedNetworkPolicy is "true" or unset (default "true").
@@ -42,8 +29,11 @@ type NetworkPolicyStatus struct {
 	// +kubebuilder:validation:Optional
 	ManagementState NetworkPolicyManagementState `json:"managementState,omitempty"`
 
-	// lastAppliedPolicies lists fixed-name NetworkPolicy resources last applied by the operator.
+	// lastAppliedPolicies lists NetworkPolicies the operator has successfully created or updated.
+	// Entries are kept across reconciles, including when spec.managedNetworkPolicy changes to "false"
+	// and when a later policy in the same reconcile fails.
+	// A later create or update appends a new name or refreshes lastAppliedTime.
 	// +kubebuilder:validation:Optional
 	// +listType=atomic
-	LastAppliedPolicies []string `json:"lastAppliedPolicies,omitempty"`
+	LastAppliedPolicies []AppliedNetworkPolicy `json:"lastAppliedPolicies,omitempty"`
 }

@@ -195,6 +195,8 @@ type ZeroTrustWorkloadIdentityManagerReconciler struct {
 // +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions,verbs=get;list;watch
 // +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions/status,verbs=update
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests,verbs=create;get;list;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=list;watch;create
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;update;delete,resourceNames=ztwim-sys-spire-server-ingress;ztwim-sys-spire-agent-ingress;ztwim-sys-spire-oidc-discovery-provider-ingress
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*ZeroTrustWorkloadIdentityManagerReconciler, error) {
@@ -256,7 +258,7 @@ func (r *ZeroTrustWorkloadIdentityManagerReconciler) Reconcile(ctx context.Conte
 	statusMgr := status.NewManager(r.ctrlClient)
 
 	defer func() {
-		if err := statusMgr.ApplyStatus(ctx, &config, func() *v1alpha1.ConditionalStatus {
+		if err := statusMgr.ApplyStatus(ctx, &config, nil, func() *v1alpha1.ConditionalStatus {
 			return &config.Status.ConditionalStatus
 		}); err != nil {
 			r.log.Error(err, "failed to update status")

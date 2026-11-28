@@ -176,6 +176,26 @@ rules:
   - update
   - watch
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resourceNames:
+  - ztwim-sys-spire-agent-ingress
+  - ztwim-sys-spire-oidc-discovery-provider-ingress
+  - ztwim-sys-spire-server-ingress
+  resources:
+  - networkpolicies
+  verbs:
+  - delete
+  - get
+  - update
+- apiGroups:
   - operator.openshift.io
   resourceNames:
   - cluster

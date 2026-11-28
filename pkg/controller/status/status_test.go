@@ -381,6 +381,70 @@ func TestNewManager(t *testing.T) {
 	}
 }
 
+func TestApplyStatus_PersistsNetworkPolicyWhenConditionsUnchanged(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	mgr := NewManager(fakeClient)
+
+	ready := metav1.Condition{
+		Type:               v1alpha1.Ready,
+		Status:             metav1.ConditionTrue,
+		Reason:             v1alpha1.ReasonReady,
+		Message:            "All components are ready",
+		LastTransitionTime: metav1.Now(),
+	}
+	agent := &v1alpha1.SpireAgent{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+		Status: v1alpha1.SpireAgentStatus{
+			ConditionalStatus: v1alpha1.ConditionalStatus{Conditions: []metav1.Condition{ready}},
+		},
+	}
+	statusAtGet := agent.Status.DeepCopy()
+	agent.Status.NetworkPolicy = &v1alpha1.NetworkPolicyStatus{
+		ManagementState: v1alpha1.NetworkPolicyManagementUnmanaged,
+	}
+
+	if err := mgr.ApplyStatus(context.Background(), agent, statusAtGet, func() *v1alpha1.ConditionalStatus {
+		return &agent.Status.ConditionalStatus
+	}); err != nil {
+		t.Fatalf("ApplyStatus: %v", err)
+	}
+	if fakeClient.StatusUpdateWithRetryCallCount() != 1 {
+		t.Fatalf("expected status update when only networkPolicy changed, got %d", fakeClient.StatusUpdateWithRetryCallCount())
+	}
+}
+
+func TestApplyStatus_SkipsWriteWhenOperandStatusUnchanged(t *testing.T) {
+	fakeClient := &fakes.FakeCustomCtrlClient{}
+	mgr := NewManager(fakeClient)
+
+	ready := metav1.Condition{
+		Type:               v1alpha1.Ready,
+		Status:             metav1.ConditionTrue,
+		Reason:             v1alpha1.ReasonReady,
+		Message:            "All components are ready",
+		LastTransitionTime: metav1.Now(),
+	}
+	agent := &v1alpha1.SpireAgent{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+		Status: v1alpha1.SpireAgentStatus{
+			ConditionalStatus: v1alpha1.ConditionalStatus{Conditions: []metav1.Condition{ready}},
+			NetworkPolicy: &v1alpha1.NetworkPolicyStatus{
+				ManagementState: v1alpha1.NetworkPolicyManagementUnmanaged,
+			},
+		},
+	}
+	statusAtGet := agent.Status.DeepCopy()
+
+	if err := mgr.ApplyStatus(context.Background(), agent, statusAtGet, func() *v1alpha1.ConditionalStatus {
+		return &agent.Status.ConditionalStatus
+	}); err != nil {
+		t.Fatalf("ApplyStatus: %v", err)
+	}
+	if fakeClient.StatusUpdateWithRetryCallCount() != 0 {
+		t.Fatalf("expected no status update, got %d", fakeClient.StatusUpdateWithRetryCallCount())
+	}
+}
+
 func TestApplyStatus(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -400,7 +464,7 @@ func TestApplyStatus(t *testing.T) {
 			mgr.AddCondition("TestCondition", "TestReason", "Test message", metav1.ConditionTrue)
 
 			obj := &v1alpha1.SpireServer{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
-			err := mgr.ApplyStatus(context.Background(), obj, func() *v1alpha1.ConditionalStatus {
+			err := mgr.ApplyStatus(context.Background(), obj, nil, func() *v1alpha1.ConditionalStatus {
 				return &obj.Status.ConditionalStatus
 			})
 
