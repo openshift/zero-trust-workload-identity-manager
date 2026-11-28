@@ -149,6 +149,77 @@ func RecordNetworkPolicyApplied(applied []v1alpha1.AppliedNetworkPolicy, name st
 	return append(applied, v1alpha1.AppliedNetworkPolicy{Name: name, LastAppliedTime: at})
 }
 
+// MergeNetworkPolicyLastApplied unions dst and src by policy name, keeping the
+// entry with the newer LastAppliedTime. Names present in only one side are preserved.
+// When times are equal, dst's entry is kept.
+func MergeNetworkPolicyLastApplied(dst, src []v1alpha1.AppliedNetworkPolicy) []v1alpha1.AppliedNetworkPolicy {
+	if len(dst) == 0 && len(src) == 0 {
+		return nil
+	}
+	byName := make(map[string]v1alpha1.AppliedNetworkPolicy, len(dst)+len(src))
+	order := make([]string, 0, len(dst)+len(src))
+	add := func(entries []v1alpha1.AppliedNetworkPolicy) {
+		for _, e := range entries {
+			if existing, ok := byName[e.Name]; ok {
+				if e.LastAppliedTime.After(existing.LastAppliedTime.Time) {
+					byName[e.Name] = e
+				}
+				continue
+			}
+			byName[e.Name] = e
+			order = append(order, e.Name)
+		}
+	}
+	add(dst)
+	add(src)
+	out := make([]v1alpha1.AppliedNetworkPolicy, 0, len(order))
+	for _, name := range order {
+		out = append(out, byName[name])
+	}
+	return out
+}
+
+// MergeNetworkPolicyStatusInto merges lastAppliedPolicies from src into dst by
+// max LastAppliedTime. If dst is nil and src is non-nil, returns a deep copy of
+// src so an accidental nil status write cannot wipe recorded policies. When both
+// are non-nil, dst's ManagementState is kept and only lastAppliedPolicies are merged.
+func MergeNetworkPolicyStatusInto(dst, src *v1alpha1.NetworkPolicyStatus) *v1alpha1.NetworkPolicyStatus {
+	if dst == nil {
+		return src.DeepCopy()
+	}
+	if src == nil {
+		return dst
+	}
+	dst.LastAppliedPolicies = MergeNetworkPolicyLastApplied(dst.LastAppliedPolicies, src.LastAppliedPolicies)
+	return dst
+}
+
+// MergeOperandNetworkPolicyLastApplied merges status.networkPolicy.lastAppliedPolicies
+// from current into obj for operand CRs that carry NetworkPolicy status. No-op for
+// other types. Mutates obj in place.
+func MergeOperandNetworkPolicyLastApplied(obj, current client.Object) {
+	switch o := obj.(type) {
+	case *v1alpha1.SpireServer:
+		c, ok := current.(*v1alpha1.SpireServer)
+		if !ok {
+			return
+		}
+		o.Status.NetworkPolicy = MergeNetworkPolicyStatusInto(o.Status.NetworkPolicy, c.Status.NetworkPolicy)
+	case *v1alpha1.SpireAgent:
+		c, ok := current.(*v1alpha1.SpireAgent)
+		if !ok {
+			return
+		}
+		o.Status.NetworkPolicy = MergeNetworkPolicyStatusInto(o.Status.NetworkPolicy, c.Status.NetworkPolicy)
+	case *v1alpha1.SpireOIDCDiscoveryProvider:
+		c, ok := current.(*v1alpha1.SpireOIDCDiscoveryProvider)
+		if !ok {
+			return
+		}
+		o.Status.NetworkPolicy = MergeNetworkPolicyStatusInto(o.Status.NetworkPolicy, c.Status.NetworkPolicy)
+	}
+}
+
 func DecodeServiceObjBytes(objBytes []byte) *corev1.Service {
 	obj, err := runtime.Decode(codecs.UniversalDecoder(corev1.SchemeGroupVersion), objBytes)
 	if err != nil {
